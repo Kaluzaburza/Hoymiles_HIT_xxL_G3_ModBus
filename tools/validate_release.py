@@ -6,9 +6,8 @@ import importlib.util
 import json
 import py_compile
 import re
+import struct
 from pathlib import Path
-
-from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +36,18 @@ def load_localization_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def png_dimensions(path: Path) -> tuple[int, int]:
+    """Return PNG dimensions using only the Python standard library."""
+    header = path.read_bytes()[:24]
+    require(
+        len(header) == 24
+        and header[:8] == b"\x89PNG\r\n\x1a\n"
+        and header[12:16] == b"IHDR",
+        f"{path.name} is not a valid PNG",
+    )
+    return struct.unpack(">II", header[16:24])
 
 
 def entity_translation_keys(translations: dict) -> dict[str, set[str]]:
@@ -156,8 +167,8 @@ def main() -> int:
     for image_name in ("icon.png", "dark_icon.png", "logo.png", "dark_logo.png"):
         image_path = COMPONENT / "brand" / image_name
         require(image_path.is_file(), f"Missing brand asset {image_name}")
-        with Image.open(image_path) as image:
-            require(image.width >= 128 and image.height >= 128, f"{image_name} is too small")
+        width, height = png_dimensions(image_path)
+        require(width >= 128 and height >= 128, f"{image_name} is too small")
 
     print(f"HACS layout: OK ({len(integration_dirs)} integration)")
     print(f"Manifest: OK (version {manifest['version']})")
