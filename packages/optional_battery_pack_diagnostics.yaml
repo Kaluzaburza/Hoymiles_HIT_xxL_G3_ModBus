@@ -1,0 +1,828 @@
+# OPCJONALNE: surowa diagnostyka pakietu baterii (rejestry 221xx)
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "DCDC Fault Code 22105"
+    id: dcdc_fault_code_22105
+    register_type: read
+    address: 22105
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Voltage 22106"
+    id: battery_voltage_22106
+    register_type: read
+    address: 22106
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: U_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Current 22107"
+    id: battery_current_22107
+    register_type: read
+    address: 22107
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Power"
+    id: battert_power_22108
+    register_type: read
+    address: 22108
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "DCDC Bus Voltage"
+    id: dcdc_bus_voltage_22109
+    register_type: read
+    address: 22109
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Output Voltage Of Relay Side"
+    id: output_voltage_of_relay_side_22110
+    register_type: read
+    address: 22110
+    unit_of_measurement: "V"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bus1 Voltage"
+    id: bus1_voltage_22111
+    register_type: read
+    address: 22111
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bus2 Voltage"
+    id: bus2_voltage_22112
+    register_type: read
+    address: 22112
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "HV Side Voltage1"
+    id: hv_side_voltage1_22113
+    register_type: read
+    address: 22113
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "HV Side Voltage2"
+    id: hv_side_voltage2_22114
+    register_type: read
+    address: 22114
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inductive Current1"
+    id: inductive_current1_22115
+    register_type: read
+    address: 22115
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 3
+    value_type: S_WORD
+    filters:
+    - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inductive Current2"
+    id: inductive_current2_22116
+    register_type: read
+    address: 22116
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 3
+    value_type: S_WORD
+    filters:
+    - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Heating Voltage"
+    id: heating_voltage_22117
+    register_type: read
+    address: 22117
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Ambient Temperature"
+    id: ambient_temperature_22118
+    register_type: read
+    address: 22118
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Radiator Temperature"
+    id: radiator_temperature_22119
+    register_type: read
+    address: 22119
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Positive Terminal Temperature Of The Floating Terminal"
+    id: positive_terminal_temperature_of_the_floating_terminal_22120
+    register_type: read
+    address: 22120
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "The Negative Terminal Temperature Of The Floating Terminal"
+    id: the_negative_terminal_temperature_of_the_floating_terminal_22121
+    register_type: read
+    address: 22121
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Auxiliary Power 12V"
+    id: auxiliary_power_12v_22122
+    register_type: read
+    address: 22122
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    value_type: U_WORD
+    filters:
+    - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Auxiliary Power 7V"
+    id: auxiliary_power_7v_22123
+    register_type: read
+    address: 22123
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    value_type: U_WORD
+    filters:
+    - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Auxiliary Power 5V"
+    id: auxiliary_power_5v_22124
+    register_type: read
+    address: 22124
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    value_type: U_WORD
+    filters:
+    - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Auxiliary Power 1.5V"
+    id: auxiliary_power_1_5v_22125
+    register_type: read
+    address: 22125
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    value_type: U_WORD
+    filters:
+    - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "The Minimum Allowable Bus Voltage For DCDC"
+    id: the_minimum_allowable_bus_voltage_for_dcdc_22126
+    register_type: read
+    address: 22126
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "DCDC System Working Status"
+    id: dcdc_system_working_status_22127
+    register_type: read
+    address: 22127
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "DCDC Heating State"
+    id: dcdc_heating_state_22128
+    register_type: read
+    address: 22128
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Group Terminal Voltage"
+    id: group_terminal_voltage_22150
+    register_type: read
+    address: 22150
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Group Terminal Current"
+    id: group_terminal_current_22151
+    register_type: read
+    address: 22151
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Group Soc"
+    id: group_soc_22152
+    register_type: read
+    address: 22152
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Group Soh"
+    id: group_soh_22153
+    register_type: read
+    address: 22153
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Pole Column Temperature 1"
+    id: pole_column_temperature_1_22154
+    register_type: read
+    address: 22154
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Pole Column Temperature 2"
+    id: pole_column_temperature_2_22155
+    register_type: read
+    address: 22155
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cell Max Volt"
+    id: cell_max_volt_22156
+    register_type: read
+    address: 22156
+    unit_of_measurement: "mV"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cell Min Volt"
+    id: cell_min_volt_22157
+    register_type: read
+    address: 22157
+    unit_of_measurement: "mV"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cell Max Temperature"
+    id: cell_max_temperature_22158
+    register_type: read
+    address: 22158
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cell Min Temperature"
+    id: cell_min_temperature_22159
+    register_type: read
+    address: 22159
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 1 Alarm status 1"
+    id: level_1_alarm_status_1_22160
+    register_type: read
+    address: 22160
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 1 Alarm status 2"
+    id: level_1_alarm_status_2_22161
+    register_type: read
+    address: 22161
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 1 Alarm status 3"
+    id: level_1_alarm_status_3_22162
+    register_type: read
+    address: 22162
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 2 Alarm status 1"
+    id: level_2_alarm_status_1_22163
+    register_type: read
+    address: 22163
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 2 Alarm status 2"
+    id: level_2_alarm_status_2_22614
+    register_type: read
+    address: 22164
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 2 Alarm status 3"
+    id: level_2_alarm_status_3_22165
+    register_type: read
+    address: 22165
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 3 Alarm status 1"
+    id: level_3_alarm_status_1_22166
+    register_type: read
+    address: 22166
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 3 Alarm status 2"
+    id: level_3_alarm_status_2_22167
+    register_type: read
+    address: 22167
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Level 3 Alarm status 3"
+    id: level_3_alarm_status_3_22168
+    register_type: read
+    address: 22168
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Hardware Fault Status"
+    id: hardware_fault_status_22169
+    register_type: read
+    address: 22169
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Fault Status-Main Control Fault"
+    id: fault_status_main_control_fault_22170
+    register_type: read
+    address: 22170
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Maximum Allowable Charging Current"
+    id: maximum_allowable_charging_current_22171
+    register_type: read
+    address: 22171
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Minimum Allowable Discharging Current"
+    id: minimum_allowable_discharging_current_22172
+    register_type: read
+    address: 22172
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Charging Cut-off Voltage"
+    id: charging_cut_off_voltage_22173
+    register_type: read
+    address: 22173
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Discharge Cut-off Voltage"
+    id: discharge_cut_off_voltage_22174
+    register_type: read
+    address: 22174
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Cycle Count"
+    id: battery_cycle_count_22175
+    register_type: read
+    address: 22175
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cumulative Battery Charge"
+    id: cumulative_battery_charge_22176
+    register_type: read
+    address: 22176
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cumulative Battery Discharge"
+    id: cumulative_battery_discharge_22177
+    register_type: read
+    address: 22177
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Single charge capacity"
+    id: single_charge_capacity_22178
+    register_type: read
+    address: 22178
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Single discharge quantity"
+    id: single_discharge_quantity_22179
+    register_type: read
+    address: 22179
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Rated capacity 22180"
+    id: rated_capacity_22180
+    register_type: read
+    address: 22180
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Current Power"
+    id: current_power_22181
+    register_type: read
+    address: 22181
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Temperature of Low-Side Bridge Arm"
+    id: temperature_of_low_side_bridge_arm_22182
+    register_type: read
+    address: 22182
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Instantaneous Maximum Charging Current"
+    id: instantaneous_maximum_charging_current_22183
+    register_type: read
+    address: 22183
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Instantaneous Maximum Discharging Current"
+    id: instantaneous_maximum_discharging_current_22184
+    register_type: read
+    address: 22184
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Network Status"
+    id: network_status_22190
+    register_type: read
+    address: 22190
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PWM Duty"
+    id: pwm_duty_22191
+    register_type: read
+    address: 22191
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "End Pack Resist Status"
+    id: end_pack_resist_status_22192
+    register_type: read
+    address: 22192
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "RTC Time Stamp H"
+    id: rtc_time_stamp_h_22193
+    register_type: read
+    address: 22193
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "RTC Time Stamp L"
+    id: rtc_time_stamp_l_22194
+    register_type: read
+    address: 22194
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Button Number"
+    id: button_number_22195
+    register_type: read
+    address: 22195
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Pre-charged Status"
+    id: pre_charged_status_22196
+    register_type: read
+    address: 22196
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Status"
+    id: battery_status_22197
+    register_type: read
+    address: 22197
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Heating enable"
+    id: heating_enable_22198
+    register_type: read
+    address: 22198
+    accuracy_decimals: 0
+    value_type: U_WORD

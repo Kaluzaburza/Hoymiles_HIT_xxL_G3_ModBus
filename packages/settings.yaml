@@ -1,0 +1,352 @@
+# Ustawienia falownika, baterii i EMS (rejestry Holding RW)
+# Zakresy i przeliczniki pochodzą z Energy Storage MODBUS Protocol Map V2.4.
+
+sensor:
+  # Surowy stan EMS jest tylko odczytywany. Zapis wykonuje poniższy select jako
+  # jeden atomowy blok FC10 (4300-4306), tak jak przycisk Save w aplikacji S-Miles.
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: ems_mode_raw_4300
+    internal: true
+    register_type: holding
+    address: 4300
+    value_type: U_WORD
+
+  # Rejestr 4302 należy do trybu Backup, a nie do Pure Off-Grid. Nie jest
+  # wystawiany jako encja użytkowa, ale jego bieżąca wartość musi pozostać
+  # częścią atomowego zapisu całego bloku EMS 4300-4306.
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: backup_soc_raw_4302
+    internal: true
+    register_type: holding
+    address: 4302
+    value_type: U_WORD
+    skip_updates: 4
+
+select:
+  - platform: template
+    name: "Tryb EMS"
+    id: ems_mode_4300
+    entity_category: config
+    update_interval: 5s
+    options:
+      - "Autokonsumpcja (Self-Use)"
+      - "Off-Grid"
+      - "Ładowanie z sieci"
+      - "Rozładowanie do sieci"
+    lambda: |-
+      if (!id(ems_mode_raw_4300).has_state()) return {};
+      const uint16_t mode = static_cast<uint16_t>(id(ems_mode_raw_4300).state);
+      switch (mode) {
+        case 0: return std::string("Autokonsumpcja (Self-Use)");
+        case 3: return std::string("Off-Grid");
+        case 4: return std::string("Ładowanie z sieci");
+        case 5: return std::string("Rozładowanie do sieci");
+        default: return {};
+      }
+    set_action:
+      - lambda: |-
+          uint16_t mode = 0;
+          if (x == "Off-Grid") mode = 3;
+          else if (x == "Ładowanie z sieci") mode = 4;
+          else if (x == "Rozładowanie do sieci") mode = 5;
+
+          auto encode = [](float value, float scale, uint16_t fallback,
+                           uint16_t minimum, uint16_t maximum) -> uint16_t {
+            if (std::isnan(value)) return fallback;
+            int32_t raw = static_cast<int32_t>(std::lround(value * scale));
+            if (raw < minimum) raw = minimum;
+            if (raw > maximum) raw = maximum;
+            return static_cast<uint16_t>(raw);
+          };
+
+          // Rejestry 4304 i 4306 mają mnożnik 10: 50% jest zapisywane jako 500.
+          std::vector<uint16_t> values = {
+            mode,
+            encode(id(self_used_soc_4301).state, 1.0f, 10, 10, 100),
+            encode(id(backup_soc_raw_4302).state, 1.0f, 90, 60, 100),
+            encode(id(force_charge_soc_4303).state, 1.0f, 70, 10, 100),
+            encode(id(maximum_charge_power_4304).state, 10.0f, 500, 0, 1000),
+            encode(id(force_discharge_soc_4305).state, 1.0f, 30, 0, 100),
+            encode(id(maximum_discharge_power_4306).state, 10.0f, 500, 0, 1000),
+          };
+
+          auto *controller = id(${modbus_controller_id});
+          auto command = esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
+              controller, 4300, values.size(), values);
+          controller->queue_command(command);
+          id(ems_mode_raw_4300).publish_state(mode);
+          id(ems_mode_4300).publish_state(x);
+          ESP_LOGI("ems", "Zapisano atomowo EMS 4300-4306, tryb=%u", mode);
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Three Phase Unbalance"
+    id: three_phase_unbalance_enable_302
+    address: 302
+    value_type: U_WORD
+    entity_category: config
+    skip_updates: 4
+    optionsmap:
+      "Disabled": 0
+      "Enabled": 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "EPS Mode"
+    id: eps_mode_323
+    address: 323
+    value_type: U_WORD
+    entity_category: config
+    skip_updates: 4
+    optionsmap:
+      "Disabled": 0
+      "EPS": 1
+      "UPS": 2
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Island Mode"
+    id: pv_island_mode_en_324
+    address: 324
+    value_type: U_WORD
+    entity_category: config
+    skip_updates: 4
+    optionsmap:
+      "Disabled": 0
+      "Enabled": 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Type Setting"
+    id: battery_type_4100
+    address: 4100
+    value_type: U_WORD
+    entity_category: config
+    skip_updates: 9
+    optionsmap:
+      "No Battery": 0
+      "Lithium": 1
+      "Lead-Acid": 2
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "BMS Type Setting"
+    id: bms_type_4101
+    address: 4101
+    value_type: U_WORD
+    entity_category: config
+    skip_updates: 9
+    optionsmap:
+      "Not Configured": 0
+      "Pylon LV": 1
+      "Pylon HV": 2
+      "Dyness HV": 3
+      "Dyness LV": 4
+      "Sunwoda LV": 5
+      "Uz LV": 6
+      "Soluna HV": 7
+      "Soluna LV": 8
+      "Steltec LV": 9
+      "XinYi LV": 10
+      "Vestwoods LV": 11
+      "JK HV": 12
+      "BYD LV": 13
+      "Uz HV": 14
+      "Zetara LV": 15
+      "FEB HV": 16
+      "Pytes LV": 17
+      "Dmegc LV": 18
+      "Weineng LV": 19
+      "Weineng HV": 20
+      "GSL LV": 21
+      "HOY LV": 22
+      "HOY HV": 23
+      "FEB LV": 24
+      "UHhome LV": 25
+      "UHhome HV": 26
+      "BYD HV": 27
+      "Vestwoods HV": 28
+      "Phylion HV": 29
+      "Hoymiles LV": 30
+      "Pholion LV": 31
+      "Wattsonic LV": 32
+      "Enershare HV": 33
+      "Beghelli LV": 34
+      "LvToPSUN LV": 35
+      "PYTES HV": 36
+      "LvToPSUN HV": 37
+      "RAJA HV": 38
+      "Felicity LV": 39
+
+number:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Input Power Limitation (Valley)"
+    id: gridin_power_limitation_when_vally_301
+    address: 301
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 50
+    step: 0.1
+    lambda: return x * 0.1f;
+    write_lambda: return x * 10.0f;
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Max Charge Power"
+    id: battery_max_charge_power_306
+    address: 306
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    # Starsza wersja integracji mogła zapisać 100% jako surowe 1000.
+    # Odczyt koryguje tę wartość, ale nowe zapisy są już zgodne z mapą (0-100).
+    lambda: |-
+      return x > 100.0f ? x * 0.1f : x;
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Max Discharge Power"
+    id: battery_max_discharge_power_307
+    address: 307
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    lambda: |-
+      return x > 100.0f ? x * 0.1f : x;
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Maximum SOC"
+    id: max_soc_308
+    address: 308
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Minimum SOC"
+    id: min_soc_309
+    address: 309
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 90
+    step: 1
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Low SOC Grid Charge Power"
+    id: replenish_power_310
+    address: 310
+    value_type: U_WORD
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 2000
+    step: 50
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "SOC Start Charge From Grid"
+    id: rsvd_replenish_power_311
+    address: 311
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 0.1
+    lambda: return x * 0.1f;
+    write_lambda: return x * 10.0f;
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Self-Use SOC"
+    id: self_used_soc_4301
+    address: 4301
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Force Charge SOC"
+    id: force_charge_soc_4303
+    address: 4303
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Maximum Charge Power"
+    id: maximum_charge_power_4304
+    address: 4304
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 0.1
+    lambda: return x * 0.1f;
+    write_lambda: return x * 10.0f;
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Force Discharge SOC"
+    id: force_discharge_soc_4305
+    address: 4305
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    entity_category: config
+    skip_updates: 4
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Maximum Discharge Power"
+    id: maximum_discharge_power_4306
+    address: 4306
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 0.1
+    lambda: return x * 0.1f;
+    write_lambda: return x * 10.0f;
+    entity_category: config
+    skip_updates: 4

@@ -1,0 +1,350 @@
+# Sieć AC: napięcia, moc oraz energia kupiona/sprzedana
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Voltage L1"
+    id: grid_voltage_a_62
+    register_type: read
+    address: 62
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Voltage L2"
+    id: grid_voltage_b_63
+    register_type: read
+    address: 63
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Voltage L3"
+    id: grid_voltage_c_64
+    register_type: read
+    address: 64
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Inverter Grid Frequency"
+    id: grid_frequency_66
+    register_type: read
+    address: 66
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: U_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy Total"
+    id: grid_energy_buy_total_8256
+    register_type: read
+    address: 2040
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy L1n Total"
+    id: grid_energy_buy_an_total_8258
+    register_type: read
+    address: 2042
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy L2n Total"
+    id: grid_energy_buy_bn_total_8260
+    register_type: read
+    address: 2044
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy L3n Total"
+    id: grid_energy_buy_cn_total_8262
+    register_type: read
+    address: 2046
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell Total"
+    id: grid_energy_sell_total_8264
+    register_type: read
+    address: 2048
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell L1n Total"
+    id: grid_energy_sell_an_total_8266
+    register_type: read
+    address: 2050
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell L2n Total"
+    id: grid_energy_sell_bn_total_8268
+    register_type: read
+    address: 2052
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell L3n Total"
+    id: grid_energy_sell_cn_total_8270
+    register_type: read
+    address: 2054
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy Today"
+    id: grid_energy_buy_today_8480
+    register_type: read
+    address: 2120
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy L1n Today"
+    id: grid_energy_buy_an_today_8481
+    register_type: read
+    address: 2121
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy L2n Today"
+    id: grid_energy_buy_bn_today_8482
+    register_type: read
+    address: 2122
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Buy L3n Today"
+    id: grid_energy_buy_cn_today_8483
+    register_type: read
+    address: 2123
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell Today"
+    id: grid_energy_sell_today_8484
+    register_type: read
+    address: 2124
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell L1n Today"
+    id: grid_energy_sell_an_today_8485
+    register_type: read
+    address: 2125
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell L2n Today"
+    id: grid_energy_sell_bn_today_8486
+    register_type: read
+    address: 2126
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Energy Sell L3n Today"
+    id: grid_energy_sell_cn_today_8487
+    register_type: read
+    address: 2127
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Active Power"
+    id: grid_active_power_8549
+    register_type: read
+    address: 2165
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Active Power L1"
+    id: grid_active_power_an_8550
+    register_type: read
+    address: 2166
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Active Power L2"
+    id: grid_active_power_bn_8551
+    register_type: read
+    address: 2167
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Active Power L3"
+    id: grid_active_power_cn_8552
+    register_type: read
+    address: 2168
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD

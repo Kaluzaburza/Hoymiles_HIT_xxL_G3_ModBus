@@ -1,0 +1,5242 @@
+[
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_voltage_l1",
+    "source_name": "Backup Voltage L1",
+    "source_id": "backup_voltage_a_81",
+    "source_object_id": "backup_voltage_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Voltage L1",
+      "pl": "Backup napięcie L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Voltage L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup napięcie L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_voltage_l2",
+    "source_name": "Backup Voltage L2",
+    "source_id": "backup_voltage_b_82",
+    "source_object_id": "backup_voltage_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Voltage L2",
+      "pl": "Backup napięcie L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Voltage L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup napięcie L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_voltage_l3",
+    "source_name": "Backup Voltage L3",
+    "source_id": "backup_voltage_c_83",
+    "source_object_id": "backup_voltage_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Voltage L3",
+      "pl": "Backup napięcie L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Voltage L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup napięcie L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_current_l1",
+    "source_name": "Backup Current L1",
+    "source_id": "backup_current_a_84",
+    "source_object_id": "backup_current_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Current L1",
+      "pl": "Backup prąd L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Current L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup prąd L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_current_l2",
+    "source_name": "Backup Current L2",
+    "source_id": "backup_current_b_85",
+    "source_object_id": "backup_current_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Current L2",
+      "pl": "Backup prąd L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Current L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup prąd L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_current_l3",
+    "source_name": "Backup Current L3",
+    "source_id": "backup_current_c_86",
+    "source_object_id": "backup_current_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Current L3",
+      "pl": "Backup prąd L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Current L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup prąd L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_apparent_power",
+    "source_name": "Backup Apparent Power",
+    "source_id": "backup_apparent_power_87",
+    "source_object_id": "backup_apparent_power",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Apparent Power",
+      "pl": "Backup pozorna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Apparent Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup pozorna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_apparent_power_l1",
+    "source_name": "Backup Apparent Power L1",
+    "source_id": "backup_apparent_power_a_88",
+    "source_object_id": "backup_apparent_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Apparent Power L1",
+      "pl": "Backup pozorna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Apparent Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup pozorna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_apparent_power_l2",
+    "source_name": "Backup Apparent Power L2",
+    "source_id": "backup_apparent_power_b_89",
+    "source_object_id": "backup_apparent_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Apparent Power L2",
+      "pl": "Backup pozorna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Apparent Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup pozorna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_apparent_power_l3",
+    "source_name": "Backup Apparent Power L3",
+    "source_id": "backup_apparent_power_c_90",
+    "source_object_id": "backup_apparent_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Apparent Power L3",
+      "pl": "Backup pozorna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Apparent Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup pozorna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_active_power",
+    "source_name": "Backup Active Power",
+    "source_id": "backup_active_power_91",
+    "source_object_id": "backup_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Active Power",
+      "pl": "Backup czynna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup czynna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_active_power_l1",
+    "source_name": "Backup Active Power L1",
+    "source_id": "backup_active_power_a_92",
+    "source_object_id": "backup_active_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Active Power L1",
+      "pl": "Backup czynna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Active Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup czynna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_active_power_l2",
+    "source_name": "Backup Active Power L2",
+    "source_id": "backup_active_power_b_93",
+    "source_object_id": "backup_active_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Active Power L2",
+      "pl": "Backup czynna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Active Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup czynna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "backup_active_power_l3",
+    "source_name": "Backup Active Power L3",
+    "source_id": "backup_active_power_c_94",
+    "source_object_id": "backup_active_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Backup Active Power L3",
+      "pl": "Backup czynna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Backup Active Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Backup czynna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_active_power_direct",
+    "source_name": "Load Active Power (Direct)",
+    "source_id": "load_active_power_644",
+    "source_object_id": "load_active_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "Load Active Power (Direct)",
+      "pl": "Odbiorniki czynna moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Active Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki czynna moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_total",
+    "source_name": "Load Energy Use Total",
+    "source_id": "load_energy_use_total_8272",
+    "source_object_id": "load_energy_use_total",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use Total",
+      "pl": "Odbiorniki energia Use łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_l1n_total",
+    "source_name": "Load Energy Use L1n Total",
+    "source_id": "load_energy_use_an_total_8274",
+    "source_object_id": "load_energy_use_l1n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use L1n Total",
+      "pl": "Odbiorniki energia Use L1n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use L1n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use L1n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_l2n_total",
+    "source_name": "Load Energy Use L2n Total",
+    "source_id": "load_energy_use_bn_total_8276",
+    "source_object_id": "load_energy_use_l2n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use L2n Total",
+      "pl": "Odbiorniki energia Use L2n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use L2n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use L2n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_l3n_total",
+    "source_name": "Load Energy Use L3n Total",
+    "source_id": "load_energy_use_cn_total_8278",
+    "source_object_id": "load_energy_use_l3n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use L3n Total",
+      "pl": "Odbiorniki energia Use L3n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use L3n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use L3n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_today",
+    "source_name": "Load Energy Use Today",
+    "source_id": "load_energy_use_today_8488",
+    "source_object_id": "load_energy_use_today",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use Today",
+      "pl": "Odbiorniki energia Use dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_l1n_today",
+    "source_name": "Load Energy Use L1n Today",
+    "source_id": "load_energy_use_an_today_8489",
+    "source_object_id": "load_energy_use_l1n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use L1n Today",
+      "pl": "Odbiorniki energia Use L1n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use L1n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use L1n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_l2n_today",
+    "source_name": "Load Energy Use L2n Today",
+    "source_id": "load_energy_use_bn_today_8490",
+    "source_object_id": "load_energy_use_l2n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use L2n Today",
+      "pl": "Odbiorniki energia Use L2n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use L2n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use L2n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_energy_use_l3n_today",
+    "source_name": "Load Energy Use L3n Today",
+    "source_id": "load_energy_use_cn_today_8491",
+    "source_object_id": "load_energy_use_l3n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Load Energy Use L3n Today",
+      "pl": "Odbiorniki energia Use L3n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Energy Use L3n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki energia Use L3n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_power_total",
+    "source_name": "Load Power Total",
+    "source_id": "load_power_total_8553",
+    "source_object_id": "load_power_total",
+    "entity_category": null,
+    "name": {
+      "en": "Load Power Total",
+      "pl": "Odbiorniki moc łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Power Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki moc łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_power_l1n",
+    "source_name": "Load Power L1n",
+    "source_id": "load_power_an_8554",
+    "source_object_id": "load_power_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "Load Power L1n",
+      "pl": "Odbiorniki moc L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Power L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki moc L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_power_l2n",
+    "source_name": "Load Power L2n",
+    "source_id": "load_power_bn_8555",
+    "source_object_id": "load_power_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "Load Power L2n",
+      "pl": "Odbiorniki moc L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Power L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki moc L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_power_l3n",
+    "source_name": "Load Power L3n",
+    "source_id": "load_power_cn_8556",
+    "source_object_id": "load_power_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "Load Power L3n",
+      "pl": "Odbiorniki moc L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load Power L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki moc L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_capacity",
+    "source_name": "Battery Capacity",
+    "source_id": "battery_capacity_4102",
+    "source_object_id": "battery_capacity",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Capacity",
+      "pl": "Bateria pojemność"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Capacity.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria pojemność."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "total_capacity",
+    "source_name": "Total Capacity",
+    "source_id": "total_capacity_1907",
+    "source_object_id": "total_capacity",
+    "entity_category": null,
+    "name": {
+      "en": "Total Capacity",
+      "pl": "Łącznie pojemność"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Total Capacity.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Łącznie pojemność."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_soc_bms",
+    "source_name": "Battery SOC (BMS)",
+    "source_id": "battery_soc_1909",
+    "source_object_id": "battery_soc_bms",
+    "entity_category": null,
+    "name": {
+      "en": "Battery SOC (BMS)",
+      "pl": "Bateria SOC (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery SOC (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria SOC (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_soh",
+    "source_name": "Battery SOH",
+    "source_id": "battery_soh_1910",
+    "source_object_id": "battery_soh",
+    "entity_category": null,
+    "name": {
+      "en": "Battery SOH",
+      "pl": "Bateria SOH"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery SOH.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria SOH."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_voltage_bms",
+    "source_name": "Battery Voltage (BMS)",
+    "source_id": "battery_voltage_1911",
+    "source_object_id": "battery_voltage_bms",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Voltage (BMS)",
+      "pl": "Bateria napięcie (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Voltage (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria napięcie (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_current_bms",
+    "source_name": "Battery Current (BMS)",
+    "source_id": "battery_current_1912",
+    "source_object_id": "battery_current_bms",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Current (BMS)",
+      "pl": "Bateria prąd (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Current (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria prąd (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_power_bms",
+    "source_name": "Battery Power (BMS)",
+    "source_id": "battery_power_1914",
+    "source_object_id": "battery_power_bms",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Power (BMS)",
+      "pl": "Bateria moc (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Power (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria moc (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "maximum_charge_current",
+    "source_name": "Maximum Charge Current",
+    "source_id": "max_charge_current_1916",
+    "source_object_id": "maximum_charge_current",
+    "entity_category": null,
+    "name": {
+      "en": "Maximum Charge Current",
+      "pl": "Maksymalna ładowanie prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Maximum Charge Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Maksymalna ładowanie prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "maximum_discharge_current",
+    "source_name": "Maximum Discharge Current",
+    "source_id": "max_discharge_current_1917",
+    "source_object_id": "maximum_discharge_current",
+    "entity_category": null,
+    "name": {
+      "en": "Maximum Discharge Current",
+      "pl": "Maksymalna rozładowanie prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Maximum Discharge Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Maksymalna rozładowanie prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "charge_cut_off_voltage",
+    "source_name": "Charge Cut-off Voltage",
+    "source_id": "charge_cutoff_voltage_1918",
+    "source_object_id": "charge_cut_off_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "Charge Cut-off Voltage",
+      "pl": "Ładowanie Cut-off napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Charge Cut-off Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Ładowanie Cut-off napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "discharge_cut_off_voltage",
+    "source_name": "Discharge Cut-off Voltage",
+    "source_id": "discharge_cutoff_voltage_1919",
+    "source_object_id": "discharge_cut_off_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "Discharge Cut-off Voltage",
+      "pl": "Rozładowanie Cut-off napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Discharge Cut-off Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Rozładowanie Cut-off napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "cell_max_temperature",
+    "source_name": "Cell Max Temperature",
+    "source_id": "cell_max_temperature_1922",
+    "source_object_id": "cell_max_temperature",
+    "entity_category": null,
+    "name": {
+      "en": "Cell Max Temperature",
+      "pl": "Cell Max temperatura"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Cell Max Temperature.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Cell Max temperatura."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "cell_min_temperature",
+    "source_name": "Cell Min Temperature",
+    "source_id": "cell_min_temperature_1923",
+    "source_object_id": "cell_min_temperature",
+    "entity_category": null,
+    "name": {
+      "en": "Cell Min Temperature",
+      "pl": "Cell Min temperatura"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Cell Min Temperature.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Cell Min temperatura."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_charge_energy_today",
+    "source_name": "Battery Charge Energy Today",
+    "source_id": "bat_charge_energy_today_8462",
+    "source_object_id": "battery_charge_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Charge Energy Today",
+      "pl": "Bateria ładowanie energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Charge Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria ładowanie energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_discharge_energy_today",
+    "source_name": "Battery Discharge Energy Today",
+    "source_id": "bat_discharge_energy_today_8463",
+    "source_object_id": "battery_discharge_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Discharge Energy Today",
+      "pl": "Bateria rozładowanie energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Discharge Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria rozładowanie energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_total_power_energy_block",
+    "source_name": "Battery Total Power (Energy Block)",
+    "source_id": "bat_total_power_8546",
+    "source_object_id": "battery_total_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Total Power (Energy Block)",
+      "pl": "Bateria łącznie moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Total Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria łącznie moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "esp_uptime",
+    "source_name": "ESP Uptime",
+    "source_id": "esp_uptime",
+    "source_object_id": "esp_uptime",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ESP Uptime",
+      "pl": "ESP Uptime"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ESP Uptime.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: ESP Uptime."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inv_ths_temp",
+    "source_name": "Inv Ths Temp",
+    "source_id": "inv_ths_temp_113",
+    "source_object_id": "inv_ths_temp",
+    "entity_category": null,
+    "name": {
+      "en": "Inv Ths Temp",
+      "pl": "Inv Ths Temp"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inv Ths Temp.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Inv Ths Temp."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "bat_ths_temp",
+    "source_name": "Bat Ths Temp",
+    "source_id": "bat_ths_temp_114",
+    "source_object_id": "bat_ths_temp",
+    "entity_category": null,
+    "name": {
+      "en": "Bat Ths Temp",
+      "pl": "Bat Ths Temp"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Bat Ths Temp.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bat Ths Temp."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "cav_temp",
+    "source_name": "Cav Temp",
+    "source_id": "cav_temp_115",
+    "source_object_id": "cav_temp",
+    "entity_category": null,
+    "name": {
+      "en": "Cav Temp",
+      "pl": "Cav Temp"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Cav Temp.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Cav Temp."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pe_voltage",
+    "source_name": "PE Voltage",
+    "source_id": "pe_voltage_577",
+    "source_object_id": "pe_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "PE Voltage",
+      "pl": "PE napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PE Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PE napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "iso_resistor",
+    "source_name": "Iso Resistor",
+    "source_id": "iso_resistor_578",
+    "source_object_id": "iso_resistor",
+    "entity_category": null,
+    "name": {
+      "en": "Iso Resistor",
+      "pl": "Iso Resistor"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Iso Resistor.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Iso Resistor."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "residual_current",
+    "source_name": "Residual Current",
+    "source_id": "residual_current_579",
+    "source_object_id": "residual_current",
+    "entity_category": null,
+    "name": {
+      "en": "Residual Current",
+      "pl": "Residual prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Residual Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Residual prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "energy_from_pv_total",
+    "source_name": "Energy From PV Total",
+    "source_id": "energy_from_pv_total_8288",
+    "source_object_id": "energy_from_pv_total",
+    "entity_category": null,
+    "name": {
+      "en": "Energy From PV Total",
+      "pl": "Energia From PV łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Energy From PV Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Energia From PV łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "energy_from_battery_total",
+    "source_name": "Energy From Battery Total",
+    "source_id": "energy_from_bat_total_8290",
+    "source_object_id": "energy_from_battery_total",
+    "entity_category": null,
+    "name": {
+      "en": "Energy From Battery Total",
+      "pl": "Energia From bateria łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Energy From Battery Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Energia From bateria łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "energy_from_grid_total",
+    "source_name": "Energy From Grid Total",
+    "source_id": "energy_from_grid_total_8296",
+    "source_object_id": "energy_from_grid_total",
+    "entity_category": null,
+    "name": {
+      "en": "Energy From Grid Total",
+      "pl": "Energia From sieć łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Energy From Grid Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Energia From sieć łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_battery_energy_today",
+    "source_name": "PV to Battery Energy Today",
+    "source_id": "pvtobat_energy_today_8459",
+    "source_object_id": "pv_to_battery_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Battery Energy Today",
+      "pl": "PV to bateria energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Battery Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to bateria energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_load_energy_today",
+    "source_name": "PV to Load Energy Today",
+    "source_id": "pvtoload_energy_today_8460",
+    "source_object_id": "pv_to_load_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Load Energy Today",
+      "pl": "PV to odbiorniki energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Load Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to odbiorniki energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_grid_energy_today",
+    "source_name": "PV to Grid Energy Today",
+    "source_id": "pvtogrid_energy_today_8461",
+    "source_object_id": "pv_to_grid_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Grid Energy Today",
+      "pl": "PV to sieć energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Grid Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to sieć energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "energy_from_pv_today",
+    "source_name": "Energy From PV Today",
+    "source_id": "energy_from_pv_today_8492",
+    "source_object_id": "energy_from_pv_today",
+    "entity_category": null,
+    "name": {
+      "en": "Energy From PV Today",
+      "pl": "Energia From PV dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Energy From PV Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Energia From PV dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "energy_from_battery_today",
+    "source_name": "Energy From Battery Today",
+    "source_id": "energy_from_bat_today_8493",
+    "source_object_id": "energy_from_battery_today",
+    "entity_category": null,
+    "name": {
+      "en": "Energy From Battery Today",
+      "pl": "Energia From bateria dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Energy From Battery Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Energia From bateria dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "energy_from_grid_today",
+    "source_name": "Energy From Grid Today",
+    "source_id": "energy_from_grid_today_8494",
+    "source_object_id": "energy_from_grid_today",
+    "entity_category": null,
+    "name": {
+      "en": "Energy From Grid Today",
+      "pl": "Energia From sieć dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Energy From Grid Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Energia From sieć dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_battery_power",
+    "source_name": "PV to Battery Power",
+    "source_id": "pvtobat_power_8561",
+    "source_object_id": "pv_to_battery_power",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Battery Power",
+      "pl": "PV to bateria moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Battery Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to bateria moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_load_power",
+    "source_name": "PV to Load Power",
+    "source_id": "pvtoload_power_8562",
+    "source_object_id": "pv_to_load_power",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Load Power",
+      "pl": "PV to odbiorniki moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Load Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to odbiorniki moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_grid_power",
+    "source_name": "PV to Grid Power",
+    "source_id": "pvtogrid_power_8563",
+    "source_object_id": "pv_to_grid_power",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Grid Power",
+      "pl": "PV to sieć moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Grid Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to sieć moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "load_from_pv_power",
+    "source_name": "Load From PV Power",
+    "source_id": "load_from_pv_power_8564",
+    "source_object_id": "load_from_pv_power",
+    "entity_category": null,
+    "name": {
+      "en": "Load From PV Power",
+      "pl": "Odbiorniki From PV moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Load From PV Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odbiorniki From PV moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_voltage_l1",
+    "source_name": "Generator Voltage L1",
+    "source_id": "gen_voltage_a_103",
+    "source_object_id": "generator_voltage_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Voltage L1",
+      "pl": "Generator napięcie L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Voltage L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator napięcie L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_voltage_l2",
+    "source_name": "Generator Voltage L2",
+    "source_id": "gen_voltage_b_104",
+    "source_object_id": "generator_voltage_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Voltage L2",
+      "pl": "Generator napięcie L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Voltage L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator napięcie L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_voltage_l3",
+    "source_name": "Generator Voltage L3",
+    "source_id": "gen_voltage_c_105",
+    "source_object_id": "generator_voltage_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Voltage L3",
+      "pl": "Generator napięcie L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Voltage L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator napięcie L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_current_l1",
+    "source_name": "Generator Current L1",
+    "source_id": "gen_current_a_106",
+    "source_object_id": "generator_current_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Current L1",
+      "pl": "Generator prąd L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Current L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator prąd L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_current_l2",
+    "source_name": "Generator Current L2",
+    "source_id": "gen_current_b_107",
+    "source_object_id": "generator_current_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Current L2",
+      "pl": "Generator prąd L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Current L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator prąd L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_current_l3",
+    "source_name": "Generator Current L3",
+    "source_id": "gen_current_c_108",
+    "source_object_id": "generator_current_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Current L3",
+      "pl": "Generator prąd L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Current L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator prąd L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_active_power_l1",
+    "source_name": "Generator Active Power L1",
+    "source_id": "gen_active_power_a_109",
+    "source_object_id": "generator_active_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Active Power L1",
+      "pl": "Generator czynna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Active Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator czynna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_active_power_l2",
+    "source_name": "Generator Active Power L2",
+    "source_id": "gen_active_power_b_110",
+    "source_object_id": "generator_active_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Active Power L2",
+      "pl": "Generator czynna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Active Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator czynna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_active_power_l3",
+    "source_name": "Generator Active Power L3",
+    "source_id": "gen_active_power_c_111",
+    "source_object_id": "generator_active_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Active Power L3",
+      "pl": "Generator czynna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Active Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator czynna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_total",
+    "source_name": "Generator Energy Total",
+    "source_id": "generator_energy_total_8304",
+    "source_object_id": "generator_energy_total",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy Total",
+      "pl": "Generator energia łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_l1n_total",
+    "source_name": "Generator Energy L1n Total",
+    "source_id": "generator_energy_an_total_8306",
+    "source_object_id": "generator_energy_l1n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy L1n Total",
+      "pl": "Generator energia L1n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy L1n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia L1n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_l2n_total",
+    "source_name": "Generator Energy L2n Total",
+    "source_id": "generator_energy_bn_total_8308",
+    "source_object_id": "generator_energy_l2n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy L2n Total",
+      "pl": "Generator energia L2n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy L2n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia L2n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_l3n_total",
+    "source_name": "Generator Energy L3n Total",
+    "source_id": "generator_energy_cn_total_8310",
+    "source_object_id": "generator_energy_l3n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy L3n Total",
+      "pl": "Generator energia L3n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy L3n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia L3n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_total_today",
+    "source_name": "Generator Energy Total Today",
+    "source_id": "generator_energy_total_today_8495",
+    "source_object_id": "generator_energy_total_today",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy Total Today",
+      "pl": "Generator energia łącznie dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy Total Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia łącznie dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_l1n_today",
+    "source_name": "Generator Energy L1n Today",
+    "source_id": "generator_energy_an_today_8496",
+    "source_object_id": "generator_energy_l1n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy L1n Today",
+      "pl": "Generator energia L1n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy L1n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia L1n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_l2n_today",
+    "source_name": "Generator Energy L2n Today",
+    "source_id": "generator_energy_bn_today_8497",
+    "source_object_id": "generator_energy_l2n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy L2n Today",
+      "pl": "Generator energia L2n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy L2n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia L2n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_energy_l3n_today",
+    "source_name": "Generator Energy L3n Today",
+    "source_id": "generator_energy_cn_today_8498",
+    "source_object_id": "generator_energy_l3n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Energy L3n Today",
+      "pl": "Generator energia L3n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Energy L3n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator energia L3n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_total_power",
+    "source_name": "Generator Total Power",
+    "source_id": "generator_total_power_8557",
+    "source_object_id": "generator_total_power",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Total Power",
+      "pl": "Generator łącznie moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Total Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator łącznie moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_power_l1n",
+    "source_name": "Generator Power L1n",
+    "source_id": "generator_power_an_8558",
+    "source_object_id": "generator_power_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Power L1n",
+      "pl": "Generator moc L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Power L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator moc L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_power_l2n",
+    "source_name": "Generator Power L2n",
+    "source_id": "generator_power_bn_8559",
+    "source_object_id": "generator_power_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Power L2n",
+      "pl": "Generator moc L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Power L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator moc L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "generator_power_l3n",
+    "source_name": "Generator Power L3n",
+    "source_id": "generator_power_cn_8560",
+    "source_object_id": "generator_power_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "Generator Power L3n",
+      "pl": "Generator moc L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Generator Power L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generator moc L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_voltage_l1",
+    "source_name": "Grid Voltage L1",
+    "source_id": "grid_voltage_a_62",
+    "source_object_id": "grid_voltage_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Voltage L1",
+      "pl": "Sieć napięcie L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Voltage L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć napięcie L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_voltage_l2",
+    "source_name": "Grid Voltage L2",
+    "source_id": "grid_voltage_b_63",
+    "source_object_id": "grid_voltage_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Voltage L2",
+      "pl": "Sieć napięcie L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Voltage L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć napięcie L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_voltage_l3",
+    "source_name": "Grid Voltage L3",
+    "source_id": "grid_voltage_c_64",
+    "source_object_id": "grid_voltage_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Voltage L3",
+      "pl": "Sieć napięcie L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Voltage L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć napięcie L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_grid_frequency",
+    "source_name": "Inverter Grid Frequency",
+    "source_id": "grid_frequency_66",
+    "source_object_id": "inverter_grid_frequency",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Grid Frequency",
+      "pl": "Falownik sieć częstotliwość"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Grid Frequency.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik sieć częstotliwość."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_total",
+    "source_name": "Grid Energy Buy Total",
+    "source_id": "grid_energy_buy_total_8256",
+    "source_object_id": "grid_energy_buy_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy Total",
+      "pl": "Sieć energia pobór łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_l1n_total",
+    "source_name": "Grid Energy Buy L1n Total",
+    "source_id": "grid_energy_buy_an_total_8258",
+    "source_object_id": "grid_energy_buy_l1n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy L1n Total",
+      "pl": "Sieć energia pobór L1n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy L1n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór L1n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_l2n_total",
+    "source_name": "Grid Energy Buy L2n Total",
+    "source_id": "grid_energy_buy_bn_total_8260",
+    "source_object_id": "grid_energy_buy_l2n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy L2n Total",
+      "pl": "Sieć energia pobór L2n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy L2n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór L2n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_l3n_total",
+    "source_name": "Grid Energy Buy L3n Total",
+    "source_id": "grid_energy_buy_cn_total_8262",
+    "source_object_id": "grid_energy_buy_l3n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy L3n Total",
+      "pl": "Sieć energia pobór L3n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy L3n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór L3n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_total",
+    "source_name": "Grid Energy Sell Total",
+    "source_id": "grid_energy_sell_total_8264",
+    "source_object_id": "grid_energy_sell_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell Total",
+      "pl": "Sieć energia oddawanie łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_l1n_total",
+    "source_name": "Grid Energy Sell L1n Total",
+    "source_id": "grid_energy_sell_an_total_8266",
+    "source_object_id": "grid_energy_sell_l1n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell L1n Total",
+      "pl": "Sieć energia oddawanie L1n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell L1n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie L1n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_l2n_total",
+    "source_name": "Grid Energy Sell L2n Total",
+    "source_id": "grid_energy_sell_bn_total_8268",
+    "source_object_id": "grid_energy_sell_l2n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell L2n Total",
+      "pl": "Sieć energia oddawanie L2n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell L2n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie L2n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_l3n_total",
+    "source_name": "Grid Energy Sell L3n Total",
+    "source_id": "grid_energy_sell_cn_total_8270",
+    "source_object_id": "grid_energy_sell_l3n_total",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell L3n Total",
+      "pl": "Sieć energia oddawanie L3n łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell L3n Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie L3n łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_today",
+    "source_name": "Grid Energy Buy Today",
+    "source_id": "grid_energy_buy_today_8480",
+    "source_object_id": "grid_energy_buy_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy Today",
+      "pl": "Sieć energia pobór dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_l1n_today",
+    "source_name": "Grid Energy Buy L1n Today",
+    "source_id": "grid_energy_buy_an_today_8481",
+    "source_object_id": "grid_energy_buy_l1n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy L1n Today",
+      "pl": "Sieć energia pobór L1n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy L1n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór L1n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_l2n_today",
+    "source_name": "Grid Energy Buy L2n Today",
+    "source_id": "grid_energy_buy_bn_today_8482",
+    "source_object_id": "grid_energy_buy_l2n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy L2n Today",
+      "pl": "Sieć energia pobór L2n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy L2n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór L2n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_buy_l3n_today",
+    "source_name": "Grid Energy Buy L3n Today",
+    "source_id": "grid_energy_buy_cn_today_8483",
+    "source_object_id": "grid_energy_buy_l3n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Buy L3n Today",
+      "pl": "Sieć energia pobór L3n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Buy L3n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia pobór L3n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_today",
+    "source_name": "Grid Energy Sell Today",
+    "source_id": "grid_energy_sell_today_8484",
+    "source_object_id": "grid_energy_sell_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell Today",
+      "pl": "Sieć energia oddawanie dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_l1n_today",
+    "source_name": "Grid Energy Sell L1n Today",
+    "source_id": "grid_energy_sell_an_today_8485",
+    "source_object_id": "grid_energy_sell_l1n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell L1n Today",
+      "pl": "Sieć energia oddawanie L1n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell L1n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie L1n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_l2n_today",
+    "source_name": "Grid Energy Sell L2n Today",
+    "source_id": "grid_energy_sell_bn_today_8486",
+    "source_object_id": "grid_energy_sell_l2n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell L2n Today",
+      "pl": "Sieć energia oddawanie L2n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell L2n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie L2n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_energy_sell_l3n_today",
+    "source_name": "Grid Energy Sell L3n Today",
+    "source_id": "grid_energy_sell_cn_today_8487",
+    "source_object_id": "grid_energy_sell_l3n_today",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Energy Sell L3n Today",
+      "pl": "Sieć energia oddawanie L3n dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Energy Sell L3n Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć energia oddawanie L3n dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_active_power",
+    "source_name": "Grid Active Power",
+    "source_id": "grid_active_power_8549",
+    "source_object_id": "grid_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Active Power",
+      "pl": "Sieć czynna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć czynna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_active_power_l1",
+    "source_name": "Grid Active Power L1",
+    "source_id": "grid_active_power_an_8550",
+    "source_object_id": "grid_active_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Active Power L1",
+      "pl": "Sieć czynna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Active Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć czynna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_active_power_l2",
+    "source_name": "Grid Active Power L2",
+    "source_id": "grid_active_power_bn_8551",
+    "source_object_id": "grid_active_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Active Power L2",
+      "pl": "Sieć czynna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Active Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć czynna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_active_power_l3",
+    "source_name": "Grid Active Power L3",
+    "source_id": "grid_active_power_cn_8552",
+    "source_object_id": "grid_active_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Active Power L3",
+      "pl": "Sieć czynna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Active Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć czynna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "bus_voltage",
+    "source_name": "Bus Voltage",
+    "source_id": "bus_voltage_60",
+    "source_object_id": "bus_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "Bus Voltage",
+      "pl": "Magistrala napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Bus Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Magistrala napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_voltage_l1",
+    "source_name": "Inverter Voltage L1",
+    "source_id": "inv_voltage_a_67",
+    "source_object_id": "inverter_voltage_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Voltage L1",
+      "pl": "Falownik napięcie L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Voltage L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik napięcie L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_voltage_l2",
+    "source_name": "Inverter Voltage L2",
+    "source_id": "inv_voltage_b_68",
+    "source_object_id": "inverter_voltage_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Voltage L2",
+      "pl": "Falownik napięcie L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Voltage L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik napięcie L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_voltage_l3",
+    "source_name": "Inverter Voltage L3",
+    "source_id": "inv_voltage_c_69",
+    "source_object_id": "inverter_voltage_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Voltage L3",
+      "pl": "Falownik napięcie L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Voltage L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik napięcie L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_current_l1",
+    "source_name": "Inverter Current L1",
+    "source_id": "inv_current_a_70",
+    "source_object_id": "inverter_current_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Current L1",
+      "pl": "Falownik prąd L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Current L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik prąd L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_current_l2",
+    "source_name": "Inverter Current L2",
+    "source_id": "inv_current_b_71",
+    "source_object_id": "inverter_current_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Current L2",
+      "pl": "Falownik prąd L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Current L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik prąd L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_current_l3",
+    "source_name": "Inverter Current L3",
+    "source_id": "inv_current_c_72",
+    "source_object_id": "inverter_current_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Current L3",
+      "pl": "Falownik prąd L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Current L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik prąd L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_active_power",
+    "source_name": "Inverter Active Power",
+    "source_id": "inv_active_power_73",
+    "source_object_id": "inverter_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Active Power",
+      "pl": "Falownik czynna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik czynna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_active_power_l1",
+    "source_name": "Inverter Active Power L1",
+    "source_id": "inv_active_power_a_74",
+    "source_object_id": "inverter_active_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Active Power L1",
+      "pl": "Falownik czynna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Active Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik czynna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_active_power_l2",
+    "source_name": "Inverter Active Power L2",
+    "source_id": "inv_active_power_b_75",
+    "source_object_id": "inverter_active_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Active Power L2",
+      "pl": "Falownik czynna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Active Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik czynna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_active_power_l3",
+    "source_name": "Inverter Active Power L3",
+    "source_id": "inv_active_power_c_76",
+    "source_object_id": "inverter_active_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Active Power L3",
+      "pl": "Falownik czynna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Active Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik czynna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_reactive_power",
+    "source_name": "Inverter Reactive Power",
+    "source_id": "inv_reactive_power_77",
+    "source_object_id": "inverter_reactive_power",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Reactive Power",
+      "pl": "Falownik bierna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Reactive Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik bierna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_reactive_power_l1",
+    "source_name": "Inverter Reactive Power L1",
+    "source_id": "inv_reactive_power_a_78",
+    "source_object_id": "inverter_reactive_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Reactive Power L1",
+      "pl": "Falownik bierna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Reactive Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik bierna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_reactive_power_l2",
+    "source_name": "Inverter Reactive Power L2",
+    "source_id": "inv_reactive_power_b_79",
+    "source_object_id": "inverter_reactive_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Reactive Power L2",
+      "pl": "Falownik bierna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Reactive Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik bierna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "inverter_reactive_power_l3",
+    "source_name": "Inverter Reactive Power L3",
+    "source_id": "inv_reactive_power_c_80",
+    "source_object_id": "inverter_reactive_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Reactive Power L3",
+      "pl": "Falownik bierna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Reactive Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Falownik bierna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_voltage_l1n",
+    "source_name": "Grid Voltage L1n",
+    "source_id": "grid_voltage_an_1801",
+    "source_object_id": "grid_voltage_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Voltage L1n",
+      "pl": "Sieć napięcie L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Voltage L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć napięcie L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_voltage_l2n",
+    "source_name": "Grid Voltage L2n",
+    "source_id": "grid_voltage_bn_1802",
+    "source_object_id": "grid_voltage_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Voltage L2n",
+      "pl": "Sieć napięcie L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Voltage L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć napięcie L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_voltage_l3n",
+    "source_name": "Grid Voltage L3n",
+    "source_id": "grid_voltage_cn_1803",
+    "source_object_id": "grid_voltage_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Voltage L3n",
+      "pl": "Sieć napięcie L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Voltage L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć napięcie L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_current_l1n",
+    "source_name": "Grid Current L1n",
+    "source_id": "grid_current_an_1804",
+    "source_object_id": "grid_current_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Current L1n",
+      "pl": "Sieć prąd L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Current L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć prąd L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_current_l2n",
+    "source_name": "Grid Current L2n",
+    "source_id": "grid_current_bn_1805",
+    "source_object_id": "grid_current_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Current L2n",
+      "pl": "Sieć prąd L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Current L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć prąd L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_current_l3n",
+    "source_name": "Grid Current L3n",
+    "source_id": "grid_current_cn_1806",
+    "source_object_id": "grid_current_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Current L3n",
+      "pl": "Sieć prąd L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Current L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć prąd L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "meter_grid_frequency",
+    "source_name": "Meter Grid Frequency",
+    "source_id": "grid_frequency_1807",
+    "source_object_id": "meter_grid_frequency",
+    "entity_category": null,
+    "name": {
+      "en": "Meter Grid Frequency",
+      "pl": "Meter sieć częstotliwość"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Meter Grid Frequency.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Meter sieć częstotliwość."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_total_current",
+    "source_name": "Grid Total Current",
+    "source_id": "grid_total_current_1804_1806",
+    "source_object_id": "grid_total_current",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Total Current",
+      "pl": "Sieć łącznie prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Total Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć łącznie prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "meter_grid_active_power_l1",
+    "source_name": "Meter Grid Active Power L1",
+    "source_id": "grid_active_power_an_1808",
+    "source_object_id": "meter_grid_active_power_l1",
+    "entity_category": null,
+    "name": {
+      "en": "Meter Grid Active Power L1",
+      "pl": "Meter sieć czynna moc L1"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Meter Grid Active Power L1.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Meter sieć czynna moc L1."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "meter_grid_active_power_l2",
+    "source_name": "Meter Grid Active Power L2",
+    "source_id": "grid_active_power_bn_1810",
+    "source_object_id": "meter_grid_active_power_l2",
+    "entity_category": null,
+    "name": {
+      "en": "Meter Grid Active Power L2",
+      "pl": "Meter sieć czynna moc L2"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Meter Grid Active Power L2.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Meter sieć czynna moc L2."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "meter_grid_active_power_l3",
+    "source_name": "Meter Grid Active Power L3",
+    "source_id": "grid_active_power_cn_1812",
+    "source_object_id": "meter_grid_active_power_l3",
+    "entity_category": null,
+    "name": {
+      "en": "Meter Grid Active Power L3",
+      "pl": "Meter sieć czynna moc L3"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Meter Grid Active Power L3.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Meter sieć czynna moc L3."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "meter_grid_total_active_power",
+    "source_name": "Meter Grid Total Active Power",
+    "source_id": "grid_total_active_power_1814",
+    "source_object_id": "meter_grid_total_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Meter Grid Total Active Power",
+      "pl": "Meter sieć łącznie czynna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Meter Grid Total Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Meter sieć łącznie czynna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_reactive_power_l1n",
+    "source_name": "Grid Reactive Power L1n",
+    "source_id": "grid_reactive_power_an_1816",
+    "source_object_id": "grid_reactive_power_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Reactive Power L1n",
+      "pl": "Sieć bierna moc L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Reactive Power L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć bierna moc L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_reactive_power_l2n",
+    "source_name": "Grid Reactive Power L2n",
+    "source_id": "grid_reactive_power_bn_1818",
+    "source_object_id": "grid_reactive_power_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Reactive Power L2n",
+      "pl": "Sieć bierna moc L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Reactive Power L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć bierna moc L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_reactive_power_l3n",
+    "source_name": "Grid Reactive Power L3n",
+    "source_id": "grid_reactive_power_cn_1820",
+    "source_object_id": "grid_reactive_power_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Reactive Power L3n",
+      "pl": "Sieć bierna moc L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Reactive Power L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć bierna moc L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_total_reactive_power",
+    "source_name": "Grid Total Reactive Power",
+    "source_id": "grid_total_reactive_power_1822",
+    "source_object_id": "grid_total_reactive_power",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Total Reactive Power",
+      "pl": "Sieć łącznie bierna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Total Reactive Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć łącznie bierna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_power_factor",
+    "source_name": "Grid Power Factor",
+    "source_id": "grid_power_factor_1824",
+    "source_object_id": "grid_power_factor",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Power Factor",
+      "pl": "Sieć moc Factor"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Power Factor.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć moc Factor."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_power_factor_l1n",
+    "source_name": "Grid Power Factor L1n",
+    "source_id": "grid_power_factor_an_1825",
+    "source_object_id": "grid_power_factor_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Power Factor L1n",
+      "pl": "Sieć moc Factor L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Power Factor L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć moc Factor L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_power_factor_l2n",
+    "source_name": "Grid Power Factor L2n",
+    "source_id": "grid_power_factor_bn_1826",
+    "source_object_id": "grid_power_factor_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Power Factor L2n",
+      "pl": "Sieć moc Factor L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Power Factor L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć moc Factor L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "grid_power_factor_l3n",
+    "source_name": "Grid Power Factor L3n",
+    "source_id": "grid_power_factor_cn_1827",
+    "source_object_id": "grid_power_factor_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "Grid Power Factor L3n",
+      "pl": "Sieć moc Factor L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Grid Power Factor L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Sieć moc Factor L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_voltage_l1n",
+    "source_name": "PV Voltage L1n",
+    "source_id": "pv_voltage_an_1851",
+    "source_object_id": "pv_voltage_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Voltage L1n",
+      "pl": "PV napięcie L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Voltage L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV napięcie L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_voltage_l2n",
+    "source_name": "PV Voltage L2n",
+    "source_id": "pv_voltage_bn_1852",
+    "source_object_id": "pv_voltage_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Voltage L2n",
+      "pl": "PV napięcie L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Voltage L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV napięcie L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_voltage_l3n",
+    "source_name": "PV Voltage L3n",
+    "source_id": "pv_voltage_cn_1853",
+    "source_object_id": "pv_voltage_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Voltage L3n",
+      "pl": "PV napięcie L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Voltage L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV napięcie L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_current_l1n",
+    "source_name": "PV Current L1n",
+    "source_id": "pv_current_an_1854",
+    "source_object_id": "pv_current_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Current L1n",
+      "pl": "PV prąd L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Current L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV prąd L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_current_l2n",
+    "source_name": "PV Current L2n",
+    "source_id": "pv_current_bn_1855",
+    "source_object_id": "pv_current_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Current L2n",
+      "pl": "PV prąd L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Current L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV prąd L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_current_l3n",
+    "source_name": "PV Current L3n",
+    "source_id": "pv_current_cn_1856",
+    "source_object_id": "pv_current_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Current L3n",
+      "pl": "PV prąd L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Current L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV prąd L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_frequency",
+    "source_name": "PV Frequency",
+    "source_id": "pv_frequency_1857",
+    "source_object_id": "pv_frequency",
+    "entity_category": null,
+    "name": {
+      "en": "PV Frequency",
+      "pl": "PV częstotliwość"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Frequency.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV częstotliwość."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_active_power_l1n",
+    "source_name": "PV Active Power L1n",
+    "source_id": "pv_active_power_an_1858",
+    "source_object_id": "pv_active_power_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Active Power L1n",
+      "pl": "PV czynna moc L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Active Power L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV czynna moc L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_active_power_l2n",
+    "source_name": "PV Active Power L2n",
+    "source_id": "pv_active_power_bn_1860",
+    "source_object_id": "pv_active_power_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Active Power L2n",
+      "pl": "PV czynna moc L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Active Power L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV czynna moc L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_active_power_l3n",
+    "source_name": "PV Active Power L3n",
+    "source_id": "pv_active_power_cn_1862",
+    "source_object_id": "pv_active_power_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Active Power L3n",
+      "pl": "PV czynna moc L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Active Power L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV czynna moc L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_total_active_power",
+    "source_name": "PV Total Active Power",
+    "source_id": "pv_total_active_power_1864",
+    "source_object_id": "pv_total_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "PV Total Active Power",
+      "pl": "PV łącznie czynna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie czynna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_reactive_power_l1n",
+    "source_name": "PV Reactive Power L1n",
+    "source_id": "pv_reactive_power_an_1866",
+    "source_object_id": "pv_reactive_power_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Reactive Power L1n",
+      "pl": "PV bierna moc L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Reactive Power L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV bierna moc L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_reactive_power_l2n",
+    "source_name": "PV Reactive Power L2n",
+    "source_id": "pv_reactive_power_bn_1868",
+    "source_object_id": "pv_reactive_power_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Reactive Power L2n",
+      "pl": "PV bierna moc L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Reactive Power L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV bierna moc L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_reactive_power_l3n",
+    "source_name": "PV Reactive Power L3n",
+    "source_id": "pv_reactive_power_cn_1870",
+    "source_object_id": "pv_reactive_power_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Reactive Power L3n",
+      "pl": "PV bierna moc L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Reactive Power L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV bierna moc L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_total_reactive_power",
+    "source_name": "PV Total Reactive Power",
+    "source_id": "pv_total_reactive_power_1872",
+    "source_object_id": "pv_total_reactive_power",
+    "entity_category": null,
+    "name": {
+      "en": "PV Total Reactive Power",
+      "pl": "PV łącznie bierna moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Reactive Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie bierna moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_power_factor",
+    "source_name": "PV Power Factor",
+    "source_id": "pv_power_factor_1874",
+    "source_object_id": "pv_power_factor",
+    "entity_category": null,
+    "name": {
+      "en": "PV Power Factor",
+      "pl": "PV moc Factor"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Power Factor.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV moc Factor."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_power_factor_l1n",
+    "source_name": "PV Power Factor L1n",
+    "source_id": "pv_power_factor_an_1875",
+    "source_object_id": "pv_power_factor_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Power Factor L1n",
+      "pl": "PV moc Factor L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Power Factor L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV moc Factor L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_power_factor_l2n",
+    "source_name": "PV Power Factor L2n",
+    "source_id": "pv_power_factor_bn_1876",
+    "source_object_id": "pv_power_factor_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Power Factor L2n",
+      "pl": "PV moc Factor L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Power Factor L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV moc Factor L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_power_factor_l3n",
+    "source_name": "PV Power Factor L3n",
+    "source_id": "pv_power_factor_cn_1877",
+    "source_object_id": "pv_power_factor_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "PV Power Factor L3n",
+      "pl": "PV moc Factor L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Power Factor L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV moc Factor L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "esp_wifi_signal",
+    "source_name": "ESP WiFi Signal",
+    "source_id": "esp_wifi_signal",
+    "source_object_id": "esp_wifi_signal",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ESP WiFi Signal",
+      "pl": "ESP WiFi Signal"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ESP WiFi Signal.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: ESP WiFi Signal."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "esp_ip_address",
+    "source_name": "ESP IP Address",
+    "source_id": "esp_ip_address",
+    "source_object_id": "esp_ip_address",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ESP IP Address",
+      "pl": "ESP IP adres"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ESP IP Address.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: ESP IP adres."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "esp_wifi_ssid",
+    "source_name": "ESP WiFi SSID",
+    "source_id": "esp_wifi_ssid",
+    "source_object_id": "esp_wifi_ssid",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ESP WiFi SSID",
+      "pl": "ESP WiFi SSID"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ESP WiFi SSID.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: ESP WiFi SSID."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "esp_mac_address",
+    "source_name": "ESP Mac Address",
+    "source_id": "esp_mac_address",
+    "source_object_id": "esp_mac_address",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ESP Mac Address",
+      "pl": "ESP Mac adres"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ESP Mac Address.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: ESP Mac adres."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_pv_total_power",
+    "source_name": "Overview PV Total Power",
+    "source_id": "pv_total_power_30001",
+    "source_object_id": "overview_pv_total_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview PV Total Power",
+      "pl": "Podgląd łącznej mocy PV"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview PV Total Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy PV."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_internal_pv_total_power",
+    "source_name": "Overview Internal PV Total Power",
+    "source_id": "internal_pv_total_power_30003",
+    "source_object_id": "overview_internal_pv_total_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Internal PV Total Power",
+      "pl": "Podgląd łącznej mocy wewnętrznych wejść PV"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Internal PV Total Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy wewnętrznych wejść PV."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_external_pv_total_power",
+    "source_name": "Overview External PV Total Power",
+    "source_id": "external_pv_total_power_30005",
+    "source_object_id": "overview_external_pv_total_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview External PV Total Power",
+      "pl": "Podgląd łącznej mocy zewnętrznych źródeł PV"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview External PV Total Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy zewnętrznych źródeł PV."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_inverter_active_power",
+    "source_name": "Overview Inverter Active Power",
+    "source_id": "inv_active_power_30007",
+    "source_object_id": "overview_inverter_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Inverter Active Power",
+      "pl": "Podgląd mocy czynnej falownika"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Inverter Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej falownika."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_battery_power",
+    "source_name": "Overview Battery Power",
+    "source_id": "battery_power_30009",
+    "source_object_id": "overview_battery_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Battery Power",
+      "pl": "Podgląd mocy baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Battery Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_grid_total_active_power",
+    "source_name": "Overview Grid Total Active Power",
+    "source_id": "grid_total_active_power_30011",
+    "source_object_id": "overview_grid_total_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Grid Total Active Power",
+      "pl": "Podgląd łącznej mocy czynnej sieci"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Grid Total Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy czynnej sieci."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_generator_active_power",
+    "source_name": "Overview Generator Active Power",
+    "source_id": "generator_active_power_30013",
+    "source_object_id": "overview_generator_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Generator Active Power",
+      "pl": "Podgląd mocy czynnej generatora"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Generator Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej generatora."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_load_active_power",
+    "source_name": "Overview Load Active Power",
+    "source_id": "load_active_power_30015",
+    "source_object_id": "overview_load_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Load Active Power",
+      "pl": "Podgląd mocy czynnej odbiorników"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Load Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej odbiorników."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_smart_load_active_power",
+    "source_name": "Overview Smart Load Active Power",
+    "source_id": "smart_load_active_power_30017",
+    "source_object_id": "overview_smart_load_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Smart Load Active Power",
+      "pl": "Podgląd mocy czynnej Smart Load"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Smart Load Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej Smart Load."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_battery_soc",
+    "source_name": "Overview Battery SOC",
+    "source_id": "battery_soc_30020",
+    "source_object_id": "overview_battery_soc",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Battery SOC",
+      "pl": "Podgląd stanu naładowania baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Battery SOC.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd stanu naładowania baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "machines_type",
+    "source_name": "Machines Type",
+    "source_id": "machines_type_6048",
+    "source_object_id": "machines_type",
+    "entity_category": null,
+    "name": {
+      "en": "Machines Type",
+      "pl": "Machines typ"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Machines Type.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Machines typ."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "number_of_machines_master_and_slave",
+    "source_name": "Number of Machines (Master and Slave)",
+    "source_id": "number_of_machines_master_and_slave_6049",
+    "source_object_id": "number_of_machines_master_and_slave",
+    "entity_category": null,
+    "name": {
+      "en": "Number of Machines (Master and Slave)",
+      "pl": "Number of Machines (Master and Slave)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Number of Machines (Master and Slave).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Number of Machines (Master and Slave)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_1_master_device",
+    "source_name": "Communication Address 1 (Master Device)",
+    "source_id": "communication_address_1_master_device_6050",
+    "source_object_id": "communication_address_1_master_device",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 1 (Master Device)",
+      "pl": "Komunikacja adres 1 (Master Device)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 1 (Master Device).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 1 (Master Device)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_2_slave_device_1",
+    "source_name": "Communication Address 2 (Slave Device 1)",
+    "source_id": "communication_address_2_slave_device_1_6055",
+    "source_object_id": "communication_address_2_slave_device_1",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 2 (Slave Device 1)",
+      "pl": "Komunikacja adres 2 (Slave Device 1)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 2 (Slave Device 1).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 2 (Slave Device 1)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_3_slave_device_2",
+    "source_name": "Communication Address 3 (Slave Device 2)",
+    "source_id": "communication_address_3_slave_device_2_6060",
+    "source_object_id": "communication_address_3_slave_device_2",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 3 (Slave Device 2)",
+      "pl": "Komunikacja adres 3 (Slave Device 2)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 3 (Slave Device 2).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 3 (Slave Device 2)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_4_slave_device_3",
+    "source_name": "Communication Address 4 (Slave Device 3)",
+    "source_id": "communication_address_4_slave_device_3_6065",
+    "source_object_id": "communication_address_4_slave_device_3",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 4 (Slave Device 3)",
+      "pl": "Komunikacja adres 4 (Slave Device 3)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 4 (Slave Device 3).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 4 (Slave Device 3)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_5_slave_device_4",
+    "source_name": "Communication Address 5 (Slave Device 4)",
+    "source_id": "communication_address_5_slave_device_4_6070",
+    "source_object_id": "communication_address_5_slave_device_4",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 5 (Slave Device 4)",
+      "pl": "Komunikacja adres 5 (Slave Device 4)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 5 (Slave Device 4).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 5 (Slave Device 4)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_6_slave_device_5",
+    "source_name": "Communication Address 6 (Slave Device 5)",
+    "source_id": "communication_address_6_slave_device_5_6075",
+    "source_object_id": "communication_address_6_slave_device_5",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 6 (Slave Device 5)",
+      "pl": "Komunikacja adres 6 (Slave Device 5)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 6 (Slave Device 5).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 6 (Slave Device 5)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_7_slave_device_6",
+    "source_name": "Communication Address 7 (Slave Device 6)",
+    "source_id": "communication_address7_slave_device_6_6080",
+    "source_object_id": "communication_address_7_slave_device_6",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 7 (Slave Device 6)",
+      "pl": "Komunikacja adres 7 (Slave Device 6)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 7 (Slave Device 6).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 7 (Slave Device 6)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_8_slave_device_7",
+    "source_name": "Communication Address 8 (Slave Device 7)",
+    "source_id": "communication_address8_slave_device_7_6085",
+    "source_object_id": "communication_address_8_slave_device_7",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 8 (Slave Device 7)",
+      "pl": "Komunikacja adres 8 (Slave Device 7)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 8 (Slave Device 7).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 8 (Slave Device 7)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_9_slave_device_8",
+    "source_name": "Communication Address 9 (Slave Device 8)",
+    "source_id": "communication_address9_slave_device_8_6090",
+    "source_object_id": "communication_address_9_slave_device_8",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 9 (Slave Device 8)",
+      "pl": "Komunikacja adres 9 (Slave Device 8)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 9 (Slave Device 8).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 9 (Slave Device 8)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "communication_address_10_slave_device_9",
+    "source_name": "Communication Address 10 (Slave Device 9)",
+    "source_id": "communication_address10_slave_device_9_6095",
+    "source_object_id": "communication_address_10_slave_device_9",
+    "entity_category": null,
+    "name": {
+      "en": "Communication Address 10 (Slave Device 9)",
+      "pl": "Komunikacja adres 10 (Slave Device 9)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 10 (Slave Device 9).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 10 (Slave Device 9)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_total_power_direct",
+    "source_name": "PV Total Power (Direct)",
+    "source_id": "pv_total_power_26",
+    "source_object_id": "pv_total_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "PV Total Power (Direct)",
+      "pl": "PV łącznie moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv1_voltage",
+    "source_name": "PV1 Voltage",
+    "source_id": "pv1_voltage_27",
+    "source_object_id": "pv1_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "PV1 Voltage",
+      "pl": "PV1 napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV1 Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV1 napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv1_current",
+    "source_name": "PV1 Current",
+    "source_id": "pv1_current_28",
+    "source_object_id": "pv1_current",
+    "entity_category": null,
+    "name": {
+      "en": "PV1 Current",
+      "pl": "PV1 prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV1 Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV1 prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv1_power_direct",
+    "source_name": "PV1 Power (Direct)",
+    "source_id": "pv1_power_29",
+    "source_object_id": "pv1_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "PV1 Power (Direct)",
+      "pl": "PV1 moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV1 Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV1 moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv2_voltage",
+    "source_name": "PV2 Voltage",
+    "source_id": "pv2_voltage_30",
+    "source_object_id": "pv2_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "PV2 Voltage",
+      "pl": "PV2 napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV2 Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV2 napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv2_current",
+    "source_name": "PV2 Current",
+    "source_id": "pv2_current_31",
+    "source_object_id": "pv2_current",
+    "entity_category": null,
+    "name": {
+      "en": "PV2 Current",
+      "pl": "PV2 prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV2 Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV2 prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv2_power_direct",
+    "source_name": "PV2 Power (Direct)",
+    "source_id": "pv2_power_32",
+    "source_object_id": "pv2_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "PV2 Power (Direct)",
+      "pl": "PV2 moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV2 Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV2 moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv3_voltage",
+    "source_name": "PV3 Voltage",
+    "source_id": "pv3_voltage_33",
+    "source_object_id": "pv3_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "PV3 Voltage",
+      "pl": "PV3 napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV3 Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV3 napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv3_current",
+    "source_name": "PV3 Current",
+    "source_id": "pv3_current_34",
+    "source_object_id": "pv3_current",
+    "entity_category": null,
+    "name": {
+      "en": "PV3 Current",
+      "pl": "PV3 prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV3 Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV3 prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv3_power_direct",
+    "source_name": "PV3 Power (Direct)",
+    "source_id": "pv3_power_35",
+    "source_object_id": "pv3_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "PV3 Power (Direct)",
+      "pl": "PV3 moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV3 Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV3 moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv4_voltage",
+    "source_name": "PV4 Voltage",
+    "source_id": "pv4_voltage_36",
+    "source_object_id": "pv4_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "PV4 Voltage",
+      "pl": "PV4 napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV4 Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV4 napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv4_current",
+    "source_name": "PV4 Current",
+    "source_id": "pv4_current_37",
+    "source_object_id": "pv4_current",
+    "entity_category": null,
+    "name": {
+      "en": "PV4 Current",
+      "pl": "PV4 prąd"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV4 Current.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV4 prąd."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv4_power_direct",
+    "source_name": "PV4 Power (Direct)",
+    "source_id": "pv4_power_38",
+    "source_object_id": "pv4_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "PV4 Power (Direct)",
+      "pl": "PV4 moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV4 Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV4 moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_total_power_direct",
+    "source_name": "Battery Total Power (Direct)",
+    "source_id": "bat_total_power_45",
+    "source_object_id": "battery_total_power_direct",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Total Power (Direct)",
+      "pl": "Bateria łącznie moc (Direct)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Total Power (Direct).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria łącznie moc (Direct)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_1_voltage",
+    "source_name": "Battery 1 Voltage",
+    "source_id": "bat1_voltage_46",
+    "source_object_id": "battery_1_voltage",
+    "entity_category": null,
+    "name": {
+      "en": "Battery 1 Voltage",
+      "pl": "Bateria 1 napięcie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery 1 Voltage.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria 1 napięcie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_total_energy",
+    "source_name": "PV Total Energy",
+    "source_id": "pv_total_energy_8192",
+    "source_object_id": "pv_total_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV Total Energy",
+      "pl": "PV łącznie energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv1_total_energy",
+    "source_name": "PV1 Total Energy",
+    "source_id": "pv1_energy_total_8194",
+    "source_object_id": "pv1_total_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV1 Total Energy",
+      "pl": "PV1 łącznie energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV1 Total Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV1 łącznie energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv2_total_energy",
+    "source_name": "PV2 Total Energy",
+    "source_id": "pv2_energy_total_8196",
+    "source_object_id": "pv2_total_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV2 Total Energy",
+      "pl": "PV2 łącznie energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV2 Total Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV2 łącznie energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv3_total_energy",
+    "source_name": "PV3 Total Energy",
+    "source_id": "pv3_energy_total_8198",
+    "source_object_id": "pv3_total_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV3 Total Energy",
+      "pl": "PV3 łącznie energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV3 Total Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV3 łącznie energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv4_total_energy",
+    "source_name": "PV4 Total Energy",
+    "source_id": "pv4_energy_total_8200",
+    "source_object_id": "pv4_total_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV4 Total Energy",
+      "pl": "PV4 łącznie energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV4 Total Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV4 łącznie energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_energy_total",
+    "source_name": "External PV Energy Total",
+    "source_id": "external_pv_energy_total_8206",
+    "source_object_id": "external_pv_energy_total",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Energy Total",
+      "pl": "Zewnętrzne PV energia łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Energy Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV energia łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_energy_l1n",
+    "source_name": "External PV Energy L1n",
+    "source_id": "ext_pv_energy_an_8208",
+    "source_object_id": "external_pv_energy_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Energy L1n",
+      "pl": "Zewnętrzne PV energia L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Energy L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV energia L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_energy_l2n",
+    "source_name": "External PV Energy L2n",
+    "source_id": "ext_pv_energy_bn_8210",
+    "source_object_id": "external_pv_energy_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Energy L2n",
+      "pl": "Zewnętrzne PV energia L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Energy L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV energia L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_energy_l3n",
+    "source_name": "External PV Energy L3n",
+    "source_id": "ext_pv_energy_cn_8212",
+    "source_object_id": "external_pv_energy_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Energy L3n",
+      "pl": "Zewnętrzne PV energia L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Energy L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV energia L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_battery_energy_total",
+    "source_name": "PV to Battery Energy Total",
+    "source_id": "pvtobat_energy_total_8214",
+    "source_object_id": "pv_to_battery_energy_total",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Battery Energy Total",
+      "pl": "PV to bateria energia łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Battery Energy Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to bateria energia łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_load_energy_total",
+    "source_name": "PV to Load Energy Total",
+    "source_id": "pvtoload_energy_total_8216",
+    "source_object_id": "pv_to_load_energy_total",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Load Energy Total",
+      "pl": "PV to odbiorniki energia łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Load Energy Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to odbiorniki energia łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_to_grid_energy_total",
+    "source_name": "PV to Grid Energy Total",
+    "source_id": "pvtogrid_energy_total_8218",
+    "source_object_id": "pv_to_grid_energy_total",
+    "entity_category": null,
+    "name": {
+      "en": "PV to Grid Energy Total",
+      "pl": "PV to sieć energia łącznie"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV to Grid Energy Total.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV to sieć energia łącznie."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv1_today_energy",
+    "source_name": "PV1 Today Energy",
+    "source_id": "pv1_today_energy_8449",
+    "source_object_id": "pv1_today_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV1 Today Energy",
+      "pl": "PV1 dzisiaj energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV1 Today Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV1 dzisiaj energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv2_today_energy",
+    "source_name": "PV2 Today Energy",
+    "source_id": "pv2_today_energy_8450",
+    "source_object_id": "pv2_today_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV2 Today Energy",
+      "pl": "PV2 dzisiaj energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV2 Today Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV2 dzisiaj energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv3_today_energy",
+    "source_name": "PV3 Today Energy",
+    "source_id": "pv3_today_energy_8451",
+    "source_object_id": "pv3_today_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV3 Today Energy",
+      "pl": "PV3 dzisiaj energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV3 Today Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV3 dzisiaj energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv4_today_energy",
+    "source_name": "PV4 Today Energy",
+    "source_id": "pv4_today_energy_8452",
+    "source_object_id": "pv4_today_energy",
+    "entity_category": null,
+    "name": {
+      "en": "PV4 Today Energy",
+      "pl": "PV4 dzisiaj energia"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV4 Today Energy.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV4 dzisiaj energia."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_total_energy_today",
+    "source_name": "External PV Total Energy Today",
+    "source_id": "external_pv_todal_energy_today_8455",
+    "source_object_id": "external_pv_total_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Total Energy Today",
+      "pl": "Zewnętrzne PV łącznie energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Total Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV łącznie energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_today_energy_l1n",
+    "source_name": "External PV Today Energy L1n",
+    "source_id": "external_pv_today_energy_an_8456",
+    "source_object_id": "external_pv_today_energy_l1n",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Today Energy L1n",
+      "pl": "Zewnętrzne PV dzisiaj energia L1n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Today Energy L1n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV dzisiaj energia L1n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_today_energy_l2n",
+    "source_name": "External PV Today Energy L2n",
+    "source_id": "external_pv_today_energy_bn_8457",
+    "source_object_id": "external_pv_today_energy_l2n",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Today Energy L2n",
+      "pl": "Zewnętrzne PV dzisiaj energia L2n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Today Energy L2n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV dzisiaj energia L2n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_today_energy_l3n",
+    "source_name": "External PV Today Energy L3n",
+    "source_id": "external_pv_today_energy_cn_8458",
+    "source_object_id": "external_pv_today_energy_l3n",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Today Energy L3n",
+      "pl": "Zewnętrzne PV dzisiaj energia L3n"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Today Energy L3n.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV dzisiaj energia L3n."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_power",
+    "source_name": "PV Power",
+    "source_id": "pv_power_8529",
+    "source_object_id": "pv_power",
+    "entity_category": null,
+    "name": {
+      "en": "PV Power",
+      "pl": "PV moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv1_power_energy_block",
+    "source_name": "PV1 Power (Energy Block)",
+    "source_id": "pv1_power_8530",
+    "source_object_id": "pv1_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "PV1 Power (Energy Block)",
+      "pl": "PV1 moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV1 Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV1 moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv2_power_energy_block",
+    "source_name": "PV2 Power (Energy Block)",
+    "source_id": "pv2_power_8531",
+    "source_object_id": "pv2_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "PV2 Power (Energy Block)",
+      "pl": "PV2 moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV2 Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV2 moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv3_power_energy_block",
+    "source_name": "PV3 Power (Energy Block)",
+    "source_id": "pv3_power_8532",
+    "source_object_id": "pv3_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "PV3 Power (Energy Block)",
+      "pl": "PV3 moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV3 Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV3 moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv4_power_energy_block",
+    "source_name": "PV4 Power (Energy Block)",
+    "source_id": "pv4_power_8533",
+    "source_object_id": "pv4_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "PV4 Power (Energy Block)",
+      "pl": "PV4 moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV4 Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV4 moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_total_power_energy_block",
+    "source_name": "External PV Total Power (Energy Block)",
+    "source_id": "external_pv_total_power_8536",
+    "source_object_id": "external_pv_total_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "External PV Total Power (Energy Block)",
+      "pl": "Zewnętrzne PV łącznie moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV Total Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV łącznie moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_l1n_power",
+    "source_name": "External PV L1n Power",
+    "source_id": "external_pv_an_power_8537",
+    "source_object_id": "external_pv_l1n_power",
+    "entity_category": null,
+    "name": {
+      "en": "External PV L1n Power",
+      "pl": "Zewnętrzne PV L1n moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV L1n Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV L1n moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_l2n_power",
+    "source_name": "External PV L2n Power",
+    "source_id": "external_pv_bn_power_8538",
+    "source_object_id": "external_pv_l2n_power",
+    "entity_category": null,
+    "name": {
+      "en": "External PV L2n Power",
+      "pl": "Zewnętrzne PV L2n moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV L2n Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV L2n moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "external_pv_l3n_power",
+    "source_name": "External PV L3n Power",
+    "source_id": "external_pv_cn_power_8539",
+    "source_object_id": "external_pv_l3n_power",
+    "entity_category": null,
+    "name": {
+      "en": "External PV L3n Power",
+      "pl": "Zewnętrzne PV L3n moc"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: External PV L3n Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Zewnętrzne PV L3n moc."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_total_energy_today",
+    "source_name": "PV Total Energy Today",
+    "source_id": "pv_total_energy_today_8448",
+    "source_object_id": "pv_total_energy_today",
+    "entity_category": null,
+    "name": {
+      "en": "PV Total Energy Today",
+      "pl": "PV łącznie energia dzisiaj"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Energy Today.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie energia dzisiaj."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "pv_total_power_energy_block",
+    "source_name": "PV Total Power (Energy Block)",
+    "source_id": "pv_total_power_8528",
+    "source_object_id": "pv_total_power_energy_block",
+    "entity_category": null,
+    "name": {
+      "en": "PV Total Power (Energy Block)",
+      "pl": "PV łącznie moc (energia Block)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Power (Energy Block).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "ems_mode",
+    "source_name": "Tryb EMS",
+    "source_id": "ems_mode_4300",
+    "source_object_id": "tryb_ems",
+    "entity_category": "config",
+    "name": {
+      "en": "EMS mode",
+      "pl": "Tryb EMS"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: EMS mode.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Tryb EMS."
+    },
+    "options": [
+      {
+        "key": "self_use",
+        "raw": "Autokonsumpcja (Self-Use)",
+        "en": "Self-Use",
+        "pl": "Autokonsumpcja"
+      },
+      {
+        "key": "off_grid",
+        "raw": "Off-Grid",
+        "en": "Off-Grid",
+        "pl": "Praca wyspowa"
+      },
+      {
+        "key": "grid_charge",
+        "raw": "Ładowanie z sieci",
+        "en": "Grid charge",
+        "pl": "Ładowanie z sieci"
+      },
+      {
+        "key": "grid_discharge",
+        "raw": "Rozładowanie do sieci",
+        "en": "Grid discharge",
+        "pl": "Rozładowanie do sieci"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "three_phase_unbalance",
+    "source_name": "Three Phase Unbalance",
+    "source_id": "three_phase_unbalance_enable_302",
+    "source_object_id": "three_phase_unbalance",
+    "entity_category": "config",
+    "name": {
+      "en": "Three Phase Unbalance",
+      "pl": "Asymetria trójfazowa"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Three Phase Unbalance.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Asymetria trójfazowa."
+    },
+    "options": [
+      {
+        "key": "disabled",
+        "raw": "Disabled",
+        "en": "Disabled",
+        "pl": "Wyłączone"
+      },
+      {
+        "key": "enabled",
+        "raw": "Enabled",
+        "en": "Enabled",
+        "pl": "Włączone"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "eps_mode",
+    "source_name": "EPS Mode",
+    "source_id": "eps_mode_323",
+    "source_object_id": "eps_mode",
+    "entity_category": "config",
+    "name": {
+      "en": "EPS Mode",
+      "pl": "EPS tryb"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: EPS Mode.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: EPS tryb."
+    },
+    "options": [
+      {
+        "key": "disabled",
+        "raw": "Disabled",
+        "en": "Disabled",
+        "pl": "Wyłączone"
+      },
+      {
+        "key": "eps",
+        "raw": "EPS",
+        "en": "EPS",
+        "pl": "EPS"
+      },
+      {
+        "key": "ups",
+        "raw": "UPS",
+        "en": "UPS",
+        "pl": "UPS"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "pv_island_mode",
+    "source_name": "PV Island Mode",
+    "source_id": "pv_island_mode_en_324",
+    "source_object_id": "pv_island_mode",
+    "entity_category": "config",
+    "name": {
+      "en": "PV Island Mode",
+      "pl": "PV Island tryb"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: PV Island Mode.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: PV Island tryb."
+    },
+    "options": [
+      {
+        "key": "disabled",
+        "raw": "Disabled",
+        "en": "Disabled",
+        "pl": "Wyłączone"
+      },
+      {
+        "key": "enabled",
+        "raw": "Enabled",
+        "en": "Enabled",
+        "pl": "Włączone"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "battery_type_setting",
+    "source_name": "Battery Type Setting",
+    "source_id": "battery_type_4100",
+    "source_object_id": "battery_type_setting",
+    "entity_category": "config",
+    "name": {
+      "en": "Battery Type Setting",
+      "pl": "Typ baterii"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Battery Type Setting.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Typ baterii."
+    },
+    "options": [
+      {
+        "key": "no_battery",
+        "raw": "No Battery",
+        "en": "No battery",
+        "pl": "Brak baterii"
+      },
+      {
+        "key": "lithium",
+        "raw": "Lithium",
+        "en": "Lithium-ion",
+        "pl": "Litowo-jonowa"
+      },
+      {
+        "key": "lead_acid",
+        "raw": "Lead-Acid",
+        "en": "Lead-acid",
+        "pl": "Kwasowo-ołowiowa"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "bms_type_setting",
+    "source_name": "BMS Type Setting",
+    "source_id": "bms_type_4101",
+    "source_object_id": "bms_type_setting",
+    "entity_category": "config",
+    "name": {
+      "en": "BMS Type Setting",
+      "pl": "Typ BMS"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: BMS Type Setting.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Typ BMS."
+    },
+    "options": [
+      {
+        "key": "not_configured",
+        "raw": "Not Configured",
+        "en": "Not configured",
+        "pl": "Nieskonfigurowane"
+      },
+      {
+        "key": "pylon_lv",
+        "raw": "Pylon LV",
+        "en": "Pylon LV",
+        "pl": "Pylon LV"
+      },
+      {
+        "key": "pylon_hv",
+        "raw": "Pylon HV",
+        "en": "Pylon HV",
+        "pl": "Pylon HV"
+      },
+      {
+        "key": "dyness_hv",
+        "raw": "Dyness HV",
+        "en": "Dyness HV",
+        "pl": "Dyness HV"
+      },
+      {
+        "key": "dyness_lv",
+        "raw": "Dyness LV",
+        "en": "Dyness LV",
+        "pl": "Dyness LV"
+      },
+      {
+        "key": "sunwoda_lv",
+        "raw": "Sunwoda LV",
+        "en": "Sunwoda LV",
+        "pl": "Sunwoda LV"
+      },
+      {
+        "key": "uz_lv",
+        "raw": "Uz LV",
+        "en": "Uz LV",
+        "pl": "Uz LV"
+      },
+      {
+        "key": "soluna_hv",
+        "raw": "Soluna HV",
+        "en": "Soluna HV",
+        "pl": "Soluna HV"
+      },
+      {
+        "key": "soluna_lv",
+        "raw": "Soluna LV",
+        "en": "Soluna LV",
+        "pl": "Soluna LV"
+      },
+      {
+        "key": "steltec_lv",
+        "raw": "Steltec LV",
+        "en": "Steltec LV",
+        "pl": "Steltec LV"
+      },
+      {
+        "key": "xinyi_lv",
+        "raw": "XinYi LV",
+        "en": "XinYi LV",
+        "pl": "XinYi LV"
+      },
+      {
+        "key": "vestwoods_lv",
+        "raw": "Vestwoods LV",
+        "en": "Vestwoods LV",
+        "pl": "Vestwoods LV"
+      },
+      {
+        "key": "jk_hv",
+        "raw": "JK HV",
+        "en": "JK HV",
+        "pl": "JK HV"
+      },
+      {
+        "key": "byd_lv",
+        "raw": "BYD LV",
+        "en": "BYD LV",
+        "pl": "BYD LV"
+      },
+      {
+        "key": "uz_hv",
+        "raw": "Uz HV",
+        "en": "Uz HV",
+        "pl": "Uz HV"
+      },
+      {
+        "key": "zetara_lv",
+        "raw": "Zetara LV",
+        "en": "Zetara LV",
+        "pl": "Zetara LV"
+      },
+      {
+        "key": "feb_hv",
+        "raw": "FEB HV",
+        "en": "FEB HV",
+        "pl": "FEB HV"
+      },
+      {
+        "key": "pytes_lv",
+        "raw": "Pytes LV",
+        "en": "Pytes LV",
+        "pl": "Pytes LV"
+      },
+      {
+        "key": "dmegc_lv",
+        "raw": "Dmegc LV",
+        "en": "Dmegc LV",
+        "pl": "Dmegc LV"
+      },
+      {
+        "key": "weineng_lv",
+        "raw": "Weineng LV",
+        "en": "Weineng LV",
+        "pl": "Weineng LV"
+      },
+      {
+        "key": "weineng_hv",
+        "raw": "Weineng HV",
+        "en": "Weineng HV",
+        "pl": "Weineng HV"
+      },
+      {
+        "key": "gsl_lv",
+        "raw": "GSL LV",
+        "en": "GSL LV",
+        "pl": "GSL LV"
+      },
+      {
+        "key": "hoy_lv",
+        "raw": "HOY LV",
+        "en": "HOY LV",
+        "pl": "HOY LV"
+      },
+      {
+        "key": "hoy_hv",
+        "raw": "HOY HV",
+        "en": "HOY HV",
+        "pl": "HOY HV"
+      },
+      {
+        "key": "feb_lv",
+        "raw": "FEB LV",
+        "en": "FEB LV",
+        "pl": "FEB LV"
+      },
+      {
+        "key": "uhhome_lv",
+        "raw": "UHhome LV",
+        "en": "UHhome LV",
+        "pl": "UHhome LV"
+      },
+      {
+        "key": "uhhome_hv",
+        "raw": "UHhome HV",
+        "en": "UHhome HV",
+        "pl": "UHhome HV"
+      },
+      {
+        "key": "byd_hv",
+        "raw": "BYD HV",
+        "en": "BYD HV",
+        "pl": "BYD HV"
+      },
+      {
+        "key": "vestwoods_hv",
+        "raw": "Vestwoods HV",
+        "en": "Vestwoods HV",
+        "pl": "Vestwoods HV"
+      },
+      {
+        "key": "phylion_hv",
+        "raw": "Phylion HV",
+        "en": "Phylion HV",
+        "pl": "Phylion HV"
+      },
+      {
+        "key": "hoymiles_lv",
+        "raw": "Hoymiles LV",
+        "en": "Hoymiles LV",
+        "pl": "Hoymiles LV"
+      },
+      {
+        "key": "pholion_lv",
+        "raw": "Pholion LV",
+        "en": "Pholion LV",
+        "pl": "Pholion LV"
+      },
+      {
+        "key": "wattsonic_lv",
+        "raw": "Wattsonic LV",
+        "en": "Wattsonic LV",
+        "pl": "Wattsonic LV"
+      },
+      {
+        "key": "enershare_hv",
+        "raw": "Enershare HV",
+        "en": "Enershare HV",
+        "pl": "Enershare HV"
+      },
+      {
+        "key": "beghelli_lv",
+        "raw": "Beghelli LV",
+        "en": "Beghelli LV",
+        "pl": "Beghelli LV"
+      },
+      {
+        "key": "lvtopsun_lv",
+        "raw": "LvToPSUN LV",
+        "en": "LvToPSUN LV",
+        "pl": "LvToPSUN LV"
+      },
+      {
+        "key": "pytes_hv",
+        "raw": "PYTES HV",
+        "en": "PYTES HV",
+        "pl": "PYTES HV"
+      },
+      {
+        "key": "lvtopsun_hv",
+        "raw": "LvToPSUN HV",
+        "en": "LvToPSUN HV",
+        "pl": "LvToPSUN HV"
+      },
+      {
+        "key": "raja_hv",
+        "raw": "RAJA HV",
+        "en": "RAJA HV",
+        "pl": "RAJA HV"
+      },
+      {
+        "key": "felicity_lv",
+        "raw": "Felicity LV",
+        "en": "Felicity LV",
+        "pl": "Felicity LV"
+      }
+    ]
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "grid_input_power_limitation_valley",
+    "source_name": "Grid Input Power Limitation (Valley)",
+    "source_id": "gridin_power_limitation_when_vally_301",
+    "source_object_id": "grid_input_power_limitation_valley",
+    "entity_category": "config",
+    "name": {
+      "en": "Grid Input Power Limitation (Valley)",
+      "pl": "Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Grid Input Power Limitation (Valley).",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "battery_max_charge_power",
+    "source_name": "Battery Max Charge Power",
+    "source_id": "battery_max_charge_power_306",
+    "source_object_id": "battery_max_charge_power",
+    "entity_category": "config",
+    "name": {
+      "en": "Battery Max Charge Power",
+      "pl": "Maksymalna moc ładowania baterii"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Battery Max Charge Power.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Maksymalna moc ładowania baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "battery_max_discharge_power",
+    "source_name": "Battery Max Discharge Power",
+    "source_id": "battery_max_discharge_power_307",
+    "source_object_id": "battery_max_discharge_power",
+    "entity_category": "config",
+    "name": {
+      "en": "Battery Max Discharge Power",
+      "pl": "Maksymalna moc rozładowania baterii"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Battery Max Discharge Power.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Maksymalna moc rozładowania baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "maximum_soc",
+    "source_name": "Maximum SOC",
+    "source_id": "max_soc_308",
+    "source_object_id": "maximum_soc",
+    "entity_category": "config",
+    "name": {
+      "en": "Maximum SOC",
+      "pl": "Maksymalna SOC"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Maximum SOC.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Maksymalna SOC."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "minimum_soc",
+    "source_name": "Minimum SOC",
+    "source_id": "min_soc_309",
+    "source_object_id": "minimum_soc",
+    "entity_category": "config",
+    "name": {
+      "en": "Minimum SOC",
+      "pl": "Minimalna SOC"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Minimum SOC.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Minimalna SOC."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "low_soc_grid_charge_power",
+    "source_name": "Low SOC Grid Charge Power",
+    "source_id": "replenish_power_310",
+    "source_object_id": "low_soc_grid_charge_power",
+    "entity_category": "config",
+    "name": {
+      "en": "Low SOC Grid Charge Power",
+      "pl": "Moc ładowania z sieci przy niskim SOC"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Low SOC Grid Charge Power.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Moc ładowania z sieci przy niskim SOC."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "soc_start_charge_from_grid",
+    "source_name": "SOC Start Charge From Grid",
+    "source_id": "rsvd_replenish_power_311",
+    "source_object_id": "soc_start_charge_from_grid",
+    "entity_category": "config",
+    "name": {
+      "en": "SOC Start Charge From Grid",
+      "pl": "SOC rozpoczęcia ładowania z sieci"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: SOC Start Charge From Grid.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: SOC rozpoczęcia ładowania z sieci."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "self_use_soc",
+    "source_name": "Self-Use SOC",
+    "source_id": "self_used_soc_4301",
+    "source_object_id": "self_use_soc",
+    "entity_category": "config",
+    "name": {
+      "en": "Self-Use SOC",
+      "pl": "Rezerwa SOC dla autokonsumpcji"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Self-Use SOC.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Rezerwa SOC dla autokonsumpcji."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "force_charge_soc",
+    "source_name": "Force Charge SOC",
+    "source_id": "force_charge_soc_4303",
+    "source_object_id": "force_charge_soc",
+    "entity_category": "config",
+    "name": {
+      "en": "Force Charge SOC",
+      "pl": "Docelowy SOC ładowania z sieci"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Force Charge SOC.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Docelowy SOC ładowania z sieci."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "maximum_charge_power",
+    "source_name": "Maximum Charge Power",
+    "source_id": "maximum_charge_power_4304",
+    "source_object_id": "maximum_charge_power",
+    "entity_category": "config",
+    "name": {
+      "en": "Maximum Charge Power",
+      "pl": "Maksymalna moc ładowania z sieci"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Maximum Charge Power.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Maksymalna moc ładowania z sieci."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "force_discharge_soc",
+    "source_name": "Force Discharge SOC",
+    "source_id": "force_discharge_soc_4305",
+    "source_object_id": "force_discharge_soc",
+    "entity_category": "config",
+    "name": {
+      "en": "Force Discharge SOC",
+      "pl": "Minimalny SOC rozładowania do sieci"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Force Discharge SOC.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Minimalny SOC rozładowania do sieci."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
+    "translation_key": "maximum_discharge_power",
+    "source_name": "Maximum Discharge Power",
+    "source_id": "maximum_discharge_power_4306",
+    "source_object_id": "maximum_discharge_power",
+    "entity_category": "config",
+    "name": {
+      "en": "Maximum Discharge Power",
+      "pl": "Maksymalna moc rozładowania do sieci"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Maximum Discharge Power.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Maksymalna moc rozładowania do sieci."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "inverter_work_status",
+    "source_name": "Inverter Work Status",
+    "source_id": "workstatus_0",
+    "source_object_id": "inverter_work_status",
+    "entity_category": null,
+    "name": {
+      "en": "Inverter Work Status",
+      "pl": "Stan pracy falownika"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Inverter Work Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Stan pracy falownika."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "sw_fault",
+    "source_name": "SW Fault",
+    "source_id": "sw_fault_19",
+    "source_object_id": "sw_fault",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "SW Fault",
+      "pl": "Błąd oprogramowania"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: SW Fault.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błąd oprogramowania."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "hw_fault",
+    "source_name": "HW Fault",
+    "source_id": "hw_fault_21",
+    "source_object_id": "hw_fault",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "HW Fault",
+      "pl": "Błąd sprzętowy"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: HW Fault.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błąd sprzętowy."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "meter_link_status",
+    "source_name": "Meter Link Status",
+    "source_id": "meter_link_status_1800",
+    "source_object_id": "meter_link_status",
+    "entity_category": null,
+    "name": {
+      "en": "Meter Link Status",
+      "pl": "Stan łącza licznika"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Meter Link Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Stan łącza licznika."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "pv_link_status",
+    "source_name": "PV Link Status",
+    "source_id": "pv_link_status_1850",
+    "source_object_id": "pv_link_status",
+    "entity_category": null,
+    "name": {
+      "en": "PV Link Status",
+      "pl": "Stan łącza PV"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: PV Link Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Stan łącza PV."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "battery_type_bms",
+    "source_name": "Battery Type (BMS)",
+    "source_id": "battery_type_1900",
+    "source_object_id": "battery_type_bms",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Type (BMS)",
+      "pl": "Typ baterii (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Type (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Typ baterii (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "battery_link_status",
+    "source_name": "Battery Link Status",
+    "source_id": "battery_link_status_1901",
+    "source_object_id": "battery_link_status",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Link Status",
+      "pl": "Stan łącza baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Link Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Stan łącza baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "battery_work_status_bms",
+    "source_name": "Battery Work Status (BMS)",
+    "source_id": "work_status_1904",
+    "source_object_id": "battery_work_status_bms",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Work Status (BMS)",
+      "pl": "Stan pracy baterii (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Work Status (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Stan pracy baterii (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "overview_system_work_status",
+    "source_name": "Overview System Work Status",
+    "source_id": "system_workstatus_30000",
+    "source_object_id": "overview_system_work_status",
+    "entity_category": null,
+    "name": {
+      "en": "Overview System Work Status",
+      "pl": "Podgląd stanu pracy systemu"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview System Work Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd stanu pracy systemu."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "overview_battery_work_status",
+    "source_name": "Overview Battery Work Status",
+    "source_id": "battery_work_status_30019",
+    "source_object_id": "overview_battery_work_status",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Battery Work Status",
+      "pl": "Podgląd stanu pracy baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Battery Work Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd stanu pracy baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "battery_fault_code_bms",
+    "source_name": "Battery Fault Code (BMS)",
+    "source_id": "battery_fault_code_1905",
+    "source_object_id": "battery_fault_code_bms",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Battery Fault Code (BMS)",
+      "pl": "Kod błędu baterii (BMS)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Fault Code (BMS).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Kod błędu baterii (BMS)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "overview_battery_faults",
+    "source_name": "Overview Battery Faults",
+    "source_id": "battery_fault_code_30021",
+    "source_object_id": "overview_battery_faults",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Overview Battery Faults",
+      "pl": "Podgląd błędów baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Battery Faults.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd błędów baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "overview_dsp_power_faults",
+    "source_name": "Overview DSP Power Faults",
+    "source_id": "dsp_pwr_fault_code_30023",
+    "source_object_id": "overview_dsp_power_faults",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Overview DSP Power Faults",
+      "pl": "Podgląd błędów DSP mocy"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview DSP Power Faults.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd błędów DSP mocy."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "dsp_safety_faults",
+    "source_name": "DSP Safety Faults",
+    "source_id": "dsp_saf_fault_code_30025",
+    "source_object_id": "dsp_safety_faults",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "DSP Safety Faults",
+      "pl": "Błędy DSP zabezpieczeń"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: DSP Safety Faults.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błędy DSP zabezpieczeń."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "arm_communication_faults",
+    "source_name": "ARM Communication Faults",
+    "source_id": "arm_fault_code1_30027",
+    "source_object_id": "arm_communication_faults",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ARM Communication Faults",
+      "pl": "Błędy komunikacji ARM"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ARM Communication Faults.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błędy komunikacji ARM."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "arm_peripheral_faults",
+    "source_name": "ARM Peripheral Faults",
+    "source_id": "arm_fault_code2_30028",
+    "source_object_id": "arm_peripheral_faults",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ARM Peripheral Faults",
+      "pl": "Błędy urządzeń peryferyjnych ARM"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ARM Peripheral Faults.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błędy urządzeń peryferyjnych ARM."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "arm_system_faults",
+    "source_name": "ARM System Faults",
+    "source_id": "arm_fault_code3_30029",
+    "source_object_id": "arm_system_faults",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "ARM System Faults",
+      "pl": "Błędy systemowe ARM"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: ARM System Faults.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błędy systemowe ARM."
+    },
+    "options": []
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "system_operation",
+    "source_name": "System Operation",
+    "source_id": "start_stop_system_3001",
+    "source_object_id": "system_operation",
+    "entity_category": "config",
+    "name": {
+      "en": "System Operation",
+      "pl": "Praca systemu"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: System Operation.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Praca systemu."
+    },
+    "options": [
+      {
+        "key": "stop",
+        "raw": "Stop",
+        "en": "Stop",
+        "pl": "Zatrzymaj"
+      },
+      {
+        "key": "start",
+        "raw": "Start",
+        "en": "Start",
+        "pl": "Uruchom"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "parallel_networking_command",
+    "source_name": "Parallel Networking Command",
+    "source_id": "parallel_networking_3016",
+    "source_object_id": "parallel_networking_command",
+    "entity_category": "config",
+    "name": {
+      "en": "Parallel Networking Command",
+      "pl": "Polecenie sieci równoległej"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: Parallel Networking Command.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Polecenie sieci równoległej."
+    },
+    "options": [
+      {
+        "key": "inactive",
+        "raw": "Inactive",
+        "en": "Inactive",
+        "pl": "Nieaktywne"
+      },
+      {
+        "key": "create_network",
+        "raw": "Create Network",
+        "en": "Create network",
+        "pl": "Utwórz sieć"
+      },
+      {
+        "key": "disassemble_network",
+        "raw": "Disassemble Network",
+        "en": "Disassemble network",
+        "pl": "Rozłącz sieć"
+      }
+    ]
+  }
+]

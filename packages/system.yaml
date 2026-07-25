@@ -1,0 +1,27 @@
+# Sterowanie stanem systemu. Polecenia jednorazowe (restart, reset fabryczny,
+# kasowanie błędów) nie są wystawiane jako sensory ani automatyczne przełączniki.
+
+select:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "System Operation"
+    id: start_stop_system_3001
+    address: 3001
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "Stop": 0
+      "Start": 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Parallel Networking Command"
+    id: parallel_networking_3016
+    address: 3016
+    value_type: U_WORD
+    entity_category: config
+    disabled_by_default: true
+    optionsmap:
+      "Inactive": 0
+      "Create Network": 1
+      "Disassemble Network": 2

@@ -1,0 +1,75 @@
+# Temperatury i diagnostyka elektryczna.
+# Opisy używanych rejestrów 113-115 według mapy Modbus V2.4:
+# 113 - radiator falownika, 114 - radiator toru baterii, 115 - temperatura powietrza
+# w wewnętrznej komorze/obudowie falownika (CAV), nie temperatura pomieszczenia.
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inv Ths Temp"
+    id: inv_ths_temp_113
+    register_type: read
+    address: 113
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat Ths Temp"
+    id: bat_ths_temp_114
+    register_type: read
+    address: 114
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cav Temp"
+    id: cav_temp_115
+    register_type: read
+    address: 115
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PE Voltage"
+    id: pe_voltage_577
+    register_type: read
+    address: 241
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Iso Resistor"
+    id: iso_resistor_578
+    register_type: read
+    address: 242
+    unit_of_measurement: "kΩ"
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Residual Current"
+    id: residual_current_579
+    register_type: read
+    address: 243
+    unit_of_measurement: "mA"
+    accuracy_decimals: 0
+    value_type: S_WORD

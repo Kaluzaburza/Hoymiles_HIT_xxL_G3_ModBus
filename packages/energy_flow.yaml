@@ -1,0 +1,189 @@
+# Przepływy energii pomiędzy PV, baterią, siecią i odbiorami
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Energy From PV Total"
+    id: energy_from_pv_total_8288
+    register_type: read
+    address: 2064
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Energy From Battery Total"
+    id: energy_from_bat_total_8290
+    register_type: read
+    address: 2066
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Energy From Grid Total"
+    id: energy_from_grid_total_8296
+    register_type: read
+    address: 2068
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Battery Energy Today"
+    id: pvtobat_energy_today_8459
+    register_type: read
+    address: 2111
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Load Energy Today"
+    id: pvtoload_energy_today_8460
+    register_type: read
+    address: 2112
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Grid Energy Today"
+    id: pvtogrid_energy_today_8461
+    register_type: read
+    address: 2113
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Energy From PV Today"
+    id: energy_from_pv_today_8492
+    register_type: read
+    address: 2132
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Energy From Battery Today"
+    id: energy_from_bat_today_8493
+    register_type: read
+    address: 2133
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Energy From Grid Today"
+    id: energy_from_grid_today_8494
+    register_type: read
+    address: 2134
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Battery Power"
+    id: pvtobat_power_8561
+    register_type: read
+    address: 2177
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Load Power"
+    id: pvtoload_power_8562
+    register_type: read
+    address: 2178
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Grid Power"
+    id: pvtogrid_power_8563
+    register_type: read
+    address: 2179
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load From PV Power"
+    id: load_from_pv_power_8564
+    register_type: read
+    address: 2180
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD

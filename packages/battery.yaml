@@ -1,0 +1,252 @@
+# Dane baterii. Ustawienia 4100/4101 są wystawione jako select w settings.yaml.
+sensor:
+  # W mapie V2.4 rejestr 4102 nadal ma historyczną jednostkę Ah, ale firmware
+  # falownika i aplikacja S-Miles dla baterii litowej traktują tę wartość jako
+  # pojemność magazynu w kWh (np. ustawienie 21 daje odczyt 21,0 kWh).
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Capacity"
+    id: battery_capacity_4102
+    register_type: holding
+    address: 4102
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    skip_updates: 9
+  # Pojemność raportowana przez klaster BMS. Niektóre baterie Pylontech
+  # zwracają tu 0 mimo aktywnej komunikacji, dlatego surowy odczyt nie jest
+  # bezpośrednio publikowany w Home Assistant.
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: bms_total_capacity_raw_1907
+    internal: true
+    register_type: read
+    address: 1907
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  # Efektywna pojemność: preferuje wartość BMS, a gdy BMS jej nie raportuje,
+  # korzysta z ustawienia 4102. Zachowana nazwa utrzymuje istniejącą encję HA.
+  - platform: template
+    name: "Total Capacity"
+    id: total_capacity_1907
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      if (id(bms_total_capacity_raw_1907).has_state() &&
+          id(bms_total_capacity_raw_1907).state > 0.0f) {
+        return id(bms_total_capacity_raw_1907).state;
+      }
+      if (id(battery_capacity_4102).has_state() &&
+          id(battery_capacity_4102).state > 0.0f) {
+        return id(battery_capacity_4102).state;
+      }
+      return {};
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery SOC (BMS)"
+    id: battery_soc_1909
+    register_type: read
+    address: 1909
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery SOH"
+    id: battery_soh_1910
+    register_type: read
+    address: 1910
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Voltage (BMS)"
+    id: battery_voltage_1911
+    register_type: read
+    address: 1911
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Current (BMS)"
+    id: battery_current_1912
+    register_type: read
+    address: 1912
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Power (BMS)"
+    id: battery_power_1914
+    register_type: read
+    address: 1914
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Maximum Charge Current"
+    id: max_charge_current_1916
+    register_type: read
+    address: 1916
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Maximum Discharge Current"
+    id: max_discharge_current_1917
+    register_type: read
+    address: 1917
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Charge Cut-off Voltage"
+    id: charge_cutoff_voltage_1918
+    register_type: read
+    address: 1918
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Discharge Cut-off Voltage"
+    id: discharge_cutoff_voltage_1919
+    register_type: read
+    address: 1919
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  # Rejestry 1922/1923 raportują skrajne temperatury pojedynczych cel w 0,1°C.
+  # Zastępują nieużyteczne dla tej baterii temperatury modułów 1920/1921.
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cell Max Temperature"
+    id: cell_max_temperature_1922
+    register_type: read
+    address: 1922
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+      - filter_out: 32767
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Cell Min Temperature"
+    id: cell_min_temperature_1923
+    register_type: read
+    address: 1923
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: S_WORD
+    filters:
+      - filter_out: 32767
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Charge Energy Today"
+    id: bat_charge_energy_today_8462
+    register_type: read
+    address: 2114
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Discharge Energy Today"
+    id: bat_discharge_energy_today_8463
+    register_type: read
+    address: 2115
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Total Power (Energy Block)"
+    id: bat_total_power_8546
+    register_type: read
+    address: 2162
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD

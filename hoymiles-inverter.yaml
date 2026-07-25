@@ -1,0 +1,62 @@
+# =============================================================================
+#
+# Wiring: ESP32 + RS485 (MAX3485 / Waveshare RS485) to the inverter's RS485/Modbus port.
+# Protocol: Modbus RTU, 115200 8N1. FC03 read holding, FC04 read input, FC06/FC10 write.
+# =============================================================================
+
+substitutions:
+  name: "hoymiles-inverter"
+  friendly_name: "Hoymiles Inverter"
+  device_description: "Hoymiles Energy Storage Inverter (Modbus V2.4)"
+
+  modbus_controller_id: hoymiles_modbus
+  modbus_fast_controller_id: hoymiles_modbus_fast
+  modbus_inverter_address: "1"      # Modbus slave/unit address of the inverter
+  baud_rate: "115200"
+  fast_update_interval: "5s"
+
+  # RS485 UART pins (adjust to your board)
+  uart_tx_pin: "GPIO17"
+  uart_rx_pin: "GPIO16"
+  # uart_de_pin: "GPIO4"            # see flow_control_pin in packages/modbus_connection.yaml
+
+  board: "esp32dev"
+
+  # Secrets (create secrets.yaml from secrets.yaml.example)
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  fallback_password: !secret fallback_password
+  api_key: !secret api_key
+  ota_password: !secret ota_password
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.1"
+      sram1_as_iram: true
+
+packages:
+  core: !include packages/core.yaml
+  network: !include packages/network.yaml
+  modbus_connection: !include packages/modbus_connection.yaml
+  settings: !include packages/settings.yaml
+  system: !include packages/system.yaml
+  states_alarms: !include packages/states_alarms.yaml
+  inverter: !include packages/inverter.yaml
+  grid: !include packages/grid.yaml
+  backup_load: !include packages/backup_load.yaml
+  generator: !include packages/generator.yaml
+  pv: !include packages/pv.yaml
+  battery: !include packages/battery.yaml
+  energy_flow: !include packages/energy_flow.yaml
+  meters: !include packages/meters.yaml
+  parallel_network: !include packages/parallel_network.yaml
+  overview: !include packages/overview.yaml
+  diagnostics: !include packages/diagnostics.yaml
+
+  # Opcjonalne mapy zależne od generacji/modelu urządzenia.
+  # W logu rejestry 221xx zwracały wartość zastępczą 9360, dlatego są wyłączone.
+  # battery_legacy: !include packages/optional_battery_legacy.yaml
+  # battery_pack_diagnostics: !include packages/optional_battery_pack_diagnostics.yaml

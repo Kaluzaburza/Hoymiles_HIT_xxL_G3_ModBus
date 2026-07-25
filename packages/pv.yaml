@@ -1,0 +1,653 @@
+# Instalacja PV: wejścia, moc i energia
+
+sensor:
+  - platform: template
+    name: "PV Total Power (Direct)"
+    id: pv_total_power_26
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(pv1_power_29).has_state() || !id(pv2_power_32).has_state() ||
+          !id(pv3_power_35).has_state() || !id(pv4_power_38).has_state()) return NAN;
+      return id(pv1_power_29).state + id(pv2_power_32).state +
+             id(pv3_power_35).state + id(pv4_power_38).state;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV1 Voltage"
+    id: pv1_voltage_27
+    register_type: read
+    address: 27
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV1 Current"
+    id: pv1_current_28
+    register_type: read
+    address: 28
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV1 Power (Direct)"
+    id: pv1_power_29
+    register_type: read
+    address: 29
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV2 Voltage"
+    id: pv2_voltage_30
+    register_type: read
+    address: 30
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV2 Current"
+    id: pv2_current_31
+    register_type: read
+    address: 31
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV2 Power (Direct)"
+    id: pv2_power_32
+    register_type: read
+    address: 32
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV3 Voltage"
+    id: pv3_voltage_33
+    register_type: read
+    address: 33
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV3 Current"
+    id: pv3_current_34
+    register_type: read
+    address: 34
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV3 Power (Direct)"
+    id: pv3_power_35
+    register_type: read
+    address: 35
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV4 Voltage"
+    id: pv4_voltage_36
+    register_type: read
+    address: 36
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV4 Current"
+    id: pv4_current_37
+    register_type: read
+    address: 37
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV4 Power (Direct)"
+    id: pv4_power_38
+    register_type: read
+    address: 38
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: template
+    name: "Battery Total Power (Direct)"
+    id: bat_total_power_45
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(battery_power_1914).has_state()) return NAN;
+      return id(battery_power_1914).state;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery 1 Voltage"
+    id: bat1_voltage_46
+    register_type: read
+    address: 46
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Total Energy"
+    id: pv_total_energy_8192
+    register_type: read
+    address: 2000
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV1 Total Energy"
+    id: pv1_energy_total_8194
+    register_type: read
+    address: 2002
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV2 Total Energy"
+    id: pv2_energy_total_8196
+    register_type: read
+    address: 2004
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV3 Total Energy"
+    id: pv3_energy_total_8198
+    register_type: read
+    address: 2006
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV4 Total Energy"
+    id: pv4_energy_total_8200
+    register_type: read
+    address: 2008
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Energy Total"
+    id: external_pv_energy_total_8206
+    register_type: read
+    address: 2014
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Energy L1n"
+    id: ext_pv_energy_an_8208
+    register_type: read
+    address: 2016
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Energy L2n"
+    id: ext_pv_energy_bn_8210
+    register_type: read
+    address: 2018
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Energy L3n"
+    id: ext_pv_energy_cn_8212
+    register_type: read
+    address: 2020
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Battery Energy Total"
+    id: pvtobat_energy_total_8214
+    register_type: read
+    address: 2022
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Load Energy Total"
+    id: pvtoload_energy_total_8216
+    register_type: read
+    address: 2024
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV to Grid Energy Total"
+    id: pvtogrid_energy_total_8218
+    register_type: read
+    address: 2026
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV1 Today Energy"
+    id: pv1_today_energy_8449
+    register_type: read
+    address: 2101
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV2 Today Energy"
+    id: pv2_today_energy_8450
+    register_type: read
+    address: 2102
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV3 Today Energy"
+    id: pv3_today_energy_8451
+    register_type: read
+    address: 2103
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV4 Today Energy"
+    id: pv4_today_energy_8452
+    register_type: read
+    address: 2104
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Total Energy Today"
+    id: external_pv_todal_energy_today_8455
+    register_type: read
+    address: 2107
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Today Energy L1n"
+    id: external_pv_today_energy_an_8456
+    register_type: read
+    address: 2108
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Today Energy L2n"
+    id: external_pv_today_energy_bn_8457
+    register_type: read
+    address: 2109
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Today Energy L3n"
+    id: external_pv_today_energy_cn_8458
+    register_type: read
+    address: 2110
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Power"
+    id: pv_power_8529
+    register_type: read
+    address: 2151
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV1 Power (Energy Block)"
+    id: pv1_power_8530
+    register_type: read
+    address: 2152
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV2 Power (Energy Block)"
+    id: pv2_power_8531
+    register_type: read
+    address: 2153
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV3 Power (Energy Block)"
+    id: pv3_power_8532
+    register_type: read
+    address: 2154
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV4 Power (Energy Block)"
+    id: pv4_power_8533
+    register_type: read
+    address: 2155
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV Total Power (Energy Block)"
+    id: external_pv_total_power_8536
+    register_type: read
+    address: 2158
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV L1n Power"
+    id: external_pv_an_power_8537
+    register_type: read
+    address: 2159
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV L2n Power"
+    id: external_pv_bn_power_8538
+    register_type: read
+    address: 2160
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "External PV L3n Power"
+    id: external_pv_cn_power_8539
+    register_type: read
+    address: 2161
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Total Energy Today"
+    id: pv_total_energy_today_8448
+    register_type: read
+    address: 2100
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Total Power (Energy Block)"
+    id: pv_total_power_8528
+    register_type: read
+    address: 2150
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD

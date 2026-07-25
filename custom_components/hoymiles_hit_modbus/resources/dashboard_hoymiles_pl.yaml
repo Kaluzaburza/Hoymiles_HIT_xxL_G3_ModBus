@@ -1,0 +1,878 @@
+# Dashboard Home Assistant dla Hoymiles Energy Storage
+#
+# Wklej CAŁĄ zawartość do edytora surowej konfiguracji nowego dashboardu.
+# Animowany przepływ mocy używa zainstalowanej karty HACS
+# custom:sunsynk-power-flow-card. Pozostałe karty są standardowe.
+# Identyfikatory encji są zgodne z rzeczywistym rejestrem tej instancji HA.
+# Encje utworzone po zmianach nazw mają dodatkowy prefiks pv_hoymiles_inverter_.
+# Karty harmonogramów EMS wymagają pakietu home_assistant/hoymiles_ems_scheduler.yaml.
+# Obejmuje wszystkie aktywne encje; pominięta jest tylko jedna encja oznaczona
+# w ESPHome jako disabled_by_default (opisana w zakładce Sterowanie).
+
+title: Hoymiles Energy Storage
+views:
+  - title: Start
+    path: start
+    icon: mdi:view-dashboard
+    type: sidebar
+    badges: []
+    cards:
+      - type: markdown
+        content: >-
+          ## Hoymiles — panel operacyjny
+
+          Najważniejsze dane do codziennej obsługi falownika. Szczegółowe
+          rejestry są w osobnych zakładkach.
+      - type: glance
+        title: Bieżący przepływ mocy
+        columns: 5
+        show_name: true
+        show_state: true
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_hit_overview_pv_total_power
+            name: PV
+          - entity: sensor.hoymiles_hit_overview_load_active_power
+            name: Load
+          - entity: sensor.hoymiles_hit_overview_grid_total_active_power
+            name: Grid
+          - entity: sensor.hoymiles_hit_overview_battery_power
+            name: Battery
+          - entity: sensor.hoymiles_hit_overview_battery_soc
+            name: SOC
+      - type: entities
+        title: Sieć — wartości bieżące
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_hit_grid_voltage_l1
+            name: Napięcie L1
+          - entity: sensor.hoymiles_hit_grid_current_l1n
+            name: Prąd L1
+          - entity: sensor.hoymiles_hit_grid_voltage_l2
+            name: Napięcie L2
+          - entity: sensor.hoymiles_hit_grid_current_l2n
+            name: Prąd L2
+          - entity: sensor.hoymiles_hit_grid_voltage_l3
+            name: Napięcie L3
+          - entity: sensor.hoymiles_hit_grid_current_l3n
+            name: Prąd L3
+          - entity: sensor.hoymiles_hit_inverter_grid_frequency
+            name: Częstotliwość
+          - entity: sensor.hoymiles_hit_grid_total_current
+            name: Prąd łączny (suma faz)
+      - type: entities
+        title: Sterowanie EMS
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - entity: select.hoymiles_hit_ems_mode
+            name: Tryb pracy
+      - type: entities
+        title: Parametry ochrony i temperatury
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - entity: sensor.hoymiles_hit_inv_ths_temp
+            name: Temperatura radiatora falownika
+          - entity: sensor.hoymiles_hit_bat_ths_temp
+            name: Temperatura radiatora toru baterii
+          - entity: sensor.hoymiles_hit_cav_temp
+            name: Temperatura wnętrza falownika (CAV)
+          - entity: sensor.hoymiles_hit_pe_voltage
+            name: Napięcie PP
+          - entity: sensor.hoymiles_hit_iso_resistor
+            name: Rezystancja izolacji
+          - entity: sensor.hoymiles_hit_residual_current
+            name: Prąd różnicowy
+      - type: custom:sunsynk-power-flow-card
+        title: Bieżący przepływ energii
+        cardstyle: lite
+        wide: true
+        show_solar: true
+        show_battery: true
+        show_grid: true
+        decimal_places: 0
+        dynamic_line_width: true
+        min_line_width: 1
+        max_line_width: 4
+        inverter:
+          modern: true
+          autarky: "no"
+          auto_scale: true
+        battery:
+          energy: 21000
+          shutdown_soc: 10
+          colour: "#00BCD4"
+          charge_colour: "#00BCD4"
+          animation_speed: 6
+          max_power: 10000
+          show_absolute: true
+          dynamic_colour: false
+          animate: true
+        solar:
+          mppts: 1
+          pv1_name: PV
+          colour: "#4CAF50"
+          animation_speed: 6
+          max_power: 10000
+          dynamic_colour: true
+        load:
+          essential_name: Odbiory
+          show_aux: false
+          colour: "#00BCD4"
+          animation_speed: 6
+          max_power: 10000
+          dynamic_colour: true
+        grid:
+          grid_name: Sieć
+          show_nonessential: false
+          show_absolute: true
+          animation_speed: 6
+          max_power: 10000
+          dynamic_colour: true
+          invert_grid: true
+        entities:
+          inverter_power_175: sensor.hoymiles_hit_overview_inverter_active_power
+          grid_power_169: sensor.hoymiles_hit_overview_grid_total_active_power
+          grid_ct_power_172: sensor.hoymiles_hit_overview_grid_total_active_power
+          battery_soc_184: sensor.hoymiles_hit_overview_battery_soc
+          battery_power_190: sensor.hoymiles_hit_overview_battery_power
+          battery_current_191: sensor.hoymiles_hit_battery_current_bms
+          battery_voltage_183: sensor.hoymiles_hit_battery_voltage_bms
+          essential_power: sensor.hoymiles_hit_overview_load_active_power
+          pv1_power_186: sensor.hoymiles_hit_overview_pv_total_power
+      - type: vertical-stack
+        cards:
+          - type: glance
+            title: Podsumowanie dzienne — energia z PV
+            columns: 1
+            show_name: true
+            show_state: true
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_pv_total_energy_today
+                name: Wyprodukowano dzisiaj
+          - type: glance
+            columns: 3
+            show_name: true
+            show_state: true
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_pv_to_load_energy_today
+                name: Do domu
+              - entity: sensor.hoymiles_hit_pv_to_battery_energy_today
+                name: Do baterii
+              - entity: sensor.hoymiles_hit_pv_to_grid_energy_today
+                name: Do sieci
+      - type: history-graph
+        title: Moc — ostatnie 24 godziny [W]
+        hours_to_show: 24
+        entities:
+          - entity: sensor.hoymiles_hit_overview_pv_total_power
+            name: PV
+          - entity: sensor.hoymiles_hit_overview_load_active_power
+            name: Load
+          - entity: sensor.hoymiles_hit_overview_grid_total_active_power
+            name: Grid
+          - entity: sensor.hoymiles_hit_overview_battery_power
+            name: Battery
+      - type: entities
+        title: Stan systemu i łączność
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - sensor.hoymiles_hit_inverter_work_status
+          - sensor.hoymiles_hit_overview_system_work_status
+          - sensor.hoymiles_hit_meter_link_status
+          - sensor.hoymiles_hit_pv_link_status
+          - sensor.hoymiles_hit_battery_link_status
+          - sensor.hoymiles_hit_battery_work_status_bms
+      - type: entities
+        title: Alarmy — szybki podgląd
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - sensor.hoymiles_hit_sw_fault
+          - sensor.hoymiles_hit_hw_fault
+          - sensor.hoymiles_hit_battery_fault_code_bms
+          - sensor.hoymiles_hit_overview_battery_faults
+          - sensor.hoymiles_hit_overview_dsp_power_faults
+          - sensor.hoymiles_hit_dsp_safety_faults
+          - sensor.hoymiles_hit_arm_communication_faults
+          - sensor.hoymiles_hit_arm_peripheral_faults
+          - sensor.hoymiles_hit_arm_system_faults
+  - title: Automatyka EMS
+    path: automatyka-ems
+    icon: mdi:calendar-clock
+    type: sidebar
+    badges: []
+    cards:
+      - type: entities
+        title: Automatyka RCE — ustawienia
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_boolean.hoymiles_rce_discharge_enabled
+            name: Włącz automatyczne rozładowanie według RCE
+          - entity: input_number.hoymiles_rce_price_threshold
+            name: Minimalna cena sprzedaży
+          - entity: number.hoymiles_hit_maximum_discharge_power
+            name: Moc rozładowania do sieci
+          - entity: number.hoymiles_hit_force_discharge_soc
+            name: Minimalny SOC akumulatora
+          - type: section
+            label: Blokada sprzedaży
+          - entity: input_boolean.hoymiles_sale_block_enabled
+            name: Włącz blokadę sprzedaży
+          - entity: input_datetime.hoymiles_sale_block_start
+            name: Początek blokady
+          - entity: input_datetime.hoymiles_sale_block_end
+            name: Koniec blokady
+          - entity: binary_sensor.hoymiles_sale_block_active
+            name: Blokada aktywna teraz
+          - entity: sensor.hoymiles_rce_current_price
+            name: Bieżąca cena RCE
+          - entity: sensor.hoymiles_rce_status
+            name: Stan automatyki
+      - type: custom:hoymiles-rce-chart-card
+        title: RCE — ceny i plan rozładowania
+        entity: sensor.hoymiles_rce_day
+        current_price_entity: sensor.hoymiles_rce_current_price
+        threshold_entity: input_number.hoymiles_rce_price_threshold
+        active_entity: input_boolean.hoymiles_rce_discharge_active
+        block_enabled_entity: input_boolean.hoymiles_sale_block_enabled
+        block_start_entity: input_datetime.hoymiles_sale_block_start
+        block_end_entity: input_datetime.hoymiles_sale_block_end
+      - type: markdown
+        title: Plan rozładowań RCE
+        entity_id:
+          - sensor.hoymiles_rce_discharge_plan
+          - input_number.hoymiles_rce_price_threshold
+          - input_boolean.hoymiles_sale_block_enabled
+          - input_datetime.hoymiles_sale_block_start
+          - input_datetime.hoymiles_sale_block_end
+        content: |-
+          {% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}
+          {% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',
+                                     'planned_duration_minutes') | int(0) %}
+          {% set date = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_date') %}
+          **Dzień:** {{ date }}<br>
+          **Okresy powyżej ustawionego progu:**<br>
+          {{ periods or 'Brak danych do przygotowania planu.' }}
+
+          **Łączny plan:** {{ minutes // 60 }} h
+          {{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}
+          bloków po 30 min)
+
+          Automatyka wróci do **Autokonsumpcji (Self-Use)** po spadku ceny do
+          progu lub niżej, po osiągnięciu minimalnego SOC albo po wyłączeniu
+          przełącznika. W czasie aktywnej blokady sprzedaży okresy są pomijane,
+          a falownik pozostaje w trybie Self-Use.
+      - type: markdown
+        view_layout:
+          position: sidebar
+        content: >-
+          ## Codzienne harmonogramy EMS
+
+          Każdy harmonogram działa codziennie, dopóki jego przełącznik jest
+          włączony. Po upływie ustawionego czasu falownik wraca do
+          autokonsumpcji.
+
+          Nie ustawiaj ładowania i rozładowania na tę samą godzinę.
+          Wyłączenie przełącznika blokuje kolejne uruchomienia.
+      - type: entities
+        title: Rozładowanie do sieci
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_boolean.hoymiles_discharge_schedule_enabled
+            name: Włącz harmonogram codzienny
+          - entity: input_datetime.hoymiles_discharge_start
+            name: Godzina rozpoczęcia
+          - entity: input_number.hoymiles_discharge_duration
+            name: Czas trwania
+          - entity: number.hoymiles_hit_force_discharge_soc
+            name: Minimalny SOC — rozładowanie do sieci
+          - entity: number.hoymiles_hit_maximum_discharge_power
+            name: Maks. moc rozładowania do sieci
+          - entity: timer.hoymiles_discharge
+            name: Pozostały czas bieżącego cyklu
+          - entity: script.hoymiles_start_grid_discharge
+            name: Uruchom rozładowanie teraz
+      - type: entities
+        title: Ładowanie z sieci
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_boolean.hoymiles_charge_schedule_enabled
+            name: Włącz harmonogram codzienny
+          - entity: input_datetime.hoymiles_charge_start
+            name: Godzina rozpoczęcia
+          - entity: input_number.hoymiles_charge_duration
+            name: Czas trwania
+          - entity: number.hoymiles_hit_force_charge_soc
+            name: Docelowy SOC — ładowanie z sieci
+          - entity: number.hoymiles_hit_maximum_charge_power
+            name: Maks. moc ładowania z sieci
+          - entity: timer.hoymiles_charge
+            name: Pozostały czas bieżącego cyklu
+          - entity: script.hoymiles_start_grid_charge
+            name: Uruchom ładowanie teraz
+      - type: entities
+        title: Sterowanie i zakończenie EMS
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - entity: select.hoymiles_hit_ems_mode
+            name: Tryb pracy
+          - entity: number.hoymiles_hit_self_use_soc
+            name: Rezerwa SOC — Self-Use
+          - entity: script.hoymiles_stop_scheduled_cycle
+            name: Zatrzymaj i wróć do Self-Use
+  - title: PV
+    path: pv
+    icon: mdi:solar-power
+    type: sidebar
+    badges: []
+    cards:
+      - type: history-graph
+        title: Moc stringów PV — ostatnie 24 godziny [W]
+        hours_to_show: 24
+        entities:
+          - entity: sensor.hoymiles_hit_pv1_power_direct
+            name: PV1
+          - entity: sensor.hoymiles_hit_pv2_power_direct
+            name: PV2
+          - entity: sensor.hoymiles_hit_pv3_power_direct
+            name: PV3
+          - entity: sensor.hoymiles_hit_pv4_power_direct
+            name: PV4
+      - type: grid
+        title: PV — wartości bieżące
+        columns: 2
+        square: false
+        cards:
+          - type: entities
+            title: PV1
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_pv1_voltage
+                name: Napięcie
+              - entity: sensor.hoymiles_hit_pv1_current
+                name: Prąd
+              - entity: sensor.hoymiles_hit_pv1_power_direct
+                name: Moc
+          - type: entities
+            title: PV2
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_pv2_voltage
+                name: Napięcie
+              - entity: sensor.hoymiles_hit_pv2_current
+                name: Prąd
+              - entity: sensor.hoymiles_hit_pv2_power_direct
+                name: Moc
+          - type: entities
+            title: PV3
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_pv3_voltage
+                name: Napięcie
+              - entity: sensor.hoymiles_hit_pv3_current
+                name: Prąd
+              - entity: sensor.hoymiles_hit_pv3_power_direct
+                name: Moc
+          - type: entities
+            title: PV4
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_pv4_voltage
+                name: Napięcie
+              - entity: sensor.hoymiles_hit_pv4_current
+                name: Prąd
+              - entity: sensor.hoymiles_hit_pv4_power_direct
+                name: Moc
+      - type: entities
+        title: PV — energia dzisiaj
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - sensor.hoymiles_hit_pv1_today_energy
+          - sensor.hoymiles_hit_pv2_today_energy
+          - sensor.hoymiles_hit_pv3_today_energy
+          - sensor.hoymiles_hit_pv4_today_energy
+          - sensor.hoymiles_hit_external_pv_total_energy_today
+          - sensor.hoymiles_hit_external_pv_today_energy_l1n
+          - sensor.hoymiles_hit_external_pv_today_energy_l2n
+          - sensor.hoymiles_hit_external_pv_today_energy_l3n
+          - sensor.hoymiles_hit_pv_total_energy_today
+      - type: entities
+        title: PV — energia całkowita
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - sensor.hoymiles_hit_pv_total_energy
+          - sensor.hoymiles_hit_pv1_total_energy
+          - sensor.hoymiles_hit_pv2_total_energy
+          - sensor.hoymiles_hit_pv3_total_energy
+          - sensor.hoymiles_hit_pv4_total_energy
+          - sensor.hoymiles_hit_external_pv_energy_total
+          - sensor.hoymiles_hit_external_pv_energy_l1n
+          - sensor.hoymiles_hit_external_pv_energy_l2n
+          - sensor.hoymiles_hit_external_pv_energy_l3n
+          - sensor.hoymiles_hit_pv_to_battery_energy_total
+          - sensor.hoymiles_hit_pv_to_load_energy_total
+          - sensor.hoymiles_hit_pv_to_grid_energy_total
+      - type: entities
+        title: PV — moc z bloku energii i źródła zewnętrzne
+        show_header_toggle: false
+        state_color: true
+        view_layout:
+          position: sidebar
+        entities:
+          - sensor.hoymiles_hit_pv_total_power_energy_block
+          - sensor.hoymiles_hit_pv_power
+          - sensor.hoymiles_hit_pv1_power_energy_block
+          - sensor.hoymiles_hit_pv2_power_energy_block
+          - sensor.hoymiles_hit_pv3_power_energy_block
+          - sensor.hoymiles_hit_pv4_power_energy_block
+          - sensor.hoymiles_hit_external_pv_total_power_energy_block
+          - sensor.hoymiles_hit_external_pv_l1n_power
+          - sensor.hoymiles_hit_external_pv_l2n_power
+          - sensor.hoymiles_hit_external_pv_l3n_power
+  - title: LOAD / EPS
+    path: load-eps
+    icon: mdi:home-lightning-bolt
+    badges: []
+    cards:
+      - type: entities
+        title: EPS / Backup
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_backup_voltage_l1
+          - sensor.hoymiles_hit_backup_voltage_l2
+          - sensor.hoymiles_hit_backup_voltage_l3
+          - sensor.hoymiles_hit_backup_current_l1
+          - sensor.hoymiles_hit_backup_current_l2
+          - sensor.hoymiles_hit_backup_current_l3
+          - sensor.hoymiles_hit_backup_apparent_power
+          - sensor.hoymiles_hit_backup_apparent_power_l1
+          - sensor.hoymiles_hit_backup_apparent_power_l2
+          - sensor.hoymiles_hit_backup_apparent_power_l3
+          - sensor.hoymiles_hit_backup_active_power
+          - sensor.hoymiles_hit_backup_active_power_l1
+          - sensor.hoymiles_hit_backup_active_power_l2
+          - sensor.hoymiles_hit_backup_active_power_l3
+      - type: entities
+        title: Odbiory — moc
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_load_active_power_direct
+          - sensor.hoymiles_hit_load_power_total
+          - sensor.hoymiles_hit_load_power_l1n
+          - sensor.hoymiles_hit_load_power_l2n
+          - sensor.hoymiles_hit_load_power_l3n
+      - type: entities
+        title: Odbiory — energia
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_load_energy_use_total
+          - sensor.hoymiles_hit_load_energy_use_l1n_total
+          - sensor.hoymiles_hit_load_energy_use_l2n_total
+          - sensor.hoymiles_hit_load_energy_use_l3n_total
+          - sensor.hoymiles_hit_load_energy_use_today
+          - sensor.hoymiles_hit_load_energy_use_l1n_today
+          - sensor.hoymiles_hit_load_energy_use_l2n_today
+          - sensor.hoymiles_hit_load_energy_use_l3n_today
+  - title: Bateria
+    path: bateria
+    icon: mdi:battery-high
+    badges: []
+    cards:
+      - type: entities
+        title: Bateria — stan, moc i limity BMS
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_battery_capacity
+          - sensor.hoymiles_hit_total_capacity
+          - sensor.hoymiles_hit_battery_soc_bms
+          - sensor.hoymiles_hit_battery_soh
+          - sensor.hoymiles_hit_battery_voltage_bms
+          - sensor.hoymiles_hit_battery_current_bms
+          - sensor.hoymiles_hit_battery_power_bms
+          - sensor.hoymiles_hit_maximum_charge_current
+          - sensor.hoymiles_hit_maximum_discharge_current
+          - sensor.hoymiles_hit_charge_cut_off_voltage
+          - sensor.hoymiles_hit_discharge_cut_off_voltage
+          - entity: sensor.hoymiles_hit_cell_max_temperature
+            name: Maksymalna temperatura celi
+          - entity: sensor.hoymiles_hit_cell_min_temperature
+            name: Minimalna temperatura celi
+      - type: entities
+        title: Bateria — energia
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_battery_charge_energy_today
+          - sensor.hoymiles_hit_battery_discharge_energy_today
+          - sensor.hoymiles_hit_battery_total_power_energy_block
+  - title: Sieć
+    path: siec
+    icon: mdi:transmission-tower
+    badges: []
+    cards:
+      - type: entities
+        title: Sieć — wartości bieżące
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_grid_voltage_l1
+          - sensor.hoymiles_hit_grid_voltage_l2
+          - sensor.hoymiles_hit_grid_voltage_l3
+          - sensor.hoymiles_hit_inverter_grid_frequency
+          - sensor.hoymiles_hit_grid_active_power
+          - sensor.hoymiles_hit_grid_active_power_l1
+          - sensor.hoymiles_hit_grid_active_power_l2
+          - sensor.hoymiles_hit_grid_active_power_l3
+      - type: entities
+        title: Sieć — energia dzisiaj
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_grid_energy_buy_today
+          - sensor.hoymiles_hit_grid_energy_buy_l1n_today
+          - sensor.hoymiles_hit_grid_energy_buy_l2n_today
+          - sensor.hoymiles_hit_grid_energy_buy_l3n_today
+          - sensor.hoymiles_hit_grid_energy_sell_today
+          - sensor.hoymiles_hit_grid_energy_sell_l1n_today
+          - sensor.hoymiles_hit_grid_energy_sell_l2n_today
+          - sensor.hoymiles_hit_grid_energy_sell_l3n_today
+      - type: entities
+        title: Sieć — energia całkowita
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_grid_energy_buy_total
+          - sensor.hoymiles_hit_grid_energy_buy_l1n_total
+          - sensor.hoymiles_hit_grid_energy_buy_l2n_total
+          - sensor.hoymiles_hit_grid_energy_buy_l3n_total
+          - sensor.hoymiles_hit_grid_energy_sell_total
+          - sensor.hoymiles_hit_grid_energy_sell_l1n_total
+          - sensor.hoymiles_hit_grid_energy_sell_l2n_total
+          - sensor.hoymiles_hit_grid_energy_sell_l3n_total
+  - title: Przepływy
+    path: przeplywy
+    icon: mdi:transit-connection-variant
+    badges: []
+    cards:
+      - type: entities
+        title: Przepływy — moc
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_pv_to_battery_power
+          - sensor.hoymiles_hit_pv_to_load_power
+          - sensor.hoymiles_hit_pv_to_grid_power
+          - sensor.hoymiles_hit_load_from_pv_power
+      - type: entities
+        title: Przepływy — energia dzisiaj
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_pv_to_battery_energy_today
+          - sensor.hoymiles_hit_pv_to_load_energy_today
+          - sensor.hoymiles_hit_pv_to_grid_energy_today
+          - sensor.hoymiles_hit_energy_from_pv_today
+          - sensor.hoymiles_hit_energy_from_battery_today
+          - sensor.hoymiles_hit_energy_from_grid_today
+      - type: entities
+        title: Przepływy — energia całkowita
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_energy_from_pv_total
+          - sensor.hoymiles_hit_energy_from_battery_total
+          - sensor.hoymiles_hit_energy_from_grid_total
+  - title: Falownik
+    path: falownik
+    icon: mdi:current-ac
+    badges: []
+    cards:
+      - type: entities
+        title: Falownik — fazy, moc i magistrala DC
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_bus_voltage
+          - sensor.hoymiles_hit_inverter_voltage_l1
+          - sensor.hoymiles_hit_inverter_voltage_l2
+          - sensor.hoymiles_hit_inverter_voltage_l3
+          - sensor.hoymiles_hit_inverter_current_l1
+          - sensor.hoymiles_hit_inverter_current_l2
+          - sensor.hoymiles_hit_inverter_current_l3
+          - sensor.hoymiles_hit_inverter_active_power
+          - sensor.hoymiles_hit_inverter_active_power_l1
+          - sensor.hoymiles_hit_inverter_active_power_l2
+          - sensor.hoymiles_hit_inverter_active_power_l3
+          - sensor.hoymiles_hit_inverter_reactive_power
+          - sensor.hoymiles_hit_inverter_reactive_power_l1
+          - sensor.hoymiles_hit_inverter_reactive_power_l2
+          - sensor.hoymiles_hit_inverter_reactive_power_l3
+  - title: Generator
+    path: generator
+    icon: mdi:engine
+    badges: []
+    cards:
+      - type: entities
+        title: Generator — wartości bieżące
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_generator_voltage_l1
+          - sensor.hoymiles_hit_generator_voltage_l2
+          - sensor.hoymiles_hit_generator_voltage_l3
+          - sensor.hoymiles_hit_generator_current_l1
+          - sensor.hoymiles_hit_generator_current_l2
+          - sensor.hoymiles_hit_generator_current_l3
+          - sensor.hoymiles_hit_generator_active_power_l1
+          - sensor.hoymiles_hit_generator_active_power_l2
+          - sensor.hoymiles_hit_generator_active_power_l3
+          - sensor.hoymiles_hit_generator_total_power
+          - sensor.hoymiles_hit_generator_power_l1n
+          - sensor.hoymiles_hit_generator_power_l2n
+          - sensor.hoymiles_hit_generator_power_l3n
+      - type: entities
+        title: Generator — energia dzisiaj
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_generator_energy_total_today
+          - sensor.hoymiles_hit_generator_energy_l1n_today
+          - sensor.hoymiles_hit_generator_energy_l2n_today
+          - sensor.hoymiles_hit_generator_energy_l3n_today
+      - type: entities
+        title: Generator — energia całkowita
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_generator_energy_total
+          - sensor.hoymiles_hit_generator_energy_l1n_total
+          - sensor.hoymiles_hit_generator_energy_l2n_total
+          - sensor.hoymiles_hit_generator_energy_l3n_total
+  - title: Liczniki
+    path: liczniki
+    icon: mdi:meter-electric
+    badges: []
+    cards:
+      - type: entities
+        title: Licznik sieci
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_grid_voltage_l1n
+          - sensor.hoymiles_hit_grid_voltage_l2n
+          - sensor.hoymiles_hit_grid_voltage_l3n
+          - sensor.hoymiles_hit_grid_current_l1n
+          - sensor.hoymiles_hit_grid_current_l2n
+          - sensor.hoymiles_hit_grid_current_l3n
+          - sensor.hoymiles_hit_meter_grid_frequency
+          - sensor.hoymiles_hit_meter_grid_active_power_l1
+          - sensor.hoymiles_hit_meter_grid_active_power_l2
+          - sensor.hoymiles_hit_meter_grid_active_power_l3
+          - sensor.hoymiles_hit_meter_grid_total_active_power
+          - sensor.hoymiles_hit_grid_reactive_power_l1n
+          - sensor.hoymiles_hit_grid_reactive_power_l2n
+          - sensor.hoymiles_hit_grid_reactive_power_l3n
+          - sensor.hoymiles_hit_grid_total_reactive_power
+          - sensor.hoymiles_hit_grid_power_factor
+          - sensor.hoymiles_hit_grid_power_factor_l1n
+          - sensor.hoymiles_hit_grid_power_factor_l2n
+          - sensor.hoymiles_hit_grid_power_factor_l3n
+      - type: entities
+        title: Licznik zewnętrznego PV
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_pv_voltage_l1n
+          - sensor.hoymiles_hit_pv_voltage_l2n
+          - sensor.hoymiles_hit_pv_voltage_l3n
+          - sensor.hoymiles_hit_pv_current_l1n
+          - sensor.hoymiles_hit_pv_current_l2n
+          - sensor.hoymiles_hit_pv_current_l3n
+          - sensor.hoymiles_hit_pv_frequency
+          - sensor.hoymiles_hit_pv_active_power_l1n
+          - sensor.hoymiles_hit_pv_active_power_l2n
+          - sensor.hoymiles_hit_pv_active_power_l3n
+          - sensor.hoymiles_hit_pv_total_active_power
+          - sensor.hoymiles_hit_pv_reactive_power_l1n
+          - sensor.hoymiles_hit_pv_reactive_power_l2n
+          - sensor.hoymiles_hit_pv_reactive_power_l3n
+          - sensor.hoymiles_hit_pv_total_reactive_power
+          - sensor.hoymiles_hit_pv_power_factor
+          - sensor.hoymiles_hit_pv_power_factor_l1n
+          - sensor.hoymiles_hit_pv_power_factor_l2n
+          - sensor.hoymiles_hit_pv_power_factor_l3n
+  - title: Sterowanie
+    path: sterowanie
+    icon: mdi:tune-variant
+    badges: []
+    cards:
+      - type: entities
+        title: EMS — bezpieczny zapis całego bloku 4300–4306
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - select.hoymiles_hit_ems_mode
+          - number.hoymiles_hit_self_use_soc
+          - number.hoymiles_hit_force_charge_soc
+          - number.hoymiles_hit_maximum_charge_power
+          - number.hoymiles_hit_force_discharge_soc
+          - number.hoymiles_hit_maximum_discharge_power
+      - type: entities
+        title: Ustawienia falownika i baterii
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - select.hoymiles_hit_three_phase_unbalance
+          - select.hoymiles_hit_eps_mode
+          - select.hoymiles_hit_pv_island_mode
+          - select.hoymiles_hit_battery_type_setting
+          - select.hoymiles_hit_bms_type_setting
+          - number.hoymiles_hit_grid_input_power_limitation_valley
+          - number.hoymiles_hit_battery_max_charge_power
+          - number.hoymiles_hit_battery_max_discharge_power
+          - number.hoymiles_hit_maximum_soc
+          - number.hoymiles_hit_minimum_soc
+          - number.hoymiles_hit_low_soc_grid_charge_power
+          - number.hoymiles_hit_soc_start_charge_from_grid
+      - type: entities
+        title: Sterowanie systemem
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - select.hoymiles_hit_system_operation
+      - type: markdown
+        content: >-
+          **Uwaga:** zmiana `System Operation` może zatrzymać falownik.
+          Encja `select.hoymiles_hit_parallel_networking_command` jest celowo pominięta,
+          ponieważ w ESPHome ma `disabled_by_default: true`. Włącz ją w Home
+          Assistant tylko wtedy, gdy konfigurujesz pracę równoległą.
+  - title: Stany i alarmy
+    path: stany-alarmy
+    icon: mdi:alert-circle-outline
+    badges: []
+    cards:
+      - type: entities
+        title: Stany komunikacji, pracy i alarmy
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_inverter_work_status
+          - sensor.hoymiles_hit_sw_fault
+          - sensor.hoymiles_hit_hw_fault
+          - sensor.hoymiles_hit_meter_link_status
+          - sensor.hoymiles_hit_pv_link_status
+          - sensor.hoymiles_hit_battery_type_bms
+          - sensor.hoymiles_hit_battery_link_status
+          - sensor.hoymiles_hit_battery_work_status_bms
+          - sensor.hoymiles_hit_overview_system_work_status
+          - sensor.hoymiles_hit_overview_battery_work_status
+          - sensor.hoymiles_hit_battery_fault_code_bms
+          - sensor.hoymiles_hit_overview_battery_faults
+          - sensor.hoymiles_hit_overview_dsp_power_faults
+          - sensor.hoymiles_hit_dsp_safety_faults
+          - sensor.hoymiles_hit_arm_communication_faults
+          - sensor.hoymiles_hit_arm_peripheral_faults
+          - sensor.hoymiles_hit_arm_system_faults
+  - title: Diagnostyka
+    path: diagnostyka
+    icon: mdi:tools
+    badges: []
+    cards:
+      - type: entities
+        title: Overview — skrócone rejestry mocy
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_overview_pv_total_power
+          - sensor.hoymiles_hit_overview_internal_pv_total_power
+          - sensor.hoymiles_hit_overview_external_pv_total_power
+          - sensor.hoymiles_hit_overview_inverter_active_power
+          - sensor.hoymiles_hit_overview_battery_power
+          - sensor.hoymiles_hit_overview_grid_total_active_power
+          - sensor.hoymiles_hit_overview_generator_active_power
+          - sensor.hoymiles_hit_overview_load_active_power
+          - sensor.hoymiles_hit_overview_smart_load_active_power
+          - sensor.hoymiles_hit_overview_battery_soc
+      - type: entities
+        title: Parametry ochronne i temperatury
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_hit_inv_ths_temp
+            name: Temperatura radiatora falownika
+          - entity: sensor.hoymiles_hit_bat_ths_temp
+            name: Temperatura radiatora toru baterii
+          - entity: sensor.hoymiles_hit_cav_temp
+            name: Temperatura wnętrza falownika (CAV)
+          - entity: sensor.hoymiles_hit_pe_voltage
+            name: Napięcie PP
+          - entity: sensor.hoymiles_hit_iso_resistor
+            name: Rezystancja izolacji
+          - entity: sensor.hoymiles_hit_residual_current
+            name: Prąd różnicowy
+      - type: entities
+        title: ESP32
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_esp_uptime
+      - type: entities
+        title: Wi-Fi
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_esp_wifi_signal
+          - sensor.hoymiles_hit_esp_ip_address
+          - sensor.hoymiles_hit_esp_wifi_ssid
+          - sensor.hoymiles_hit_esp_mac_address
+      - type: entities
+        title: Sieć równoległa falowników
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - sensor.hoymiles_hit_machines_type
+          - sensor.hoymiles_hit_number_of_machines_master_and_slave
+          - sensor.hoymiles_hit_communication_address_1_master_device
+          - sensor.hoymiles_hit_communication_address_2_slave_device_1
+          - sensor.hoymiles_hit_communication_address_3_slave_device_2
+          - sensor.hoymiles_hit_communication_address_4_slave_device_3
+          - sensor.hoymiles_hit_communication_address_5_slave_device_4
+          - sensor.hoymiles_hit_communication_address_6_slave_device_5
+          - sensor.hoymiles_hit_communication_address_7_slave_device_6
+          - sensor.hoymiles_hit_communication_address_8_slave_device_7
+          - sensor.hoymiles_hit_communication_address_9_slave_device_8
+          - sensor.hoymiles_hit_communication_address_10_slave_device_9

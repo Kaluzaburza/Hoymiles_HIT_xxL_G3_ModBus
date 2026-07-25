@@ -1,0 +1,7 @@
+install_assets:
+  fields:
+    overwrite:
+      required: false
+      default: false
+      selector:
+        boolean:
