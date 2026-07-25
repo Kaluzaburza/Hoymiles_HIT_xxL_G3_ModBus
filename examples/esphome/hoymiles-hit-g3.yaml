@@ -1,0 +1,55 @@
+# Public ESPHome entry point for Hoymiles HIT xxL G3 Modbus.
+# Copy this file to your ESPHome directory and adjust substitutions/secrets.
+
+substitutions:
+  name: "hoymiles-hit-g3"
+  friendly_name: "Hoymiles HIT G3"
+  device_description: "Hoymiles HIT xxL G3 energy storage inverter (Modbus V2.4)"
+
+  modbus_controller_id: hoymiles_modbus
+  modbus_fast_controller_id: hoymiles_modbus_fast
+  modbus_inverter_address: "1"
+  baud_rate: "115200"
+  fast_update_interval: "5s"
+
+  uart_tx_pin: "GPIO17"
+  uart_rx_pin: "GPIO16"
+  board: "esp32dev"
+
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  fallback_password: !secret fallback_password
+  api_key: !secret api_key
+  ota_password: !secret ota_password
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.1"
+      sram1_as_iram: true
+
+packages:
+  hoymiles_hit_g3:
+    url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
+    ref: v1.0.0
+    refresh: 1d
+    files:
+      - packages/core.yaml
+      - packages/network.yaml
+      - packages/modbus_connection.yaml
+      - packages/settings.yaml
+      - packages/system.yaml
+      - packages/states_alarms.yaml
+      - packages/inverter.yaml
+      - packages/grid.yaml
+      - packages/backup_load.yaml
+      - packages/generator.yaml
+      - packages/pv.yaml
+      - packages/battery.yaml
+      - packages/energy_flow.yaml
+      - packages/meters.yaml
+      - packages/parallel_network.yaml
+      - packages/overview.yaml
+      - packages/diagnostics.yaml

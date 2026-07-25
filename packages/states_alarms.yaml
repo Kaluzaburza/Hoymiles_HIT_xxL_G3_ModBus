@@ -1,0 +1,455 @@
+# Czytelne stany i alarmy. Dekodowanie odbywa się z surowych bajtów,
+# dzięki czemu 32-bitowe maski błędów nie tracą precyzji w typie float.
+
+text_sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Work Status"
+    id: workstatus_0
+    register_type: read
+    address: 0
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:state-machine
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      switch (value) {
+        case 0: return std::string("Inicjalizacja zasilania");
+        case 1: return std::string("Czuwanie");
+        case 2: return std::string("Test sieci");
+        case 3: return std::string("Praca z siecią");
+        case 4: return std::string("Awaria");
+        case 5: return std::string("Praca wyspowa");
+        case 6: return std::string("Bypass");
+        default: return std::string("Nieznany stan (") + std::to_string(value) + ")";
+      }
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "SW Fault"
+    id: sw_fault_19
+    register_type: read
+    address: 19
+    register_count: 2
+    response_size: 4
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:alert-circle-outline
+    lambda: |-
+      const size_t o = item->offset;
+      const uint32_t value = (static_cast<uint32_t>(data[o]) << 24) |
+                             (static_cast<uint32_t>(data[o + 1]) << 16) |
+                             (static_cast<uint32_t>(data[o + 2]) << 8) |
+                             data[o + 3];
+      if (value == 0) return std::string("Brak błędu");
+      if (value == 0x24902490) return std::string("Niedostępne");
+      char buffer[48];
+      snprintf(buffer, sizeof(buffer), "Kod błędu programu: 0x%08lX", static_cast<unsigned long>(value));
+      return std::string(buffer);
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "HW Fault"
+    id: hw_fault_21
+    register_type: read
+    address: 21
+    register_count: 2
+    response_size: 4
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:alert-circle-outline
+    lambda: |-
+      const size_t o = item->offset;
+      const uint32_t value = (static_cast<uint32_t>(data[o]) << 24) |
+                             (static_cast<uint32_t>(data[o + 1]) << 16) |
+                             (static_cast<uint32_t>(data[o + 2]) << 8) |
+                             data[o + 3];
+      if (value == 0) return std::string("Brak błędu");
+      if (value == 0x24902490) return std::string("Niedostępne");
+      char buffer[48];
+      snprintf(buffer, sizeof(buffer), "Kod błędu sprzętu: 0x%08lX", static_cast<unsigned long>(value));
+      return std::string(buffer);
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Meter Link Status"
+    id: meter_link_status_1800
+    register_type: read
+    address: 1800
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:meter-electric
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      switch (value) {
+        case 0: return std::string("Offline");
+        case 1: return std::string("Online");
+        case 3: return std::string("HMID: połączenie prawidłowe");
+        case 4: return std::string("HMID: błąd połączenia");
+        default: return std::string("Nieznany stan (") + std::to_string(value) + ")";
+      }
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Link Status"
+    id: pv_link_status_1850
+    register_type: read
+    address: 1850
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:solar-power-variant
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      if (value == 0) return std::string("Offline");
+      if (value == 1) return std::string("Online");
+      return std::string("Nieznany stan (") + std::to_string(value) + ")";
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Type (BMS)"
+    id: battery_type_1900
+    register_type: read
+    address: 1900
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:battery
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      switch (value) {
+        case 0: return std::string("Brak baterii");
+        case 1: return std::string("Litowa");
+        case 2: return std::string("Kwasowo-fosforanowa");
+        case 3: return std::string("Symulowana");
+        default: return std::string("Nieznany typ (") + std::to_string(value) + ")";
+      }
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Link Status"
+    id: battery_link_status_1901
+    register_type: read
+    address: 1901
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:battery-sync
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      if (value == 0) return std::string("Offline");
+      if (value == 1) return std::string("Online");
+      return std::string("Nieznany stan (") + std::to_string(value) + ")";
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Work Status (BMS)"
+    id: work_status_1904
+    register_type: read
+    address: 1904
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:battery-sync
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      if (value == 0) return std::string("Czuwanie");
+      if (value == 1) return std::string("Ładowanie");
+      if (value == 2) return std::string("Rozładowanie");
+      return std::string("Nieznany stan (") + std::to_string(value) + ")";
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Overview System Work Status"
+    id: system_workstatus_30000
+    register_type: read
+    address: 30000
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:state-machine
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      switch (value) {
+        case 0: return std::string("Inicjalizacja zasilania");
+        case 1: return std::string("Czuwanie");
+        case 2: return std::string("Test sieci");
+        case 3: return std::string("Praca z siecią");
+        case 4: return std::string("Awaria");
+        case 5: return std::string("Praca wyspowa");
+        case 6: return std::string("Bypass");
+        default: return std::string("Nieznany stan (") + std::to_string(value) + ")";
+      }
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Overview Battery Work Status"
+    id: battery_work_status_30019
+    register_type: read
+    address: 30019
+    response_size: 2
+    raw_encode: HEXBYTES
+    icon: mdi:battery-sync
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      if (value == 0) return std::string("Czuwanie");
+      if (value == 1) return std::string("Ładowanie");
+      if (value == 2) return std::string("Rozładowanie");
+      return std::string("Nieznany stan (") + std::to_string(value) + ")";
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Battery Fault Code (BMS)"
+    id: battery_fault_code_1905
+    register_type: read
+    address: 1905
+    register_count: 2
+    response_size: 4
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:battery-alert
+    lambda: |-
+      const size_t o = item->offset;
+      const uint32_t value = (static_cast<uint32_t>(data[o]) << 24) |
+                             (static_cast<uint32_t>(data[o + 1]) << 16) |
+                             (static_cast<uint32_t>(data[o + 2]) << 8) |
+                             data[o + 3];
+      if (value == 0) return std::string("Brak błędu");
+      if (value == 0x24902490) return std::string("Niedostępne");
+      char buffer[48];
+      snprintf(buffer, sizeof(buffer), "Kod błędu BMS: 0x%08lX", static_cast<unsigned long>(value));
+      return std::string(buffer);
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Overview Battery Faults"
+    id: battery_fault_code_30021
+    register_type: read
+    address: 30021
+    register_count: 2
+    response_size: 4
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:battery-alert
+    lambda: |-
+      const size_t o = item->offset;
+      const uint32_t value = (static_cast<uint32_t>(data[o]) << 24) |
+                             (static_cast<uint32_t>(data[o + 1]) << 16) |
+                             (static_cast<uint32_t>(data[o + 2]) << 8) |
+                             data[o + 3];
+      if (value == 0) return std::string("Brak błędów");
+      if (value == 0x24902490) return std::string("Niedostępne");
+      std::string result;
+      auto add = [&](const char *name) { if (!result.empty()) result += "; "; result += name; };
+      if (value & (1UL << 0)) add("Niskie napięcie baterii");
+      if (value & (1UL << 1)) add("Wysokie napięcie baterii");
+      if (value & (1UL << 2)) add("Niskie napięcie pakietu przy rozładowaniu");
+      if (value & (1UL << 3)) add("Wysokie napięcie pakietu przy ładowaniu");
+      if (value & (1UL << 4)) add("Niska temperatura ładowania");
+      if (value & (1UL << 5)) add("Wysoka temperatura ładowania");
+      if (value & (1UL << 6)) add("Niska temperatura rozładowania");
+      if (value & (1UL << 7)) add("Wysoka temperatura rozładowania");
+      if (value & (1UL << 8)) add("Za wysokie napięcie wejściowe (HV)");
+      if (result.empty()) {
+        char buffer[48];
+        snprintf(buffer, sizeof(buffer), "Błąd w zarezerwowanym bicie: 0x%08lX", static_cast<unsigned long>(value));
+        return std::string(buffer);
+      }
+      return result;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Overview DSP Power Faults"
+    id: dsp_pwr_fault_code_30023
+    register_type: read
+    address: 30023
+    register_count: 2
+    response_size: 4
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:alert-octagon
+    lambda: |-
+      const size_t o = item->offset;
+      const uint32_t value = (static_cast<uint32_t>(data[o]) << 24) |
+                             (static_cast<uint32_t>(data[o + 1]) << 16) |
+                             (static_cast<uint32_t>(data[o + 2]) << 8) |
+                             data[o + 3];
+      if (value == 0) return std::string("Brak błędów");
+      if (value == 0x24902490) return std::string("Niedostępne");
+      std::string result;
+      auto add = [&](const char *name) { if (!result.empty()) result += "; "; result += name; };
+      if (value & (1UL << 0)) add("Wyłączenie");
+      if (value & (1UL << 1)) add("Zabezpieczenie sprzętowe");
+      if (value & (1UL << 2)) add("Błąd komparatora");
+      if (value & (1UL << 3)) add("Błąd komunikacji SPI");
+      if (value & (1UL << 4)) add("Błąd komunikacji ARM");
+      if (value & (1UL << 5)) add("Nieprawidłowe przesunięcie pomiaru");
+      if (value & (1UL << 6)) add("Błąd obliczenia przesunięcia CMPSS");
+      if (value & (1UL << 7)) add("Błąd EEPROM");
+      if (value & (1UL << 8)) add("Błąd PV");
+      if (value & (1UL << 9)) add("Błąd baterii");
+      if (value & (1UL << 10)) add("Nieprawidłowe zasilanie pomocnicze");
+      if (value & (1UL << 11)) add("Zabezpieczenie przekaźnika sieci");
+      if (value & (1UL << 12)) add("Nieprawidłowa szyna DC");
+      if (value & (1UL << 13)) add("Błąd wentylatora");
+      if (value & (1UL << 14)) add("Niezgodny typ urządzenia");
+      if (value & (1UL << 15)) add("Niezgodna wersja");
+      if (value & (1UL << 16)) add("Nieprawidłowe okablowanie");
+      if (value & (1UL << 17)) add("Napięcie PV wyższe od napięcia szyny");
+      if (value & (1UL << 18)) add("Błąd sterownika mocy");
+      if (value & (1UL << 19)) add("Nieprawidłowa temperatura");
+      if (value & (1UL << 20)) add("Zabezpieczenie przekaźnika EPS");
+      if (value & (1UL << 21)) add("Niski poziom energii baterii");
+      if (value & (1UL << 22)) add("Nieprawidłowe napięcie EPS");
+      if (value & (1UL << 23)) add("Przeciążenie EPS");
+      if (value & (1UL << 24)) add("Błąd generatora");
+      if (value & (1UL << 25)) add("Przeciążenie generatora");
+      if (value & (1UL << 26)) add("Nieprawidłowe okablowanie licznika");
+      if (value & (1UL << 27)) add("Przekroczenie czasu komunikacji CAN");
+      if (value & (1UL << 28)) add("Nieudana synchronizacja wstępna");
+      if (value & (1UL << 29)) add("Brak synchronizacji PLL");
+      if (value & (1UL << 30)) add("Nieprawidłowe napięcie sieci");
+      return result;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "DSP Safety Faults"
+    id: dsp_saf_fault_code_30025
+    register_type: read
+    address: 30025
+    register_count: 2
+    response_size: 4
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:shield-alert
+    lambda: |-
+      const size_t o = item->offset;
+      const uint32_t value = (static_cast<uint32_t>(data[o]) << 24) |
+                             (static_cast<uint32_t>(data[o + 1]) << 16) |
+                             (static_cast<uint32_t>(data[o + 2]) << 8) |
+                             data[o + 3];
+      if (value == 0) return std::string("Brak błędów");
+      if (value == 0x24902490) return std::string("Niedostępne");
+      std::string result;
+      auto add = [&](const char *name) { if (!result.empty()) result += "; "; result += name; };
+      if (value & (1UL << 0)) add("Za wysokie napięcie sieci");
+      if (value & (1UL << 1)) add("Za niskie napięcie sieci");
+      if (value & (1UL << 2)) add("Przekroczenie napięcia 10-minutowego");
+      if (value & (1UL << 3)) add("Za wysoka częstotliwość sieci");
+      if (value & (1UL << 4)) add("Za niska częstotliwość sieci");
+      if (value & (1UL << 5)) add("Zbyt szybka zmiana częstotliwości");
+      if (value & (1UL << 6)) add("Nieudane ponowne połączenie");
+      if (value & (1UL << 7)) add("Zanik sieci");
+      if (value & (1UL << 8)) add("Niepodłączony przewód neutralny N");
+      if (value & (1UL << 9)) add("Zwarcie faza–PE");
+      if (value & (1UL << 10)) add("Zwarcie N–PE");
+      if (value & (1UL << 11)) add("Niezgodny typ urządzenia");
+      if (value & (1UL << 12)) add("Niezgodna wersja");
+      if (value & (1UL << 13)) add("Błąd autotestu AFCI");
+      if (value & (1UL << 14)) add("Błąd łuku AFCI");
+      if (value & (1UL << 15)) add("Błąd izolacji");
+      if (value & (1UL << 16)) add("Błąd autotestu RCD");
+      if (value & (1UL << 17)) add("Błąd RCD");
+      if (value & (1UL << 18)) add("Zabezpieczenie przekaźnika sieci");
+      if (value & (1UL << 19)) add("Nieprawidłowe zasilanie pomocnicze");
+      if (value & (1UL << 20)) add("Błąd komunikacji SPI");
+      if (value & (1UL << 21)) add("Błąd komunikacji ARM");
+      if (value & (1UL << 22)) add("Nieprawidłowe przesunięcie pomiaru");
+      if (value & (1UL << 23)) add("Błąd komunikacji Flash");
+      if (value & (1UL << 24)) add("Składowa DC napięcia off-grid poza zakresem");
+      if (value & (1UL << 25)) add("Składowa DC prądu sieci poza zakresem");
+      if (value & (1UL << 26)) add("Przepełnienie przerwania");
+      if (value & (1UL << 27)) add("Błąd mikrokontrolera");
+      if (value & (1UL << 28)) add("Za niska temperatura otoczenia");
+      if (value & (1UL << 29)) add("Przegrzanie");
+      if (value & (1UL << 30)) add("Błąd komparatora");
+      if (value & (1UL << 31)) add("Błąd wentylatora");
+      return result;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "ARM Communication Faults"
+    id: arm_fault_code1_30027
+    register_type: read
+    address: 30027
+    response_size: 2
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:lan-disconnect
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      std::string result;
+      auto add = [&](const char *name) { if (!result.empty()) result += "; "; result += name; };
+      // W tym firmware aktywny bit oznacza błąd (potwierdzone stanami
+      // działających DSP, licznika i BMS w logu), odwrotnie niż uwaga w PDF.
+      if (value & (1U << 5)) add("Brak komunikacji DSP_PWR");
+      if (value & (1U << 6)) add("Brak komunikacji DSP_SAF");
+      return result.empty() ? std::string("Brak błędów") : result;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "ARM Peripheral Faults"
+    id: arm_fault_code2_30028
+    register_type: read
+    address: 30028
+    response_size: 2
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:lan-disconnect
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      std::string result;
+      auto add = [&](const char *name) { if (!result.empty()) result += "; "; result += name; };
+      if (value & (1U << 1)) add("Brak komunikacji z licznikiem PV");
+      if (value & (1U << 2)) add("Brak komunikacji z licznikiem sieci");
+      if (value & (1U << 3)) add("Brak komunikacji BMS CAN");
+      if (value & (1U << 4)) add("Za niska wersja DTU");
+      if (value & (1U << 5)) add("Brak komunikacji DTS");
+      if (value & (1U << 6)) add("Nieprawidłowy typ licznika sieci");
+      if (value & (1U << 7)) add("Nieprawidłowy typ licznika PV");
+      if (value & (1U << 8)) add("Błędne podłączenie baterii urządzenia podrzędnego");
+      if (value & (1U << 9)) add("Brak komunikacji DTU1 RS485");
+      if (value & (1U << 10)) add("Brak komunikacji DTU2 RS485");
+      if (value & (1U << 11)) add("Brak komunikacji DTU3 RS485");
+      if (value & (1U << 12)) add("Brak komunikacji DTU4 RS485");
+      if (value & (1U << 13)) add("Brak komunikacji DTU5 RS485");
+      if (value & (1U << 14)) add("Brak komunikacji z ładowarką EV1");
+      if (value & (1U << 15)) add("Brak komunikacji z ładowarką EV2");
+      return result.empty() ? std::string("Brak błędów") : result;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "ARM System Faults"
+    id: arm_fault_code3_30029
+    register_type: read
+    address: 30029
+    response_size: 2
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    icon: mdi:alert-circle
+    lambda: |-
+      const size_t o = item->offset;
+      const uint16_t value = (static_cast<uint16_t>(data[o]) << 8) | data[o + 1];
+      if (value == 0x2490) return std::string("Niedostępne");
+      std::string result;
+      auto add = [&](const char *name) { if (!result.empty()) result += "; "; result += name; };
+      if (value & (1U << 0)) add("Błąd ładowarki EV1");
+      if (value & (1U << 1)) add("Błąd ładowarki EV2");
+      if (value & (1U << 2)) add("Trwale ujemna moc obciążenia");
+      if (value & (1U << 3)) add("Nieprawidłowa pojemność baterii");
+      return result.empty() ? std::string("Brak błędów") : result;

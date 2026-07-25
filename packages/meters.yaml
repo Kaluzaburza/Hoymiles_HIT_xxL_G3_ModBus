@@ -1,0 +1,488 @@
+# Zewnętrzne liczniki energii
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Voltage L1n"
+    id: grid_voltage_an_1801
+    register_type: read
+    address: 1801
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Voltage L2n"
+    id: grid_voltage_bn_1802
+    register_type: read
+    address: 1802
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Voltage L3n"
+    id: grid_voltage_cn_1803
+    register_type: read
+    address: 1803
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Current L1n"
+    id: grid_current_an_1804
+    register_type: read
+    address: 1804
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Current L2n"
+    id: grid_current_bn_1805
+    register_type: read
+    address: 1805
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Grid Current L3n"
+    id: grid_current_cn_1806
+    register_type: read
+    address: 1806
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_fast_controller_id}
+    name: "Meter Grid Frequency"
+    id: grid_frequency_1807
+    register_type: read
+    address: 1807
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: U_WORD
+    filters:
+    - multiply: 0.01
+
+  # Mapa nie udostępnia osobnego rejestru prądu łącznego. Ta wartość jest
+  # sumą bezwzględnych prądów L1n/L2n/L3n z rejestrów 1804-1806.
+  - platform: template
+    name: "Grid Total Current"
+    id: grid_total_current_1804_1806
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: ${fast_update_interval}
+    lambda: |-
+      if (!id(grid_current_an_1804).has_state() ||
+          !id(grid_current_bn_1805).has_state() ||
+          !id(grid_current_cn_1806).has_state()) return NAN;
+      return std::abs(id(grid_current_an_1804).state) +
+             std::abs(id(grid_current_bn_1805).state) +
+             std::abs(id(grid_current_cn_1806).state);
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Meter Grid Active Power L1"
+    id: grid_active_power_an_1808
+    register_type: read
+    address: 1808
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Meter Grid Active Power L2"
+    id: grid_active_power_bn_1810
+    register_type: read
+    address: 1810
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Meter Grid Active Power L3"
+    id: grid_active_power_cn_1812
+    register_type: read
+    address: 1812
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Meter Grid Total Active Power"
+    id: grid_total_active_power_1814
+    register_type: read
+    address: 1814
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Reactive Power L1n"
+    id: grid_reactive_power_an_1816
+    register_type: read
+    address: 1816
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Reactive Power L2n"
+    id: grid_reactive_power_bn_1818
+    register_type: read
+    address: 1818
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Reactive Power L3n"
+    id: grid_reactive_power_cn_1820
+    register_type: read
+    address: 1820
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Total Reactive Power"
+    id: grid_total_reactive_power_1822
+    register_type: read
+    address: 1822
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Power Factor"
+    id: grid_power_factor_1824
+    register_type: read
+    address: 1824
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Power Factor L1n"
+    id: grid_power_factor_an_1825
+    register_type: read
+    address: 1825
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Power Factor L2n"
+    id: grid_power_factor_bn_1826
+    register_type: read
+    address: 1826
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Grid Power Factor L3n"
+    id: grid_power_factor_cn_1827
+    register_type: read
+    address: 1827
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Voltage L1n"
+    id: pv_voltage_an_1851
+    register_type: read
+    address: 1851
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Voltage L2n"
+    id: pv_voltage_bn_1852
+    register_type: read
+    address: 1852
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Voltage L3n"
+    id: pv_voltage_cn_1853
+    register_type: read
+    address: 1853
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Current L1n"
+    id: pv_current_an_1854
+    register_type: read
+    address: 1854
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Current L2n"
+    id: pv_current_bn_1855
+    register_type: read
+    address: 1855
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Current L3n"
+    id: pv_current_cn_1856
+    register_type: read
+    address: 1856
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Frequency"
+    id: pv_frequency_1857
+    register_type: read
+    address: 1857
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: U_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Active Power L1n"
+    id: pv_active_power_an_1858
+    register_type: read
+    address: 1858
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Active Power L2n"
+    id: pv_active_power_bn_1860
+    register_type: read
+    address: 1860
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Active Power L3n"
+    id: pv_active_power_cn_1862
+    register_type: read
+    address: 1862
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Total Active Power"
+    id: pv_total_active_power_1864
+    register_type: read
+    address: 1864
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Reactive Power L1n"
+    id: pv_reactive_power_an_1866
+    register_type: read
+    address: 1866
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Reactive Power L2n"
+    id: pv_reactive_power_bn_1868
+    register_type: read
+    address: 1868
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Reactive Power L3n"
+    id: pv_reactive_power_cn_1870
+    register_type: read
+    address: 1870
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Total Reactive Power"
+    id: pv_total_reactive_power_1872
+    register_type: read
+    address: 1872
+    unit_of_measurement: "var"
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Power Factor"
+    id: pv_power_factor_1874
+    register_type: read
+    address: 1874
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Power Factor L1n"
+    id: pv_power_factor_an_1875
+    register_type: read
+    address: 1875
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Power Factor L2n"
+    id: pv_power_factor_bn_1876
+    register_type: read
+    address: 1876
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "PV Power Factor L3n"
+    id: pv_power_factor_cn_1877
+    register_type: read
+    address: 1877
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01

@@ -1,0 +1,21 @@
+# ESPHome secrets and build files
+/.esphome/
+/secrets.yaml
+
+# Local diagnostics and generated scratch files
+/tmp/
+/*-logs.txt
+/*.log
+/.agents/
+/.codex/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,86 @@
+# OPCJONALNE: rejestry baterii zależne od generacji falownika
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat1 Current (G1-G2)"
+    id: bat1_current_48_g1g2
+    register_type: read
+    address: 48
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat1 Current (G3)"
+    id: bat1_current_48_g3
+    register_type: read
+    address: 48
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_DWORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat1 Power (G3)"
+    id: bat1_power_50_g3
+    register_type: read
+    address: 50
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat1 Power (G1-G2)"
+    id: bat1_power_51_g1g2
+    register_type: read
+    address: 51
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat Total Charge Energy"
+    id: bat_total_charge_energy_8220
+    register_type: read
+    address: 8220
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bat Total Discharge Energy"
+    id: bat_total_discharge_energy_8222
+    register_type: read
+    address: 8222
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1

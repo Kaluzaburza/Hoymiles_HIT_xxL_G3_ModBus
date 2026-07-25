@@ -1,0 +1,191 @@
+# Hoymiles HIT xxL G3 Modbus
+
+Home Assistant and ESPHome integration for Hoymiles HIT xxL G3 hybrid
+inverters using Modbus RTU over an ESP32 RS485 bridge.
+
+[![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
+
+Version **1.0.0** is the first public release. It contains:
+
+- 271 localized read-only and writable Modbus entities;
+- four physical PV inputs (PV1–PV4);
+- grid, load/EPS, battery/BMS, generator and inverter registers;
+- safe atomic EMS writes for registers 4300–4306;
+- daily grid charge/discharge schedules;
+- PSE RCE price-based discharge automation with an export lockout window;
+- a ready-to-import Home Assistant dashboard and RCE chart card;
+- English and Polish entity names, select options, config flow and services.
+
+> [!WARNING]
+> This project writes operating parameters to a high-power inverter. Verify the
+> register map, wiring, battery limits and grid-code requirements for your exact
+> model before enabling writable entities. You use it at your own risk.
+
+## Architecture
+
+```text
+Hoymiles inverter ── RS485/Modbus RTU ── ESP32/ESPHome
+                                              │
+                                      native ESPHome API
+                                              │
+                                    Home Assistant + HACS
+```
+
+The HACS integration creates localized, stable proxy entities from the native
+ESPHome device. It listens to Home Assistant state events, so it does **not**
+add another Modbus polling cycle.
+
+## Requirements
+
+- a compatible Hoymiles HIT xxL G3 inverter (tested primarily with HIT-10L-G3);
+- ESP32 with a 3.3 V RS485 transceiver such as MAX3485 or Waveshare RS485;
+- ESPHome 2026.7 or newer;
+- Home Assistant 2026.7 or newer;
+- HACS 2.x.
+
+## 1. Flash the ESP32
+
+Copy [`examples/esphome/hoymiles-hit-g3.yaml`](examples/esphome/hoymiles-hit-g3.yaml)
+to your ESPHome configuration directory. Copy the required keys from
+[`secrets.yaml.example`](secrets.yaml.example) to your local `secrets.yaml`,
+then adjust the UART pins and board.
+
+The example loads the versioned package directly from GitHub. Compile and flash
+it from ESPHome. Add the discovered ESPHome device to Home Assistant before
+installing the localized integration.
+
+Default serial settings are Modbus RTU `115200 8N1`, slave address `1`.
+
+## 2. Install through HACS
+
+This repository must be public for HACS to download it.
+
+1. Open **HACS → Integrations → Custom repositories**.
+2. Add:
+   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus`
+3. Select the **Integration** category.
+4. Download **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
+5. Open **Settings → Devices & services → Add integration**.
+6. Search for **Hoymiles HIT xxL G3 Modbus** and select the ESPHome device.
+
+The integration automatically uses the Home Assistant language. English and
+Polish translations are bundled in `translations/en.json` and
+`translations/pl.json`.
+
+## 3. Dashboard and EMS automation
+
+During setup, the integration can copy:
+
+- `/config/dashboard_hoymiles.yaml`;
+- `/config/packages/hoymiles_ems_scheduler.yaml`;
+- `/config/www/hoymiles-rce-chart-card.js`.
+
+If Home Assistant packages are not enabled yet, add this under the existing
+`homeassistant:` section in `configuration.yaml`:
+
+```yaml
+homeassistant:
+  packages: !include_dir_named packages
+```
+
+Do not create a second `homeassistant:` key. Check the configuration and restart
+Home Assistant.
+
+Add the dashboard resource:
+
+```text
+/local/hoymiles-rce-chart-card.js?v=1.0.0
+```
+
+with resource type **JavaScript module**, then import
+`/config/dashboard_hoymiles.yaml` in the raw dashboard editor.
+
+To reinstall the bundled assets later, call:
+
+```yaml
+action: hoymiles_hit_modbus.install_assets
+data:
+  overwrite: true
+```
+
+## EMS safety
+
+Changing the EMS mode writes the complete register block `4300–4306` with one
+FC10 command. Writing register `4300` alone may leave the inverter with an
+inconsistent EMS configuration.
+
+The provided EMS automation supports:
+
+- Self-Use;
+- Off-Grid;
+- grid charge;
+- grid discharge;
+- daily start time and duration;
+- charge/discharge power and SOC limits;
+- PSE RCE prices in 30-minute control blocks;
+- a configurable export lockout window, including ranges across midnight.
+
+Manual schedules take priority over RCE automation. The export lockout always
+returns the inverter to Self-Use and blocks manual, scheduled and RCE export.
+
+## Repository structure
+
+```text
+custom_components/hoymiles_hit_modbus/  HACS integration
+packages/                               ESPHome Modbus register packages
+examples/esphome/                       public ESPHome entry configuration
+home_assistant/                         dashboard card and source EMS package
+tools/                                  catalog and validation scripts
+```
+
+## Development
+
+Regenerate the localized entity catalog and bundled assets:
+
+```bash
+python tools/build_hacs_assets.py
+```
+
+GitHub Actions run HACS validation, Hassfest and local structural tests.
+
+## Support
+
+Please open an issue and include:
+
+- exact inverter model and firmware version;
+- ESPHome and Home Assistant versions;
+- relevant logs with secrets removed;
+- the affected Modbus register and the expected value.
+
+---
+
+## Polski
+
+Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.0.0** udostępnia
+271 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
+automatykę cenową RCE PSE, blokadę sprzedaży oraz gotowy dashboard.
+
+### Instalacja
+
+1. Skopiuj
+   [`examples/esphome/hoymiles-hit-g3.yaml`](examples/esphome/hoymiles-hit-g3.yaml)
+   do ESPHome, uzupełnij sekrety oraz piny UART i wgraj firmware.
+2. Dodaj urządzenie przez standardową integrację ESPHome.
+3. W HACS dodaj to repozytorium jako niestandardowe repozytorium typu
+   **Integration**, zainstaluj je i uruchom Home Assistant ponownie.
+4. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz urządzenie ESPHome.
+5. Włącz pakiety Home Assistanta, dodaj zasób karty JavaScript i zaimportuj
+   skopiowany dashboard zgodnie z instrukcją powyżej.
+
+Nazwy encji i opcje wyboru są tłumaczone automatycznie na polski lub angielski
+zależnie od języka Home Assistanta. Pierwsze tłumaczenia są celowo opisowe i
+mogą być dalej poprawiane w plikach `translations/pl.json` oraz
+`translations/en.json`.
+
+### Bezpieczeństwo
+
+Integracja zapisuje ustawienia falownika. Przed użyciem sprawdź model, mapę
+rejestrów, limity BMS oraz wymagania operatora sieci. Tryb EMS jest zapisywany
+atomowo jako cały blok `4300–4306`, tak jak po użyciu przycisku **Save** w
+aplikacji producenta.

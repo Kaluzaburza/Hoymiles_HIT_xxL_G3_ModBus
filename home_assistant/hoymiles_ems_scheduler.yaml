@@ -1,0 +1,754 @@
+# Pakiet Home Assistant: codzienne harmonogramy EMS dla falownika Hoymiles.
+# Wymaga encji select.pv_hoymiles_inverter_tryb_ems z integracji ESPHome.
+
+input_boolean:
+  hoymiles_discharge_schedule_enabled:
+    name: "EMS — codzienne rozładowanie włączone"
+    icon: mdi:transmission-tower-export
+
+  hoymiles_charge_schedule_enabled:
+    name: "EMS — codzienne ładowanie włączone"
+    icon: mdi:transmission-tower-import
+
+  # Wewnętrzne znaczniki pozwalają bezpiecznie obsłużyć restart HA podczas cyklu.
+  hoymiles_discharge_cycle_active:
+    name: "EMS — trwa cykl rozładowania"
+    icon: mdi:battery-arrow-down
+
+  hoymiles_charge_cycle_active:
+    name: "EMS — trwa cykl ładowania"
+    icon: mdi:battery-arrow-up
+
+  hoymiles_rce_discharge_enabled:
+    name: "EMS RCE — automatyczne rozładowanie włączone"
+    icon: mdi:chart-line
+
+  # Wewnętrzny znacznik: tylko cykl rozpoczęty przez automatykę RCE może zostać
+  # przez nią zakończony. Ręczne harmonogramy zachowują pierwszeństwo.
+  hoymiles_rce_discharge_active:
+    name: "EMS RCE — trwa rozładowanie"
+    icon: mdi:battery-arrow-down-outline
+
+  hoymiles_sale_block_enabled:
+    name: "EMS — blokada sprzedaży w wybranych godzinach"
+    icon: mdi:transmission-tower-off
+
+input_datetime:
+  hoymiles_discharge_start:
+    name: "EMS — godzina rozpoczęcia rozładowania"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-start
+
+  hoymiles_charge_start:
+    name: "EMS — godzina rozpoczęcia ładowania"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-start
+
+  hoymiles_sale_block_start:
+    name: "EMS — początek blokady sprzedaży"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-start
+
+  hoymiles_sale_block_end:
+    name: "EMS — koniec blokady sprzedaży"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-end
+
+input_number:
+  hoymiles_discharge_duration:
+    name: "EMS — czas rozładowania"
+    min: 1
+    max: 720
+    step: 1
+    mode: box
+    unit_of_measurement: "min"
+    icon: mdi:timer-sand
+
+  hoymiles_charge_duration:
+    name: "EMS — czas ładowania"
+    min: 1
+    max: 720
+    step: 1
+    mode: box
+    unit_of_measurement: "min"
+    icon: mdi:timer-sand
+
+  hoymiles_rce_price_threshold:
+    name: "EMS RCE — minimalna cena sprzedaży"
+    min: -1
+    max: 5
+    step: 0.01
+    mode: box
+    unit_of_measurement: "PLN/kWh"
+    icon: mdi:currency-usd
+
+# Oficjalne API PSE publikuje RCE w PLN/MWh w 96 okresach po 15 minut.
+# Automatyka oraz dashboard łączą każde dwa kolejne okresy w 48 bloków
+# półgodzinnych i przeliczają cenę na PLN/kWh.
+rest:
+  - resource_template: >-
+      https://api.raporty.pse.pl/api/rce-pln?%24select=rce_pln%2Cperiod%2Cbusiness_date&%24filter=business_date%20eq%20%27{{ now().strftime('%Y-%m-%d') }}%27
+    method: GET
+    scan_interval: 900
+    timeout: 30
+    headers:
+      Accept: application/json
+    sensor:
+      - name: "Hoymiles RCE Day"
+        unique_id: hoymiles_rce_day
+        icon: mdi:chart-areaspline
+        value_template: "{{ value_json.value | count }}"
+        json_attributes:
+          - value
+
+template:
+  - sensor:
+      - name: "Hoymiles RCE Current Price"
+        unique_id: hoymiles_rce_current_price
+        icon: mdi:cash-clock
+        unit_of_measurement: "PLN/kWh"
+        state_class: measurement
+        availability: >-
+          {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
+          {{ rows | count >= 2
+             and rows[0]['business_date'] == now().strftime('%Y-%m-%d') }}
+        state: >-
+          {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
+          {% set slot = now().hour * 2 + (1 if now().minute >= 30 else 0) %}
+          {% set index = slot * 2 %}
+          {% if rows | count > index + 1 %}
+            {{ (((rows[index]['rce_pln'] | float(0)) +
+                  (rows[index + 1]['rce_pln'] | float(0))) / 2000) | round(4) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+
+      - name: "Hoymiles RCE Discharge Plan"
+        unique_id: hoymiles_rce_discharge_plan
+        icon: mdi:calendar-clock
+        state: >-
+          {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
+          {% set threshold = states('input_number.hoymiles_rce_price_threshold') | float(0) %}
+          {% set start_parts =
+            states('input_datetime.hoymiles_sale_block_start').split(':') %}
+          {% set end_parts =
+            states('input_datetime.hoymiles_sale_block_end').split(':') %}
+          {% set block_start = (start_parts[0] | int(0)) * 60
+                             + (start_parts[1] | int(0)) %}
+          {% set block_end = (end_parts[0] | int(0)) * 60
+                           + (end_parts[1] | int(0)) %}
+          {% set block_enabled =
+            is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
+            and block_start != block_end %}
+          {% set ns = namespace(blocks=0) %}
+          {% for index in range(0, (rows | count) - 1, 2) %}
+            {% set slot_minute = loop.index0 * 30 %}
+            {% set blocked = block_enabled and
+              ((block_start < block_end
+                and block_start <= slot_minute < block_end)
+               or (block_start > block_end
+                and (slot_minute >= block_start or slot_minute < block_end))) %}
+            {% set price = (((rows[index]['rce_pln'] | float(0)) +
+                             (rows[index + 1]['rce_pln'] | float(0))) / 2000) %}
+            {% if price > threshold and not blocked %}
+              {% set ns.blocks = ns.blocks + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.blocks }}
+        attributes:
+          data_date: >-
+            {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
+            {{ rows[0]['business_date'] if rows | count > 0 else 'brak danych' }}
+          planned_duration_minutes: >-
+            {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
+            {% set threshold = states('input_number.hoymiles_rce_price_threshold') | float(0) %}
+            {% set start_parts =
+              states('input_datetime.hoymiles_sale_block_start').split(':') %}
+            {% set end_parts =
+              states('input_datetime.hoymiles_sale_block_end').split(':') %}
+            {% set block_start = (start_parts[0] | int(0)) * 60
+                               + (start_parts[1] | int(0)) %}
+            {% set block_end = (end_parts[0] | int(0)) * 60
+                             + (end_parts[1] | int(0)) %}
+            {% set block_enabled =
+              is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
+              and block_start != block_end %}
+            {% set ns = namespace(blocks=0) %}
+            {% for index in range(0, (rows | count) - 1, 2) %}
+              {% set slot_minute = loop.index0 * 30 %}
+              {% set blocked = block_enabled and
+                ((block_start < block_end
+                  and block_start <= slot_minute < block_end)
+                 or (block_start > block_end
+                  and (slot_minute >= block_start or slot_minute < block_end))) %}
+              {% set price = (((rows[index]['rce_pln'] | float(0)) +
+                               (rows[index + 1]['rce_pln'] | float(0))) / 2000) %}
+              {% if price > threshold and not blocked %}
+                {% set ns.blocks = ns.blocks + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.blocks * 30 }}
+          periods: >-
+            {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
+            {% set threshold = states('input_number.hoymiles_rce_price_threshold') | float(0) %}
+            {% set start_parts =
+              states('input_datetime.hoymiles_sale_block_start').split(':') %}
+            {% set end_parts =
+              states('input_datetime.hoymiles_sale_block_end').split(':') %}
+            {% set block_start = (start_parts[0] | int(0)) * 60
+                               + (start_parts[1] | int(0)) %}
+            {% set block_end = (end_parts[0] | int(0)) * 60
+                             + (end_parts[1] | int(0)) %}
+            {% set block_enabled =
+              is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
+              and block_start != block_end %}
+            {% set ns = namespace(active=false, start='', finish='',
+                                  start_slot=0, last_slot=0, periods=[]) %}
+            {% for index in range(0, (rows | count) - 1, 2) %}
+              {% set slot = loop.index0 %}
+              {% set slot_minute = slot * 30 %}
+              {% set blocked = block_enabled and
+                ((block_start < block_end
+                  and block_start <= slot_minute < block_end)
+                 or (block_start > block_end
+                  and (slot_minute >= block_start or slot_minute < block_end))) %}
+              {% set price = (((rows[index]['rce_pln'] | float(0)) +
+                               (rows[index + 1]['rce_pln'] | float(0))) / 2000) %}
+              {% set is_high = price > threshold and not blocked %}
+              {% if is_high %}
+                {% if not ns.active %}
+                  {% set ns.active = true %}
+                  {% set ns.start = rows[index]['period'].split(' - ')[0] %}
+                  {% set ns.start_slot = slot %}
+                {% endif %}
+                {% set ns.finish = rows[index + 1]['period'].split(' - ')[1] %}
+                {% set ns.last_slot = slot %}
+              {% elif ns.active %}
+                {% set minutes = (ns.last_slot - ns.start_slot + 1) * 30 %}
+                {% set duration = (minutes // 60) ~ ' h'
+                  ~ ((' ' ~ (minutes % 60) ~ ' min') if minutes % 60 else '') %}
+                {% set ns.periods = ns.periods +
+                  [ns.start ~ '–' ~ ns.finish ~ ' (' ~ duration ~ ')'] %}
+                {% set ns.active = false %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.active %}
+              {% set minutes = (ns.last_slot - ns.start_slot + 1) * 30 %}
+              {% set duration = (minutes // 60) ~ ' h'
+                ~ ((' ' ~ (minutes % 60) ~ ' min') if minutes % 60 else '') %}
+              {% set ns.periods = ns.periods +
+                [ns.start ~ '–' ~ ns.finish ~ ' (' ~ duration ~ ')'] %}
+            {% endif %}
+            {{ ns.periods | join(', ') if ns.periods
+               else 'Brak okresów powyżej progu poza blokadą sprzedaży.' }}
+
+      - name: "Hoymiles RCE Status"
+        unique_id: hoymiles_rce_status
+        icon: mdi:transmission-tower-export
+        state: >-
+          {% if is_state('input_boolean.hoymiles_rce_discharge_enabled', 'off') %}
+            Wyłączona
+          {% elif is_state('binary_sensor.hoymiles_sale_block_active', 'on') %}
+            Blokada sprzedaży — Self-Use
+          {% elif is_state('input_boolean.hoymiles_rce_discharge_active', 'on') %}
+            Rozładowanie do sieci
+          {% elif not is_number(states('sensor.hoymiles_rce_current_price')) %}
+            Brak danych RCE
+          {% elif (states('sensor.pv_hoymiles_inverter_overview_battery_soc') | float(0))
+                   <= (states('number.pv_hoymiles_inverter_force_discharge_soc') | float(0)) %}
+            Oczekiwanie — osiągnięto minimalny SOC
+          {% elif is_state('input_boolean.hoymiles_discharge_cycle_active', 'on')
+               or is_state('input_boolean.hoymiles_charge_cycle_active', 'on') %}
+            Oczekiwanie — aktywny harmonogram ręczny
+          {% elif is_state('binary_sensor.hoymiles_rce_price_above_threshold', 'on') %}
+            Cena powyżej progu — gotowa
+          {% else %}
+            Oczekiwanie na cenę
+          {% endif %}
+
+    binary_sensor:
+      - name: "Hoymiles RCE Price Above Threshold"
+        unique_id: hoymiles_rce_price_above_threshold
+        icon: mdi:trending-up
+        availability: "{{ is_number(states('sensor.hoymiles_rce_current_price')) }}"
+        state: >-
+          {{ (states('sensor.hoymiles_rce_current_price') | float(0))
+             > (states('input_number.hoymiles_rce_price_threshold') | float(0)) }}
+
+      - name: "Hoymiles Sale Block Active"
+        unique_id: hoymiles_sale_block_active
+        icon: mdi:transmission-tower-off
+        availability: >-
+          {{ states('input_datetime.hoymiles_sale_block_start')
+               not in ['unknown', 'unavailable', 'none']
+             and states('input_datetime.hoymiles_sale_block_end')
+               not in ['unknown', 'unavailable', 'none'] }}
+        state: >-
+          {% set start_parts =
+            states('input_datetime.hoymiles_sale_block_start').split(':') %}
+          {% set end_parts =
+            states('input_datetime.hoymiles_sale_block_end').split(':') %}
+          {% set start = (start_parts[0] | int(0)) * 60
+                       + (start_parts[1] | int(0)) %}
+          {% set finish = (end_parts[0] | int(0)) * 60
+                        + (end_parts[1] | int(0)) %}
+          {% set current = now().hour * 60 + now().minute %}
+          {% set in_window =
+            (start < finish and start <= current < finish)
+            or (start > finish and (current >= start or current < finish)) %}
+          {{ is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
+             and start != finish and in_window }}
+        attributes:
+          configured_window: >-
+            {{ states('input_datetime.hoymiles_sale_block_start')[0:5] }}
+            –
+            {{ states('input_datetime.hoymiles_sale_block_end')[0:5] }}
+
+timer:
+  hoymiles_discharge:
+    name: "EMS — pozostały czas rozładowania"
+    duration: "01:30:00"
+    restore: true
+    icon: mdi:timer-outline
+
+  hoymiles_charge:
+    name: "EMS — pozostały czas ładowania"
+    duration: "01:30:00"
+    restore: true
+    icon: mdi:timer-outline
+
+script:
+  hoymiles_start_grid_discharge:
+    alias: "EMS — rozpocznij rozładowanie do sieci"
+    description: "Przełącza EMS na rozładowanie poza godzinami blokady sprzedaży i uruchamia timer."
+    icon: mdi:transmission-tower-export
+    mode: restart
+    sequence:
+      - condition: state
+        entity_id: binary_sensor.hoymiles_sale_block_active
+        state: "off"
+      - wait_template: >-
+          {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+             ['unknown', 'unavailable', 'none'] }}
+        timeout: "00:05:00"
+        continue_on_timeout: false
+      - action: timer.cancel
+        target:
+          entity_id: timer.hoymiles_charge
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hoymiles_charge_cycle_active
+      - action: select.select_option
+        target:
+          entity_id: select.pv_hoymiles_inverter_tryb_ems
+        data:
+          option: "Rozładowanie do sieci"
+      - action: timer.start
+        target:
+          entity_id: timer.hoymiles_discharge
+        data:
+          duration: >-
+            {{ (states('input_number.hoymiles_discharge_duration') | int(90)) * 60 }}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hoymiles_discharge_cycle_active
+
+  hoymiles_start_grid_charge:
+    alias: "EMS — rozpocznij ładowanie z sieci"
+    description: "Przełącza EMS na ładowanie i uruchamia timer z czasu ustawionego na dashboardzie."
+    icon: mdi:transmission-tower-import
+    mode: restart
+    sequence:
+      - wait_template: >-
+          {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+             ['unknown', 'unavailable', 'none'] }}
+        timeout: "00:05:00"
+        continue_on_timeout: false
+      - action: timer.cancel
+        target:
+          entity_id: timer.hoymiles_discharge
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hoymiles_discharge_cycle_active
+      - action: select.select_option
+        target:
+          entity_id: select.pv_hoymiles_inverter_tryb_ems
+        data:
+          option: "Ładowanie z sieci"
+      - action: timer.start
+        target:
+          entity_id: timer.hoymiles_charge
+        data:
+          duration: >-
+            {{ (states('input_number.hoymiles_charge_duration') | int(90)) * 60 }}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hoymiles_charge_cycle_active
+
+  hoymiles_stop_scheduled_cycle:
+    alias: "EMS — zatrzymaj cykl i wróć do Self-Use"
+    description: "Kończy oba timery i bezpiecznie przełącza falownik na autokonsumpcję."
+    icon: mdi:stop-circle-outline
+    mode: restart
+    sequence:
+      - action: timer.cancel
+        target:
+          entity_id:
+            - timer.hoymiles_discharge
+            - timer.hoymiles_charge
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.hoymiles_discharge_cycle_active
+            - input_boolean.hoymiles_charge_cycle_active
+      - wait_template: >-
+          {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+             ['unknown', 'unavailable', 'none'] }}
+        timeout: "00:05:00"
+        continue_on_timeout: false
+      - action: select.select_option
+        target:
+          entity_id: select.pv_hoymiles_inverter_tryb_ems
+        data:
+          option: "Autokonsumpcja (Self-Use)"
+
+automation:
+  - id: hoymiles_enforce_sale_block
+    alias: "EMS — wymuś blokadę sprzedaży"
+    description: >-
+      W godzinach blokady zatrzymuje każde rozładowanie do sieci i przełącza
+      falownik na Autokonsumpcję (Self-Use). Ładowanie z sieci pozostaje dozwolone.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.hoymiles_sale_block_active
+        to: "on"
+      - trigger: state
+        entity_id: select.pv_hoymiles_inverter_tryb_ems
+        to: "Rozładowanie do sieci"
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.hoymiles_sale_block_active
+        state: "on"
+    actions:
+      - action: timer.cancel
+        target:
+          entity_id: timer.hoymiles_discharge
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.hoymiles_discharge_cycle_active
+            - input_boolean.hoymiles_rce_discharge_active
+      - wait_template: >-
+          {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+             ['unknown', 'unavailable', 'none'] }}
+        timeout: "00:05:00"
+        continue_on_timeout: false
+      - if:
+          - condition: state
+            entity_id: select.pv_hoymiles_inverter_tryb_ems
+            state: "Rozładowanie do sieci"
+        then:
+          - action: select.select_option
+            target:
+              entity_id: select.pv_hoymiles_inverter_tryb_ems
+            data:
+              option: "Autokonsumpcja (Self-Use)"
+
+  - id: hoymiles_rce_grid_discharge_control
+    alias: "EMS RCE — sterowanie rozładowaniem według ceny"
+    description: >-
+      Co minutę porównuje bieżący półgodzinny blok RCE z progiem użytkownika.
+      Rozładowuje tylko powyżej progu i powyżej minimalnego SOC. Ręczne timery
+      ładowania i rozładowania mają pierwszeństwo.
+    mode: restart
+    triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: state
+        entity_id:
+          - sensor.hoymiles_rce_current_price
+          - binary_sensor.hoymiles_rce_price_above_threshold
+          - input_boolean.hoymiles_rce_discharge_enabled
+          - input_boolean.hoymiles_sale_block_enabled
+          - input_datetime.hoymiles_sale_block_start
+          - input_datetime.hoymiles_sale_block_end
+          - binary_sensor.hoymiles_sale_block_active
+          - input_boolean.hoymiles_discharge_cycle_active
+          - input_boolean.hoymiles_charge_cycle_active
+          - timer.hoymiles_discharge
+          - timer.hoymiles_charge
+          - sensor.pv_hoymiles_inverter_overview_battery_soc
+          - number.pv_hoymiles_inverter_force_discharge_soc
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          # Jeśli w trakcie pracy RCE uruchomiono ręczny timer, automatyka RCE
+          # oddaje mu sterowanie i nie zmienia ustawionego przez niego trybu.
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_rce_discharge_active
+                state: "on"
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: input_boolean.hoymiles_discharge_cycle_active
+                    state: "on"
+                  - condition: state
+                    entity_id: input_boolean.hoymiles_charge_cycle_active
+                    state: "on"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.hoymiles_rce_discharge_active
+
+          # Start RCE: cena powyżej progu, zapas SOC i brak ręcznego cyklu.
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_rce_discharge_enabled
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.hoymiles_rce_discharge_active
+                state: "off"
+              - condition: state
+                entity_id: binary_sensor.hoymiles_rce_price_above_threshold
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.hoymiles_sale_block_active
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ (states('sensor.pv_hoymiles_inverter_overview_battery_soc') | float(0))
+                     > (states('number.pv_hoymiles_inverter_force_discharge_soc') | float(0)) }}
+              - condition: state
+                entity_id: input_boolean.hoymiles_discharge_cycle_active
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.hoymiles_charge_cycle_active
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ not is_state('timer.hoymiles_discharge', 'active')
+                     and not is_state('timer.hoymiles_charge', 'active')
+                     and states('select.pv_hoymiles_inverter_tryb_ems')
+                       not in ['unknown', 'unavailable', 'none'] }}
+            sequence:
+              - action: select.select_option
+                target:
+                  entity_id: select.pv_hoymiles_inverter_tryb_ems
+                data:
+                  option: "Rozładowanie do sieci"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.hoymiles_rce_discharge_active
+
+          # Stop RCE: cena spadła, osiągnięto minimalny SOC, wyłączono
+          # automatykę albo dane PSE stały się niedostępne.
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_rce_discharge_active
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ is_state('input_boolean.hoymiles_rce_discharge_enabled', 'off')
+                     or is_state('binary_sensor.hoymiles_sale_block_active', 'on')
+                     or not is_state('binary_sensor.hoymiles_rce_price_above_threshold', 'on')
+                     or (states('sensor.pv_hoymiles_inverter_overview_battery_soc') | float(0))
+                        <= (states('number.pv_hoymiles_inverter_force_discharge_soc') | float(0)) }}
+              - condition: template
+                value_template: >-
+                  {{ states('select.pv_hoymiles_inverter_tryb_ems')
+                     not in ['unknown', 'unavailable', 'none'] }}
+            sequence:
+              - if:
+                  - condition: state
+                    entity_id: select.pv_hoymiles_inverter_tryb_ems
+                    state: "Rozładowanie do sieci"
+                then:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.pv_hoymiles_inverter_tryb_ems
+                    data:
+                      option: "Autokonsumpcja (Self-Use)"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.hoymiles_rce_discharge_active
+
+  - id: hoymiles_daily_grid_discharge
+    alias: "EMS — codzienne rozładowanie do sieci"
+    description: "Uruchamia rozładowanie codziennie o godzinie ustawionej na dashboardzie."
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hoymiles_discharge_start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hoymiles_discharge_schedule_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.hoymiles_sale_block_active
+        state: "off"
+    actions:
+      - action: script.hoymiles_start_grid_discharge
+
+  - id: hoymiles_daily_grid_charge
+    alias: "EMS — codzienne ładowanie z sieci"
+    description: "Uruchamia ładowanie codziennie o godzinie ustawionej na dashboardzie."
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hoymiles_charge_start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hoymiles_charge_schedule_enabled
+        state: "on"
+    actions:
+      - action: script.hoymiles_start_grid_charge
+
+  - id: hoymiles_finish_grid_discharge
+    alias: "EMS — zakończ rozładowanie i wróć do Self-Use"
+    mode: single
+    triggers:
+      - trigger: timer.finished
+        target:
+          entity_id: timer.hoymiles_discharge
+    actions:
+      - wait_template: >-
+          {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+             ['unknown', 'unavailable', 'none'] }}
+        timeout: "01:00:00"
+        continue_on_timeout: false
+      - if:
+          - condition: state
+            entity_id: select.pv_hoymiles_inverter_tryb_ems
+            state: "Rozładowanie do sieci"
+        then:
+          - action: select.select_option
+            target:
+              entity_id: select.pv_hoymiles_inverter_tryb_ems
+            data:
+              option: "Autokonsumpcja (Self-Use)"
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hoymiles_discharge_cycle_active
+
+  - id: hoymiles_finish_grid_charge
+    alias: "EMS — zakończ ładowanie i wróć do Self-Use"
+    mode: single
+    triggers:
+      - trigger: timer.finished
+        target:
+          entity_id: timer.hoymiles_charge
+    actions:
+      - wait_template: >-
+          {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+             ['unknown', 'unavailable', 'none'] }}
+        timeout: "01:00:00"
+        continue_on_timeout: false
+      - if:
+          - condition: state
+            entity_id: select.pv_hoymiles_inverter_tryb_ems
+            state: "Ładowanie z sieci"
+        then:
+          - action: select.select_option
+            target:
+              entity_id: select.pv_hoymiles_inverter_tryb_ems
+            data:
+              option: "Autokonsumpcja (Self-Use)"
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hoymiles_charge_cycle_active
+
+  - id: hoymiles_restore_ems_cycle_after_ha_restart
+    alias: "EMS — odzyskaj cykl po restarcie Home Assistant"
+    description: "Wznawia aktywny cykl albo wraca do Self-Use, jeśli timer upłynął podczas wyłączenia HA."
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:15"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_discharge_cycle_active
+                state: "on"
+              - condition: state
+                entity_id: timer.hoymiles_discharge
+                state: "active"
+              - condition: state
+                entity_id: binary_sensor.hoymiles_sale_block_active
+                state: "off"
+            sequence:
+              - wait_template: >-
+                  {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+                     ['unknown', 'unavailable', 'none'] }}
+                timeout: "00:05:00"
+                continue_on_timeout: false
+              - action: select.select_option
+                target:
+                  entity_id: select.pv_hoymiles_inverter_tryb_ems
+                data:
+                  option: "Rozładowanie do sieci"
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_discharge_cycle_active
+                state: "on"
+            sequence:
+              - wait_template: >-
+                  {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+                     ['unknown', 'unavailable', 'none'] }}
+                timeout: "00:05:00"
+                continue_on_timeout: false
+              - action: select.select_option
+                target:
+                  entity_id: select.pv_hoymiles_inverter_tryb_ems
+                data:
+                  option: "Autokonsumpcja (Self-Use)"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.hoymiles_discharge_cycle_active
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_charge_cycle_active
+                state: "on"
+              - condition: state
+                entity_id: timer.hoymiles_charge
+                state: "active"
+            sequence:
+              - wait_template: >-
+                  {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+                     ['unknown', 'unavailable', 'none'] }}
+                timeout: "00:05:00"
+                continue_on_timeout: false
+              - action: select.select_option
+                target:
+                  entity_id: select.pv_hoymiles_inverter_tryb_ems
+                data:
+                  option: "Ładowanie z sieci"
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_charge_cycle_active
+                state: "on"
+            sequence:
+              - wait_template: >-
+                  {{ states('select.pv_hoymiles_inverter_tryb_ems') not in
+                     ['unknown', 'unavailable', 'none'] }}
+                timeout: "00:05:00"
+                continue_on_timeout: false
+              - action: select.select_option
+                target:
+                  entity_id: select.pv_hoymiles_inverter_tryb_ems
+                data:
+                  option: "Autokonsumpcja (Self-Use)"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.hoymiles_charge_cycle_active

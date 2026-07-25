@@ -1,0 +1,38 @@
+# Fizyczne łącze RS485 i klient Modbus RTU
+uart:
+  id: modbus_uart
+  baud_rate: ${baud_rate}
+  stop_bits: 1
+  data_bits: 8
+  parity: NONE
+  tx_pin: ${uart_tx_pin}
+  rx_pin: ${uart_rx_pin}
+
+modbus:
+  id: modbus_1
+  uart_id: modbus_uart
+  send_wait_time: 250ms
+  # Odkomentuj dla konwertera, który wymaga sterowania liniami DE/RE:
+  # flow_control_pin: ${uart_de_pin}
+
+modbus_controller:
+  - id: ${modbus_controller_id}
+    address: ${modbus_inverter_address}
+    modbus_id: modbus_1
+    setup_priority: -10
+    update_interval: ${update_interval}
+    command_throttle: 100ms
+    max_cmd_retries: 1
+    offline_skip_updates: 3
+
+  # Trzy krótkie bloki używane przez główny dashboard są odpytywane osobno:
+  # 62-66 (sieć falownika), 1801-1807 (licznik sieci) i 30001-30020
+  # (animacja przepływu). Pozostałe rejestry zachowują cykl 60 s.
+  - id: ${modbus_fast_controller_id}
+    address: ${modbus_inverter_address}
+    modbus_id: modbus_1
+    setup_priority: -10
+    update_interval: ${fast_update_interval}
+    command_throttle: 100ms
+    max_cmd_retries: 1
+    offline_skip_updates: 3

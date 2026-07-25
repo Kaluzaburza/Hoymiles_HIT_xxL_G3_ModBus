@@ -1,0 +1,371 @@
+# Wyjście awaryjne EPS / LOAD
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Voltage L1"
+    id: backup_voltage_a_81
+    register_type: read
+    address: 81
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Voltage L2"
+    id: backup_voltage_b_82
+    register_type: read
+    address: 82
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Voltage L3"
+    id: backup_voltage_c_83
+    register_type: read
+    address: 83
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Current L1"
+    id: backup_current_a_84
+    register_type: read
+    address: 84
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Current L2"
+    id: backup_current_b_85
+    register_type: read
+    address: 85
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Current L3"
+    id: backup_current_c_86
+    register_type: read
+    address: 86
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: template
+    name: "Backup Apparent Power"
+    id: backup_apparent_power_87
+    unit_of_measurement: "VA"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(backup_apparent_power_a_88).has_state() ||
+          !id(backup_apparent_power_b_89).has_state() ||
+          !id(backup_apparent_power_c_90).has_state()) return NAN;
+      return id(backup_apparent_power_a_88).state +
+             id(backup_apparent_power_b_89).state +
+             id(backup_apparent_power_c_90).state;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Apparent Power L1"
+    id: backup_apparent_power_a_88
+    register_type: read
+    address: 88
+    unit_of_measurement: "VA"
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Apparent Power L2"
+    id: backup_apparent_power_b_89
+    register_type: read
+    address: 89
+    unit_of_measurement: "VA"
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Apparent Power L3"
+    id: backup_apparent_power_c_90
+    register_type: read
+    address: 90
+    unit_of_measurement: "VA"
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: template
+    name: "Backup Active Power"
+    id: backup_active_power_91
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(backup_active_power_a_92).has_state() ||
+          !id(backup_active_power_b_93).has_state() ||
+          !id(backup_active_power_c_94).has_state()) return NAN;
+      return id(backup_active_power_a_92).state +
+             id(backup_active_power_b_93).state +
+             id(backup_active_power_c_94).state;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Active Power L1"
+    id: backup_active_power_a_92
+    register_type: read
+    address: 92
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Active Power L2"
+    id: backup_active_power_b_93
+    register_type: read
+    address: 93
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Backup Active Power L3"
+    id: backup_active_power_c_94
+    register_type: read
+    address: 94
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Active Power (Direct)"
+    id: load_active_power_644
+    register_type: read
+    address: 284
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use Total"
+    id: load_energy_use_total_8272
+    register_type: read
+    address: 2056
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use L1n Total"
+    id: load_energy_use_an_total_8274
+    register_type: read
+    address: 2058
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use L2n Total"
+    id: load_energy_use_bn_total_8276
+    register_type: read
+    address: 2060
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use L3n Total"
+    id: load_energy_use_cn_total_8278
+    register_type: read
+    address: 2062
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_DWORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use Today"
+    id: load_energy_use_today_8488
+    register_type: read
+    address: 2128
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use L1n Today"
+    id: load_energy_use_an_today_8489
+    register_type: read
+    address: 2129
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use L2n Today"
+    id: load_energy_use_bn_today_8490
+    register_type: read
+    address: 2130
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Energy Use L3n Today"
+    id: load_energy_use_cn_today_8491
+    register_type: read
+    address: 2131
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: mdi:counter
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Power Total"
+    id: load_power_total_8553
+    register_type: read
+    address: 2169
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Power L1n"
+    id: load_power_an_8554
+    register_type: read
+    address: 2170
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Power L2n"
+    id: load_power_bn_8555
+    register_type: read
+    address: 2171
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Load Power L3n"
+    id: load_power_cn_8556
+    register_type: read
+    address: 2172
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD

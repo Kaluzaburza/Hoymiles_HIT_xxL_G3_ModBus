@@ -1,0 +1,200 @@
+# Parametry wyjściowe falownika
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Bus Voltage"
+    id: bus_voltage_60
+    register_type: read
+    address: 60
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Voltage L1"
+    id: inv_voltage_a_67
+    register_type: read
+    address: 67
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Voltage L2"
+    id: inv_voltage_b_68
+    register_type: read
+    address: 68
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Voltage L3"
+    id: inv_voltage_c_69
+    register_type: read
+    address: 69
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    value_type: U_WORD
+    filters:
+    - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Current L1"
+    id: inv_current_a_70
+    register_type: read
+    address: 70
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Current L2"
+    id: inv_current_b_71
+    register_type: read
+    address: 71
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Current L3"
+    id: inv_current_c_72
+    register_type: read
+    address: 72
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    value_type: S_WORD
+    filters:
+    - multiply: 0.01
+
+  - platform: template
+    name: "Inverter Active Power"
+    id: inv_active_power_73
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(inv_active_power_a_74).has_state() ||
+          !id(inv_active_power_b_75).has_state() ||
+          !id(inv_active_power_c_76).has_state()) return NAN;
+      return id(inv_active_power_a_74).state +
+             id(inv_active_power_b_75).state +
+             id(inv_active_power_c_76).state;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Active Power L1"
+    id: inv_active_power_a_74
+    register_type: read
+    address: 74
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Active Power L2"
+    id: inv_active_power_b_75
+    register_type: read
+    address: 75
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Active Power L3"
+    id: inv_active_power_c_76
+    register_type: read
+    address: 76
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: template
+    name: "Inverter Reactive Power"
+    id: inv_reactive_power_77
+    unit_of_measurement: "Var"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(inv_reactive_power_a_78).has_state() ||
+          !id(inv_reactive_power_b_79).has_state() ||
+          !id(inv_reactive_power_c_80).has_state()) return NAN;
+      return id(inv_reactive_power_a_78).state +
+             id(inv_reactive_power_b_79).state +
+             id(inv_reactive_power_c_80).state;
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Reactive Power L1"
+    id: inv_reactive_power_a_78
+    register_type: read
+    address: 78
+    unit_of_measurement: "Var"
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Reactive Power L2"
+    id: inv_reactive_power_b_79
+    register_type: read
+    address: 79
+    unit_of_measurement: "Var"
+    accuracy_decimals: 0
+    value_type: S_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Inverter Reactive Power L3"
+    id: inv_reactive_power_c_80
+    register_type: read
+    address: 80
+    unit_of_measurement: "Var"
+    accuracy_decimals: 0
+    value_type: S_WORD

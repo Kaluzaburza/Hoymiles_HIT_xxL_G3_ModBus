@@ -1,0 +1,1374 @@
+{
+  "title": "Hoymiles HIT xxL G3 Modbus",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect an ESPHome device",
+        "description": "Select the ESPHome device connected to the Hoymiles inverter. The integration creates localized entities without additional Modbus polling.",
+        "data": {
+          "source_device_id": "Source ESPHome device",
+          "copy_assets": "Copy the dashboard and EMS automation"
+        },
+        "data_description": {
+          "source_device_id": "The device must run firmware provided by this project.",
+          "copy_assets": "Copies the dashboard, EMS package and RCE card to their corresponding /config directories."
+        }
+      }
+    },
+    "error": {
+      "device_not_found": "The selected device was not found.",
+      "no_entities": "The device exposes no supported entities."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "services": {
+    "install_assets": {
+      "name": "Install or update assets",
+      "description": "Copies the dashboard, RCE card and EMS automation package to the Home Assistant configuration directory.",
+      "fields": {
+        "overwrite": {
+          "name": "Overwrite existing files",
+          "description": "Replace previously copied assets with the version bundled with this integration."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "backup_voltage_l1": {
+        "name": "Backup Voltage L1"
+      },
+      "backup_voltage_l2": {
+        "name": "Backup Voltage L2"
+      },
+      "backup_voltage_l3": {
+        "name": "Backup Voltage L3"
+      },
+      "backup_current_l1": {
+        "name": "Backup Current L1"
+      },
+      "backup_current_l2": {
+        "name": "Backup Current L2"
+      },
+      "backup_current_l3": {
+        "name": "Backup Current L3"
+      },
+      "backup_apparent_power": {
+        "name": "Backup Apparent Power"
+      },
+      "backup_apparent_power_l1": {
+        "name": "Backup Apparent Power L1"
+      },
+      "backup_apparent_power_l2": {
+        "name": "Backup Apparent Power L2"
+      },
+      "backup_apparent_power_l3": {
+        "name": "Backup Apparent Power L3"
+      },
+      "backup_active_power": {
+        "name": "Backup Active Power"
+      },
+      "backup_active_power_l1": {
+        "name": "Backup Active Power L1"
+      },
+      "backup_active_power_l2": {
+        "name": "Backup Active Power L2"
+      },
+      "backup_active_power_l3": {
+        "name": "Backup Active Power L3"
+      },
+      "load_active_power_direct": {
+        "name": "Load Active Power (Direct)"
+      },
+      "load_energy_use_total": {
+        "name": "Load Energy Use Total"
+      },
+      "load_energy_use_l1n_total": {
+        "name": "Load Energy Use L1n Total"
+      },
+      "load_energy_use_l2n_total": {
+        "name": "Load Energy Use L2n Total"
+      },
+      "load_energy_use_l3n_total": {
+        "name": "Load Energy Use L3n Total"
+      },
+      "load_energy_use_today": {
+        "name": "Load Energy Use Today"
+      },
+      "load_energy_use_l1n_today": {
+        "name": "Load Energy Use L1n Today"
+      },
+      "load_energy_use_l2n_today": {
+        "name": "Load Energy Use L2n Today"
+      },
+      "load_energy_use_l3n_today": {
+        "name": "Load Energy Use L3n Today"
+      },
+      "load_power_total": {
+        "name": "Load Power Total"
+      },
+      "load_power_l1n": {
+        "name": "Load Power L1n"
+      },
+      "load_power_l2n": {
+        "name": "Load Power L2n"
+      },
+      "load_power_l3n": {
+        "name": "Load Power L3n"
+      },
+      "battery_capacity": {
+        "name": "Battery Capacity"
+      },
+      "total_capacity": {
+        "name": "Total Capacity"
+      },
+      "battery_soc_bms": {
+        "name": "Battery SOC (BMS)"
+      },
+      "battery_soh": {
+        "name": "Battery SOH"
+      },
+      "battery_voltage_bms": {
+        "name": "Battery Voltage (BMS)"
+      },
+      "battery_current_bms": {
+        "name": "Battery Current (BMS)"
+      },
+      "battery_power_bms": {
+        "name": "Battery Power (BMS)"
+      },
+      "maximum_charge_current": {
+        "name": "Maximum Charge Current"
+      },
+      "maximum_discharge_current": {
+        "name": "Maximum Discharge Current"
+      },
+      "charge_cut_off_voltage": {
+        "name": "Charge Cut-off Voltage"
+      },
+      "discharge_cut_off_voltage": {
+        "name": "Discharge Cut-off Voltage"
+      },
+      "cell_max_temperature": {
+        "name": "Cell Max Temperature"
+      },
+      "cell_min_temperature": {
+        "name": "Cell Min Temperature"
+      },
+      "battery_charge_energy_today": {
+        "name": "Battery Charge Energy Today"
+      },
+      "battery_discharge_energy_today": {
+        "name": "Battery Discharge Energy Today"
+      },
+      "battery_total_power_energy_block": {
+        "name": "Battery Total Power (Energy Block)"
+      },
+      "esp_uptime": {
+        "name": "ESP Uptime"
+      },
+      "inv_ths_temp": {
+        "name": "Inv Ths Temp"
+      },
+      "bat_ths_temp": {
+        "name": "Bat Ths Temp"
+      },
+      "cav_temp": {
+        "name": "Cav Temp"
+      },
+      "pe_voltage": {
+        "name": "PE Voltage"
+      },
+      "iso_resistor": {
+        "name": "Iso Resistor"
+      },
+      "residual_current": {
+        "name": "Residual Current"
+      },
+      "energy_from_pv_total": {
+        "name": "Energy From PV Total"
+      },
+      "energy_from_battery_total": {
+        "name": "Energy From Battery Total"
+      },
+      "energy_from_grid_total": {
+        "name": "Energy From Grid Total"
+      },
+      "pv_to_battery_energy_today": {
+        "name": "PV to Battery Energy Today"
+      },
+      "pv_to_load_energy_today": {
+        "name": "PV to Load Energy Today"
+      },
+      "pv_to_grid_energy_today": {
+        "name": "PV to Grid Energy Today"
+      },
+      "energy_from_pv_today": {
+        "name": "Energy From PV Today"
+      },
+      "energy_from_battery_today": {
+        "name": "Energy From Battery Today"
+      },
+      "energy_from_grid_today": {
+        "name": "Energy From Grid Today"
+      },
+      "pv_to_battery_power": {
+        "name": "PV to Battery Power"
+      },
+      "pv_to_load_power": {
+        "name": "PV to Load Power"
+      },
+      "pv_to_grid_power": {
+        "name": "PV to Grid Power"
+      },
+      "load_from_pv_power": {
+        "name": "Load From PV Power"
+      },
+      "generator_voltage_l1": {
+        "name": "Generator Voltage L1"
+      },
+      "generator_voltage_l2": {
+        "name": "Generator Voltage L2"
+      },
+      "generator_voltage_l3": {
+        "name": "Generator Voltage L3"
+      },
+      "generator_current_l1": {
+        "name": "Generator Current L1"
+      },
+      "generator_current_l2": {
+        "name": "Generator Current L2"
+      },
+      "generator_current_l3": {
+        "name": "Generator Current L3"
+      },
+      "generator_active_power_l1": {
+        "name": "Generator Active Power L1"
+      },
+      "generator_active_power_l2": {
+        "name": "Generator Active Power L2"
+      },
+      "generator_active_power_l3": {
+        "name": "Generator Active Power L3"
+      },
+      "generator_energy_total": {
+        "name": "Generator Energy Total"
+      },
+      "generator_energy_l1n_total": {
+        "name": "Generator Energy L1n Total"
+      },
+      "generator_energy_l2n_total": {
+        "name": "Generator Energy L2n Total"
+      },
+      "generator_energy_l3n_total": {
+        "name": "Generator Energy L3n Total"
+      },
+      "generator_energy_total_today": {
+        "name": "Generator Energy Total Today"
+      },
+      "generator_energy_l1n_today": {
+        "name": "Generator Energy L1n Today"
+      },
+      "generator_energy_l2n_today": {
+        "name": "Generator Energy L2n Today"
+      },
+      "generator_energy_l3n_today": {
+        "name": "Generator Energy L3n Today"
+      },
+      "generator_total_power": {
+        "name": "Generator Total Power"
+      },
+      "generator_power_l1n": {
+        "name": "Generator Power L1n"
+      },
+      "generator_power_l2n": {
+        "name": "Generator Power L2n"
+      },
+      "generator_power_l3n": {
+        "name": "Generator Power L3n"
+      },
+      "grid_voltage_l1": {
+        "name": "Grid Voltage L1"
+      },
+      "grid_voltage_l2": {
+        "name": "Grid Voltage L2"
+      },
+      "grid_voltage_l3": {
+        "name": "Grid Voltage L3"
+      },
+      "inverter_grid_frequency": {
+        "name": "Inverter Grid Frequency"
+      },
+      "grid_energy_buy_total": {
+        "name": "Grid Energy Buy Total"
+      },
+      "grid_energy_buy_l1n_total": {
+        "name": "Grid Energy Buy L1n Total"
+      },
+      "grid_energy_buy_l2n_total": {
+        "name": "Grid Energy Buy L2n Total"
+      },
+      "grid_energy_buy_l3n_total": {
+        "name": "Grid Energy Buy L3n Total"
+      },
+      "grid_energy_sell_total": {
+        "name": "Grid Energy Sell Total"
+      },
+      "grid_energy_sell_l1n_total": {
+        "name": "Grid Energy Sell L1n Total"
+      },
+      "grid_energy_sell_l2n_total": {
+        "name": "Grid Energy Sell L2n Total"
+      },
+      "grid_energy_sell_l3n_total": {
+        "name": "Grid Energy Sell L3n Total"
+      },
+      "grid_energy_buy_today": {
+        "name": "Grid Energy Buy Today"
+      },
+      "grid_energy_buy_l1n_today": {
+        "name": "Grid Energy Buy L1n Today"
+      },
+      "grid_energy_buy_l2n_today": {
+        "name": "Grid Energy Buy L2n Today"
+      },
+      "grid_energy_buy_l3n_today": {
+        "name": "Grid Energy Buy L3n Today"
+      },
+      "grid_energy_sell_today": {
+        "name": "Grid Energy Sell Today"
+      },
+      "grid_energy_sell_l1n_today": {
+        "name": "Grid Energy Sell L1n Today"
+      },
+      "grid_energy_sell_l2n_today": {
+        "name": "Grid Energy Sell L2n Today"
+      },
+      "grid_energy_sell_l3n_today": {
+        "name": "Grid Energy Sell L3n Today"
+      },
+      "grid_active_power": {
+        "name": "Grid Active Power"
+      },
+      "grid_active_power_l1": {
+        "name": "Grid Active Power L1"
+      },
+      "grid_active_power_l2": {
+        "name": "Grid Active Power L2"
+      },
+      "grid_active_power_l3": {
+        "name": "Grid Active Power L3"
+      },
+      "bus_voltage": {
+        "name": "Bus Voltage"
+      },
+      "inverter_voltage_l1": {
+        "name": "Inverter Voltage L1"
+      },
+      "inverter_voltage_l2": {
+        "name": "Inverter Voltage L2"
+      },
+      "inverter_voltage_l3": {
+        "name": "Inverter Voltage L3"
+      },
+      "inverter_current_l1": {
+        "name": "Inverter Current L1"
+      },
+      "inverter_current_l2": {
+        "name": "Inverter Current L2"
+      },
+      "inverter_current_l3": {
+        "name": "Inverter Current L3"
+      },
+      "inverter_active_power": {
+        "name": "Inverter Active Power"
+      },
+      "inverter_active_power_l1": {
+        "name": "Inverter Active Power L1"
+      },
+      "inverter_active_power_l2": {
+        "name": "Inverter Active Power L2"
+      },
+      "inverter_active_power_l3": {
+        "name": "Inverter Active Power L3"
+      },
+      "inverter_reactive_power": {
+        "name": "Inverter Reactive Power"
+      },
+      "inverter_reactive_power_l1": {
+        "name": "Inverter Reactive Power L1"
+      },
+      "inverter_reactive_power_l2": {
+        "name": "Inverter Reactive Power L2"
+      },
+      "inverter_reactive_power_l3": {
+        "name": "Inverter Reactive Power L3"
+      },
+      "grid_voltage_l1n": {
+        "name": "Grid Voltage L1n"
+      },
+      "grid_voltage_l2n": {
+        "name": "Grid Voltage L2n"
+      },
+      "grid_voltage_l3n": {
+        "name": "Grid Voltage L3n"
+      },
+      "grid_current_l1n": {
+        "name": "Grid Current L1n"
+      },
+      "grid_current_l2n": {
+        "name": "Grid Current L2n"
+      },
+      "grid_current_l3n": {
+        "name": "Grid Current L3n"
+      },
+      "meter_grid_frequency": {
+        "name": "Meter Grid Frequency"
+      },
+      "grid_total_current": {
+        "name": "Grid Total Current"
+      },
+      "meter_grid_active_power_l1": {
+        "name": "Meter Grid Active Power L1"
+      },
+      "meter_grid_active_power_l2": {
+        "name": "Meter Grid Active Power L2"
+      },
+      "meter_grid_active_power_l3": {
+        "name": "Meter Grid Active Power L3"
+      },
+      "meter_grid_total_active_power": {
+        "name": "Meter Grid Total Active Power"
+      },
+      "grid_reactive_power_l1n": {
+        "name": "Grid Reactive Power L1n"
+      },
+      "grid_reactive_power_l2n": {
+        "name": "Grid Reactive Power L2n"
+      },
+      "grid_reactive_power_l3n": {
+        "name": "Grid Reactive Power L3n"
+      },
+      "grid_total_reactive_power": {
+        "name": "Grid Total Reactive Power"
+      },
+      "grid_power_factor": {
+        "name": "Grid Power Factor"
+      },
+      "grid_power_factor_l1n": {
+        "name": "Grid Power Factor L1n"
+      },
+      "grid_power_factor_l2n": {
+        "name": "Grid Power Factor L2n"
+      },
+      "grid_power_factor_l3n": {
+        "name": "Grid Power Factor L3n"
+      },
+      "pv_voltage_l1n": {
+        "name": "PV Voltage L1n"
+      },
+      "pv_voltage_l2n": {
+        "name": "PV Voltage L2n"
+      },
+      "pv_voltage_l3n": {
+        "name": "PV Voltage L3n"
+      },
+      "pv_current_l1n": {
+        "name": "PV Current L1n"
+      },
+      "pv_current_l2n": {
+        "name": "PV Current L2n"
+      },
+      "pv_current_l3n": {
+        "name": "PV Current L3n"
+      },
+      "pv_frequency": {
+        "name": "PV Frequency"
+      },
+      "pv_active_power_l1n": {
+        "name": "PV Active Power L1n"
+      },
+      "pv_active_power_l2n": {
+        "name": "PV Active Power L2n"
+      },
+      "pv_active_power_l3n": {
+        "name": "PV Active Power L3n"
+      },
+      "pv_total_active_power": {
+        "name": "PV Total Active Power"
+      },
+      "pv_reactive_power_l1n": {
+        "name": "PV Reactive Power L1n"
+      },
+      "pv_reactive_power_l2n": {
+        "name": "PV Reactive Power L2n"
+      },
+      "pv_reactive_power_l3n": {
+        "name": "PV Reactive Power L3n"
+      },
+      "pv_total_reactive_power": {
+        "name": "PV Total Reactive Power"
+      },
+      "pv_power_factor": {
+        "name": "PV Power Factor"
+      },
+      "pv_power_factor_l1n": {
+        "name": "PV Power Factor L1n"
+      },
+      "pv_power_factor_l2n": {
+        "name": "PV Power Factor L2n"
+      },
+      "pv_power_factor_l3n": {
+        "name": "PV Power Factor L3n"
+      },
+      "esp_wifi_signal": {
+        "name": "ESP WiFi Signal"
+      },
+      "esp_ip_address": {
+        "name": "ESP IP Address",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "esp_wifi_ssid": {
+        "name": "ESP WiFi SSID",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "esp_mac_address": {
+        "name": "ESP Mac Address",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "overview_pv_total_power": {
+        "name": "Overview PV Total Power"
+      },
+      "overview_internal_pv_total_power": {
+        "name": "Overview Internal PV Total Power"
+      },
+      "overview_external_pv_total_power": {
+        "name": "Overview External PV Total Power"
+      },
+      "overview_inverter_active_power": {
+        "name": "Overview Inverter Active Power"
+      },
+      "overview_battery_power": {
+        "name": "Overview Battery Power"
+      },
+      "overview_grid_total_active_power": {
+        "name": "Overview Grid Total Active Power"
+      },
+      "overview_generator_active_power": {
+        "name": "Overview Generator Active Power"
+      },
+      "overview_load_active_power": {
+        "name": "Overview Load Active Power"
+      },
+      "overview_smart_load_active_power": {
+        "name": "Overview Smart Load Active Power"
+      },
+      "overview_battery_soc": {
+        "name": "Overview Battery SOC"
+      },
+      "machines_type": {
+        "name": "Machines Type"
+      },
+      "number_of_machines_master_and_slave": {
+        "name": "Number of Machines (Master and Slave)"
+      },
+      "communication_address_1_master_device": {
+        "name": "Communication Address 1 (Master Device)"
+      },
+      "communication_address_2_slave_device_1": {
+        "name": "Communication Address 2 (Slave Device 1)"
+      },
+      "communication_address_3_slave_device_2": {
+        "name": "Communication Address 3 (Slave Device 2)"
+      },
+      "communication_address_4_slave_device_3": {
+        "name": "Communication Address 4 (Slave Device 3)"
+      },
+      "communication_address_5_slave_device_4": {
+        "name": "Communication Address 5 (Slave Device 4)"
+      },
+      "communication_address_6_slave_device_5": {
+        "name": "Communication Address 6 (Slave Device 5)"
+      },
+      "communication_address_7_slave_device_6": {
+        "name": "Communication Address 7 (Slave Device 6)"
+      },
+      "communication_address_8_slave_device_7": {
+        "name": "Communication Address 8 (Slave Device 7)"
+      },
+      "communication_address_9_slave_device_8": {
+        "name": "Communication Address 9 (Slave Device 8)"
+      },
+      "communication_address_10_slave_device_9": {
+        "name": "Communication Address 10 (Slave Device 9)"
+      },
+      "pv_total_power_direct": {
+        "name": "PV Total Power (Direct)"
+      },
+      "pv1_voltage": {
+        "name": "PV1 Voltage"
+      },
+      "pv1_current": {
+        "name": "PV1 Current"
+      },
+      "pv1_power_direct": {
+        "name": "PV1 Power (Direct)"
+      },
+      "pv2_voltage": {
+        "name": "PV2 Voltage"
+      },
+      "pv2_current": {
+        "name": "PV2 Current"
+      },
+      "pv2_power_direct": {
+        "name": "PV2 Power (Direct)"
+      },
+      "pv3_voltage": {
+        "name": "PV3 Voltage"
+      },
+      "pv3_current": {
+        "name": "PV3 Current"
+      },
+      "pv3_power_direct": {
+        "name": "PV3 Power (Direct)"
+      },
+      "pv4_voltage": {
+        "name": "PV4 Voltage"
+      },
+      "pv4_current": {
+        "name": "PV4 Current"
+      },
+      "pv4_power_direct": {
+        "name": "PV4 Power (Direct)"
+      },
+      "battery_total_power_direct": {
+        "name": "Battery Total Power (Direct)"
+      },
+      "battery_1_voltage": {
+        "name": "Battery 1 Voltage"
+      },
+      "pv_total_energy": {
+        "name": "PV Total Energy"
+      },
+      "pv1_total_energy": {
+        "name": "PV1 Total Energy"
+      },
+      "pv2_total_energy": {
+        "name": "PV2 Total Energy"
+      },
+      "pv3_total_energy": {
+        "name": "PV3 Total Energy"
+      },
+      "pv4_total_energy": {
+        "name": "PV4 Total Energy"
+      },
+      "external_pv_energy_total": {
+        "name": "External PV Energy Total"
+      },
+      "external_pv_energy_l1n": {
+        "name": "External PV Energy L1n"
+      },
+      "external_pv_energy_l2n": {
+        "name": "External PV Energy L2n"
+      },
+      "external_pv_energy_l3n": {
+        "name": "External PV Energy L3n"
+      },
+      "pv_to_battery_energy_total": {
+        "name": "PV to Battery Energy Total"
+      },
+      "pv_to_load_energy_total": {
+        "name": "PV to Load Energy Total"
+      },
+      "pv_to_grid_energy_total": {
+        "name": "PV to Grid Energy Total"
+      },
+      "pv1_today_energy": {
+        "name": "PV1 Today Energy"
+      },
+      "pv2_today_energy": {
+        "name": "PV2 Today Energy"
+      },
+      "pv3_today_energy": {
+        "name": "PV3 Today Energy"
+      },
+      "pv4_today_energy": {
+        "name": "PV4 Today Energy"
+      },
+      "external_pv_total_energy_today": {
+        "name": "External PV Total Energy Today"
+      },
+      "external_pv_today_energy_l1n": {
+        "name": "External PV Today Energy L1n"
+      },
+      "external_pv_today_energy_l2n": {
+        "name": "External PV Today Energy L2n"
+      },
+      "external_pv_today_energy_l3n": {
+        "name": "External PV Today Energy L3n"
+      },
+      "pv_power": {
+        "name": "PV Power"
+      },
+      "pv1_power_energy_block": {
+        "name": "PV1 Power (Energy Block)"
+      },
+      "pv2_power_energy_block": {
+        "name": "PV2 Power (Energy Block)"
+      },
+      "pv3_power_energy_block": {
+        "name": "PV3 Power (Energy Block)"
+      },
+      "pv4_power_energy_block": {
+        "name": "PV4 Power (Energy Block)"
+      },
+      "external_pv_total_power_energy_block": {
+        "name": "External PV Total Power (Energy Block)"
+      },
+      "external_pv_l1n_power": {
+        "name": "External PV L1n Power"
+      },
+      "external_pv_l2n_power": {
+        "name": "External PV L2n Power"
+      },
+      "external_pv_l3n_power": {
+        "name": "External PV L3n Power"
+      },
+      "pv_total_energy_today": {
+        "name": "PV Total Energy Today"
+      },
+      "pv_total_power_energy_block": {
+        "name": "PV Total Power (Energy Block)"
+      },
+      "inverter_work_status": {
+        "name": "Inverter Work Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "sw_fault": {
+        "name": "SW Fault",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "hw_fault": {
+        "name": "HW Fault",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "meter_link_status": {
+        "name": "Meter Link Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "pv_link_status": {
+        "name": "PV Link Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "battery_type_bms": {
+        "name": "Battery Type (BMS)",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "battery_link_status": {
+        "name": "Battery Link Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "battery_work_status_bms": {
+        "name": "Battery Work Status (BMS)",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "overview_system_work_status": {
+        "name": "Overview System Work Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "overview_battery_work_status": {
+        "name": "Overview Battery Work Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "battery_fault_code_bms": {
+        "name": "Battery Fault Code (BMS)",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "overview_battery_faults": {
+        "name": "Overview Battery Faults",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "overview_dsp_power_faults": {
+        "name": "Overview DSP Power Faults",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "dsp_safety_faults": {
+        "name": "DSP Safety Faults",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "arm_communication_faults": {
+        "name": "ARM Communication Faults",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "arm_peripheral_faults": {
+        "name": "ARM Peripheral Faults",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      },
+      "arm_system_faults": {
+        "name": "ARM System Faults",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging"
+        }
+      }
+    },
+    "number": {
+      "grid_input_power_limitation_valley": {
+        "name": "Grid Input Power Limitation (Valley)"
+      },
+      "battery_max_charge_power": {
+        "name": "Battery Max Charge Power"
+      },
+      "battery_max_discharge_power": {
+        "name": "Battery Max Discharge Power"
+      },
+      "maximum_soc": {
+        "name": "Maximum SOC"
+      },
+      "minimum_soc": {
+        "name": "Minimum SOC"
+      },
+      "low_soc_grid_charge_power": {
+        "name": "Low SOC Grid Charge Power"
+      },
+      "soc_start_charge_from_grid": {
+        "name": "SOC Start Charge From Grid"
+      },
+      "self_use_soc": {
+        "name": "Self-Use SOC"
+      },
+      "force_charge_soc": {
+        "name": "Force Charge SOC"
+      },
+      "maximum_charge_power": {
+        "name": "Maximum Charge Power"
+      },
+      "force_discharge_soc": {
+        "name": "Force Discharge SOC"
+      },
+      "maximum_discharge_power": {
+        "name": "Maximum Discharge Power"
+      }
+    },
+    "select": {
+      "ems_mode": {
+        "name": "EMS mode",
+        "state": {
+          "self_use": "Self-Use",
+          "off_grid": "Off-Grid",
+          "grid_charge": "Grid charge",
+          "grid_discharge": "Grid discharge"
+        }
+      },
+      "three_phase_unbalance": {
+        "name": "Three Phase Unbalance",
+        "state": {
+          "disabled": "Disabled",
+          "enabled": "Enabled"
+        }
+      },
+      "eps_mode": {
+        "name": "EPS Mode",
+        "state": {
+          "disabled": "Disabled",
+          "eps": "EPS",
+          "ups": "UPS"
+        }
+      },
+      "pv_island_mode": {
+        "name": "PV Island Mode",
+        "state": {
+          "disabled": "Disabled",
+          "enabled": "Enabled"
+        }
+      },
+      "battery_type_setting": {
+        "name": "Battery Type Setting",
+        "state": {
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid"
+        }
+      },
+      "bms_type_setting": {
+        "name": "BMS Type Setting",
+        "state": {
+          "not_configured": "Not configured",
+          "pylon_lv": "Pylon LV",
+          "pylon_hv": "Pylon HV",
+          "dyness_hv": "Dyness HV",
+          "dyness_lv": "Dyness LV",
+          "sunwoda_lv": "Sunwoda LV",
+          "uz_lv": "Uz LV",
+          "soluna_hv": "Soluna HV",
+          "soluna_lv": "Soluna LV",
+          "steltec_lv": "Steltec LV",
+          "xinyi_lv": "XinYi LV",
+          "vestwoods_lv": "Vestwoods LV",
+          "jk_hv": "JK HV",
+          "byd_lv": "BYD LV",
+          "uz_hv": "Uz HV",
+          "zetara_lv": "Zetara LV",
+          "feb_hv": "FEB HV",
+          "pytes_lv": "Pytes LV",
+          "dmegc_lv": "Dmegc LV",
+          "weineng_lv": "Weineng LV",
+          "weineng_hv": "Weineng HV",
+          "gsl_lv": "GSL LV",
+          "hoy_lv": "HOY LV",
+          "hoy_hv": "HOY HV",
+          "feb_lv": "FEB LV",
+          "uhhome_lv": "UHhome LV",
+          "uhhome_hv": "UHhome HV",
+          "byd_hv": "BYD HV",
+          "vestwoods_hv": "Vestwoods HV",
+          "phylion_hv": "Phylion HV",
+          "hoymiles_lv": "Hoymiles LV",
+          "pholion_lv": "Pholion LV",
+          "wattsonic_lv": "Wattsonic LV",
+          "enershare_hv": "Enershare HV",
+          "beghelli_lv": "Beghelli LV",
+          "lvtopsun_lv": "LvToPSUN LV",
+          "pytes_hv": "PYTES HV",
+          "lvtopsun_hv": "LvToPSUN HV",
+          "raja_hv": "RAJA HV",
+          "felicity_lv": "Felicity LV"
+        }
+      },
+      "system_operation": {
+        "name": "System Operation",
+        "state": {
+          "stop": "Stop",
+          "start": "Start"
+        }
+      },
+      "parallel_networking_command": {
+        "name": "Parallel Networking Command",
+        "state": {
+          "inactive": "Inactive",
+          "create_network": "Create network",
+          "disassemble_network": "Disassemble network"
+        }
+      }
+    }
+  }
+}

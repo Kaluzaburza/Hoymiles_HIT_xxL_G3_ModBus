@@ -1,0 +1,33 @@
+# Rdzeń urządzenia ESPHome
+substitutions:
+  update_interval: 60s
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  comment: "${device_description}"
+  project:
+    name: "hoymiles.energy-storage-modbus"
+    version: "1.0.0"
+
+logger:
+  level: WARN
+  baud_rate: 0
+
+api:
+  encryption:
+    key: ${api_key}
+
+ota:
+  - platform: esphome
+    id: ota_esphome
+    password: ${ota_password}
+
+sensor:
+  - platform: uptime
+    name: "ESP Uptime"
+    id: esp_uptime
+    type: seconds
+    icon: mdi:timer-check
+    update_interval: 60s
+    entity_category: diagnostic
