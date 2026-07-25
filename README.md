@@ -35,6 +35,16 @@ The HACS integration creates localized, stable proxy entities from the native
 ESPHome device. It listens to Home Assistant state events, so it does **not**
 add another Modbus polling cycle.
 
+## Screenshots / Zrzuty ekranu
+
+### Live energy flow / Bieżący przepływ energii
+
+![Hoymiles dashboard with live grid, PV, home and battery energy flow](docs/images/dashboard-energy-flow.png)
+
+### RCE automation / Automatyka cenowa RCE
+
+![Hoymiles EMS automation with the daily PSE RCE price chart](docs/images/dashboard-rce-automation.png)
+
 ## Requirements
 
 - a compatible Hoymiles HIT xxL G3 inverter (tested primarily with HIT-10L-G3);
@@ -42,6 +52,46 @@ add another Modbus polling cycle.
 - ESPHome 2026.7 or newer;
 - Home Assistant 2026.7 or newer;
 - HACS 2.x.
+
+## ESP32 and RS485 wiring
+
+The default configuration assumes a **3.3 V TTL ↔ RS485 converter with
+automatic direction control**.
+
+```text
+ESP32                         RS485 converter                    Inverter
+GPIO17 (TX)  ---------------> DI
+GPIO16 (RX)  <--------------- RO
+3.3 V        ---------------> VCC (3.3 V)
+GND          ---------------- GND ------------------------------ GND (Modbus)
+                                A+ ------------------------------ A+ (Modbus)
+                                B- ------------------------------ B- (Modbus)
+```
+
+| ESP32 | Converter — TTL side | Converter — RS485 side | Inverter |
+|---|---|---|---|
+| GPIO17 (TX) | DI | — | — |
+| GPIO16 (RX) | RO | — | — |
+| 3.3 V | VCC (3.3 V) | — | — |
+| GND | GND | GND/reference | GND (Modbus) |
+| — | — | A+ | A+ (Modbus) |
+| — | — | B− | B− (Modbus) |
+
+> [!CAUTION]
+> Disconnect all power before wiring. Never connect the inverter's RS485 lines
+> directly to the ESP32 and never feed 5 V logic into an ESP32 GPIO. Confirm
+> the `A/B` or `D+/D−` naming in the converter manual, because some vendors use
+> reversed labels.
+
+If the converter exposes `DE` and `/RE` and does not switch direction
+automatically, tie these pins together and connect them to a free ESP32 GPIO.
+Then add this override to the top-level ESPHome file, using the selected pin:
+
+```yaml
+modbus:
+  - id: modbus_1
+    flow_control_pin: GPIO4
+```
 
 ## 1. Install through HACS
 
@@ -141,6 +191,7 @@ custom_components/hoymiles_hit_modbus/  HACS integration
 packages/                               ESPHome Modbus register packages
 examples/esphome/                       public ESPHome entry configuration
 home_assistant/                         dashboard card and source EMS package
+docs/images/                            README screenshots
 tools/                                  catalog and validation scripts
 ```
 
@@ -171,6 +222,46 @@ Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
 przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.0.0** udostępnia
 271 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 automatykę cenową RCE PSE, blokadę sprzedaży oraz gotowy dashboard.
+
+### Podłączenie ESP32 i konwertera RS485
+
+Domyślna konfiguracja jest przygotowana dla konwertera
+**3,3 V TTL ↔ RS485 z automatycznym przełączaniem kierunku transmisji**.
+
+```text
+ESP32                         Konwerter RS485                    Falownik
+GPIO17 (TX)  ---------------> DI
+GPIO16 (RX)  <--------------- RO
+3,3 V        ---------------> VCC (3,3 V)
+GND          ---------------- GND ------------------------------ GND (Modbus)
+                                A+ ------------------------------ A+ (Modbus)
+                                B- ------------------------------ B- (Modbus)
+```
+
+| ESP32 | Konwerter — strona TTL | Konwerter — strona RS485 | Falownik |
+|---|---|---|---|
+| GPIO17 (TX) | DI | — | — |
+| GPIO16 (RX) | RO | — | — |
+| 3,3 V | VCC (3,3 V) | — | — |
+| GND | GND | GND/referencja | GND (Modbus) |
+| — | — | A+ | A+ (Modbus) |
+| — | — | B− | B− (Modbus) |
+
+> [!CAUTION]
+> Podłączenia wykonuj przy wyłączonym zasilaniu. Nie podłączaj przewodów RS485
+> falownika bezpośrednio do GPIO ESP32 i nie podawaj napięcia logicznego 5 V na
+> ESP32. Sprawdź w instrukcji konwertera oznaczenia `A/B` lub `D+/D−`, ponieważ
+> niektórzy producenci stosują odwrotne nazewnictwo.
+
+Jeżeli konwerter ma osobne wejścia `DE` i `/RE` i nie przełącza kierunku
+automatycznie, połącz je razem, podłącz do wolnego GPIO ESP32 i dodaj do
+głównego pliku ESPHome:
+
+```yaml
+modbus:
+  - id: modbus_1
+    flow_control_pin: GPIO4
+```
 
 ### Instalacja
 

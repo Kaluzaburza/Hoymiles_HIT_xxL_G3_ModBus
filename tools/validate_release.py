@@ -120,6 +120,23 @@ def main() -> int:
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
 
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme_images = [
+        ROOT / "docs" / "images" / "dashboard-energy-flow.png",
+        ROOT / "docs" / "images" / "dashboard-rce-automation.png",
+    ]
+    for image in readme_images:
+        require(image.is_file(), f"Missing README image: {image.relative_to(ROOT)}")
+        require(
+            str(image.relative_to(ROOT)).replace("\\", "/") in readme,
+            f"README does not reference {image.name}",
+        )
+        width, height = png_dimensions(image)
+        require(
+            width >= 1200 and height >= 700,
+            f"README image is unexpectedly small: {image.name}",
+        )
+
     esphome_entry_files = [
         ROOT / "hoymiles-inverter.yaml",
         ROOT / "examples" / "esphome" / "hoymiles-hit-g3.yaml",
@@ -202,6 +219,7 @@ def main() -> int:
     print(f"Manifest: OK (version {manifest['version']})")
     print(f"Localized entities: {len(catalog)} (English and Polish)")
     print("Bundled dashboards/EMS assets: OK")
+    print("README screenshots: OK")
     print("Public ESPHome remote packages: OK")
     print("Python syntax: OK")
     print("Text-state localization: OK")

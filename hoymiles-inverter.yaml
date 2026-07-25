@@ -20,7 +20,8 @@ substitutions:
   # RS485 UART pins (adjust to your board)
   uart_tx_pin: "GPIO17"
   uart_rx_pin: "GPIO16"
-  # uart_de_pin: "GPIO4"            # see flow_control_pin in packages/modbus_connection.yaml
+  # For converters without automatic direction control, add the DE/RE
+  # flow_control_pin override described in the README wiring section.
 
   board: "esp32dev"
 
