@@ -120,6 +120,34 @@ def main() -> int:
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
 
+    esphome_entry_files = [
+        ROOT / "hoymiles-inverter.yaml",
+        ROOT / "examples" / "esphome" / "hoymiles-hit-g3.yaml",
+    ]
+    required_esphome_packages = {
+        f"packages/{path.name}"
+        for path in (ROOT / "packages").glob("*.yaml")
+        if not path.name.startswith("optional_")
+    }
+    for entry_file in esphome_entry_files:
+        entry_text = entry_file.read_text(encoding="utf-8")
+        require(
+            "!include packages/" not in entry_text,
+            f"Public ESPHome entry point uses local includes: {entry_file.name}",
+        )
+        require(
+            "url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
+            in entry_text,
+            f"Public ESPHome entry point has no remote package: {entry_file.name}",
+        )
+        included_packages = set(
+            re.findall(r"^\s*-\s+(packages/[a-z0-9_]+\.yaml)\s*$", entry_text, re.M)
+        )
+        require(
+            included_packages == required_esphome_packages,
+            f"ESPHome package list differs in {entry_file.name}",
+        )
+
     for asset in required_assets[:4]:
         text = asset.read_text(encoding="utf-8")
         require(
@@ -174,6 +202,7 @@ def main() -> int:
     print(f"Manifest: OK (version {manifest['version']})")
     print(f"Localized entities: {len(catalog)} (English and Polish)")
     print("Bundled dashboards/EMS assets: OK")
+    print("Public ESPHome remote packages: OK")
     print("Python syntax: OK")
     print("Text-state localization: OK")
     print("Brand assets: OK")

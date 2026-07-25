@@ -1,8 +1,10 @@
-# =============================================================================
+# Public ESPHome entry point for Hoymiles HIT xxL G3 Modbus.
+# This file is self-contained: ESPHome downloads all register packages from
+# the versioned GitHub release. Only this file and the required secrets need
+# to be copied to the user's ESPHome configuration directory.
 #
 # Wiring: ESP32 + RS485 (MAX3485 / Waveshare RS485) to the inverter's RS485/Modbus port.
 # Protocol: Modbus RTU, 115200 8N1. FC03 read holding, FC04 read input, FC06/FC10 write.
-# =============================================================================
 
 substitutions:
   name: "hoymiles-inverter"
@@ -38,25 +40,25 @@ esp32:
       sram1_as_iram: true
 
 packages:
-  core: !include packages/core.yaml
-  network: !include packages/network.yaml
-  modbus_connection: !include packages/modbus_connection.yaml
-  settings: !include packages/settings.yaml
-  system: !include packages/system.yaml
-  states_alarms: !include packages/states_alarms.yaml
-  inverter: !include packages/inverter.yaml
-  grid: !include packages/grid.yaml
-  backup_load: !include packages/backup_load.yaml
-  generator: !include packages/generator.yaml
-  pv: !include packages/pv.yaml
-  battery: !include packages/battery.yaml
-  energy_flow: !include packages/energy_flow.yaml
-  meters: !include packages/meters.yaml
-  parallel_network: !include packages/parallel_network.yaml
-  overview: !include packages/overview.yaml
-  diagnostics: !include packages/diagnostics.yaml
-
-  # Opcjonalne mapy zależne od generacji/modelu urządzenia.
-  # W logu rejestry 221xx zwracały wartość zastępczą 9360, dlatego są wyłączone.
-  # battery_legacy: !include packages/optional_battery_legacy.yaml
-  # battery_pack_diagnostics: !include packages/optional_battery_pack_diagnostics.yaml
+  hoymiles_hit_g3:
+    url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
+    ref: v1.0.0
+    refresh: 1d
+    files:
+      - packages/core.yaml
+      - packages/network.yaml
+      - packages/modbus_connection.yaml
+      - packages/settings.yaml
+      - packages/system.yaml
+      - packages/states_alarms.yaml
+      - packages/inverter.yaml
+      - packages/grid.yaml
+      - packages/backup_load.yaml
+      - packages/generator.yaml
+      - packages/pv.yaml
+      - packages/battery.yaml
+      - packages/energy_flow.yaml
+      - packages/meters.yaml
+      - packages/parallel_network.yaml
+      - packages/overview.yaml
+      - packages/diagnostics.yaml

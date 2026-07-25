@@ -43,36 +43,42 @@ add another Modbus polling cycle.
 - Home Assistant 2026.7 or newer;
 - HACS 2.x.
 
-## 1. Flash the ESP32
+## 1. Install through HACS
 
-Copy [`examples/esphome/hoymiles-hit-g3.yaml`](examples/esphome/hoymiles-hit-g3.yaml)
-to your ESPHome configuration directory. Copy the required keys from
-[`secrets.yaml.example`](secrets.yaml.example) to your local `secrets.yaml`,
-then adjust the UART pins and board.
-
-The example loads the versioned package directly from GitHub. Compile and flash
-it from ESPHome. Add the discovered ESPHome device to Home Assistant before
-installing the localized integration.
-
-Default serial settings are Modbus RTU `115200 8N1`, slave address `1`.
-
-## 2. Install through HACS
-
-This repository must be public for HACS to download it.
+Install the Home Assistant integration before configuring the ESP32 so it is
+ready after the device is discovered.
 
 1. Open **HACS → Integrations → Custom repositories**.
 2. Add:
    `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus`
 3. Select the **Integration** category.
 4. Download **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
-5. Open **Settings → Devices & services → Add integration**.
-6. Search for **Hoymiles HIT xxL G3 Modbus** and select the ESPHome device.
 
 The integration automatically uses the Home Assistant language. English and
 Polish translations are bundled in `translations/en.json` and
 `translations/pl.json`.
 
-## 3. Dashboard and EMS automation
+## 2. Flash the ESP32
+
+Copy the self-contained [`hoymiles-inverter.yaml`](hoymiles-inverter.yaml) to
+your ESPHome configuration directory. Copy the required keys from
+[`secrets.yaml.example`](secrets.yaml.example) to your local `secrets.yaml`,
+then adjust the UART pins and board.
+
+Do **not** copy the repository's `packages` directory. The public ESPHome entry
+file downloads all versioned register packages directly from GitHub. It does
+not depend on files installed by HACS.
+
+Compile and flash the configuration from ESPHome. Default serial settings are
+Modbus RTU `115200 8N1`, slave address `1`.
+
+## 3. Add the integrations
+
+1. Add the discovered device through the standard **ESPHome** integration.
+2. Open **Settings → Devices & services → Add integration**.
+3. Search for **Hoymiles HIT xxL G3 Modbus** and select that ESPHome device.
+
+## 4. Dashboard and EMS automation
 
 During setup, the integration can copy:
 
@@ -168,12 +174,13 @@ automatykę cenową RCE PSE, blokadę sprzedaży oraz gotowy dashboard.
 
 ### Instalacja
 
-1. Skopiuj
-   [`examples/esphome/hoymiles-hit-g3.yaml`](examples/esphome/hoymiles-hit-g3.yaml)
-   do ESPHome, uzupełnij sekrety oraz piny UART i wgraj firmware.
-2. Dodaj urządzenie przez standardową integrację ESPHome.
-3. W HACS dodaj to repozytorium jako niestandardowe repozytorium typu
+1. W HACS dodaj to repozytorium jako niestandardowe repozytorium typu
    **Integration**, zainstaluj je i uruchom Home Assistant ponownie.
+2. Skopiuj samowystarczalny
+   [`hoymiles-inverter.yaml`](hoymiles-inverter.yaml) do ESPHome, uzupełnij
+   sekrety oraz piny UART i wgraj firmware. Plik automatycznie pobierze
+   wersjonowane pakiety rejestrów z GitHuba — nie kopiuj katalogu `packages`.
+3. Dodaj urządzenie przez standardową integrację ESPHome.
 4. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz urządzenie ESPHome.
 5. Włącz pakiety Home Assistanta, dodaj zasób karty JavaScript i zaimportuj
    skopiowany dashboard zgodnie z instrukcją powyżej.
