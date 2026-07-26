@@ -40,15 +40,17 @@ class HoymilesProxyEntity(Entity):
         self._attr_unique_id = (
             f"{entry.entry_id}_{matched.source.unique_id}_localized"
         )
-        self._attr_suggested_object_id = (
-            f"hoymiles_hit_{self._catalog['translation_key']}"
-        )
         self._attr_entity_registry_enabled_default = (
             matched.source.disabled_by is None
         )
         category = self._catalog.get("entity_category")
         if category in {EntityCategory.CONFIG.value, EntityCategory.DIAGNOSTIC.value}:
             self._attr_entity_category = EntityCategory(category)
+
+    @property
+    def suggested_object_id(self) -> str:
+        """Return a stable object id independent of language and device name."""
+        return f"hoymiles_hit_{self._catalog['translation_key']}"
 
     @property
     def source_state(self) -> State | None:

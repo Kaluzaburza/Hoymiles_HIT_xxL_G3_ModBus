@@ -39,3 +39,5 @@ jobs:
         run: git diff --exit-code
       - name: Run structural tests
         run: python tools/validate_release.py
+      - name: Test RCE custom card
+        run: node tools/validate_rce_card.js

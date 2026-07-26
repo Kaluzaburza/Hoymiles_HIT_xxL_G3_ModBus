@@ -243,15 +243,17 @@ views:
             name: Current RCE price
           - entity: sensor.hoymiles_rce_status
             name: Automation status
-      - type: custom:hoymiles-rce-chart-card
-        title: RCE — prices and discharge plan
-        entity: sensor.hoymiles_rce_day
-        current_price_entity: sensor.hoymiles_rce_current_price
-        threshold_entity: input_number.hoymiles_rce_price_threshold
-        active_entity: input_boolean.hoymiles_rce_discharge_active
-        block_enabled_entity: input_boolean.hoymiles_sale_block_enabled
-        block_start_entity: input_datetime.hoymiles_sale_block_start
-        block_end_entity: input_datetime.hoymiles_sale_block_end
+      - type: vertical-stack
+        cards:
+          - type: custom:hoymiles-rce-chart-card
+            title: RCE — prices and discharge plan
+            entity: sensor.hoymiles_rce_day
+            current_price_entity: sensor.hoymiles_rce_current_price
+            threshold_entity: input_number.hoymiles_rce_price_threshold
+            active_entity: input_boolean.hoymiles_rce_discharge_active
+            block_enabled_entity: input_boolean.hoymiles_sale_block_enabled
+            block_start_entity: input_datetime.hoymiles_sale_block_start
+            block_end_entity: input_datetime.hoymiles_sale_block_end
       - type: markdown
         title: RCE discharge plan
         entity_id:

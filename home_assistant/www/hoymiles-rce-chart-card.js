@@ -1,16 +1,54 @@
 class HoymilesRceChartCard extends HTMLElement {
+  constructor() {
+    super();
+    this._renderKey = "";
+    this._states = {};
+    this._language = document.documentElement.lang || "en";
+    this._unsubscribeStates = undefined;
+  }
+
   setConfig(config) {
     if (!config.entity || !config.threshold_entity) {
       throw new Error("entity and threshold_entity are required");
     }
     this._config = config;
     this._renderKey = "";
+    this._update();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._config) return;
+    this._states = hass.states || {};
+    this._language = hass.language || this._language;
+    this._update();
+  }
 
+  connectedCallback() {
+    if (this._unsubscribeStates) return;
+    const request = new CustomEvent("context-request", {
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    });
+    request.context = "states";
+    request.subscribe = true;
+    request.callback = (states, unsubscribe) => {
+      this._states = states || {};
+      this._unsubscribeStates = unsubscribe;
+      this._update();
+    };
+    this.dispatchEvent(request);
+  }
+
+  disconnectedCallback() {
+    if (typeof this._unsubscribeStates === "function") {
+      this._unsubscribeStates();
+    }
+    this._unsubscribeStates = undefined;
+  }
+
+  _update() {
+    if (!this._config) return;
     const ids = [
       this._config.entity,
       this._config.threshold_entity,
@@ -20,9 +58,9 @@ class HoymilesRceChartCard extends HTMLElement {
       this._config.block_start_entity,
       this._config.block_end_entity,
     ].filter(Boolean);
-    const key = `${hass.language}|${ids
+    const key = `${this._language}|${ids
       .map((id) => {
-        const entity = hass.states[id];
+        const entity = this._states[id];
         return entity ? `${entity.state}:${entity.last_updated}` : "missing";
       })
       .join("|")}`;
@@ -35,6 +73,15 @@ class HoymilesRceChartCard extends HTMLElement {
 
   getCardSize() {
     return 7;
+  }
+
+  getGridOptions() {
+    return {
+      columns: 12,
+      rows: 7,
+      min_columns: 6,
+      min_rows: 5,
+    };
   }
 
   static getStubConfig() {
@@ -61,14 +108,14 @@ class HoymilesRceChartCard extends HTMLElement {
   _number(value, digits = 3) {
     const number = Number(value);
     if (!Number.isFinite(number)) return "—";
-    return new Intl.NumberFormat(this._hass?.language || "en", {
+    return new Intl.NumberFormat(this._language || "en", {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     }).format(number);
   }
 
   _strings() {
-    const polish = String(this._hass?.language || "").toLowerCase().startsWith("pl");
+    const polish = String(this._language || "").toLowerCase().startsWith("pl");
     return polish
       ? {
           defaultTitle: "RCE — ceny na dziś",
@@ -140,22 +187,22 @@ class HoymilesRceChartCard extends HTMLElement {
   }
 
   _render() {
-    const source = this._hass.states[this._config.entity];
-    const thresholdState = this._hass.states[this._config.threshold_entity];
+    const source = this._states[this._config.entity];
+    const thresholdState = this._states[this._config.threshold_entity];
     const currentState = this._config.current_price_entity
-      ? this._hass.states[this._config.current_price_entity]
+      ? this._states[this._config.current_price_entity]
       : undefined;
     const activeState = this._config.active_entity
-      ? this._hass.states[this._config.active_entity]
+      ? this._states[this._config.active_entity]
       : undefined;
     const blockEnabledState = this._config.block_enabled_entity
-      ? this._hass.states[this._config.block_enabled_entity]
+      ? this._states[this._config.block_enabled_entity]
       : undefined;
     const blockStartState = this._config.block_start_entity
-      ? this._hass.states[this._config.block_start_entity]
+      ? this._states[this._config.block_start_entity]
       : undefined;
     const blockEndState = this._config.block_end_entity
-      ? this._hass.states[this._config.block_end_entity]
+      ? this._states[this._config.block_end_entity]
       : undefined;
 
     const rows = Array.isArray(source?.attributes?.value)

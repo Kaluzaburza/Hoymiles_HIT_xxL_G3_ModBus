@@ -85,7 +85,18 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.0.0", "Release version must be 1.0.0")
+    require(manifest["version"] == "1.0.1", "Release version must be 1.0.1")
+
+    entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
+    init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+    require(
+        "def suggested_object_id(self)" in entity_source,
+        "Proxy entities need an explicit stable suggested_object_id property",
+    )
+    require(
+        "_async_migrate_entity_ids(hass, entry)" in init_source,
+        "Existing localized entity ids are not migrated",
+    )
 
     catalog = load_json(COMPONENT / "entity_catalog.json")
     require(isinstance(catalog, list), "Entity catalog must be a list")
