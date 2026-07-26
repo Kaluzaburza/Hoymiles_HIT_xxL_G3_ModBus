@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 DOMAIN = "hoymiles_hit_modbus"
 NAME = "Hoymiles HIT xxL G3 Modbus"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 CONF_SOURCE_DEVICE_ID = "source_device_id"
 CONF_COPY_ASSETS = "copy_assets"

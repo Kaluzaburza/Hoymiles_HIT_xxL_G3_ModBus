@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.1] - 2026-07-26
+
+### Fixed
+
+- Entity IDs are now stable and independent of the Home Assistant language.
+- Existing localized proxy entity IDs are migrated automatically during setup.
+- EMS and RCE packages can resolve the EMS mode, discharge SOC and battery SOC
+  entities after installation on Polish and English Home Assistant instances.
+- The RCE card supports both the current Home Assistant states context and the
+  legacy `hass` setter.
+- The dashboard wraps the custom RCE chart in a standard stack to prevent an
+  asynchronous custom-card loading race.
+- The RCE resource cache key was increased to `v=1.0.1`.
+
+### Validation
+
+- Added a headless RCE card registration and rendering test to CI.
+- Added release checks for the stable entity ID property and migration hook.
+
+### Polski
+
+- Identyfikatory encji są teraz stałe i niezależne od języka Home Assistanta.
+- Istniejące, przetłumaczone identyfikatory encji są automatycznie migrowane.
+- Naprawiono odwołania automatyki EMS/RCE do trybu EMS, minimalnego SOC
+  rozładowania oraz SOC baterii.
+- Karta RCE obsługuje aktualny mechanizm przekazywania stanów w Home Assistant.
+- Dodano automatyczny test rejestracji i renderowania karty RCE.
+
 ## [1.0.0] - 2026-07-24
 
 First public release.

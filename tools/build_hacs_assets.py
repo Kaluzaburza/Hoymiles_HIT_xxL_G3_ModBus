@@ -689,7 +689,7 @@ def transform_entity_ids(text: str, catalog: list[dict]) -> str:
 
 
 def translate_asset_to_english(text: str) -> str:
-    """Create a first-pass English dashboard/package for release v1.0.0."""
+    """Create a first-pass English dashboard/package for the current release."""
     text = text.replace('"Autokonsumpcja (Self-Use)"', '"self_use"')
     text = text.replace('"Ładowanie z sieci"', '"grid_charge"')
     text = text.replace('"Rozładowanie do sieci"', '"grid_discharge"')
