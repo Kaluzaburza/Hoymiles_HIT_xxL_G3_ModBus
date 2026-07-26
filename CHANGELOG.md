@@ -4,8 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [1.0.1] - 2026-07-26
 
+### Added
+
+- Documented the required HACS-first installation order for the integration and
+  ESPHome package.
+- Added the ESP32-to-RS485-to-inverter wiring table for GPIO17/GPIO16, A+/B-,
+  power and Modbus ground.
+- Added dashboard screenshots for the live energy flow and RCE automation.
+- Expanded the README with installation, update and troubleshooting guidance.
+
 ### Fixed
 
+- Corrected standalone ESPHome installation so public remote packages resolve
+  from the tagged GitHub release.
 - Entity IDs are now stable and independent of the Home Assistant language.
 - Existing localized proxy entity IDs are migrated automatically during setup.
 - EMS and RCE packages can resolve the EMS mode, discharge SOC and battery SOC
@@ -23,6 +34,14 @@ All notable changes to this project are documented in this file.
 
 ### Polski
 
+- Opisano wymaganą kolejność instalacji: najpierw repozytorium przez HACS, a
+  następnie konfiguracja urządzenia ESPHome.
+- Dodano tabelę podłączenia ESP32, konwertera RS485 i falownika dla GPIO17/GPIO16,
+  A+/B-, zasilania oraz masy Modbus.
+- Dodano zrzuty dashboardu przepływu energii i automatyki RCE.
+- Rozszerzono instrukcję instalacji, aktualizacji i diagnostyki.
+- Naprawiono samodzielną instalację ESPHome oraz publiczne odwołania do pakietów
+  z oznaczonego wydania GitHub.
 - Identyfikatory encji są teraz stałe i niezależne od języka Home Assistanta.
 - Istniejące, przetłumaczone identyfikatory encji są automatycznie migrowane.
 - Naprawiono odwołania automatyki EMS/RCE do trybu EMS, minimalnego SOC
