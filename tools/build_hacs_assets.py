@@ -21,7 +21,13 @@ COMPONENT = ROOT / "custom_components" / "hoymiles_hit_modbus"
 TRANSLATIONS = COMPONENT / "translations"
 RESOURCES = COMPONENT / "resources"
 
-SUPPORTED_SOURCE_DOMAINS = {"sensor", "text_sensor", "number", "select"}
+SUPPORTED_SOURCE_DOMAINS = {
+    "button",
+    "sensor",
+    "text_sensor",
+    "number",
+    "select",
+}
 SKIPPED_FILES = {
     "optional_battery_legacy.yaml",
     "optional_battery_pack_diagnostics.yaml",
@@ -47,6 +53,11 @@ PHRASE_TRANSLATIONS = {
     "Low SOC Grid Charge Power": "Moc ładowania z sieci przy niskim SOC",
     "Battery Max Charge Power": "Maksymalna moc ładowania baterii",
     "Battery Max Discharge Power": "Maksymalna moc rozładowania baterii",
+    "Battery Current (BMS)": "Prąd baterii (BMS)",
+    "Battery Power (BMS)": "Moc baterii (BMS)",
+    "Battery Voltage (BMS)": "Napięcie baterii (BMS)",
+    "Battery Current (Inverter)": "Prąd baterii (falownik)",
+    "Battery 1 Voltage": "Napięcie baterii (falownik)",
     "Maximum Charge Power": "Maksymalna moc ładowania z sieci",
     "Maximum Discharge Power": "Maksymalna moc rozładowania do sieci",
     "Force Charge SOC": "Docelowy SOC ładowania z sieci",
@@ -74,6 +85,7 @@ PHRASE_TRANSLATIONS = {
     "ARM System Faults": "Błędy systemowe ARM",
     "SW Fault": "Błąd oprogramowania",
     "HW Fault": "Błąd sprzętowy",
+    "Clear Fault": "Wyczyść alarmy falownika",
 }
 
 WORD_TRANSLATIONS = {
@@ -216,13 +228,59 @@ ENGLISH_REPLACEMENTS = {
     "Zatrzymaj i wróć do Self-Use": "Stop and return to Self-Use",
     "Bieżący przepływ mocy": "Current power flow",
     "Bieżący przepływ energii": "Current energy flow",
+    "name: Dom": "name: Load",
+    "name: Sieć": "name: Grid",
+    "name: Bateria (A)": "name: Battery (A)",
+    "name: Bateria": "name: Battery",
+    "Napięcie baterii (falownik)": "Battery voltage (inverter)",
+    "Prąd baterii (falownik)": "Battery current (inverter)",
     "Podsumowanie dzienne": "Daily summary",
     "Produkcja dzisiaj": "Production today",
     "Do domu": "To home",
     "Do baterii": "To battery",
     "Do sieci": "To grid",
     "Stan systemu i łączność": "System and connectivity",
+    "title: Sterowanie": "title: Control",
     "Alarmy — szybki podgląd": "Alarms — quick view",
+    "Wyczyść alarmy falownika": "Clear inverter faults",
+    "Stany komunikacji i pracy": "Communication and operating states",
+    "Alarmy falownika i baterii": "Inverter and battery alarms",
+    "Stan pracy falownika": "Inverter operating state",
+    "Stan pracy systemu": "System operating state",
+    "Łącze licznika": "Meter link",
+    "Łącze PV": "PV link",
+    "Łącze baterii": "Battery link",
+    "Stan pracy baterii (BMS)": "Battery operating state (BMS)",
+    "Stan pracy baterii": "Battery operating state",
+    "Typ baterii (BMS)": "Battery type (BMS)",
+    "Parametry ochrony i temperatury": "Protection parameters and temperatures",
+    "Temperatura radiatora falownika": "Inverter heatsink temperature",
+    "Temperatura radiatora toru baterii": "Battery-stage heatsink temperature",
+    "Rezystancja izolacji": "Insulation resistance",
+    "Wyprodukowano dzisiaj": "Generated today",
+    "Moc — ostatnie 24 godziny [W]": "Power — last 24 hours [W]",
+    "name: Moc": "name: Power",
+    "Odbiory — moc": "Loads — power",
+    "Odbiory — energia": "Loads — energy",
+    "Maksymalna temperatura celi": "Maximum cell temperature",
+    "Minimalna temperatura celi": "Minimum cell temperature",
+    "Bateria — energia": "Battery — energy",
+    "Licznik sieci": "Grid meter",
+    "Ustawienia falownika i baterii": "Inverter and battery settings",
+    "Błąd oprogramowania": "Software fault",
+    "Błąd sprzętowy": "Hardware fault",
+    "Błąd baterii (BMS)": "Battery fault (BMS)",
+    "Błędy baterii": "Battery faults",
+    "Błędy DSP mocy": "DSP power faults",
+    "Błędy DSP zabezpieczeń": "DSP safety faults",
+    "Błędy komunikacji ARM": "ARM communication faults",
+    "Błędy urządzeń peryferyjnych ARM": "ARM peripheral faults",
+    "Błędy systemowe ARM": "ARM system faults",
+    "Praca z siecią": "On-grid operation",
+    "HMID: połączenie prawidłowe": "HMID: connected",
+    "Czuwanie": "Standby",
+    "Ładowanie": "Charging",
+    "Rozładowanie": "Discharging",
     "Parametry ochronne i temperatury": "Protection parameters and temperatures",
     "Napięcie L1": "L1 voltage",
     "Napięcie L2": "L2 voltage",
@@ -289,6 +347,8 @@ ENGLISH_REPLACEMENTS = {
     "PV — energia całkowita": "PV — total energy",
     "Bateria — stan, moc i limity BMS": "Battery — state, power and BMS limits",
     "Sieć — wartości bieżące": "Grid — current values",
+    "Sieć — napięcia i częstotliwość": "Grid — voltages and frequency",
+    "Sieć — prądy": "Grid — currents",
     "Sieć — energia dzisiaj": "Grid — energy today",
     "Sieć — energia całkowita": "Grid — total energy",
     "Generator — wartości bieżące": "Generator — current values",
@@ -304,6 +364,9 @@ ENGLISH_REPLACEMENTS = {
     "Brak kompletnych danych PSE": "No complete PSE data",
     "Brak danych": "No data",
     "Brak błędu": "No error",
+    "Litowa": "Lithium",
+    "Kwasowo-fosforanowa": "Lead-acid/phosphate",
+    "Symulowana": "Simulated",
     "Brak błędów": "No faults",
     "Niedostępne": "Unavailable",
     "Wyłączona": "Disabled",
@@ -665,13 +728,18 @@ def static_translations(language: str) -> dict:
 
 def transform_entity_ids(text: str, catalog: list[dict]) -> str:
     """Replace installation-specific ESPHome ids with stable proxy ids."""
-    candidates: dict[str, list[dict]] = {"sensor": [], "number": [], "select": []}
+    candidates: dict[str, list[dict]] = {
+        "button": [],
+        "sensor": [],
+        "number": [],
+        "select": [],
+    }
     for record in catalog:
         candidates[record["domain"]].append(record)
     for records in candidates.values():
         records.sort(key=lambda record: len(record["source_object_id"]), reverse=True)
 
-    pattern = re.compile(r"\b(sensor|number|select)\.([a-z0-9_]+)\b")
+    pattern = re.compile(r"\b(button|sensor|number|select)\.([a-z0-9_]+)\b")
 
     def replace(match: re.Match[str]) -> str:
         domain, object_id = match.groups()
@@ -686,6 +754,98 @@ def transform_entity_ids(text: str, catalog: list[dict]) -> str:
         return match.group(0)
 
     return pattern.sub(replace, text)
+
+
+def add_dashboard_entity_names(
+    text: str, catalog: list[dict], language: str
+) -> str:
+    """Expand entity-card shorthand with short localized dashboard-only names."""
+    names: dict[str, str] = {}
+    localized_names: dict[str, dict[str, str]] = {}
+    for record in catalog:
+        domain = record["domain"]
+        source_object_id = record["source_object_id"]
+        name = record["name"][language]
+        aliases = (
+            f"{domain}.hoymiles_hit_{record['translation_key']}",
+            f"{domain}.hoymiles_inverter_{source_object_id}",
+            f"{domain}.pv_hoymiles_inverter_{source_object_id}",
+        )
+        for alias in aliases:
+            names[alias] = name
+            localized_names[alias] = record["name"]
+
+    shorthand = re.compile(
+        r"^(?P<indent>\s*)-\s+"
+        r"(?P<entity>(?:button|sensor|number|select)\.[a-z0-9_]+)"
+        r"\s*$"
+    )
+    expanded: list[str] = []
+    entities_indent: int | None = None
+    for line in text.splitlines():
+        leading = len(line) - len(line.lstrip())
+        if line.strip() and entities_indent is not None and leading <= entities_indent:
+            entities_indent = None
+        if re.match(r"^\s*entities:\s*$", line):
+            entities_indent = leading
+            expanded.append(line)
+            continue
+
+        match = shorthand.match(line)
+        if (
+            not match
+            or entities_indent is None
+            or len(match.group("indent")) != entities_indent + 2
+        ):
+            expanded.append(line)
+            continue
+        entity_id = match.group("entity")
+        name = names.get(entity_id)
+        if not name:
+            expanded.append(line)
+            continue
+        indent = match.group("indent")
+        expanded.append(f"{indent}- entity: {entity_id}")
+        expanded.append(
+            f"{indent}  name: {json.dumps(name, ensure_ascii=False)}"
+        )
+    relocalized: list[str] = []
+    entity_row = re.compile(
+        r"^(?P<indent>\s*)-\s+entity:\s+"
+        r"(?P<entity>(?:button|sensor|number|select)\.[a-z0-9_]+)\s*$"
+    )
+    name_row = re.compile(r"^(?P<indent>\s*)name:\s+(?P<name>.+?)\s*$")
+    index = 0
+    while index < len(expanded):
+        line = expanded[index]
+        match = entity_row.match(line)
+        if (
+            match
+            and index + 1 < len(expanded)
+            and match.group("entity") in localized_names
+        ):
+            following = name_row.match(expanded[index + 1])
+            if following:
+                raw_name = following.group("name")
+                try:
+                    current_name = json.loads(raw_name)
+                except json.JSONDecodeError:
+                    current_name = raw_name.strip("'\"")
+                known_names = set(
+                    localized_names[match.group("entity")].values()
+                )
+                if current_name in known_names:
+                    relocalized.append(line)
+                    relocalized.append(
+                        f"{following.group('indent')}name: "
+                        f"{json.dumps(names[match.group('entity')], ensure_ascii=False)}"
+                    )
+                    index += 2
+                    continue
+        relocalized.append(line)
+        index += 1
+
+    return "\n".join(relocalized) + ("\n" if text.endswith("\n") else "")
 
 
 def translate_asset_to_english(text: str) -> str:
@@ -722,8 +882,8 @@ def build() -> None:
     catalog: list[dict] = []
     en = static_translations("en")
     pl = static_translations("pl")
-    en["entity"] = {"sensor": {}, "number": {}, "select": {}}
-    pl["entity"] = {"sensor": {}, "number": {}, "select": {}}
+    en["entity"] = {"button": {}, "sensor": {}, "number": {}, "select": {}}
+    pl["entity"] = {"button": {}, "sensor": {}, "number": {}, "select": {}}
 
     for entity in entities:
         if entity.source_name in SPECIAL_NAMES:
@@ -753,12 +913,20 @@ def build() -> None:
                 "en": (
                     f"Hoymiles HIT xxL G3 Modbus value: {english}."
                     if entity.source_domain == "sensor"
-                    else f"Writable Hoymiles HIT xxL G3 setting: {english}."
+                    else (
+                        f"One-shot Hoymiles HIT xxL G3 command: {english}."
+                        if entity.source_domain == "button"
+                        else f"Writable Hoymiles HIT xxL G3 setting: {english}."
+                    )
                 ),
                 "pl": (
                     f"Wartość Modbus falownika Hoymiles HIT xxL G3: {polish}."
                     if entity.source_domain == "sensor"
-                    else f"Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: {polish}."
+                    else (
+                        f"Jednorazowe polecenie falownika Hoymiles HIT xxL G3: {polish}."
+                        if entity.source_domain == "button"
+                        else f"Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: {polish}."
+                    )
                 ),
             },
             "options": options,
@@ -807,9 +975,11 @@ def build() -> None:
     )
 
     localized_assets = {
-        RESOURCES / "dashboard_hoymiles_pl.yaml": dashboard,
+        RESOURCES / "dashboard_hoymiles_pl.yaml": add_dashboard_entity_names(
+            dashboard, catalog, "pl"
+        ),
         RESOURCES / "dashboard_hoymiles_en.yaml": translate_asset_to_english(
-            dashboard
+            add_dashboard_entity_names(dashboard, catalog, "en")
         ),
         RESOURCES
         / "home_assistant"

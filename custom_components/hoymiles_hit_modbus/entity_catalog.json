@@ -567,11 +567,11 @@
     "entity_category": null,
     "name": {
       "en": "Battery Voltage (BMS)",
-      "pl": "Bateria napięcie (BMS)"
+      "pl": "Napięcie baterii (BMS)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Battery Voltage (BMS).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria napięcie (BMS)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Napięcie baterii (BMS)."
     },
     "options": []
   },
@@ -585,11 +585,11 @@
     "entity_category": null,
     "name": {
       "en": "Battery Current (BMS)",
-      "pl": "Bateria prąd (BMS)"
+      "pl": "Prąd baterii (BMS)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Battery Current (BMS).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria prąd (BMS)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Prąd baterii (BMS)."
     },
     "options": []
   },
@@ -603,11 +603,11 @@
     "entity_category": null,
     "name": {
       "en": "Battery Power (BMS)",
-      "pl": "Bateria moc (BMS)"
+      "pl": "Moc baterii (BMS)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Battery Power (BMS).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria moc (BMS)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Moc baterii (BMS)."
     },
     "options": []
   },
@@ -3645,11 +3645,29 @@
     "entity_category": null,
     "name": {
       "en": "Battery 1 Voltage",
-      "pl": "Bateria 1 napięcie"
+      "pl": "Napięcie baterii (falownik)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Battery 1 Voltage.",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Bateria 1 napięcie."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Napięcie baterii (falownik)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_current_inverter",
+    "source_name": "Battery Current (Inverter)",
+    "source_id": "battery_current_inverter_48",
+    "source_object_id": "battery_current_inverter",
+    "entity_category": null,
+    "name": {
+      "en": "Battery Current (Inverter)",
+      "pl": "Prąd baterii (falownik)"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Current (Inverter).",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Prąd baterii (falownik)."
     },
     "options": []
   },
@@ -5168,6 +5186,24 @@
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: ARM System Faults.",
       "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Błędy systemowe ARM."
+    },
+    "options": []
+  },
+  {
+    "domain": "button",
+    "source_component": "button",
+    "translation_key": "clear_fault",
+    "source_name": "Clear Fault",
+    "source_id": "clear_fault_3004",
+    "source_object_id": "clear_fault",
+    "entity_category": "config",
+    "name": {
+      "en": "Clear Fault",
+      "pl": "Wyczyść alarmy falownika"
+    },
+    "description": {
+      "en": "One-shot Hoymiles HIT xxL G3 command: Clear Fault.",
+      "pl": "Jednorazowe polecenie falownika Hoymiles HIT xxL G3: Wyczyść alarmy falownika."
     },
     "options": []
   },

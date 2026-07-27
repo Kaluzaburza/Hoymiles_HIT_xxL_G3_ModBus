@@ -36,6 +36,11 @@
     }
   },
   "entity": {
+    "button": {
+      "clear_fault": {
+        "name": "Wyczyść alarmy falownika"
+      }
+    },
     "sensor": {
       "backup_voltage_l1": {
         "name": "Backup napięcie L1"
@@ -131,13 +136,13 @@
         "name": "Bateria SOH"
       },
       "battery_voltage_bms": {
-        "name": "Bateria napięcie (BMS)"
+        "name": "Napięcie baterii (BMS)"
       },
       "battery_current_bms": {
-        "name": "Bateria prąd (BMS)"
+        "name": "Prąd baterii (BMS)"
       },
       "battery_power_bms": {
-        "name": "Bateria moc (BMS)"
+        "name": "Moc baterii (BMS)"
       },
       "maximum_charge_current": {
         "name": "Maksymalna ładowanie prąd"
@@ -710,7 +715,10 @@
         "name": "Bateria łącznie moc (Direct)"
       },
       "battery_1_voltage": {
-        "name": "Bateria 1 napięcie"
+        "name": "Napięcie baterii (falownik)"
+      },
+      "battery_current_inverter": {
+        "name": "Prąd baterii (falownik)"
       },
       "pv_total_energy": {
         "name": "PV łącznie energia"

@@ -4,7 +4,7 @@
 - `network.yaml` — Wi-Fi oraz informacje sieciowe.
 - `modbus_connection.yaml` — UART, RS485 i harmonogram odpytywania Modbus.
 - `settings.yaml` — zapisywalne ustawienia falownika, baterii i EMS (`number`/`select`).
-- `system.yaml` — sterowanie pracą systemu.
+- `system.yaml` — sterowanie pracą systemu i bezpieczny przycisk kasowania alarmów.
 - `states_alarms.yaml` — opisowe stany, łącza i zdekodowane maski alarmów.
 - `inverter.yaml` — wyjście falownika.
 - `grid.yaml` — sieć AC.

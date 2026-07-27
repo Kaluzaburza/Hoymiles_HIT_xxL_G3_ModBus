@@ -25,7 +25,7 @@ views:
           registers are available on separate tabs.
       - type: glance
         title: Current power flow
-        columns: 5
+        columns: 7
         show_name: true
         show_state: true
         state_color: true
@@ -38,31 +38,42 @@ views:
             name: Grid
           - entity: sensor.hoymiles_hit_overview_battery_power
             name: Battery
+          - entity: sensor.hoymiles_hit_battery_current_inverter
+            name: Battery (A)
+          - entity: sensor.hoymiles_hit_battery_1_voltage
+            name: Battery (V)
           - entity: sensor.hoymiles_hit_overview_battery_soc
             name: SOC
+      - type: horizontal-stack
+        cards:
+          - type: entities
+            title: Grid — voltages and frequency
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_grid_voltage_l1
+                name: L1 voltage
+              - entity: sensor.hoymiles_hit_grid_voltage_l2
+                name: L2 voltage
+              - entity: sensor.hoymiles_hit_grid_voltage_l3
+                name: L3 voltage
+              - entity: sensor.hoymiles_hit_inverter_grid_frequency
+                name: Frequency
+          - type: entities
+            title: Grid — currents
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: sensor.hoymiles_hit_grid_current_l1n
+                name: L1 current
+              - entity: sensor.hoymiles_hit_grid_current_l2n
+                name: L2 current
+              - entity: sensor.hoymiles_hit_grid_current_l3n
+                name: L3 current
+              - entity: sensor.hoymiles_hit_grid_total_current
+                name: Total current (sum of phases)
       - type: entities
-        title: Grid — current values
-        show_header_toggle: false
-        state_color: true
-        entities:
-          - entity: sensor.hoymiles_hit_grid_voltage_l1
-            name: L1 voltage
-          - entity: sensor.hoymiles_hit_grid_current_l1n
-            name: L1 current
-          - entity: sensor.hoymiles_hit_grid_voltage_l2
-            name: L2 voltage
-          - entity: sensor.hoymiles_hit_grid_current_l2n
-            name: L2 current
-          - entity: sensor.hoymiles_hit_grid_voltage_l3
-            name: L3 voltage
-          - entity: sensor.hoymiles_hit_grid_current_l3n
-            name: L3 current
-          - entity: sensor.hoymiles_hit_inverter_grid_frequency
-            name: Frequency
-          - entity: sensor.hoymiles_hit_grid_total_current
-            name: Total current (sum of phases)
-      - type: entities
-        title: Sterowanie EMS
+        title: Control EMS
         show_header_toggle: false
         state_color: true
         view_layout:
@@ -70,23 +81,25 @@ views:
         entities:
           - entity: select.hoymiles_hit_ems_mode
             name: Operating mode
+          - entity: button.hoymiles_hit_clear_fault
+            name: "Clear Fault"
       - type: entities
-        title: Parametry ochrony i temperatury
+        title: Protection parameters and temperatures
         show_header_toggle: false
         state_color: true
         view_layout:
           position: sidebar
         entities:
           - entity: sensor.hoymiles_hit_inv_ths_temp
-            name: Temperatura radiatora falownika
+            name: Inverter heatsink temperature
           - entity: sensor.hoymiles_hit_bat_ths_temp
-            name: Temperatura radiatora toru baterii
+            name: Battery-stage heatsink temperature
           - entity: sensor.hoymiles_hit_cav_temp
             name: Inverter internal temperature (CAV)
           - entity: sensor.hoymiles_hit_pe_voltage
             name: PP voltage
           - entity: sensor.hoymiles_hit_iso_resistor
-            name: Rezystancja izolacji
+            name: Insulation resistance
           - entity: sensor.hoymiles_hit_residual_current
             name: Residual current
       - type: custom:sunsynk-power-flow-card
@@ -96,7 +109,7 @@ views:
         show_solar: true
         show_battery: true
         show_grid: true
-        decimal_places: 0
+        decimal_places: 2
         dynamic_line_width: true
         min_line_width: 1
         max_line_width: 4
@@ -142,8 +155,8 @@ views:
           grid_ct_power_172: sensor.hoymiles_hit_overview_grid_total_active_power
           battery_soc_184: sensor.hoymiles_hit_overview_battery_soc
           battery_power_190: sensor.hoymiles_hit_overview_battery_power
-          battery_current_191: sensor.hoymiles_hit_battery_current_bms
-          battery_voltage_183: sensor.hoymiles_hit_battery_voltage_bms
+          battery_current_191: sensor.hoymiles_hit_battery_current_inverter
+          battery_voltage_183: sensor.hoymiles_hit_battery_1_voltage
           essential_power: sensor.hoymiles_hit_overview_load_active_power
           pv1_power_186: sensor.hoymiles_hit_overview_pv_total_power
       - type: vertical-stack
@@ -156,7 +169,7 @@ views:
             state_color: true
             entities:
               - entity: sensor.hoymiles_hit_pv_total_energy_today
-                name: Wyprodukowano dzisiaj
+                name: Generated today
           - type: glance
             columns: 3
             show_name: true
@@ -170,7 +183,7 @@ views:
               - entity: sensor.hoymiles_hit_pv_to_grid_energy_today
                 name: To grid
       - type: history-graph
-        title: Moc — ostatnie 24 godziny [W]
+        title: Power — last 24 hours [W]
         hours_to_show: 24
         entities:
           - entity: sensor.hoymiles_hit_overview_pv_total_power
@@ -188,12 +201,30 @@ views:
         view_layout:
           position: sidebar
         entities:
-          - sensor.hoymiles_hit_inverter_work_status
-          - sensor.hoymiles_hit_overview_system_work_status
-          - sensor.hoymiles_hit_meter_link_status
-          - sensor.hoymiles_hit_pv_link_status
-          - sensor.hoymiles_hit_battery_link_status
-          - sensor.hoymiles_hit_battery_work_status_bms
+          - entity: sensor.hoymiles_hit_inverter_work_status
+            name: "Inverter Work Status"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_system_work_status
+            name: System operating state
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_meter_link_status
+            name: Meter link
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_pv_link_status
+            name: PV link
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_link_status
+            name: Battery link
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_work_status_bms
+            name: "Battery Work Status (BMS)"
+            tap_action:
+              action: more-info
       - type: entities
         title: Alarms — quick view
         show_header_toggle: false
@@ -201,15 +232,42 @@ views:
         view_layout:
           position: sidebar
         entities:
-          - sensor.hoymiles_hit_sw_fault
-          - sensor.hoymiles_hit_hw_fault
-          - sensor.hoymiles_hit_battery_fault_code_bms
-          - sensor.hoymiles_hit_overview_battery_faults
-          - sensor.hoymiles_hit_overview_dsp_power_faults
-          - sensor.hoymiles_hit_dsp_safety_faults
-          - sensor.hoymiles_hit_arm_communication_faults
-          - sensor.hoymiles_hit_arm_peripheral_faults
-          - sensor.hoymiles_hit_arm_system_faults
+          - entity: sensor.hoymiles_hit_sw_fault
+            name: "SW Fault"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_hw_fault
+            name: "HW Fault"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_fault_code_bms
+            name: Battery fault (BMS)
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_battery_faults
+            name: Battery faults
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_dsp_power_faults
+            name: DSP power faults
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_dsp_safety_faults
+            name: "DSP Safety Faults"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_arm_communication_faults
+            name: "ARM Communication Faults"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_arm_peripheral_faults
+            name: "ARM Peripheral Faults"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_arm_system_faults
+            name: "ARM System Faults"
+            tap_action:
+              action: more-info
   - title: Automatyka EMS
     path: automatyka-ems
     icon: mdi:calendar-clock
@@ -375,7 +433,7 @@ views:
               - entity: sensor.hoymiles_hit_pv1_current
                 name: Current
               - entity: sensor.hoymiles_hit_pv1_power_direct
-                name: Moc
+                name: Power
           - type: entities
             title: PV2
             show_header_toggle: false
@@ -386,7 +444,7 @@ views:
               - entity: sensor.hoymiles_hit_pv2_current
                 name: Current
               - entity: sensor.hoymiles_hit_pv2_power_direct
-                name: Moc
+                name: Power
           - type: entities
             title: PV3
             show_header_toggle: false
@@ -397,7 +455,7 @@ views:
               - entity: sensor.hoymiles_hit_pv3_current
                 name: Current
               - entity: sensor.hoymiles_hit_pv3_power_direct
-                name: Moc
+                name: Power
           - type: entities
             title: PV4
             show_header_toggle: false
@@ -408,7 +466,7 @@ views:
               - entity: sensor.hoymiles_hit_pv4_current
                 name: Current
               - entity: sensor.hoymiles_hit_pv4_power_direct
-                name: Moc
+                name: Power
       - type: entities
         title: PV — energy today
         show_header_toggle: false
@@ -416,15 +474,24 @@ views:
         view_layout:
           position: sidebar
         entities:
-          - sensor.hoymiles_hit_pv1_today_energy
-          - sensor.hoymiles_hit_pv2_today_energy
-          - sensor.hoymiles_hit_pv3_today_energy
-          - sensor.hoymiles_hit_pv4_today_energy
-          - sensor.hoymiles_hit_external_pv_total_energy_today
-          - sensor.hoymiles_hit_external_pv_today_energy_l1n
-          - sensor.hoymiles_hit_external_pv_today_energy_l2n
-          - sensor.hoymiles_hit_external_pv_today_energy_l3n
-          - sensor.hoymiles_hit_pv_total_energy_today
+          - entity: sensor.hoymiles_hit_pv1_today_energy
+            name: "PV1 Today Energy"
+          - entity: sensor.hoymiles_hit_pv2_today_energy
+            name: "PV2 Today Energy"
+          - entity: sensor.hoymiles_hit_pv3_today_energy
+            name: "PV3 Today Energy"
+          - entity: sensor.hoymiles_hit_pv4_today_energy
+            name: "PV4 Today Energy"
+          - entity: sensor.hoymiles_hit_external_pv_total_energy_today
+            name: "External PV Total Energy Today"
+          - entity: sensor.hoymiles_hit_external_pv_today_energy_l1n
+            name: "External PV Today Energy L1n"
+          - entity: sensor.hoymiles_hit_external_pv_today_energy_l2n
+            name: "External PV Today Energy L2n"
+          - entity: sensor.hoymiles_hit_external_pv_today_energy_l3n
+            name: "External PV Today Energy L3n"
+          - entity: sensor.hoymiles_hit_pv_total_energy_today
+            name: "PV Total Energy Today"
       - type: entities
         title: PV — total energy
         show_header_toggle: false
@@ -432,18 +499,30 @@ views:
         view_layout:
           position: sidebar
         entities:
-          - sensor.hoymiles_hit_pv_total_energy
-          - sensor.hoymiles_hit_pv1_total_energy
-          - sensor.hoymiles_hit_pv2_total_energy
-          - sensor.hoymiles_hit_pv3_total_energy
-          - sensor.hoymiles_hit_pv4_total_energy
-          - sensor.hoymiles_hit_external_pv_energy_total
-          - sensor.hoymiles_hit_external_pv_energy_l1n
-          - sensor.hoymiles_hit_external_pv_energy_l2n
-          - sensor.hoymiles_hit_external_pv_energy_l3n
-          - sensor.hoymiles_hit_pv_to_battery_energy_total
-          - sensor.hoymiles_hit_pv_to_load_energy_total
-          - sensor.hoymiles_hit_pv_to_grid_energy_total
+          - entity: sensor.hoymiles_hit_pv_total_energy
+            name: "PV Total Energy"
+          - entity: sensor.hoymiles_hit_pv1_total_energy
+            name: "PV1 Total Energy"
+          - entity: sensor.hoymiles_hit_pv2_total_energy
+            name: "PV2 Total Energy"
+          - entity: sensor.hoymiles_hit_pv3_total_energy
+            name: "PV3 Total Energy"
+          - entity: sensor.hoymiles_hit_pv4_total_energy
+            name: "PV4 Total Energy"
+          - entity: sensor.hoymiles_hit_external_pv_energy_total
+            name: "External PV Energy Total"
+          - entity: sensor.hoymiles_hit_external_pv_energy_l1n
+            name: "External PV Energy L1n"
+          - entity: sensor.hoymiles_hit_external_pv_energy_l2n
+            name: "External PV Energy L2n"
+          - entity: sensor.hoymiles_hit_external_pv_energy_l3n
+            name: "External PV Energy L3n"
+          - entity: sensor.hoymiles_hit_pv_to_battery_energy_total
+            name: "PV to Battery Energy Total"
+          - entity: sensor.hoymiles_hit_pv_to_load_energy_total
+            name: "PV to Load Energy Total"
+          - entity: sensor.hoymiles_hit_pv_to_grid_energy_total
+            name: "PV to Grid Energy Total"
       - type: entities
         title: PV — energy-block and external-source power
         show_header_toggle: false
@@ -451,16 +530,26 @@ views:
         view_layout:
           position: sidebar
         entities:
-          - sensor.hoymiles_hit_pv_total_power_energy_block
-          - sensor.hoymiles_hit_pv_power
-          - sensor.hoymiles_hit_pv1_power_energy_block
-          - sensor.hoymiles_hit_pv2_power_energy_block
-          - sensor.hoymiles_hit_pv3_power_energy_block
-          - sensor.hoymiles_hit_pv4_power_energy_block
-          - sensor.hoymiles_hit_external_pv_total_power_energy_block
-          - sensor.hoymiles_hit_external_pv_l1n_power
-          - sensor.hoymiles_hit_external_pv_l2n_power
-          - sensor.hoymiles_hit_external_pv_l3n_power
+          - entity: sensor.hoymiles_hit_pv_total_power_energy_block
+            name: "PV Total Power (Energy Block)"
+          - entity: sensor.hoymiles_hit_pv_power
+            name: "PV Power"
+          - entity: sensor.hoymiles_hit_pv1_power_energy_block
+            name: "PV1 Power (Energy Block)"
+          - entity: sensor.hoymiles_hit_pv2_power_energy_block
+            name: "PV2 Power (Energy Block)"
+          - entity: sensor.hoymiles_hit_pv3_power_energy_block
+            name: "PV3 Power (Energy Block)"
+          - entity: sensor.hoymiles_hit_pv4_power_energy_block
+            name: "PV4 Power (Energy Block)"
+          - entity: sensor.hoymiles_hit_external_pv_total_power_energy_block
+            name: "External PV Total Power (Energy Block)"
+          - entity: sensor.hoymiles_hit_external_pv_l1n_power
+            name: "External PV L1n Power"
+          - entity: sensor.hoymiles_hit_external_pv_l2n_power
+            name: "External PV L2n Power"
+          - entity: sensor.hoymiles_hit_external_pv_l3n_power
+            name: "External PV L3n Power"
   - title: LOAD / EPS
     path: load-eps
     icon: mdi:home-lightning-bolt
@@ -471,43 +560,70 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_backup_voltage_l1
-          - sensor.hoymiles_hit_backup_voltage_l2
-          - sensor.hoymiles_hit_backup_voltage_l3
-          - sensor.hoymiles_hit_backup_current_l1
-          - sensor.hoymiles_hit_backup_current_l2
-          - sensor.hoymiles_hit_backup_current_l3
-          - sensor.hoymiles_hit_backup_apparent_power
-          - sensor.hoymiles_hit_backup_apparent_power_l1
-          - sensor.hoymiles_hit_backup_apparent_power_l2
-          - sensor.hoymiles_hit_backup_apparent_power_l3
-          - sensor.hoymiles_hit_backup_active_power
-          - sensor.hoymiles_hit_backup_active_power_l1
-          - sensor.hoymiles_hit_backup_active_power_l2
-          - sensor.hoymiles_hit_backup_active_power_l3
+          - entity: sensor.hoymiles_hit_backup_voltage_l1
+            name: "Backup Voltage L1"
+          - entity: sensor.hoymiles_hit_backup_voltage_l2
+            name: "Backup Voltage L2"
+          - entity: sensor.hoymiles_hit_backup_voltage_l3
+            name: "Backup Voltage L3"
+          - entity: sensor.hoymiles_hit_backup_current_l1
+            name: "Backup Current L1"
+          - entity: sensor.hoymiles_hit_backup_current_l2
+            name: "Backup Current L2"
+          - entity: sensor.hoymiles_hit_backup_current_l3
+            name: "Backup Current L3"
+          - entity: sensor.hoymiles_hit_backup_apparent_power
+            name: "Backup Apparent Power"
+          - entity: sensor.hoymiles_hit_backup_apparent_power_l1
+            name: "Backup Apparent Power L1"
+          - entity: sensor.hoymiles_hit_backup_apparent_power_l2
+            name: "Backup Apparent Power L2"
+          - entity: sensor.hoymiles_hit_backup_apparent_power_l3
+            name: "Backup Apparent Power L3"
+          - entity: sensor.hoymiles_hit_backup_active_power
+            name: "Backup Active Power"
+          - entity: sensor.hoymiles_hit_backup_active_power_l1
+            name: "Backup Active Power L1"
+          - entity: sensor.hoymiles_hit_backup_active_power_l2
+            name: "Backup Active Power L2"
+          - entity: sensor.hoymiles_hit_backup_active_power_l3
+            name: "Backup Active Power L3"
       - type: entities
-        title: Odbiory — moc
+        title: Loads — power
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_load_active_power_direct
-          - sensor.hoymiles_hit_load_power_total
-          - sensor.hoymiles_hit_load_power_l1n
-          - sensor.hoymiles_hit_load_power_l2n
-          - sensor.hoymiles_hit_load_power_l3n
+          - entity: sensor.hoymiles_hit_load_active_power_direct
+            name: "Load Active Power (Direct)"
+          - entity: sensor.hoymiles_hit_load_power_total
+            name: "Load Power Total"
+          - entity: sensor.hoymiles_hit_load_power_l1n
+            name: "Load Power L1n"
+          - entity: sensor.hoymiles_hit_load_power_l2n
+            name: "Load Power L2n"
+          - entity: sensor.hoymiles_hit_load_power_l3n
+            name: "Load Power L3n"
       - type: entities
-        title: Odbiory — energia
+        title: Loads — energy
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_load_energy_use_total
-          - sensor.hoymiles_hit_load_energy_use_l1n_total
-          - sensor.hoymiles_hit_load_energy_use_l2n_total
-          - sensor.hoymiles_hit_load_energy_use_l3n_total
-          - sensor.hoymiles_hit_load_energy_use_today
-          - sensor.hoymiles_hit_load_energy_use_l1n_today
-          - sensor.hoymiles_hit_load_energy_use_l2n_today
-          - sensor.hoymiles_hit_load_energy_use_l3n_today
+          - entity: sensor.hoymiles_hit_load_energy_use_total
+            name: "Load Energy Use Total"
+          - entity: sensor.hoymiles_hit_load_energy_use_l1n_total
+            name: "Load Energy Use L1n Total"
+          - entity: sensor.hoymiles_hit_load_energy_use_l2n_total
+            name: "Load Energy Use L2n Total"
+          - entity: sensor.hoymiles_hit_load_energy_use_l3n_total
+            name: "Load Energy Use L3n Total"
+          - entity: sensor.hoymiles_hit_load_energy_use_today
+            name: "Load Energy Use Today"
+          - entity: sensor.hoymiles_hit_load_energy_use_l1n_today
+            name: "Load Energy Use L1n Today"
+          - entity: sensor.hoymiles_hit_load_energy_use_l2n_today
+            name: "Load Energy Use L2n Today"
+          - entity: sensor.hoymiles_hit_load_energy_use_l3n_today
+            name: "Load Energy Use L3n Today"
   - title: Bateria
     path: bateria
     icon: mdi:battery-high
@@ -518,29 +634,43 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_battery_capacity
-          - sensor.hoymiles_hit_total_capacity
-          - sensor.hoymiles_hit_battery_soc_bms
-          - sensor.hoymiles_hit_battery_soh
-          - sensor.hoymiles_hit_battery_voltage_bms
-          - sensor.hoymiles_hit_battery_current_bms
-          - sensor.hoymiles_hit_battery_power_bms
-          - sensor.hoymiles_hit_maximum_charge_current
-          - sensor.hoymiles_hit_maximum_discharge_current
-          - sensor.hoymiles_hit_charge_cut_off_voltage
-          - sensor.hoymiles_hit_discharge_cut_off_voltage
+          - entity: sensor.hoymiles_hit_battery_capacity
+            name: "Battery Capacity"
+          - entity: sensor.hoymiles_hit_total_capacity
+            name: "Total Capacity"
+          - entity: sensor.hoymiles_hit_battery_soc_bms
+            name: "Battery SOC (BMS)"
+          - entity: sensor.hoymiles_hit_battery_soh
+            name: "Battery SOH"
+          - entity: sensor.hoymiles_hit_battery_voltage_bms
+            name: "Battery Voltage (BMS)"
+          - entity: sensor.hoymiles_hit_battery_current_bms
+            name: "Battery Current (BMS)"
+          - entity: sensor.hoymiles_hit_battery_power_bms
+            name: "Battery Power (BMS)"
+          - entity: sensor.hoymiles_hit_maximum_charge_current
+            name: "Maximum Charge Current"
+          - entity: sensor.hoymiles_hit_maximum_discharge_current
+            name: "Maximum Discharge Current"
+          - entity: sensor.hoymiles_hit_charge_cut_off_voltage
+            name: "Charge Cut-off Voltage"
+          - entity: sensor.hoymiles_hit_discharge_cut_off_voltage
+            name: "Discharge Cut-off Voltage"
           - entity: sensor.hoymiles_hit_cell_max_temperature
-            name: Maksymalna temperatura celi
+            name: Maximum cell temperature
           - entity: sensor.hoymiles_hit_cell_min_temperature
-            name: Minimalna temperatura celi
+            name: Minimum cell temperature
       - type: entities
-        title: Bateria — energia
+        title: Battery — energy
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_battery_charge_energy_today
-          - sensor.hoymiles_hit_battery_discharge_energy_today
-          - sensor.hoymiles_hit_battery_total_power_energy_block
+          - entity: sensor.hoymiles_hit_battery_charge_energy_today
+            name: "Battery Charge Energy Today"
+          - entity: sensor.hoymiles_hit_battery_discharge_energy_today
+            name: "Battery Discharge Energy Today"
+          - entity: sensor.hoymiles_hit_battery_total_power_energy_block
+            name: "Battery Total Power (Energy Block)"
   - title: Grid
     path: siec
     icon: mdi:transmission-tower
@@ -551,40 +681,64 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_grid_voltage_l1
-          - sensor.hoymiles_hit_grid_voltage_l2
-          - sensor.hoymiles_hit_grid_voltage_l3
-          - sensor.hoymiles_hit_inverter_grid_frequency
-          - sensor.hoymiles_hit_grid_active_power
-          - sensor.hoymiles_hit_grid_active_power_l1
-          - sensor.hoymiles_hit_grid_active_power_l2
-          - sensor.hoymiles_hit_grid_active_power_l3
+          - entity: sensor.hoymiles_hit_grid_voltage_l1
+            name: "Grid Voltage L1"
+          - entity: sensor.hoymiles_hit_grid_voltage_l2
+            name: "Grid Voltage L2"
+          - entity: sensor.hoymiles_hit_grid_voltage_l3
+            name: "Grid Voltage L3"
+          - entity: sensor.hoymiles_hit_inverter_grid_frequency
+            name: "Inverter Grid Frequency"
+          - entity: sensor.hoymiles_hit_grid_active_power
+            name: "Grid Active Power"
+          - entity: sensor.hoymiles_hit_grid_active_power_l1
+            name: "Grid Active Power L1"
+          - entity: sensor.hoymiles_hit_grid_active_power_l2
+            name: "Grid Active Power L2"
+          - entity: sensor.hoymiles_hit_grid_active_power_l3
+            name: "Grid Active Power L3"
       - type: entities
         title: Grid — energy today
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_grid_energy_buy_today
-          - sensor.hoymiles_hit_grid_energy_buy_l1n_today
-          - sensor.hoymiles_hit_grid_energy_buy_l2n_today
-          - sensor.hoymiles_hit_grid_energy_buy_l3n_today
-          - sensor.hoymiles_hit_grid_energy_sell_today
-          - sensor.hoymiles_hit_grid_energy_sell_l1n_today
-          - sensor.hoymiles_hit_grid_energy_sell_l2n_today
-          - sensor.hoymiles_hit_grid_energy_sell_l3n_today
+          - entity: sensor.hoymiles_hit_grid_energy_buy_today
+            name: "Grid Energy Buy Today"
+          - entity: sensor.hoymiles_hit_grid_energy_buy_l1n_today
+            name: "Grid Energy Buy L1n Today"
+          - entity: sensor.hoymiles_hit_grid_energy_buy_l2n_today
+            name: "Grid Energy Buy L2n Today"
+          - entity: sensor.hoymiles_hit_grid_energy_buy_l3n_today
+            name: "Grid Energy Buy L3n Today"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_today
+            name: "Grid Energy Sell Today"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_l1n_today
+            name: "Grid Energy Sell L1n Today"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_l2n_today
+            name: "Grid Energy Sell L2n Today"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_l3n_today
+            name: "Grid Energy Sell L3n Today"
       - type: entities
         title: Grid — total energy
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_grid_energy_buy_total
-          - sensor.hoymiles_hit_grid_energy_buy_l1n_total
-          - sensor.hoymiles_hit_grid_energy_buy_l2n_total
-          - sensor.hoymiles_hit_grid_energy_buy_l3n_total
-          - sensor.hoymiles_hit_grid_energy_sell_total
-          - sensor.hoymiles_hit_grid_energy_sell_l1n_total
-          - sensor.hoymiles_hit_grid_energy_sell_l2n_total
-          - sensor.hoymiles_hit_grid_energy_sell_l3n_total
+          - entity: sensor.hoymiles_hit_grid_energy_buy_total
+            name: "Grid Energy Buy Total"
+          - entity: sensor.hoymiles_hit_grid_energy_buy_l1n_total
+            name: "Grid Energy Buy L1n Total"
+          - entity: sensor.hoymiles_hit_grid_energy_buy_l2n_total
+            name: "Grid Energy Buy L2n Total"
+          - entity: sensor.hoymiles_hit_grid_energy_buy_l3n_total
+            name: "Grid Energy Buy L3n Total"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_total
+            name: "Grid Energy Sell Total"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_l1n_total
+            name: "Grid Energy Sell L1n Total"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_l2n_total
+            name: "Grid Energy Sell L2n Total"
+          - entity: sensor.hoymiles_hit_grid_energy_sell_l3n_total
+            name: "Grid Energy Sell L3n Total"
   - title: Flows
     path: przeplywy
     icon: mdi:transit-connection-variant
@@ -595,29 +749,42 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_pv_to_battery_power
-          - sensor.hoymiles_hit_pv_to_load_power
-          - sensor.hoymiles_hit_pv_to_grid_power
-          - sensor.hoymiles_hit_load_from_pv_power
+          - entity: sensor.hoymiles_hit_pv_to_battery_power
+            name: "PV to Battery Power"
+          - entity: sensor.hoymiles_hit_pv_to_load_power
+            name: "PV to Load Power"
+          - entity: sensor.hoymiles_hit_pv_to_grid_power
+            name: "PV to Grid Power"
+          - entity: sensor.hoymiles_hit_load_from_pv_power
+            name: "Load From PV Power"
       - type: entities
         title: Flows — energy today
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_pv_to_battery_energy_today
-          - sensor.hoymiles_hit_pv_to_load_energy_today
-          - sensor.hoymiles_hit_pv_to_grid_energy_today
-          - sensor.hoymiles_hit_energy_from_pv_today
-          - sensor.hoymiles_hit_energy_from_battery_today
-          - sensor.hoymiles_hit_energy_from_grid_today
+          - entity: sensor.hoymiles_hit_pv_to_battery_energy_today
+            name: "PV to Battery Energy Today"
+          - entity: sensor.hoymiles_hit_pv_to_load_energy_today
+            name: "PV to Load Energy Today"
+          - entity: sensor.hoymiles_hit_pv_to_grid_energy_today
+            name: "PV to Grid Energy Today"
+          - entity: sensor.hoymiles_hit_energy_from_pv_today
+            name: "Energy From PV Today"
+          - entity: sensor.hoymiles_hit_energy_from_battery_today
+            name: "Energy From Battery Today"
+          - entity: sensor.hoymiles_hit_energy_from_grid_today
+            name: "Energy From Grid Today"
       - type: entities
         title: Flows — total energy
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_energy_from_pv_total
-          - sensor.hoymiles_hit_energy_from_battery_total
-          - sensor.hoymiles_hit_energy_from_grid_total
+          - entity: sensor.hoymiles_hit_energy_from_pv_total
+            name: "Energy From PV Total"
+          - entity: sensor.hoymiles_hit_energy_from_battery_total
+            name: "Energy From Battery Total"
+          - entity: sensor.hoymiles_hit_energy_from_grid_total
+            name: "Energy From Grid Total"
   - title: Falownik
     path: falownik
     icon: mdi:current-ac
@@ -628,21 +795,40 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_bus_voltage
-          - sensor.hoymiles_hit_inverter_voltage_l1
-          - sensor.hoymiles_hit_inverter_voltage_l2
-          - sensor.hoymiles_hit_inverter_voltage_l3
-          - sensor.hoymiles_hit_inverter_current_l1
-          - sensor.hoymiles_hit_inverter_current_l2
-          - sensor.hoymiles_hit_inverter_current_l3
-          - sensor.hoymiles_hit_inverter_active_power
-          - sensor.hoymiles_hit_inverter_active_power_l1
-          - sensor.hoymiles_hit_inverter_active_power_l2
-          - sensor.hoymiles_hit_inverter_active_power_l3
-          - sensor.hoymiles_hit_inverter_reactive_power
-          - sensor.hoymiles_hit_inverter_reactive_power_l1
-          - sensor.hoymiles_hit_inverter_reactive_power_l2
-          - sensor.hoymiles_hit_inverter_reactive_power_l3
+          - entity: sensor.hoymiles_hit_bus_voltage
+            name: "Bus Voltage"
+          - entity: sensor.hoymiles_hit_battery_1_voltage
+            name: "Battery 1 Voltage"
+          - entity: sensor.hoymiles_hit_battery_current_inverter
+            name: "Battery Current (Inverter)"
+          - entity: sensor.hoymiles_hit_inverter_voltage_l1
+            name: "Inverter Voltage L1"
+          - entity: sensor.hoymiles_hit_inverter_voltage_l2
+            name: "Inverter Voltage L2"
+          - entity: sensor.hoymiles_hit_inverter_voltage_l3
+            name: "Inverter Voltage L3"
+          - entity: sensor.hoymiles_hit_inverter_current_l1
+            name: "Inverter Current L1"
+          - entity: sensor.hoymiles_hit_inverter_current_l2
+            name: "Inverter Current L2"
+          - entity: sensor.hoymiles_hit_inverter_current_l3
+            name: "Inverter Current L3"
+          - entity: sensor.hoymiles_hit_inverter_active_power
+            name: "Inverter Active Power"
+          - entity: sensor.hoymiles_hit_inverter_active_power_l1
+            name: "Inverter Active Power L1"
+          - entity: sensor.hoymiles_hit_inverter_active_power_l2
+            name: "Inverter Active Power L2"
+          - entity: sensor.hoymiles_hit_inverter_active_power_l3
+            name: "Inverter Active Power L3"
+          - entity: sensor.hoymiles_hit_inverter_reactive_power
+            name: "Inverter Reactive Power"
+          - entity: sensor.hoymiles_hit_inverter_reactive_power_l1
+            name: "Inverter Reactive Power L1"
+          - entity: sensor.hoymiles_hit_inverter_reactive_power_l2
+            name: "Inverter Reactive Power L2"
+          - entity: sensor.hoymiles_hit_inverter_reactive_power_l3
+            name: "Inverter Reactive Power L3"
   - title: Generator
     path: generator
     icon: mdi:engine
@@ -653,130 +839,215 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_generator_voltage_l1
-          - sensor.hoymiles_hit_generator_voltage_l2
-          - sensor.hoymiles_hit_generator_voltage_l3
-          - sensor.hoymiles_hit_generator_current_l1
-          - sensor.hoymiles_hit_generator_current_l2
-          - sensor.hoymiles_hit_generator_current_l3
-          - sensor.hoymiles_hit_generator_active_power_l1
-          - sensor.hoymiles_hit_generator_active_power_l2
-          - sensor.hoymiles_hit_generator_active_power_l3
-          - sensor.hoymiles_hit_generator_total_power
-          - sensor.hoymiles_hit_generator_power_l1n
-          - sensor.hoymiles_hit_generator_power_l2n
-          - sensor.hoymiles_hit_generator_power_l3n
+          - entity: sensor.hoymiles_hit_generator_voltage_l1
+            name: "Generator Voltage L1"
+          - entity: sensor.hoymiles_hit_generator_voltage_l2
+            name: "Generator Voltage L2"
+          - entity: sensor.hoymiles_hit_generator_voltage_l3
+            name: "Generator Voltage L3"
+          - entity: sensor.hoymiles_hit_generator_current_l1
+            name: "Generator Current L1"
+          - entity: sensor.hoymiles_hit_generator_current_l2
+            name: "Generator Current L2"
+          - entity: sensor.hoymiles_hit_generator_current_l3
+            name: "Generator Current L3"
+          - entity: sensor.hoymiles_hit_generator_active_power_l1
+            name: "Generator Active Power L1"
+          - entity: sensor.hoymiles_hit_generator_active_power_l2
+            name: "Generator Active Power L2"
+          - entity: sensor.hoymiles_hit_generator_active_power_l3
+            name: "Generator Active Power L3"
+          - entity: sensor.hoymiles_hit_generator_total_power
+            name: "Generator Total Power"
+          - entity: sensor.hoymiles_hit_generator_power_l1n
+            name: "Generator Power L1n"
+          - entity: sensor.hoymiles_hit_generator_power_l2n
+            name: "Generator Power L2n"
+          - entity: sensor.hoymiles_hit_generator_power_l3n
+            name: "Generator Power L3n"
       - type: entities
         title: Generator — energy today
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_generator_energy_total_today
-          - sensor.hoymiles_hit_generator_energy_l1n_today
-          - sensor.hoymiles_hit_generator_energy_l2n_today
-          - sensor.hoymiles_hit_generator_energy_l3n_today
+          - entity: sensor.hoymiles_hit_generator_energy_total_today
+            name: "Generator Energy Total Today"
+          - entity: sensor.hoymiles_hit_generator_energy_l1n_today
+            name: "Generator Energy L1n Today"
+          - entity: sensor.hoymiles_hit_generator_energy_l2n_today
+            name: "Generator Energy L2n Today"
+          - entity: sensor.hoymiles_hit_generator_energy_l3n_today
+            name: "Generator Energy L3n Today"
       - type: entities
         title: Generator — total energy
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_generator_energy_total
-          - sensor.hoymiles_hit_generator_energy_l1n_total
-          - sensor.hoymiles_hit_generator_energy_l2n_total
-          - sensor.hoymiles_hit_generator_energy_l3n_total
+          - entity: sensor.hoymiles_hit_generator_energy_total
+            name: "Generator Energy Total"
+          - entity: sensor.hoymiles_hit_generator_energy_l1n_total
+            name: "Generator Energy L1n Total"
+          - entity: sensor.hoymiles_hit_generator_energy_l2n_total
+            name: "Generator Energy L2n Total"
+          - entity: sensor.hoymiles_hit_generator_energy_l3n_total
+            name: "Generator Energy L3n Total"
   - title: Liczniki
     path: liczniki
     icon: mdi:meter-electric
     badges: []
     cards:
       - type: entities
-        title: Licznik sieci
+        title: Grid meter
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_grid_voltage_l1n
-          - sensor.hoymiles_hit_grid_voltage_l2n
-          - sensor.hoymiles_hit_grid_voltage_l3n
-          - sensor.hoymiles_hit_grid_current_l1n
-          - sensor.hoymiles_hit_grid_current_l2n
-          - sensor.hoymiles_hit_grid_current_l3n
-          - sensor.hoymiles_hit_meter_grid_frequency
-          - sensor.hoymiles_hit_meter_grid_active_power_l1
-          - sensor.hoymiles_hit_meter_grid_active_power_l2
-          - sensor.hoymiles_hit_meter_grid_active_power_l3
-          - sensor.hoymiles_hit_meter_grid_total_active_power
-          - sensor.hoymiles_hit_grid_reactive_power_l1n
-          - sensor.hoymiles_hit_grid_reactive_power_l2n
-          - sensor.hoymiles_hit_grid_reactive_power_l3n
-          - sensor.hoymiles_hit_grid_total_reactive_power
-          - sensor.hoymiles_hit_grid_power_factor
-          - sensor.hoymiles_hit_grid_power_factor_l1n
-          - sensor.hoymiles_hit_grid_power_factor_l2n
-          - sensor.hoymiles_hit_grid_power_factor_l3n
+          - entity: sensor.hoymiles_hit_grid_voltage_l1n
+            name: "Grid Voltage L1n"
+          - entity: sensor.hoymiles_hit_grid_voltage_l2n
+            name: "Grid Voltage L2n"
+          - entity: sensor.hoymiles_hit_grid_voltage_l3n
+            name: "Grid Voltage L3n"
+          - entity: sensor.hoymiles_hit_grid_current_l1n
+            name: "Grid Current L1n"
+          - entity: sensor.hoymiles_hit_grid_current_l2n
+            name: "Grid Current L2n"
+          - entity: sensor.hoymiles_hit_grid_current_l3n
+            name: "Grid Current L3n"
+          - entity: sensor.hoymiles_hit_meter_grid_frequency
+            name: "Meter Grid Frequency"
+          - entity: sensor.hoymiles_hit_meter_grid_active_power_l1
+            name: "Meter Grid Active Power L1"
+          - entity: sensor.hoymiles_hit_meter_grid_active_power_l2
+            name: "Meter Grid Active Power L2"
+          - entity: sensor.hoymiles_hit_meter_grid_active_power_l3
+            name: "Meter Grid Active Power L3"
+          - entity: sensor.hoymiles_hit_meter_grid_total_active_power
+            name: "Meter Grid Total Active Power"
+          - entity: sensor.hoymiles_hit_grid_reactive_power_l1n
+            name: "Grid Reactive Power L1n"
+          - entity: sensor.hoymiles_hit_grid_reactive_power_l2n
+            name: "Grid Reactive Power L2n"
+          - entity: sensor.hoymiles_hit_grid_reactive_power_l3n
+            name: "Grid Reactive Power L3n"
+          - entity: sensor.hoymiles_hit_grid_total_reactive_power
+            name: "Grid Total Reactive Power"
+          - entity: sensor.hoymiles_hit_grid_power_factor
+            name: "Grid Power Factor"
+          - entity: sensor.hoymiles_hit_grid_power_factor_l1n
+            name: "Grid Power Factor L1n"
+          - entity: sensor.hoymiles_hit_grid_power_factor_l2n
+            name: "Grid Power Factor L2n"
+          - entity: sensor.hoymiles_hit_grid_power_factor_l3n
+            name: "Grid Power Factor L3n"
       - type: entities
         title: External PV meter
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_pv_voltage_l1n
-          - sensor.hoymiles_hit_pv_voltage_l2n
-          - sensor.hoymiles_hit_pv_voltage_l3n
-          - sensor.hoymiles_hit_pv_current_l1n
-          - sensor.hoymiles_hit_pv_current_l2n
-          - sensor.hoymiles_hit_pv_current_l3n
-          - sensor.hoymiles_hit_pv_frequency
-          - sensor.hoymiles_hit_pv_active_power_l1n
-          - sensor.hoymiles_hit_pv_active_power_l2n
-          - sensor.hoymiles_hit_pv_active_power_l3n
-          - sensor.hoymiles_hit_pv_total_active_power
-          - sensor.hoymiles_hit_pv_reactive_power_l1n
-          - sensor.hoymiles_hit_pv_reactive_power_l2n
-          - sensor.hoymiles_hit_pv_reactive_power_l3n
-          - sensor.hoymiles_hit_pv_total_reactive_power
-          - sensor.hoymiles_hit_pv_power_factor
-          - sensor.hoymiles_hit_pv_power_factor_l1n
-          - sensor.hoymiles_hit_pv_power_factor_l2n
-          - sensor.hoymiles_hit_pv_power_factor_l3n
-  - title: Sterowanie
+          - entity: sensor.hoymiles_hit_pv_voltage_l1n
+            name: "PV Voltage L1n"
+          - entity: sensor.hoymiles_hit_pv_voltage_l2n
+            name: "PV Voltage L2n"
+          - entity: sensor.hoymiles_hit_pv_voltage_l3n
+            name: "PV Voltage L3n"
+          - entity: sensor.hoymiles_hit_pv_current_l1n
+            name: "PV Current L1n"
+          - entity: sensor.hoymiles_hit_pv_current_l2n
+            name: "PV Current L2n"
+          - entity: sensor.hoymiles_hit_pv_current_l3n
+            name: "PV Current L3n"
+          - entity: sensor.hoymiles_hit_pv_frequency
+            name: "PV Frequency"
+          - entity: sensor.hoymiles_hit_pv_active_power_l1n
+            name: "PV Active Power L1n"
+          - entity: sensor.hoymiles_hit_pv_active_power_l2n
+            name: "PV Active Power L2n"
+          - entity: sensor.hoymiles_hit_pv_active_power_l3n
+            name: "PV Active Power L3n"
+          - entity: sensor.hoymiles_hit_pv_total_active_power
+            name: "PV Total Active Power"
+          - entity: sensor.hoymiles_hit_pv_reactive_power_l1n
+            name: "PV Reactive Power L1n"
+          - entity: sensor.hoymiles_hit_pv_reactive_power_l2n
+            name: "PV Reactive Power L2n"
+          - entity: sensor.hoymiles_hit_pv_reactive_power_l3n
+            name: "PV Reactive Power L3n"
+          - entity: sensor.hoymiles_hit_pv_total_reactive_power
+            name: "PV Total Reactive Power"
+          - entity: sensor.hoymiles_hit_pv_power_factor
+            name: "PV Power Factor"
+          - entity: sensor.hoymiles_hit_pv_power_factor_l1n
+            name: "PV Power Factor L1n"
+          - entity: sensor.hoymiles_hit_pv_power_factor_l2n
+            name: "PV Power Factor L2n"
+          - entity: sensor.hoymiles_hit_pv_power_factor_l3n
+            name: "PV Power Factor L3n"
+  - title: Control
     path: control
     icon: mdi:tune-variant
+    type: sidebar
     badges: []
     cards:
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: EMS — safe full-block write 4300–4306
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: select.hoymiles_hit_ems_mode
+                name: "EMS mode"
+              - entity: number.hoymiles_hit_self_use_soc
+                name: "Self-Use SOC"
+              - entity: number.hoymiles_hit_force_charge_soc
+                name: "Force Charge SOC"
+              - entity: number.hoymiles_hit_maximum_charge_power
+                name: "Maximum Charge Power"
+              - entity: number.hoymiles_hit_force_discharge_soc
+                name: "Force Discharge SOC"
+              - entity: number.hoymiles_hit_maximum_discharge_power
+                name: "Maximum Discharge Power"
+          - type: entities
+            title: Inverter and battery settings
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: select.hoymiles_hit_three_phase_unbalance
+                name: "Three Phase Unbalance"
+              - entity: select.hoymiles_hit_eps_mode
+                name: "EPS Mode"
+              - entity: select.hoymiles_hit_pv_island_mode
+                name: "PV Island Mode"
+              - entity: select.hoymiles_hit_battery_type_setting
+                name: "Battery Type Setting"
+              - entity: select.hoymiles_hit_bms_type_setting
+                name: "BMS Type Setting"
+              - entity: number.hoymiles_hit_grid_input_power_limitation_valley
+                name: "Grid Input Power Limitation (Valley)"
+              - entity: number.hoymiles_hit_battery_max_charge_power
+                name: "Battery Max Charge Power"
+              - entity: number.hoymiles_hit_battery_max_discharge_power
+                name: "Battery Max Discharge Power"
+              - entity: number.hoymiles_hit_maximum_soc
+                name: "Maximum SOC"
+              - entity: number.hoymiles_hit_minimum_soc
+                name: "Minimum SOC"
+              - entity: number.hoymiles_hit_low_soc_grid_charge_power
+                name: "Low SOC Grid Charge Power"
+              - entity: number.hoymiles_hit_soc_start_charge_from_grid
+                name: "SOC Start Charge From Grid"
       - type: entities
-        title: EMS — safe full-block write 4300–4306
+        title: Control systemem
         show_header_toggle: false
         state_color: true
+        view_layout:
+          position: sidebar
         entities:
-          - select.hoymiles_hit_ems_mode
-          - number.hoymiles_hit_self_use_soc
-          - number.hoymiles_hit_force_charge_soc
-          - number.hoymiles_hit_maximum_charge_power
-          - number.hoymiles_hit_force_discharge_soc
-          - number.hoymiles_hit_maximum_discharge_power
-      - type: entities
-        title: Ustawienia falownika i baterii
-        show_header_toggle: false
-        state_color: true
-        entities:
-          - select.hoymiles_hit_three_phase_unbalance
-          - select.hoymiles_hit_eps_mode
-          - select.hoymiles_hit_pv_island_mode
-          - select.hoymiles_hit_battery_type_setting
-          - select.hoymiles_hit_bms_type_setting
-          - number.hoymiles_hit_grid_input_power_limitation_valley
-          - number.hoymiles_hit_battery_max_charge_power
-          - number.hoymiles_hit_battery_max_discharge_power
-          - number.hoymiles_hit_maximum_soc
-          - number.hoymiles_hit_minimum_soc
-          - number.hoymiles_hit_low_soc_grid_charge_power
-          - number.hoymiles_hit_soc_start_charge_from_grid
-      - type: entities
-        title: Sterowanie systemem
-        show_header_toggle: false
-        state_color: true
-        entities:
-          - select.hoymiles_hit_system_operation
+          - entity: select.hoymiles_hit_system_operation
+            name: "System Operation"
       - type: markdown
+        view_layout:
+          position: sidebar
         content: >-
           **Warning:** changing `System Operation` can stop the inverter.
           The `select.hoymiles_hit_parallel_networking_command` entity is intentionally omitted,
@@ -788,27 +1059,83 @@ views:
     badges: []
     cards:
       - type: entities
-        title: Stany komunikacji, pracy i alarmy
+        title: Communication and operating states
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_inverter_work_status
-          - sensor.hoymiles_hit_sw_fault
-          - sensor.hoymiles_hit_hw_fault
-          - sensor.hoymiles_hit_meter_link_status
-          - sensor.hoymiles_hit_pv_link_status
-          - sensor.hoymiles_hit_battery_type_bms
-          - sensor.hoymiles_hit_battery_link_status
-          - sensor.hoymiles_hit_battery_work_status_bms
-          - sensor.hoymiles_hit_overview_system_work_status
-          - sensor.hoymiles_hit_overview_battery_work_status
-          - sensor.hoymiles_hit_battery_fault_code_bms
-          - sensor.hoymiles_hit_overview_battery_faults
-          - sensor.hoymiles_hit_overview_dsp_power_faults
-          - sensor.hoymiles_hit_dsp_safety_faults
-          - sensor.hoymiles_hit_arm_communication_faults
-          - sensor.hoymiles_hit_arm_peripheral_faults
-          - sensor.hoymiles_hit_arm_system_faults
+          - entity: sensor.hoymiles_hit_inverter_work_status
+            name: "Inverter Work Status"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_system_work_status
+            name: System operating state
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_meter_link_status
+            name: Meter link
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_pv_link_status
+            name: PV link
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_type_bms
+            name: "Battery Type (BMS)"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_link_status
+            name: Battery link
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_work_status_bms
+            name: "Battery Work Status (BMS)"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_battery_work_status
+            name: Battery operating state
+            tap_action:
+              action: more-info
+      - type: entities
+        title: Inverter and battery alarms
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_hit_sw_fault
+            name: "SW Fault"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_hw_fault
+            name: "HW Fault"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_battery_fault_code_bms
+            name: Battery fault (BMS)
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_battery_faults
+            name: Battery faults
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_overview_dsp_power_faults
+            name: DSP power faults
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_dsp_safety_faults
+            name: "DSP Safety Faults"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_arm_communication_faults
+            name: "ARM Communication Faults"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_arm_peripheral_faults
+            name: "ARM Peripheral Faults"
+            tap_action:
+              action: more-info
+          - entity: sensor.hoymiles_hit_arm_system_faults
+            name: "ARM System Faults"
+            tap_action:
+              action: more-info
   - title: Diagnostyka
     path: diagnostyka
     icon: mdi:tools
@@ -819,31 +1146,41 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_overview_pv_total_power
-          - sensor.hoymiles_hit_overview_internal_pv_total_power
-          - sensor.hoymiles_hit_overview_external_pv_total_power
-          - sensor.hoymiles_hit_overview_inverter_active_power
-          - sensor.hoymiles_hit_overview_battery_power
-          - sensor.hoymiles_hit_overview_grid_total_active_power
-          - sensor.hoymiles_hit_overview_generator_active_power
-          - sensor.hoymiles_hit_overview_load_active_power
-          - sensor.hoymiles_hit_overview_smart_load_active_power
-          - sensor.hoymiles_hit_overview_battery_soc
+          - entity: sensor.hoymiles_hit_overview_pv_total_power
+            name: "Overview PV Total Power"
+          - entity: sensor.hoymiles_hit_overview_internal_pv_total_power
+            name: "Overview Internal PV Total Power"
+          - entity: sensor.hoymiles_hit_overview_external_pv_total_power
+            name: "Overview External PV Total Power"
+          - entity: sensor.hoymiles_hit_overview_inverter_active_power
+            name: "Overview Inverter Active Power"
+          - entity: sensor.hoymiles_hit_overview_battery_power
+            name: "Overview Battery Power"
+          - entity: sensor.hoymiles_hit_overview_grid_total_active_power
+            name: "Overview Grid Total Active Power"
+          - entity: sensor.hoymiles_hit_overview_generator_active_power
+            name: "Overview Generator Active Power"
+          - entity: sensor.hoymiles_hit_overview_load_active_power
+            name: "Overview Load Active Power"
+          - entity: sensor.hoymiles_hit_overview_smart_load_active_power
+            name: "Overview Smart Load Active Power"
+          - entity: sensor.hoymiles_hit_overview_battery_soc
+            name: "Overview Battery SOC"
       - type: entities
         title: Protection parameters and temperatures
         show_header_toggle: false
         state_color: true
         entities:
           - entity: sensor.hoymiles_hit_inv_ths_temp
-            name: Temperatura radiatora falownika
+            name: Inverter heatsink temperature
           - entity: sensor.hoymiles_hit_bat_ths_temp
-            name: Temperatura radiatora toru baterii
+            name: Battery-stage heatsink temperature
           - entity: sensor.hoymiles_hit_cav_temp
             name: Inverter internal temperature (CAV)
           - entity: sensor.hoymiles_hit_pe_voltage
             name: PP voltage
           - entity: sensor.hoymiles_hit_iso_resistor
-            name: Rezystancja izolacji
+            name: Insulation resistance
           - entity: sensor.hoymiles_hit_residual_current
             name: Residual current
       - type: entities
@@ -851,30 +1188,47 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_esp_uptime
+          - entity: sensor.hoymiles_hit_esp_uptime
+            name: "ESP Uptime"
       - type: entities
         title: Wi-Fi
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_esp_wifi_signal
-          - sensor.hoymiles_hit_esp_ip_address
-          - sensor.hoymiles_hit_esp_wifi_ssid
-          - sensor.hoymiles_hit_esp_mac_address
+          - entity: sensor.hoymiles_hit_esp_wifi_signal
+            name: "ESP WiFi Signal"
+          - entity: sensor.hoymiles_hit_esp_ip_address
+            name: "ESP IP Address"
+          - entity: sensor.hoymiles_hit_esp_wifi_ssid
+            name: "ESP WiFi SSID"
+          - entity: sensor.hoymiles_hit_esp_mac_address
+            name: "ESP Mac Address"
       - type: entities
         title: Parallel inverter network
         show_header_toggle: false
         state_color: true
         entities:
-          - sensor.hoymiles_hit_machines_type
-          - sensor.hoymiles_hit_number_of_machines_master_and_slave
-          - sensor.hoymiles_hit_communication_address_1_master_device
-          - sensor.hoymiles_hit_communication_address_2_slave_device_1
-          - sensor.hoymiles_hit_communication_address_3_slave_device_2
-          - sensor.hoymiles_hit_communication_address_4_slave_device_3
-          - sensor.hoymiles_hit_communication_address_5_slave_device_4
-          - sensor.hoymiles_hit_communication_address_6_slave_device_5
-          - sensor.hoymiles_hit_communication_address_7_slave_device_6
-          - sensor.hoymiles_hit_communication_address_8_slave_device_7
-          - sensor.hoymiles_hit_communication_address_9_slave_device_8
-          - sensor.hoymiles_hit_communication_address_10_slave_device_9
+          - entity: sensor.hoymiles_hit_machines_type
+            name: "Machines Type"
+          - entity: sensor.hoymiles_hit_number_of_machines_master_and_slave
+            name: "Number of Machines (Master and Slave)"
+          - entity: sensor.hoymiles_hit_communication_address_1_master_device
+            name: "Communication Address 1 (Master Device)"
+          - entity: sensor.hoymiles_hit_communication_address_2_slave_device_1
+            name: "Communication Address 2 (Slave Device 1)"
+          - entity: sensor.hoymiles_hit_communication_address_3_slave_device_2
+            name: "Communication Address 3 (Slave Device 2)"
+          - entity: sensor.hoymiles_hit_communication_address_4_slave_device_3
+            name: "Communication Address 4 (Slave Device 3)"
+          - entity: sensor.hoymiles_hit_communication_address_5_slave_device_4
+            name: "Communication Address 5 (Slave Device 4)"
+          - entity: sensor.hoymiles_hit_communication_address_6_slave_device_5
+            name: "Communication Address 6 (Slave Device 5)"
+          - entity: sensor.hoymiles_hit_communication_address_7_slave_device_6
+            name: "Communication Address 7 (Slave Device 6)"
+          - entity: sensor.hoymiles_hit_communication_address_8_slave_device_7
+            name: "Communication Address 8 (Slave Device 7)"
+          - entity: sensor.hoymiles_hit_communication_address_9_slave_device_8
+            name: "Communication Address 9 (Slave Device 8)"
+          - entity: sensor.hoymiles_hit_communication_address_10_slave_device_9
+            name: "Communication Address 10 (Slave Device 9)"
