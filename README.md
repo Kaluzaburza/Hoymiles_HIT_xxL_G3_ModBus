@@ -5,7 +5,7 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
 
-Version **1.0.2** is the current public release. It contains:
+Version **1.1.0** is the current public release. It contains:
 
 - 273 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -13,6 +13,8 @@ Version **1.0.2** is the current public release. It contains:
 - safe atomic EMS writes for registers 4300–4306;
 - daily grid charge/discharge schedules;
 - PSE RCE price-based discharge automation with an export lockout window;
+- optional Solcast- and LOAD-based dynamic SOC reserve with protected
+  night-time home demand;
 - a ready-to-import Home Assistant dashboard and RCE chart card;
 - English and Polish entity names, select options, config flow and services.
 
@@ -150,11 +152,17 @@ Home Assistant.
 Add the dashboard resource:
 
 ```text
-/local/hoymiles-rce-chart-card.js?v=1.0.2
+/local/hoymiles-rce-chart-card.js?v=1.1.0
 ```
 
 with resource type **JavaScript module**, then import
 `/config/dashboard_hoymiles.yaml` in the raw dashboard editor.
+
+Updating the integration in HACS does not rewrite a dashboard previously pasted
+into Home Assistant's storage-mode raw editor. After an update that changes
+entity references, reinstall the bundled assets and import the dashboard file
+again. The installer migrates legacy device-name-dependent IDs in the file and
+keeps a `.pre-stable-entity-ids.bak` backup before changing it.
 
 To reinstall the bundled assets later, call:
 
@@ -179,10 +187,27 @@ The provided EMS automation supports:
 - daily start time and duration;
 - charge/discharge power and SOC limits;
 - PSE RCE prices in 30-minute control blocks;
+- an optional dynamic RCE minimum SOC calculated from the BJReplay Solcast
+  `Forecast Tomorrow` sensor, the trailing four-day LOAD average, inverter
+  battery capacity, the Self-Use outage reserve, the remaining home demand
+  between 90 minutes before sunset and 90 minutes after sunrise, and a user
+  safety correction;
 - a configurable export lockout window, including ranges across midnight.
 
 Manual schedules take priority over RCE automation. The export lockout always
 returns the inverter to Self-Use and blocks manual, scheduled and RCE export.
+Dynamic SOC control fails safe: missing Solcast, LOAD history, sun data or
+battery capacity data blocks automatic RCE export. Install and configure
+[BJReplay Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar)
+before enabling this option. The package automatically detects both the
+English `sensor.solcast_pv_forecast_forecast_tomorrow` and Polish
+`sensor.solcast_pv_forecast_prognoza_na_jutro` entity IDs.
+
+During the protected night window, the reserve decreases with the remaining
+time until 90 minutes after sunrise. After the first complete day, the estimate
+uses the measured average consumption from up to four previous protected
+windows; before that, it falls back to a proportional share of the four-day
+daily LOAD average.
 
 ## Repository structure
 
@@ -219,9 +244,10 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.0.2** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.1.0** udostępnia
 273 encje, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
-automatykę cenową RCE PSE, blokadę sprzedaży oraz gotowy dashboard.
+automatykę cenową RCE PSE, dynamiczną rezerwę SOC na podstawie Solcast i LOAD,
+ochronę nocnego zapotrzebowania domu, blokadę sprzedaży oraz gotowy dashboard.
 
 ### Podłączenie ESP32 i konwertera RS485
 
@@ -275,6 +301,13 @@ modbus:
 4. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz urządzenie ESPHome.
 5. Włącz pakiety Home Assistanta, dodaj zasób karty JavaScript i zaimportuj
    skopiowany dashboard zgodnie z instrukcją powyżej.
+
+Aktualizacja integracji w HACS nie nadpisuje dashboardu wklejonego wcześniej do
+surowego edytora działającego w trybie pamięci masowej. Po wydaniu zmieniającym
+identyfikatory encji trzeba ponownie zainstalować zasoby i jeszcze raz
+zaimportować `/config/dashboard_hoymiles.yaml`. Instalator zamienia stare
+identyfikatory zależne od nazwy urządzenia i przed zmianą tworzy kopię
+`.pre-stable-entity-ids.bak`.
 
 Nazwy encji i opcje wyboru są tłumaczone automatycznie na polski lub angielski
 zależnie od języka Home Assistanta. Pierwsze tłumaczenia są celowo opisowe i

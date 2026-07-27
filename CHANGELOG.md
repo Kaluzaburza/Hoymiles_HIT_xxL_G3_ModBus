@@ -2,6 +2,84 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.0] - 2026-07-27
+
+### Added
+
+- Added an optional dynamic RCE minimum-SOC model using the BJReplay Solcast
+  forecast for tomorrow, the inverter battery capacity and the trailing
+  four-day LOAD average.
+- Added a protected home-energy calculation for the period from 90 minutes
+  before sunset until 90 minutes after sunrise.
+- Added protected-window consumption history. After the first complete window,
+  the reserve uses the measured average from up to four previous nights.
+- Added an adjustable positive SOC safety correction for forecast uncertainty.
+- Added dashboard controls and diagnostics for the Solcast source, forecast,
+  LOAD averages, protected night window, calculated energy reserve and
+  effective minimum SOC.
+- Added automatic detection of Polish and English BJReplay Solcast
+  `Forecast Tomorrow` entity IDs, with a configurable entity override.
+- Added safe legacy-ID migration for installed dashboard and EMS package files.
+  A `.pre-stable-entity-ids.bak` copy is created before the first migration.
+
+### Changed
+
+- RCE export now protects the greater of the remaining night-time home demand
+  and the next-day PV energy deficit, in addition to the Self-Use outage
+  reserve and the user safety correction.
+- The protected night reserve decreases as the installation approaches
+  90 minutes after sunrise, allowing only energy not required by the home to
+  be exported.
+- Distributed Polish and English dashboards and EMS packages now use only
+  stable `hoymiles_hit_*` proxy IDs, independent of the ESPHome device name.
+- The source dashboard and source EMS package use the same stable IDs as the
+  generated HACS assets.
+- Updated the public ESPHome package reference and integration metadata to
+  `v1.1.0`.
+
+### Fixed
+
+- Fixed missing entities across Start, PV, LOAD/EPS, Battery, Grid, Flows,
+  Inverter, Generator, Meters and Diagnostics after updating an installation
+  whose ESPHome entity IDs used a device-name prefix.
+- Prevented future releases from containing device-name-dependent dashboard
+  IDs or stable IDs missing from the generated entity catalog.
+- Documented that a dashboard pasted into Home Assistant storage mode must be
+  imported again after an asset update because HACS cannot rewrite its stored
+  Lovelace configuration.
+
+### Safety
+
+- Dynamic RCE export fails safe when the Solcast forecast, LOAD history,
+  battery capacity, sun data or calculated reserve is unavailable.
+- Manual EMS schedules retain priority over RCE automation.
+- The export lockout window and minimum-SOC checks remain authoritative.
+
+### Validation
+
+- Rebuilt 273 localized entities and all Polish/English HACS assets.
+- Added tests for fresh installs, legacy dashboard and EMS migration, exact
+  backups, idempotence, stable catalog references and dynamic reserve markers.
+- Validated the source and generated YAML assets and Python syntax.
+
+### Polski
+
+- Dodano dynamiczną rezerwę SOC dla automatyki RCE, obliczaną z prognozy
+  Solcast BJReplay na jutro, średniego zużycia LOAD z czterech dni, pojemności
+  magazynu, rezerwy awaryjnej Self-Use i korekty bezpieczeństwa użytkownika.
+- Dodano ochronę energii potrzebnej domowi od 90 minut przed zachodem do
+  90 minut po wschodzie słońca oraz średnią z maksymalnie czterech poprzednich
+  chronionych okien nocnych.
+- Sprzedaż RCE jest blokowana przy brakujących lub nieprawidłowych danych.
+- Dashboard i pakiet EMS używają wyłącznie stabilnych identyfikatorów
+  `hoymiles_hit_*`, niezależnych od nazwy urządzenia ESPHome.
+- Naprawiono braki encji występujące po aktualizacji 1.0.2 we wszystkich
+  zakładkach dashboardu.
+- Instalator migruje stare identyfikatory w plikach dashboardu i EMS, zachowując
+  przed zmianą kopię `.pre-stable-entity-ids.bak`.
+- Rozszerzono walidację nowych instalacji, migracji, tłumaczeń PL/EN i pełnej
+  zgodności dashboardu z katalogiem encji.
+
 ## [1.0.2] - 2026-07-27
 
 ### Added
