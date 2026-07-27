@@ -59,19 +59,21 @@ def load_assets_module():
 
 
 def validate_fresh_asset_install() -> None:
-    """Exercise the PL/EN asset-copy path used by a fresh HACS setup."""
+    """Exercise fresh installation and the legacy-dashboard migration path."""
     assets = load_assets_module()
     with tempfile.TemporaryDirectory(prefix="hoymiles_hacs_install_") as tmp:
         config_path = Path(tmp)
+        dashboard_path = config_path / "dashboard_hoymiles.yaml"
+        package_path = (
+            config_path / "packages" / "hoymiles_ems_scheduler.yaml"
+        )
         polish_written = assets._copy_assets(config_path, "pl-PL", False)
         require(
             len(polish_written) == 3,
             "Fresh Polish installation did not copy all three assets",
         )
         require(
-            (config_path / "dashboard_hoymiles.yaml").read_text(
-                encoding="utf-8"
-            )
+            dashboard_path.read_text(encoding="utf-8")
             == (RESOURCES / "dashboard_hoymiles_pl.yaml").read_text(
                 encoding="utf-8"
             ),
@@ -80,6 +82,64 @@ def validate_fresh_asset_install() -> None:
         require(
             assets._copy_assets(config_path, "pl-PL", False) == [],
             "Asset installer overwrites user files without explicit permission",
+        )
+
+        legacy_dashboard = """\
+title: Custom user dashboard
+entities:
+  - sensor.hoymiles_inverter_pv1_voltage
+  - sensor.pv_hoymiles_inverter_pv1_current
+  - sensor.unrelated_user_entity
+"""
+        dashboard_path.write_text(legacy_dashboard, encoding="utf-8")
+        legacy_package = """\
+script:
+  custom_user_script:
+    sequence:
+      - action: select.select_option
+        target:
+          entity_id: select.pv_hoymiles_inverter_tryb_ems
+"""
+        package_path.write_text(legacy_package, encoding="utf-8")
+        migrated = assets._copy_assets(config_path, "pl-PL", False)
+        require(
+            migrated == [dashboard_path, package_path],
+            "Existing legacy assets were not migrated in place",
+        )
+        migrated_text = dashboard_path.read_text(encoding="utf-8")
+        require(
+            "sensor.hoymiles_hit_pv1_voltage" in migrated_text
+            and "sensor.hoymiles_hit_pv1_current" in migrated_text,
+            "Legacy dashboard ids were not replaced with stable proxy ids",
+        )
+        require(
+            "title: Custom user dashboard" in migrated_text
+            and "sensor.unrelated_user_entity" in migrated_text,
+            "Legacy migration did not preserve user dashboard content",
+        )
+        backup_path = dashboard_path.with_name(
+            f"{dashboard_path.name}{assets.LEGACY_ENTITY_BACKUP_SUFFIX}"
+        )
+        require(
+            backup_path.read_text(encoding="utf-8") == legacy_dashboard,
+            "Legacy dashboard migration did not create an exact backup",
+        )
+        migrated_package = package_path.read_text(encoding="utf-8")
+        require(
+            "select.hoymiles_hit_ems_mode" in migrated_package
+            and "custom_user_script" in migrated_package,
+            "Legacy EMS package was not safely migrated",
+        )
+        package_backup = package_path.with_name(
+            f"{package_path.name}{assets.LEGACY_ENTITY_BACKUP_SUFFIX}"
+        )
+        require(
+            package_backup.read_text(encoding="utf-8") == legacy_package,
+            "Legacy EMS migration did not create an exact backup",
+        )
+        require(
+            assets._copy_assets(config_path, "pl-PL", False) == [],
+            "Stable dashboard migration is not idempotent",
         )
 
         english_written = assets._copy_assets(config_path, "en-GB", True)
@@ -145,7 +205,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.0.2", "Release version must be 1.0.2")
+    require(manifest["version"] == "1.1.0", "Release version must be 1.1.0")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -203,6 +263,69 @@ def main() -> int:
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
 
+    stable_entity_assets = [
+        ROOT / "dashboard_hoymiles.yaml",
+        ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml",
+        required_assets[0],
+        required_assets[1],
+        required_assets[2],
+        required_assets[3],
+    ]
+    stable_entity_pattern = re.compile(
+        r"\b(button|sensor|number|select)\.hoymiles_hit_([a-z0-9_]+)\b"
+    )
+    legacy_entity_pattern = re.compile(
+        r"\b(?:button|sensor|number|select)\."
+        r"[a-z0-9_]*hoymiles_inverter[a-z0-9_]*\b"
+    )
+    for asset_path in stable_entity_assets:
+        asset_text = asset_path.read_text(encoding="utf-8")
+        require(
+            not legacy_entity_pattern.search(asset_text),
+            "Installation-specific entity id remains in "
+            f"{asset_path.relative_to(ROOT)}",
+        )
+        for domain, translation_key in stable_entity_pattern.findall(
+            asset_text
+        ):
+            require(
+                (domain, translation_key) in identities,
+                f"Asset references an entity absent from the catalog: "
+                f"{domain}.hoymiles_hit_{translation_key}",
+            )
+
+    for package_path in required_assets[2:4]:
+        package_text = package_path.read_text(encoding="utf-8")
+        dynamic_reserve_markers = (
+            "input_boolean.hoymiles_rce_dynamic_soc_enabled",
+            "input_number.hoymiles_rce_soc_safety_margin",
+            "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+            "sensor.solcast_pv_forecast_forecast_tomorrow",
+            "sensor.solcast_pv_forecast_prognoza_na_jutro",
+            "state_characteristic: sum_differences_nonnegative",
+            "max_age:\n      days: 4",
+            "sensor.hoymiles_hit_load_energy_use_today",
+            "sensor.hoymiles_hit_overview_load_active_power",
+            "sensor.hoymiles_night_protected_load_power",
+            "sensor.hoymiles_night_protection_window_remaining",
+            "sensor.hoymiles_protected_window_expected_load",
+            "sensor.hoymiles_rce_protected_home_energy",
+            "state_attr('sun.sun', 'next_rising')",
+            "state_attr('sun.sun', 'next_setting')",
+            "reserve + (protected / capacity * 100) + margin",
+            "sensor.hoymiles_hit_battery_capacity",
+            "number.hoymiles_hit_self_use_soc",
+            "sensor.hoymiles_rce_dynamic_minimum_soc",
+            "sensor.hoymiles_rce_effective_minimum_soc",
+            "binary_sensor.hoymiles_rce_reserve_ready",
+            "or is_state('binary_sensor.hoymiles_rce_reserve_ready', 'off')",
+        )
+        for marker in dynamic_reserve_markers:
+            require(
+                marker in package_text,
+                f"Dynamic RCE reserve marker missing in {package_path.name}: {marker}",
+            )
+
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     readme_images = [
         ROOT / "docs" / "images" / "dashboard-energy-flow.png",
@@ -251,10 +374,7 @@ def main() -> int:
     for asset in required_assets[:4]:
         text = asset.read_text(encoding="utf-8")
         require(
-            not re.search(
-                r"\b(?:button|sensor|number|select)\.[a-z0-9_]*hoymiles_inverter[a-z0-9_]*\b",
-                text,
-            ),
+            not legacy_entity_pattern.search(text),
             f"Installation-specific entity id remains in {asset.name}",
         )
         require(
@@ -353,6 +473,31 @@ def main() -> int:
             in dashboard_text,
             f"{language} control view is not using the sidebar layout",
         )
+        for entity_id in (
+            "input_boolean.hoymiles_rce_dynamic_soc_enabled",
+            "input_number.hoymiles_rce_soc_safety_margin",
+            "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+            "sensor.hoymiles_solcast_forecast_tomorrow",
+            "sensor.hoymiles_load_average_4_days",
+            "binary_sensor.hoymiles_night_protection_window",
+            "sensor.hoymiles_night_protection_window_duration",
+            "sensor.hoymiles_night_protection_window_remaining",
+            "sensor.hoymiles_night_load_average_4_days",
+            "sensor.hoymiles_protected_window_expected_load",
+            "sensor.hoymiles_rce_energy_deficit_tomorrow",
+            "sensor.hoymiles_rce_protected_home_energy",
+            "sensor.hoymiles_rce_dynamic_minimum_soc",
+            "sensor.hoymiles_rce_effective_minimum_soc",
+            "binary_sensor.hoymiles_rce_reserve_ready",
+        ):
+            require(
+                entity_id in dashboard_text,
+                f"{language} dashboard lacks dynamic RCE entity {entity_id}",
+            )
+        require(
+            "https://github.com/BJReplay/ha-solcast-solar" in dashboard_text,
+            f"{language} dashboard does not document the Solcast dependency",
+        )
     require(
         "Wyczyść alarmy falownika" in polish_dashboard,
         "Polish dashboard lacks the localized Clear Fault name",
@@ -388,8 +533,12 @@ def main() -> int:
             for line in asset.read_text(encoding="utf-8").splitlines()
             if not line.lstrip().startswith("#")
         ]
+        visible_text = "\n".join(visible_lines).replace(
+            "sensor.solcast_pv_forecast_prognoza_na_jutro",
+            "sensor.solcast_pv_forecast_localized_tomorrow",
+        )
         require(
-            not polish_characters.search("\n".join(visible_lines)),
+            not polish_characters.search(visible_text),
             f"Visible Polish text remains in English asset {asset.name}",
         )
 

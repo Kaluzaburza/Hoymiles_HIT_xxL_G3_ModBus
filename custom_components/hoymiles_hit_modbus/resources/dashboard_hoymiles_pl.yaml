@@ -3,8 +3,8 @@
 # Wklej CAŁĄ zawartość do edytora surowej konfiguracji nowego dashboardu.
 # Animowany przepływ mocy używa zainstalowanej karty HACS
 # custom:sunsynk-power-flow-card. Pozostałe karty są standardowe.
-# Identyfikatory encji są zgodne z rzeczywistym rejestrem tej instancji HA.
-# Encje utworzone po zmianach nazw mają dodatkowy prefiks pv_hoymiles_inverter_.
+# Dashboard używa stabilnych identyfikatorów proxy tworzonych przez integrację
+# Hoymiles HIT xxL G3 Modbus. Nie zależą one od nazwy urządzenia ESPHome.
 # Karty harmonogramów EMS wymagają pakietu home_assistant/hoymiles_ems_scheduler.yaml.
 # Obejmuje wszystkie aktywne encje; pominięta jest tylko jedna encja oznaczona
 # w ESPHome jako disabled_by_default (opisana w zakładce Sterowanie).
@@ -285,8 +285,16 @@ views:
             name: Minimalna cena sprzedaży
           - entity: number.hoymiles_hit_maximum_discharge_power
             name: Moc rozładowania do sieci
+          - type: section
+            label: Dynamiczna rezerwa SOC
+          - entity: input_boolean.hoymiles_rce_dynamic_soc_enabled
+            name: Automatycznie wyliczaj minimalny SOC
+          - entity: input_number.hoymiles_rce_soc_safety_margin
+            name: Korekta bezpieczeństwa SOC (+)
+          - entity: sensor.hoymiles_rce_effective_minimum_soc
+            name: Obowiązujący minimalny SOC
           - entity: number.hoymiles_hit_force_discharge_soc
-            name: Minimalny SOC akumulatora
+            name: Próg zapisany do falownika
           - type: section
             label: Blokada sprzedaży
           - entity: input_boolean.hoymiles_sale_block_enabled
@@ -301,6 +309,41 @@ views:
             name: Bieżąca cena RCE
           - entity: sensor.hoymiles_rce_status
             name: Stan automatyki
+      - type: entities
+        title: Prognoza energii i rezerwa SOC
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_text.hoymiles_solcast_forecast_tomorrow_entity
+            name: Encja Solcast — prognoza na jutro
+          - entity: sensor.hoymiles_solcast_forecast_tomorrow
+            name: Prognozowana produkcja PV jutro
+          - entity: sensor.hoymiles_load_average_4_days
+            name: Średnie dobowe zużycie LOAD — 4 dni
+          - entity: binary_sensor.hoymiles_night_protection_window
+            name: Chronione okno nocne aktywne
+          - entity: sensor.hoymiles_night_protection_window_duration
+            name: Pełne okno nocne — zachód/wschód ± 1,5 h
+          - entity: sensor.hoymiles_night_protection_window_remaining
+            name: Pozostało do końca chronionego okna
+          - entity: sensor.hoymiles_night_load_average_4_days
+            name: Średnie zużycie w oknie nocnym — 4 dni
+          - entity: sensor.hoymiles_protected_window_expected_load
+            name: Energia potrzebna do rozpoczęcia produkcji PV
+          - entity: sensor.hoymiles_rce_energy_deficit_tomorrow
+            name: Deficyt dobowy według prognozy PV
+          - entity: sensor.hoymiles_rce_protected_home_energy
+            name: Energia domu chroniona przed sprzedażą
+          - entity: sensor.hoymiles_hit_battery_capacity
+            name: Pojemność magazynu z falownika
+          - entity: number.hoymiles_hit_self_use_soc
+            name: Rezerwa awaryjna SOC — zanik sieci
+          - entity: sensor.hoymiles_rce_dynamic_minimum_soc
+            name: Wyliczony minimalny SOC dla RCE
+          - entity: binary_sensor.hoymiles_rce_reserve_ready
+            name: Dane rezerwy kompletne
+          - entity: sensor.hoymiles_rce_reserve_status
+            name: Stan wyliczania rezerwy
       - type: vertical-stack
         cards:
           - type: custom:hoymiles-rce-chart-card
@@ -312,6 +355,43 @@ views:
             block_enabled_entity: input_boolean.hoymiles_sale_block_enabled
             block_start_entity: input_datetime.hoymiles_sale_block_start
             block_end_entity: input_datetime.hoymiles_sale_block_end
+      - type: markdown
+        title: Wymagane źródło prognozy
+        view_layout:
+          position: sidebar
+        entity_id:
+          - input_boolean.hoymiles_rce_dynamic_soc_enabled
+          - sensor.hoymiles_rce_reserve_status
+          - sensor.hoymiles_rce_dynamic_minimum_soc
+        content: |-
+          Dynamiczna rezerwa wymaga zewnętrznej integracji
+          **Solcast PV Forecast** producenta **BJReplay**:
+          [instalacja i konfiguracja](https://github.com/BJReplay/ha-solcast-solar).
+
+          Domyślna encja to
+          `sensor.solcast_pv_forecast_forecast_tomorrow` (HA po angielsku) albo
+          `sensor.solcast_pv_forecast_prognoza_na_jutro` (HA po polsku).
+          Jeśli w Twojej instalacji ma inną nazwę, wpisz ją w polu
+          **Encja Solcast**.
+
+          Wyliczenie:
+
+          **rezerwa awaryjna Self-Use + większa z wartości: pozostałe zużycie
+          domu do końca okna nocnego albo dobowy deficyt prognozy PV + korekta
+          bezpieczeństwa użytkownika**.
+
+          Okno nocne rozpoczyna się **90 minut przed zachodem** i kończy
+          **90 minut po wschodzie słońca**. W trakcie nocy chroniona energia
+          maleje wraz z pozostałym czasem, dzięki czemu automat może sprzedać
+          tylko tę część magazynu, która nie będzie potrzebna domowi do
+          rozpoczęcia produkcji PV.
+
+          Przez pierwszą dobę zużycie nocne jest szacowane z czterodniowej
+          średniej dobowej. Później automat korzysta z rzeczywistego zużycia
+          z maksymalnie czterech ostatnich chronionych okien. Korekta jest
+          dodawana w punktach procentowych. Przy brakujących danych Solcast,
+          LOAD, słońca lub pojemności magazynu sprzedaż RCE zostanie bezpiecznie
+          zablokowana.
       - type: markdown
         title: Plan rozładowań RCE
         entity_id:

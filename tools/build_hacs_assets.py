@@ -205,6 +205,103 @@ ENGLISH_REPLACEMENTS = {
     "Minimalna cena sprzedaży": "Minimum export price",
     "Moc rozładowania do sieci": "Grid discharge power",
     "Minimalny SOC akumulatora": "Minimum battery SOC",
+    "Dynamiczna rezerwa SOC": "Dynamic SOC reserve",
+    "Automatycznie wyliczaj minimalny SOC": "Automatically calculate minimum SOC",
+    "Korekta bezpieczeństwa SOC (+)": "SOC safety correction (+)",
+    "Obowiązujący minimalny SOC": "Effective minimum SOC",
+    "Próg zapisany do falownika": "Threshold written to the inverter",
+    "Prognoza energii i rezerwa SOC": "Energy forecast and SOC reserve",
+    "Encja Solcast — prognoza na jutro": "Solcast entity — tomorrow forecast",
+    "Prognozowana produkcja PV jutro": "Forecast PV production tomorrow",
+    "Średnie dobowe zużycie LOAD — 4 dni": "Average daily LOAD — 4 days",
+    "Chronione okno nocne aktywne": "Protected night window active",
+    "Pełne okno nocne — zachód/wschód ± 1,5 h": (
+        "Full night window — sunset/sunrise ± 1.5 h"
+    ),
+    "Pozostało do końca chronionego okna": "Protected window time remaining",
+    "Średnie zużycie w oknie nocnym — 4 dni": (
+        "Average protected-window consumption — 4 days"
+    ),
+    "Energia potrzebna do rozpoczęcia produkcji PV": (
+        "Energy required until PV production starts"
+    ),
+    "Przewidywany deficyt energii jutro": "Expected energy deficit tomorrow",
+    "Deficyt dobowy według prognozy PV": "Daily deficit from PV forecast",
+    "Energia domu chroniona przed sprzedażą": (
+        "Home energy protected from export"
+    ),
+    "Pojemność magazynu z falownika": "Battery capacity from inverter",
+    "Rezerwa awaryjna SOC — zanik sieci": "Outage SOC reserve",
+    "Wyliczony minimalny SOC dla RCE": "Calculated minimum SOC for RCE",
+    "Dane rezerwy kompletne": "Reserve data complete",
+    "Stan wyliczania rezerwy": "Reserve calculation status",
+    "Wymagane źródło prognozy": "Required forecast source",
+    "Dynamiczna rezerwa wymaga zewnętrznej integracji": (
+        "Dynamic reserve requires the external integration"
+    ),
+    "producenta **BJReplay**:": "by **BJReplay**:",
+    "instalacja i konfiguracja": "installation and configuration",
+    "Domyślna encja to": "The default entity is",
+    "(HA po angielsku) albo": "(English HA) or",
+    "(HA po polsku).": "(Polish HA).",
+    "instalacji ma inną nazwę, wpisz ją w polu": (
+        "installation uses a different name, enter it in the"
+    ),
+    "**Encja Solcast**.": "**Solcast entity** field.",
+    "instalacji ma inną nazwę, wpisz ją w polu **Encja Solcast**.": (
+        "installation uses a different name, enter it in the **Solcast entity** field."
+    ),
+    "Jeśli w Twojej": "If your",
+    "Wyliczenie:": "Calculation:",
+    "**rezerwa awaryjna Self-Use + deficyt LOAD względem prognozy PV +": (
+        "**Self-Use outage reserve + LOAD deficit against the PV forecast +"
+    ),
+    "**rezerwa awaryjna Self-Use + większa z wartości: pozostałe zużycie": (
+        "**Self-Use outage reserve + the greater of: remaining home demand"
+    ),
+    "domu do końca okna nocnego albo dobowy deficyt prognozy PV + korekta": (
+        "until the end of the night window or the daily PV forecast deficit +"
+    ),
+    "korekta bezpieczeństwa użytkownika**.": "user safety correction**.",
+    "bezpieczeństwa użytkownika**.": "user safety correction**.",
+    "Okno nocne rozpoczyna się **90 minut przed zachodem** i kończy": (
+        "The night window starts **90 minutes before sunset** and ends"
+    ),
+    "**90 minut po wschodzie słońca**. W trakcie nocy chroniona energia": (
+        "**90 minutes after sunrise**. During the night, protected energy"
+    ),
+    "maleje wraz z pozostałym czasem, dzięki czemu automat może sprzedać": (
+        "decreases with the remaining time, so the automation can export"
+    ),
+    "tylko tę część magazynu, która nie będzie potrzebna domowi do": (
+        "only the part of the battery that the home will not need before"
+    ),
+    "rozpoczęcia produkcji PV.": "PV production starts.",
+    "Przez pierwszą dobę zużycie nocne jest szacowane z czterodniowej": (
+        "For the first day, night consumption is estimated from the four-day"
+    ),
+    "średniej dobowej. Później automat korzysta z rzeczywistego zużycia": (
+        "daily average. Afterwards, the automation uses measured consumption"
+    ),
+    "z maksymalnie czterech ostatnich chronionych okien. Korekta jest": (
+        "from up to four previous protected windows. The correction is"
+    ),
+    "dodawana w punktach procentowych. Przy brakujących danych Solcast,": (
+        "added in percentage points. If Solcast, LOAD, sun, or battery"
+    ),
+    "LOAD, słońca lub pojemności magazynu sprzedaż RCE zostanie bezpiecznie": (
+        "capacity data is missing, RCE export is safely"
+    ),
+    "zablokowana.": "blocked.",
+    "Korekta jest dodawana w punktach procentowych. Przy brakujących": (
+        "The correction is added in percentage points. If Solcast data,"
+    ),
+    "danych Solcast, historii LOAD lub pojemności magazynu automatyczna": (
+        "LOAD history, or battery capacity is missing, automatic RCE"
+    ),
+    "sprzedaż RCE zostanie bezpiecznie zablokowana.": (
+        "export is safely blocked."
+    ),
     "Blokada sprzedaży": "Export lockout",
     "Włącz blokadę sprzedaży": "Enable export lockout",
     "Początek blokady": "Lockout start",
@@ -416,6 +513,94 @@ ENGLISH_REPLACEMENTS = {
     "EMS — czas rozładowania": "EMS — discharge duration",
     "EMS — czas ładowania": "EMS — charge duration",
     "EMS RCE — minimalna cena sprzedaży": "EMS RCE — minimum export price",
+    "EMS RCE — dynamiczna rezerwa SOC": "EMS RCE — dynamic SOC reserve",
+    "EMS RCE — encja prognozy Solcast na jutro": (
+        "EMS RCE — Solcast tomorrow forecast entity"
+    ),
+    "EMS RCE — korekta bezpieczeństwa SOC": (
+        "EMS RCE — SOC safety correction"
+    ),
+    "EMS RCE — ustaw domyślną encję Solcast": (
+        "EMS RCE — set default Solcast entity"
+    ),
+    "EMS RCE — zapisz dynamiczną rezerwę SOC": (
+        "EMS RCE — write dynamic SOC reserve"
+    ),
+    "Tryb ręczny — używany jest próg rozładowania falownika": (
+        "Manual mode — using the inverter discharge threshold"
+    ),
+    "Brak danych Solcast — sprzedaż zablokowana": (
+        "No Solcast data — export blocked"
+    ),
+    "Za mało historii LOAD — wymagane minimum 24 godziny": (
+        "Insufficient LOAD history — at least 24 hours required"
+    ),
+    "Brak danych wschodu lub zachodu słońca — sprzedaż zablokowana": (
+        "Missing sunrise or sunset data — export blocked"
+    ),
+    "Brak pojemności baterii z falownika — sprzedaż zablokowana": (
+        "No inverter battery capacity — export blocked"
+    ),
+    "Nie można obliczyć rezerwy — sprzedaż zablokowana": (
+        "Cannot calculate reserve — export blocked"
+    ),
+    "Gotowa — dynamiczny próg": "Ready — dynamic threshold",
+    "Brak danych rezerwy SOC — sprzedaż zablokowana": (
+        "No SOC reserve data — export blocked"
+    ),
+    "Przy pierwszym uruchomieniu wpisuje standardową encję Forecast Tomorrow": (
+        "On first start, sets the standard Forecast Tomorrow entity"
+    ),
+    "integracji Solcast PV Forecast producenta BJReplay. Późniejsze zmiany": (
+        "from the BJReplay Solcast PV Forecast integration. Later changes"
+    ),
+    "użytkownika są zachowywane.": "made by the user are preserved.",
+    "Wykrywa angielską albo polską encję Forecast Tomorrow integracji Solcast": (
+        "Detects the English or Polish Forecast Tomorrow entity from the Solcast"
+    ),
+    "PV Forecast producenta BJReplay. Poprawna własna encja użytkownika jest": (
+        "PV Forecast integration by BJReplay. A valid custom entity entered by the user is"
+    ),
+    "zachowywana.": "preserved.",
+    "Zapisuje do falownika wyliczony minimalny SOC rozładowania. Próg obejmuje": (
+        "Writes the calculated minimum discharge SOC to the inverter. The threshold includes"
+    ),
+    "rezerwę awaryjną Self-Use, energię domu chronioną w nocnym oknie,": (
+        "the Self-Use outage reserve, home energy protected in the night window,"
+    ),
+    "prognozowany deficyt energii i korektę bezpieczeństwa użytkownika.": (
+        "the forecast energy deficit, and the user's safety correction."
+    ),
+    "rezerwę awaryjną Self-Use, prognozowany deficyt energii i korektę": (
+        "the Self-Use outage reserve, forecast energy deficit, and the user's"
+    ),
+    "bezpieczeństwa użytkownika.": "safety correction.",
+    "Rozładowuje tylko powyżej progu i dynamicznej rezerwy SOC. Rezerwa": (
+        "Discharges only above the price threshold and dynamic SOC reserve. The reserve"
+    ),
+    "obejmuje awaryjny SOC Self-Use, deficyt prognozy Solcast względem średniego": (
+        "includes the Self-Use outage SOC, the Solcast forecast deficit against average"
+    ),
+    "obejmuje awaryjny SOC Self-Use, pozostałe zużycie domu w chronionym oknie": (
+        "includes the Self-Use outage SOC, remaining home demand in the protected"
+    ),
+    "nocnym, deficyt prognozy Solcast oraz korektę bezpieczeństwa. Ręczne": (
+        "night window, the Solcast forecast deficit, and the safety correction. Manual"
+    ),
+    "timery mają pierwszeństwo.": "timers take priority.",
+    "LOAD oraz korektę bezpieczeństwa. Ręczne timery mają pierwszeństwo.": (
+        "LOAD, and the safety correction. Manual timers take priority."
+    ),
+    "Licznik dzienny LOAD zwiększa się w ciągu dnia i zeruje po północy.": (
+        "The daily LOAD meter increases during the day and resets at midnight."
+    ),
+    "sum_differences_nonnegative sumuje wyłącznie dodatnie przyrosty z ostatnich": (
+        "sum_differences_nonnegative sums only positive increments from the last"
+    ),
+    "96 godzin, uwzględniając reset licznika. Recorder odtwarza bufor po restarcie.": (
+        "96 hours, accounting for the reset. Recorder restores the buffer after restart."
+    ),
+    "'brak'": "'none'",
     "EMS — pozostały czas rozładowania": "EMS — discharge time remaining",
     "EMS — pozostały czas ładowania": "EMS — charge time remaining",
     "Przełącza EMS na rozładowanie poza godzinami blokady sprzedaży i uruchamia timer.": (
