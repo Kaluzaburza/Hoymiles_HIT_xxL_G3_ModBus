@@ -5,9 +5,9 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
 
-Version **1.0.1** is the current public release. It contains:
+Version **1.0.2** is the current public release. It contains:
 
-- 271 localized read-only and writable Modbus entities;
+- 273 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
 - grid, load/EPS, battery/BMS, generator and inverter registers;
 - safe atomic EMS writes for registers 4300–4306;
@@ -150,7 +150,7 @@ Home Assistant.
 Add the dashboard resource:
 
 ```text
-/local/hoymiles-rce-chart-card.js?v=1.0.1
+/local/hoymiles-rce-chart-card.js?v=1.0.2
 ```
 
 with resource type **JavaScript module**, then import
@@ -219,8 +219,8 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.0.1** udostępnia
-271 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.0.2** udostępnia
+273 encje, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 automatykę cenową RCE PSE, blokadę sprzedaży oraz gotowy dashboard.
 
 ### Podłączenie ESP32 i konwertera RS485

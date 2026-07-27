@@ -7,6 +7,9 @@ import json
 import py_compile
 import re
 import struct
+import sys
+import tempfile
+import types
 from pathlib import Path
 
 
@@ -36,6 +39,63 @@ def load_localization_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_assets_module():
+    """Load the asset installer with a minimal Home Assistant type stub."""
+    homeassistant = types.ModuleType("homeassistant")
+    core = types.ModuleType("homeassistant.core")
+    core.HomeAssistant = object
+    homeassistant.core = core
+    sys.modules.setdefault("homeassistant", homeassistant)
+    sys.modules.setdefault("homeassistant.core", core)
+
+    path = COMPONENT / "assets.py"
+    spec = importlib.util.spec_from_file_location("hoymiles_assets", path)
+    require(spec is not None and spec.loader is not None, "Cannot load assets")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def validate_fresh_asset_install() -> None:
+    """Exercise the PL/EN asset-copy path used by a fresh HACS setup."""
+    assets = load_assets_module()
+    with tempfile.TemporaryDirectory(prefix="hoymiles_hacs_install_") as tmp:
+        config_path = Path(tmp)
+        polish_written = assets._copy_assets(config_path, "pl-PL", False)
+        require(
+            len(polish_written) == 3,
+            "Fresh Polish installation did not copy all three assets",
+        )
+        require(
+            (config_path / "dashboard_hoymiles.yaml").read_text(
+                encoding="utf-8"
+            )
+            == (RESOURCES / "dashboard_hoymiles_pl.yaml").read_text(
+                encoding="utf-8"
+            ),
+            "Fresh Polish installation copied the wrong dashboard",
+        )
+        require(
+            assets._copy_assets(config_path, "pl-PL", False) == [],
+            "Asset installer overwrites user files without explicit permission",
+        )
+
+        english_written = assets._copy_assets(config_path, "en-GB", True)
+        require(
+            len(english_written) == 3,
+            "English overwrite installation did not copy all three assets",
+        )
+        require(
+            (config_path / "dashboard_hoymiles.yaml").read_text(
+                encoding="utf-8"
+            )
+            == (RESOURCES / "dashboard_hoymiles_en.yaml").read_text(
+                encoding="utf-8"
+            ),
+            "English installation copied the wrong dashboard",
+        )
 
 
 def png_dimensions(path: Path) -> tuple[int, int]:
@@ -85,7 +145,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.0.1", "Release version must be 1.0.1")
+    require(manifest["version"] == "1.0.2", "Release version must be 1.0.2")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -107,6 +167,18 @@ def main() -> int:
     require(
         len(identities) == len(catalog),
         "Duplicate domain/translation_key in entity catalog",
+    )
+    require(
+        ("button", "clear_fault") in identities,
+        "Generated catalog is missing the Clear Fault button",
+    )
+    system_package = (ROOT / "packages" / "system.yaml").read_text(
+        encoding="utf-8"
+    )
+    require(
+        "create_write_single_command" in system_package
+        and "controller, 3004, 1" in system_package,
+        "Clear Fault must write value 1 to holding register 3004",
     )
 
     english = load_json(COMPONENT / "translations" / "en.json")
@@ -180,7 +252,7 @@ def main() -> int:
         text = asset.read_text(encoding="utf-8")
         require(
             not re.search(
-                r"\b(?:sensor|number|select)\.[a-z0-9_]*hoymiles_inverter[a-z0-9_]*\b",
+                r"\b(?:button|sensor|number|select)\.[a-z0-9_]*hoymiles_inverter[a-z0-9_]*\b",
                 text,
             ),
             f"Installation-specific entity id remains in {asset.name}",
@@ -189,6 +261,124 @@ def main() -> int:
             not re.search(r"\bPV[56]\b", text, flags=re.IGNORECASE),
             f"Unsupported PV5/PV6 reference remains in {asset.name}",
         )
+
+    polish_dashboard = required_assets[1].read_text(encoding="utf-8")
+    english_dashboard = required_assets[0].read_text(encoding="utf-8")
+    for dashboard_text, language in (
+        (polish_dashboard, "Polish"),
+        (english_dashboard, "English"),
+    ):
+        dashboard_lines = dashboard_text.splitlines()
+        require(
+            not re.search(
+                r"^\s*-\s+(?:button|sensor|number|select)\.hoymiles_hit_[a-z0-9_]+\s*$",
+                dashboard_text,
+                re.M,
+            ),
+            f"{language} dashboard contains entity rows without short names",
+        )
+        for index, line in enumerate(dashboard_lines):
+            entity_match = re.match(
+                r"^(?P<indent>\s*)-\s+entity:\s+"
+                r"(?:button|sensor|number|select)\.hoymiles_hit_[a-z0-9_]+\s*$",
+                line,
+            )
+            if not entity_match:
+                continue
+            following = (
+                dashboard_lines[index + 1]
+                if index + 1 < len(dashboard_lines)
+                else ""
+            )
+            require(
+                following.startswith(
+                    f"{entity_match.group('indent')}  name:"
+                ),
+                f"{language} dashboard entity row on line {index + 1} "
+                "has no dashboard-only short name",
+            )
+        require(
+            not re.search(
+                r"^\s*name:\s*[\"']?Hoymiles Inverter\b",
+                dashboard_text,
+                re.M | re.I,
+            ),
+            f"{language} dashboard still displays the Hoymiles Inverter prefix",
+        )
+        require(
+            "<table>" not in dashboard_text,
+            f"{language} dashboard still contains non-clickable HTML tables",
+        )
+        require(
+            "decimal_places: 2" in dashboard_text,
+            f"{language} dashboard does not show power flow with two decimals",
+        )
+        require(
+            "sensor.hoymiles_hit_battery_current_inverter" in dashboard_text,
+            f"{language} dashboard does not show inverter-side battery current",
+        )
+        require(
+            "sensor.hoymiles_hit_battery_1_voltage" in dashboard_text,
+            f"{language} dashboard does not show inverter-side battery voltage",
+        )
+        require(
+            "button.hoymiles_hit_clear_fault" in dashboard_text,
+            f"{language} dashboard lacks the Clear Fault button",
+        )
+        require(
+            '<ha-alert alert-type="error">' not in dashboard_text,
+            f"{language} dashboard still contains the removed red alert rows",
+        )
+        state_title = (
+            "Stan systemu i łączność"
+            if language == "Polish"
+            else "System and connectivity"
+        )
+        alarm_title = (
+            "Alarmy — szybki podgląd"
+            if language == "Polish"
+            else "Alarms — quick view"
+        )
+        require(
+            f"- type: entities\n        title: {state_title}" in dashboard_text
+            and f"- type: entities\n        title: {alarm_title}" in dashboard_text,
+            f"{language} dashboard status/alarm cards are not clickable entity cards",
+        )
+        require(
+            dashboard_text.count("action: more-info") >= 32,
+            f"{language} dashboard status/alarm rows do not explicitly open more-info history",
+        )
+        require(
+            f"path: {'sterowanie' if language == 'Polish' else 'control'}\n    icon: mdi:tune-variant\n    type: sidebar"
+            in dashboard_text,
+            f"{language} control view is not using the sidebar layout",
+        )
+    require(
+        "Wyczyść alarmy falownika" in polish_dashboard,
+        "Polish dashboard lacks the localized Clear Fault name",
+    )
+    require(
+        "Clear Fault" in english_dashboard,
+        "English dashboard lacks the localized Clear Fault name",
+    )
+    require(
+        'name: "Docelowy SOC ładowania z sieci"' in polish_dashboard,
+        "Polish dashboard lacks the localized Force Charge SOC name",
+    )
+    require(
+        'name: "Maksymalna moc rozładowania do sieci"' in polish_dashboard,
+        "Polish dashboard lacks the localized Maximum Discharge Power name",
+    )
+    require(
+        "title: Sieć — napięcia i częstotliwość" in polish_dashboard
+        and "title: Sieć — prądy" in polish_dashboard,
+        "Polish dashboard does not split live grid values into two cards",
+    )
+    require(
+        "title: Grid — voltages and frequency" in english_dashboard
+        and "title: Grid — currents" in english_dashboard,
+        "English dashboard does not split live grid values into two cards",
+    )
 
     english_assets = [required_assets[0], required_assets[2]]
     polish_characters = re.compile(r"[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
@@ -219,6 +409,7 @@ def main() -> int:
         localization.localized_text_state("Brak błędu", "en") == "No error",
         "English fault state localization failed",
     )
+    validate_fresh_asset_install()
 
     for image_name in ("icon.png", "dark_icon.png", "logo.png", "dark_logo.png"):
         image_path = COMPONENT / "brand" / image_name
@@ -234,6 +425,7 @@ def main() -> int:
     print("Public ESPHome remote packages: OK")
     print("Python syntax: OK")
     print("Text-state localization: OK")
+    print("Fresh PL/EN asset installation: OK")
     print("Brand assets: OK")
     return 0
 

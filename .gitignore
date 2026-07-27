@@ -8,6 +8,8 @@
 /*.log
 /.agents/
 /.codex/
+/.codex_transfer_*/
+/.codex_deps_*/
 
 # Python
 __pycache__/

@@ -36,6 +36,11 @@
     }
   },
   "entity": {
+    "button": {
+      "clear_fault": {
+        "name": "Clear Fault"
+      }
+    },
     "sensor": {
       "backup_voltage_l1": {
         "name": "Backup Voltage L1"
@@ -711,6 +716,9 @@
       },
       "battery_1_voltage": {
         "name": "Battery 1 Voltage"
+      },
+      "battery_current_inverter": {
+        "name": "Battery Current (Inverter)"
       },
       "pv_total_energy": {
         "name": "PV Total Energy"

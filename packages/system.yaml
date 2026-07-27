@@ -1,5 +1,21 @@
-# Sterowanie stanem systemu. Polecenia jednorazowe (restart, reset fabryczny,
-# kasowanie błędów) nie są wystawiane jako sensory ani automatyczne przełączniki.
+# Sterowanie stanem systemu. Niebezpieczne polecenia jednorazowe (restart
+# i reset fabryczny) nie są wystawiane. Kasowanie aktywnych błędów jest
+# dostępne jako przycisk wykonujący pojedynczy zapis 3004 = 1.
+
+button:
+  - platform: template
+    name: "Clear Fault"
+    id: clear_fault_3004
+    entity_category: config
+    icon: mdi:alert-remove-outline
+    on_press:
+      - lambda: |-
+          auto *controller = id(${modbus_controller_id});
+          auto command =
+              esphome::modbus_controller::ModbusCommandItem::create_write_single_command(
+                  controller, 3004, 1);
+          controller->queue_command(command);
+          ESP_LOGI("hoymiles.modbus", "Clear Fault command sent: register 3004 = 1");
 
 select:
   - platform: modbus_controller

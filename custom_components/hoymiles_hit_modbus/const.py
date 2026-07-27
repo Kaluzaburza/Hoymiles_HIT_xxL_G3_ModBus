@@ -7,18 +7,19 @@ from homeassistant.const import Platform
 
 DOMAIN = "hoymiles_hit_modbus"
 NAME = "Hoymiles HIT xxL G3 Modbus"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 CONF_SOURCE_DEVICE_ID = "source_device_id"
 CONF_COPY_ASSETS = "copy_assets"
 
 PLATFORMS: tuple[Platform, ...] = (
+    Platform.BUTTON,
     Platform.SENSOR,
     Platform.NUMBER,
     Platform.SELECT,
 )
 
-SUPPORTED_SOURCE_DOMAINS = {"sensor", "number", "select"}
+SUPPORTED_SOURCE_DOMAINS = {"button", "sensor", "number", "select"}
 
 SERVICE_INSTALL_ASSETS = "install_assets"
 ATTR_OVERWRITE = "overwrite"
