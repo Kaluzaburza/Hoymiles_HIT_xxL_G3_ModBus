@@ -3,8 +3,8 @@
 sensor:
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
-    name: "Overview PV Total Power"
-    id: pv_total_power_30001
+    id: pv_total_power_master_30001
+    internal: true
     register_type: read
     address: 30001
     unit_of_measurement: "W"
@@ -42,8 +42,8 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
-    name: "Overview Inverter Active Power"
-    id: inv_active_power_30007
+    id: inv_active_power_master_30007
+    internal: true
     register_type: read
     address: 30007
     unit_of_measurement: "W"
@@ -55,8 +55,8 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
-    name: "Overview Battery Power"
-    id: battery_power_30009
+    id: battery_power_master_30009
+    internal: true
     register_type: read
     address: 30009
     unit_of_measurement: "W"
@@ -68,8 +68,8 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
-    name: "Overview Grid Total Active Power"
-    id: grid_total_active_power_30011
+    id: grid_total_active_power_master_30011
+    internal: true
     register_type: read
     address: 30011
     unit_of_measurement: "W"
@@ -94,8 +94,8 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
-    name: "Overview Load Active Power"
-    id: load_active_power_30015
+    id: load_active_power_master_30015
+    internal: true
     register_type: read
     address: 30015
     unit_of_measurement: "W"
@@ -122,8 +122,8 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
-    name: "Overview Battery SOC"
-    id: battery_soc_30020
+    id: battery_soc_master_30020
+    internal: true
     register_type: read
     address: 30020
     unit_of_measurement: "%"
@@ -131,3 +131,115 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     value_type: U_WORD
+
+  # Encje poniżej zachowują dotychczasowe nazwy i identyfikatory Home
+  # Assistant. Dla pojedynczego falownika publikują szybki blok 30001.
+  # W trybie równoległym korzystają z wartości całego systemu udostępnianych
+  # przez Mastera w blokach energii i licznika.
+  - platform: template
+    name: "Overview PV Total Power"
+    id: pv_total_power_30001
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(pv_total_power_master_30001).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(pv_total_power_master_30001).state;
+      }
+      if (!id(pv_total_power_8528).has_state()) return {};
+      return id(pv_total_power_8528).state;
+
+  - platform: template
+    name: "Overview Inverter Active Power"
+    id: inv_active_power_30007
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(inv_active_power_master_30007).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(inv_active_power_master_30007).state;
+      }
+      if (!id(pv_total_power_8528).has_state() ||
+          !id(bat_total_power_8546).has_state()) return {};
+      return id(pv_total_power_8528).state + id(bat_total_power_8546).state;
+
+  - platform: template
+    name: "Overview Battery Power"
+    id: battery_power_30009
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(battery_power_master_30009).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(battery_power_master_30009).state;
+      }
+      if (!id(bat_total_power_8546).has_state()) return {};
+      return id(bat_total_power_8546).state;
+
+  - platform: template
+    name: "Overview Grid Total Active Power"
+    id: grid_total_active_power_30011
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(grid_total_active_power_master_30011).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(grid_total_active_power_master_30011).state;
+      }
+      if (!id(grid_total_active_power_1814).has_state()) return {};
+      return id(grid_total_active_power_1814).state;
+
+  - platform: template
+    name: "Overview Load Active Power"
+    id: load_active_power_30015
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: mdi:flash
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(load_active_power_master_30015).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(load_active_power_master_30015).state;
+      }
+      if (!id(load_power_total_8553).has_state()) return {};
+      return id(load_power_total_8553).state;
+
+  - platform: template
+    name: "Overview Battery SOC"
+    id: battery_soc_30020
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(battery_soc_master_30020).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(battery_soc_master_30020).state;
+      }
+      if (!id(battery_soc_1909).has_state()) return {};
+      return id(battery_soc_1909).state;

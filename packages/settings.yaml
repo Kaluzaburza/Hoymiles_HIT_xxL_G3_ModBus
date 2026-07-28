@@ -47,6 +47,45 @@ select:
       }
     set_action:
       - lambda: |-
+          // Rejestr 6048: 0 = pojedynczy, 1 = Master, 2 = Slave.
+          // W sieci równoległej zapis trafia wyłącznie do Mastera. Zgodnie z
+          // instrukcją Hoymiles Master rozsyła EMS i dispatch do wszystkich
+          // urządzeń Slave przez wewnętrzne łącze równoległe.
+          if (!id(machines_type_6048).has_state()) {
+            ESP_LOGE("ems", "Zapis EMS zablokowany: nie wykryto jeszcze topologii 6048");
+            return;
+          }
+
+          const uint16_t machine_type =
+              static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+          uint16_t machine_count = 1;
+          if (machine_type == 2) {
+            ESP_LOGE(
+                "ems",
+                "Zapis EMS zablokowany: ESP32 jest podłączone do Slave; podłącz Modbus do Mastera");
+            return;
+          }
+          if (machine_type > 2) {
+            ESP_LOGE("ems", "Zapis EMS zablokowany: nieprawidłowa wartość rejestru 6048=%u",
+                     machine_type);
+            return;
+          }
+          if (machine_type == 1) {
+            if (!id(number_of_machines_master_and_slave_6049).has_state()) {
+              ESP_LOGE("ems", "Zapis EMS zablokowany: Master nie podał jeszcze liczby urządzeń");
+              return;
+            }
+            machine_count = static_cast<uint16_t>(
+                std::lround(id(number_of_machines_master_and_slave_6049).state));
+            if (machine_count < 2 || machine_count > 10) {
+              ESP_LOGE(
+                  "ems",
+                  "Zapis EMS zablokowany: nieprawidłowa liczba urządzeń w sieci=%u",
+                  machine_count);
+              return;
+            }
+          }
+
           uint16_t mode = 0;
           if (x == "Off-Grid") mode = 3;
           else if (x == "Ładowanie z sieci") mode = 4;
@@ -73,12 +112,21 @@ select:
           };
 
           auto *controller = id(${modbus_controller_id});
-          auto command = esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
-              controller, 4300, values.size(), values);
+          auto command =
+              esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
+                  controller, 4300, values.size(), values);
           controller->queue_command(command);
           id(ems_mode_raw_4300).publish_state(mode);
           id(ems_mode_4300).publish_state(x);
-          ESP_LOGI("ems", "Zapisano atomowo EMS 4300-4306, tryb=%u", mode);
+          if (machine_type == 1) {
+            ESP_LOGI(
+                "ems",
+                "Zapisano EMS 4300-4306 do Mastera; Master steruje siecią, tryb=%u, falowniki=%u",
+                mode, machine_count);
+          } else {
+            ESP_LOGI("ems", "Zapisano atomowo EMS 4300-4306, tryb=%u, falownik pojedynczy",
+                     mode);
+          }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}

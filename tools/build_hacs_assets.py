@@ -67,6 +67,20 @@ PHRASE_TRANSLATIONS = {
     "Battery Type Setting": "Typ baterii",
     "BMS Type Setting": "Typ BMS",
     "Parallel Networking Command": "Polecenie sieci równoległej",
+    "Parallel Topology": "Topologia sieci równoległej",
+    "Parallel EMS Control Status": "Stan sterowania EMS sieci równoległej",
+    "Machines Type": "Rola urządzenia w sieci równoległej",
+    "Number of Machines (Master and Slave)": "Liczba falowników (Master i Slave)",
+    "Communication Address 1 (Master Device)": "Adres komunikacyjny 1 (Master)",
+    "Communication Address 2 (Slave Device 1)": "Adres komunikacyjny 2 (Slave 1)",
+    "Communication Address 3 (Slave Device 2)": "Adres komunikacyjny 3 (Slave 2)",
+    "Communication Address 4 (Slave Device 3)": "Adres komunikacyjny 4 (Slave 3)",
+    "Communication Address 5 (Slave Device 4)": "Adres komunikacyjny 5 (Slave 4)",
+    "Communication Address 6 (Slave Device 5)": "Adres komunikacyjny 6 (Slave 5)",
+    "Communication Address 7 (Slave Device 6)": "Adres komunikacyjny 7 (Slave 6)",
+    "Communication Address 8 (Slave Device 7)": "Adres komunikacyjny 8 (Slave 7)",
+    "Communication Address 9 (Slave Device 8)": "Adres komunikacyjny 9 (Slave 8)",
+    "Communication Address 10 (Slave Device 9)": "Adres komunikacyjny 10 (Slave 9)",
     "System Operation": "Praca systemu",
     "Inverter Work Status": "Stan pracy falownika",
     "Overview System Work Status": "Podgląd stanu pracy systemu",
@@ -193,6 +207,51 @@ TEXT_STATE_TRANSLATIONS = {
     "simulated": ("Simulated", "Symulowana"),
     "charging": ("Charging", "Ładowanie"),
     "discharging": ("Discharging", "Rozładowanie"),
+    "single_inverter": ("Single inverter", "Falownik pojedynczy"),
+    "parallel_master": ("Master", "Master"),
+    "parallel_slave": ("Slave", "Slave"),
+    "unknown_topology": ("Unknown topology", "Nieznana topologia"),
+    "invalid_topology": ("Invalid topology", "Nieprawidłowa topologia"),
+    "parallel_ems_ready_direct": (
+        "Ready - direct control",
+        "Gotowe - sterowanie bezpośrednie",
+    ),
+    "parallel_ems_ready_master": (
+        "Ready - Master controls the parallel network",
+        "Gotowe - Master steruje siecią równoległą",
+    ),
+    "parallel_ems_blocked_slave": (
+        "Blocked - ESP32 connected to Slave",
+        "Zablokowane - ESP32 podłączone do Slave",
+    ),
+    "parallel_ems_waiting": (
+        "Waiting for network detection",
+        "Oczekiwanie na wykrycie sieci",
+    ),
+    "parallel_ems_waiting_master_mode": (
+        "Waiting for Master EMS mode",
+        "Oczekiwanie na tryb EMS Mastera",
+    ),
+    "parallel_ems_waiting_slave_confirmation": (
+        "Waiting for Slave confirmation",
+        "Oczekiwanie na potwierdzenie Slave",
+    ),
+    "parallel_address_error": (
+        "Parallel-network address error",
+        "Błąd adresów sieci równoległej",
+    ),
+    "parallel_slave_offline": (
+        "Error - Slave is not responding",
+        "Błąd - Slave nie odpowiada",
+    ),
+    "parallel_slave_ems_mismatch": (
+        "Error - Slave EMS mode mismatch",
+        "Błąd - tryb EMS Slave niezgodny",
+    ),
+    "parallel_invalid_count": (
+        "Invalid inverter count",
+        "Nieprawidłowa liczba falowników",
+    ),
 }
 
 ENGLISH_REPLACEMENTS = {
@@ -214,11 +273,15 @@ ENGLISH_REPLACEMENTS = {
     "Encja Solcast — prognoza na jutro": "Solcast entity — tomorrow forecast",
     "Prognozowana produkcja PV jutro": "Forecast PV production tomorrow",
     "Średnie dobowe zużycie LOAD — 4 dni": "Average daily LOAD — 4 days",
-    "Chronione okno nocne aktywne": "Protected night window active",
+    "Pomiar zużycia okna nocnego aktywny": (
+        "Night-window consumption sampling active"
+    ),
     "Pełne okno nocne — zachód/wschód ± 1,5 h": (
         "Full night window — sunset/sunrise ± 1.5 h"
     ),
-    "Pozostało do końca chronionego okna": "Protected window time remaining",
+    "Chroniony czas pracy domu — najbliższa noc": (
+        "Protected home runtime — nearest night"
+    ),
     "Średnie zużycie w oknie nocnym — 4 dni": (
         "Average protected-window consumption — 4 days"
     ),
@@ -256,22 +319,31 @@ ENGLISH_REPLACEMENTS = {
     "**rezerwa awaryjna Self-Use + deficyt LOAD względem prognozy PV +": (
         "**Self-Use outage reserve + LOAD deficit against the PV forecast +"
     ),
-    "**rezerwa awaryjna Self-Use + większa z wartości: pozostałe zużycie": (
-        "**Self-Use outage reserve + the greater of: remaining home demand"
+    "**rezerwa awaryjna Self-Use + pozostałe zużycie domu w najbliższym": (
+        "**Self-Use outage reserve + remaining home demand in the nearest"
     ),
-    "domu do końca okna nocnego albo dobowy deficyt prognozy PV + korekta": (
-        "until the end of the night window or the daily PV forecast deficit +"
+    "oknie nocnym + dodatkowy dobowy deficyt prognozy PV + korekta": (
+        "night window + the additional daily PV forecast deficit +"
     ),
     "korekta bezpieczeństwa użytkownika**.": "user safety correction**.",
     "bezpieczeństwa użytkownika**.": "user safety correction**.",
     "Okno nocne rozpoczyna się **90 minut przed zachodem** i kończy": (
         "The night window starts **90 minutes before sunset** and ends"
     ),
-    "**90 minut po wschodzie słońca**. W trakcie nocy chroniona energia": (
-        "**90 minutes after sunrise**. During the night, protected energy"
+    "**90 minut po wschodzie słońca**. W ciągu dnia automatyka chroni": (
+        "**90 minutes after sunrise**. During the day, the automation protects"
     ),
-    "maleje wraz z pozostałym czasem, dzięki czemu automat może sprzedać": (
-        "decreases with the remaining time, so the automation can export"
+    "energię dla całego nadchodzącego okna nocnego. Od 90 minut przed": (
+        "energy for the entire upcoming night window. From 90 minutes before"
+    ),
+    "zachodem chroniona energia maleje wraz z pozostałym czasem, dzięki": (
+        "sunset, protected energy decreases with the remaining time, so the"
+    ),
+    "czemu automat może sprzedać tylko tę część magazynu, która nie będzie": (
+        "automation can export only the part of the battery that the home will not"
+    ),
+    "potrzebna domowi do rozpoczęcia produkcji PV.": (
+        "need before PV production starts."
     ),
     "tylko tę część magazynu, która nie będzie potrzebna domowi do": (
         "only the part of the battery that the home will not need before"
@@ -386,6 +458,10 @@ ENGLISH_REPLACEMENTS = {
     "Prąd L2": "L2 current",
     "Prąd L3": "L3 current",
     "Prąd łączny (suma faz)": "Total current (sum of phases)",
+    "Moc L1": "L1 power",
+    "Moc L2": "L2 power",
+    "Moc L3": "L3 power",
+    "Moc łączna": "Total power",
     "Częstotliwość": "Frequency",
     "Temperatura wnętrza falownika (CAV)": "Inverter internal temperature (CAV)",
     "Napięcie PP": "PP voltage",
@@ -403,6 +479,20 @@ ENGLISH_REPLACEMENTS = {
     "EMS — bezpieczny zapis całego bloku 4300–4306": "EMS — safe full-block write 4300–4306",
     "Overview — skrócone rejestry mocy": "Overview — essential power registers",
     "Sieć równoległa falowników": "Parallel inverter network",
+    'name: "Topologia sieci"': 'name: "Network topology"',
+    'name: "Gotowość sterowania EMS"': 'name: "EMS control readiness"',
+    'name: "Typ urządzenia (kod)"': 'name: "Device type (code)"',
+    'name: "Wykryta liczba falowników"': 'name: "Detected inverter count"',
+    'name: "Adres 1 (Master)"': 'name: "Address 1 (Master)"',
+    'name: "Adres 2 (Slave 1)"': 'name: "Address 2 (Slave 1)"',
+    'name: "Adres 3 (Slave 2)"': 'name: "Address 3 (Slave 2)"',
+    'name: "Adres 4 (Slave 3)"': 'name: "Address 4 (Slave 3)"',
+    'name: "Adres 5 (Slave 4)"': 'name: "Address 5 (Slave 4)"',
+    'name: "Adres 6 (Slave 5)"': 'name: "Address 6 (Slave 5)"',
+    'name: "Adres 7 (Slave 6)"': 'name: "Address 7 (Slave 6)"',
+    'name: "Adres 8 (Slave 7)"': 'name: "Address 8 (Slave 7)"',
+    'name: "Adres 9 (Slave 8)"': 'name: "Address 9 (Slave 8)"',
+    'name: "Adres 10 (Slave 9)"': 'name: "Address 10 (Slave 9)"',
     "Każdy harmonogram działa codziennie, dopóki jego przełącznik jest": (
         "Each schedule runs every day while its switch is"
     ),
@@ -446,6 +536,7 @@ ENGLISH_REPLACEMENTS = {
     "Sieć — wartości bieżące": "Grid — current values",
     "Sieć — napięcia i częstotliwość": "Grid — voltages and frequency",
     "Sieć — prądy": "Grid — currents",
+    "Sieć — moc": "Grid — power",
     "Sieć — energia dzisiaj": "Grid — energy today",
     "Sieć — energia całkowita": "Grid — total energy",
     "Generator — wartości bieżące": "Generator — current values",
@@ -526,6 +617,9 @@ ENGLISH_REPLACEMENTS = {
     "EMS RCE — zapisz dynamiczną rezerwę SOC": (
         "EMS RCE — write dynamic SOC reserve"
     ),
+    "EMS RCE — sterowanie rozładowaniem według ceny": (
+        "EMS RCE — price-based discharge control"
+    ),
     "Tryb ręczny — używany jest próg rozładowania falownika": (
         "Manual mode — using the inverter discharge threshold"
     ),
@@ -568,6 +662,9 @@ ENGLISH_REPLACEMENTS = {
     "rezerwę awaryjną Self-Use, energię domu chronioną w nocnym oknie,": (
         "the Self-Use outage reserve, home energy protected in the night window,"
     ),
+    "dodatkowy prognozowany deficyt energii następnego dnia i korektę": (
+        "the additional forecast energy deficit for the next day, and the"
+    ),
     "prognozowany deficyt energii i korektę bezpieczeństwa użytkownika.": (
         "the forecast energy deficit, and the user's safety correction."
     ),
@@ -583,6 +680,13 @@ ENGLISH_REPLACEMENTS = {
     ),
     "obejmuje awaryjny SOC Self-Use, pozostałe zużycie domu w chronionym oknie": (
         "includes the Self-Use outage SOC, remaining home demand in the protected"
+    ),
+    "nocnym, dodatkowy deficyt prognozy Solcast na następny dzień oraz korektę": (
+        "night window, the additional Solcast forecast deficit for the next day,"
+        " and the safety"
+    ),
+    "bezpieczeństwa. Ręczne timery mają pierwszeństwo.": (
+        "correction. Manual timers take priority."
     ),
     "nocnym, deficyt prognozy Solcast oraz korektę bezpieczeństwa. Ręczne": (
         "night window, the Solcast forecast deficit, and the safety correction. Manual"
@@ -1179,12 +1283,14 @@ def build() -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding="utf-8")
 
-    card_source = (
-        ROOT / "home_assistant" / "www" / "hoymiles-rce-chart-card.js"
-    )
-    card_destination = RESOURCES / "www" / "hoymiles-rce-chart-card.js"
-    card_destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(card_source, card_destination)
+    for bundled_www_asset in (
+        "hoymiles-rce-chart-card.js",
+        "hoymiles-inverter.png",
+    ):
+        card_source = ROOT / "home_assistant" / "www" / bundled_www_asset
+        card_destination = RESOURCES / "www" / bundled_www_asset
+        card_destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(card_source, card_destination)
 
     print(f"Generated {len(catalog)} localized entities.")
 

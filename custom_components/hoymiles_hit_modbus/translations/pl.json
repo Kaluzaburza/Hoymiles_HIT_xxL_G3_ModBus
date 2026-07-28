@@ -553,7 +553,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "esp_wifi_ssid": {
@@ -578,7 +593,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "esp_mac_address": {
@@ -603,17 +633,38 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
-      },
-      "overview_pv_total_power": {
-        "name": "Podgląd łącznej mocy PV"
       },
       "overview_internal_pv_total_power": {
         "name": "Podgląd łącznej mocy wewnętrznych wejść PV"
       },
       "overview_external_pv_total_power": {
         "name": "Podgląd łącznej mocy zewnętrznych źródeł PV"
+      },
+      "overview_generator_active_power": {
+        "name": "Podgląd mocy czynnej generatora"
+      },
+      "overview_smart_load_active_power": {
+        "name": "Podgląd mocy czynnej Smart Load"
+      },
+      "overview_pv_total_power": {
+        "name": "Podgląd łącznej mocy PV"
       },
       "overview_inverter_active_power": {
         "name": "Podgląd mocy czynnej falownika"
@@ -624,53 +675,127 @@
       "overview_grid_total_active_power": {
         "name": "Podgląd łącznej mocy czynnej sieci"
       },
-      "overview_generator_active_power": {
-        "name": "Podgląd mocy czynnej generatora"
-      },
       "overview_load_active_power": {
         "name": "Podgląd mocy czynnej odbiorników"
-      },
-      "overview_smart_load_active_power": {
-        "name": "Podgląd mocy czynnej Smart Load"
       },
       "overview_battery_soc": {
         "name": "Podgląd stanu naładowania baterii"
       },
       "machines_type": {
-        "name": "Machines typ"
+        "name": "Rola urządzenia w sieci równoległej"
       },
       "number_of_machines_master_and_slave": {
-        "name": "Number of Machines (Master and Slave)"
+        "name": "Liczba falowników (Master i Slave)"
       },
       "communication_address_1_master_device": {
-        "name": "Komunikacja adres 1 (Master Device)"
+        "name": "Adres komunikacyjny 1 (Master)"
       },
       "communication_address_2_slave_device_1": {
-        "name": "Komunikacja adres 2 (Slave Device 1)"
+        "name": "Adres komunikacyjny 2 (Slave 1)"
       },
       "communication_address_3_slave_device_2": {
-        "name": "Komunikacja adres 3 (Slave Device 2)"
+        "name": "Adres komunikacyjny 3 (Slave 2)"
       },
       "communication_address_4_slave_device_3": {
-        "name": "Komunikacja adres 4 (Slave Device 3)"
+        "name": "Adres komunikacyjny 4 (Slave 3)"
       },
       "communication_address_5_slave_device_4": {
-        "name": "Komunikacja adres 5 (Slave Device 4)"
+        "name": "Adres komunikacyjny 5 (Slave 4)"
       },
       "communication_address_6_slave_device_5": {
-        "name": "Komunikacja adres 6 (Slave Device 5)"
+        "name": "Adres komunikacyjny 6 (Slave 5)"
       },
       "communication_address_7_slave_device_6": {
-        "name": "Komunikacja adres 7 (Slave Device 6)"
+        "name": "Adres komunikacyjny 7 (Slave 6)"
       },
       "communication_address_8_slave_device_7": {
-        "name": "Komunikacja adres 8 (Slave Device 7)"
+        "name": "Adres komunikacyjny 8 (Slave 7)"
       },
       "communication_address_9_slave_device_8": {
-        "name": "Komunikacja adres 9 (Slave Device 8)"
+        "name": "Adres komunikacyjny 9 (Slave 8)"
       },
       "communication_address_10_slave_device_9": {
-        "name": "Komunikacja adres 10 (Slave Device 9)"
+        "name": "Adres komunikacyjny 10 (Slave 9)"
+      },
+      "parallel_topology": {
+        "name": "Topologia sieci równoległej",
+        "state": {
+          "unavailable": "Niedostępne",
+          "power_initialization": "Inicjalizacja zasilania",
+          "standby": "Czuwanie",
+          "grid_test": "Test sieci",
+          "on_grid": "Praca z siecią",
+          "fault": "Awaria",
+          "off_grid": "Praca wyspowa",
+          "bypass": "Bypass",
+          "no_error": "Brak błędu",
+          "no_errors": "Brak błędów",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: połączenie prawidłowe",
+          "hmid_connection_error": "HMID: błąd połączenia",
+          "no_battery": "Brak baterii",
+          "lithium": "Litowa",
+          "lead_acid": "Kwasowo-ołowiowa",
+          "simulated": "Symulowana",
+          "charging": "Ładowanie",
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
+        }
+      },
+      "parallel_ems_control_status": {
+        "name": "Stan sterowania EMS sieci równoległej",
+        "state": {
+          "unavailable": "Niedostępne",
+          "power_initialization": "Inicjalizacja zasilania",
+          "standby": "Czuwanie",
+          "grid_test": "Test sieci",
+          "on_grid": "Praca z siecią",
+          "fault": "Awaria",
+          "off_grid": "Praca wyspowa",
+          "bypass": "Bypass",
+          "no_error": "Brak błędu",
+          "no_errors": "Brak błędów",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: połączenie prawidłowe",
+          "hmid_connection_error": "HMID: błąd połączenia",
+          "no_battery": "Brak baterii",
+          "lithium": "Litowa",
+          "lead_acid": "Kwasowo-ołowiowa",
+          "simulated": "Symulowana",
+          "charging": "Ładowanie",
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
+        }
       },
       "pv_total_power_direct": {
         "name": "PV łącznie moc (Direct)"
@@ -835,7 +960,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "sw_fault": {
@@ -860,7 +1000,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "hw_fault": {
@@ -885,7 +1040,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "meter_link_status": {
@@ -910,7 +1080,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "pv_link_status": {
@@ -935,7 +1120,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "battery_type_bms": {
@@ -960,7 +1160,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "battery_link_status": {
@@ -985,7 +1200,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "battery_work_status_bms": {
@@ -1010,7 +1240,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "overview_system_work_status": {
@@ -1035,7 +1280,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "overview_battery_work_status": {
@@ -1060,7 +1320,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "battery_fault_code_bms": {
@@ -1085,7 +1360,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "overview_battery_faults": {
@@ -1110,7 +1400,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "overview_dsp_power_faults": {
@@ -1135,7 +1440,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "dsp_safety_faults": {
@@ -1160,7 +1480,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "arm_communication_faults": {
@@ -1185,7 +1520,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "arm_peripheral_faults": {
@@ -1210,7 +1560,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
       "arm_system_faults": {
@@ -1235,7 +1600,22 @@
           "lead_acid": "Kwasowo-ołowiowa",
           "simulated": "Symulowana",
           "charging": "Ładowanie",
-          "discharging": "Rozładowanie"
+          "discharging": "Rozładowanie",
+          "single_inverter": "Falownik pojedynczy",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Nieznana topologia",
+          "invalid_topology": "Nieprawidłowa topologia",
+          "parallel_ems_ready_direct": "Gotowe - sterowanie bezpośrednie",
+          "parallel_ems_ready_master": "Gotowe - Master steruje siecią równoległą",
+          "parallel_ems_blocked_slave": "Zablokowane - ESP32 podłączone do Slave",
+          "parallel_ems_waiting": "Oczekiwanie na wykrycie sieci",
+          "parallel_ems_waiting_master_mode": "Oczekiwanie na tryb EMS Mastera",
+          "parallel_ems_waiting_slave_confirmation": "Oczekiwanie na potwierdzenie Slave",
+          "parallel_address_error": "Błąd adresów sieci równoległej",
+          "parallel_slave_offline": "Błąd - Slave nie odpowiada",
+          "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
+          "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       }
     },

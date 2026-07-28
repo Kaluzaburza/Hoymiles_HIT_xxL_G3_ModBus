@@ -2,6 +2,71 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+## [1.2.0] - 2026-07-28
+
+### Added
+
+- Added automatic single/Master/Slave topology detection using registers
+  `6048-6095`, including localized topology and EMS-control readiness entities.
+- Added dashboard diagnostics for the detected role, inverter count and
+  communication addresses of up to nine Slave devices.
+- Added a transparent Hoymiles inverter illustration and use it as the central
+  device graphic in the animated dashboard power-flow card.
+
+### Changed
+
+- EMS writes now use the detected Master as the single control point for a
+  parallel system of 2-10 inverters.
+- In a detected Master system, the overview and dashboard power flow now use
+  the manufacturer's system-wide PV, battery, LOAD and grid registers. The
+  displayed values and energy-flow animation therefore represent all detected
+  inverters instead of only the Master.
+- Battery current in the overview is derived from the system-wide battery
+  power and the physical DC voltage when parallel operation is active.
+- Internal parallel-device addresses are no longer polled as external Modbus
+  slave IDs. The Master's RS485 port does not route those requests; the
+  topology addresses remain available as diagnostics only.
+- The standard ESPHome entry files load parallel topology diagnostics before
+  writable EMS settings.
+- The main dashboard now shows per-phase and total grid active power instead
+  of the less useful phase-current card. Home Assistant automatically presents
+  the readings in W or kW.
+- Grid active power registers `1808-1815` now use the dedicated 5-second
+  polling controller together with the other live dashboard values.
+
+### Fixed
+
+- The dynamic RCE reserve now protects the complete upcoming night window
+  throughout the daytime. Previously the protected duration fell to zero
+  between the morning buffer and 90 minutes before sunset, allowing an
+  evening export to reserve too little energy for the home.
+- The next-day PV deficit is now added to the protected night energy instead
+  of replacing it only when larger. A forecast that merely covers the average
+  home demand therefore cannot erase the overnight reserve.
+- Clarified that the night-window binary sensor indicates consumption
+  sampling, not whether SOC protection is enabled.
+- The Hoymiles inverter illustration is now embedded in the power-flow SVG,
+  so it scales with the complete diagram on phones, tablets and desktop
+  browsers. The original inverter symbol is hidden to prevent overlap.
+
+### Safety
+
+- EMS writes are blocked when the ESP32 is connected to a device reporting the
+  Slave role, before topology detection completes, or when the Master reports
+  an invalid inverter count.
+- Register `3016` remains disabled by default and is never invoked
+  automatically, preventing unintended creation or disassembly of a parallel
+  network.
+
+### Validation
+
+- Rebuilt and validated 275 localized entities and all Polish/English HACS
+  assets.
+- Verified the animated power-flow card on desktop and at a 390 x 844 mobile
+  viewport.
+
 ## [1.1.0] - 2026-07-27
 
 ### Added

@@ -26,7 +26,7 @@ modbus_controller:
     offline_skip_updates: 3
 
   # Trzy krótkie bloki używane przez główny dashboard są odpytywane osobno:
-  # 62-66 (sieć falownika), 1801-1807 (licznik sieci) i 30001-30020
+  # 62-66 (sieć falownika), 1801-1815 (licznik sieci) i 30001-30020
   # (animacja przepływu). Pozostałe rejestry zachowują cykl 60 s.
   - id: ${modbus_fast_controller_id}
     address: ${modbus_inverter_address}

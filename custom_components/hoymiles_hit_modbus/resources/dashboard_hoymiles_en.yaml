@@ -60,18 +60,18 @@ views:
               - entity: sensor.hoymiles_hit_inverter_grid_frequency
                 name: Frequency
           - type: entities
-            title: Grid — currents
+            title: Grid — power
             show_header_toggle: false
             state_color: true
             entities:
-              - entity: sensor.hoymiles_hit_grid_current_l1n
-                name: L1 current
-              - entity: sensor.hoymiles_hit_grid_current_l2n
-                name: L2 current
-              - entity: sensor.hoymiles_hit_grid_current_l3n
-                name: L3 current
-              - entity: sensor.hoymiles_hit_grid_total_current
-                name: Total current (sum of phases)
+              - entity: sensor.hoymiles_hit_meter_grid_active_power_l1
+                name: Power L1
+              - entity: sensor.hoymiles_hit_meter_grid_active_power_l2
+                name: Power L2
+              - entity: sensor.hoymiles_hit_meter_grid_active_power_l3
+                name: Power L3
+              - entity: sensor.hoymiles_hit_meter_grid_total_active_power
+                name: Total power
       - type: entities
         title: Control EMS
         show_header_toggle: false
@@ -81,6 +81,10 @@ views:
         entities:
           - entity: select.hoymiles_hit_ems_mode
             name: Operating mode
+          - entity: sensor.hoymiles_hit_parallel_ems_control_status
+            name: "EMS control readiness"
+          - entity: sensor.hoymiles_hit_number_of_machines_master_and_slave
+            name: "Detected inverter count"
           - entity: button.hoymiles_hit_clear_fault
             name: "Clear Fault"
       - type: entities
@@ -102,7 +106,7 @@ views:
             name: Insulation resistance
           - entity: sensor.hoymiles_hit_residual_current
             name: Residual current
-      - type: custom:sunsynk-power-flow-card
+      - type: custom:hoymiles-power-flow-card
         title: Current energy flow
         cardstyle: lite
         wide: true
@@ -117,6 +121,7 @@ views:
           modern: true
           autarky: "no"
           auto_scale: true
+        inverter_image: /local/hoymiles-inverter.png?v=1
         battery:
           energy: 21000
           shutdown_soc: 10
@@ -321,11 +326,11 @@ views:
           - entity: sensor.hoymiles_load_average_4_days
             name: Average daily LOAD — 4 days
           - entity: binary_sensor.hoymiles_night_protection_window
-            name: Protected night window active
+            name: Night-window consumption sampling active
           - entity: sensor.hoymiles_night_protection_window_duration
             name: Full night window — sunset/sunrise ± 1.5 h
           - entity: sensor.hoymiles_night_protection_window_remaining
-            name: Protected window time remaining
+            name: Protected home runtime — nearest night
           - entity: sensor.hoymiles_night_load_average_4_days
             name: Average protected-window consumption — 4 days
           - entity: sensor.hoymiles_protected_window_expected_load
@@ -376,15 +381,16 @@ views:
 
           Calculation:
 
-          **Self-Use outage reserve + the greater of: remaining home demand
-          until the end of the night window or the daily PV forecast deficit +
+          **Self-Use outage reserve + remaining home demand in the nearest
+          night window + the additional daily PV forecast deficit +
           user safety correction**.
 
           The night window starts **90 minutes before sunset** and ends
-          **90 minutes after sunrise**. During the night, protected energy
-          decreases with the remaining time, so the automation can export
-          only the part of the battery that the home will not need before
-          PV production starts.
+          **90 minutes after sunrise**. During the day, the automation protects
+          energy for the entire upcoming night window. From 90 minutes before
+          sunset, protected energy decreases with the remaining time, so the
+          automation can export only the part of the battery that the home will not
+          need before PV production starts.
 
           For the first day, night consumption is estimated from the four-day
           daily average. Afterwards, the automation uses measured consumption
@@ -1288,27 +1294,31 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
+          - entity: sensor.hoymiles_hit_parallel_topology
+            name: "Network topology"
+          - entity: sensor.hoymiles_hit_parallel_ems_control_status
+            name: "EMS control readiness"
           - entity: sensor.hoymiles_hit_machines_type
-            name: "Machines Type"
+            name: "Device type (code)"
           - entity: sensor.hoymiles_hit_number_of_machines_master_and_slave
-            name: "Number of Machines (Master and Slave)"
+            name: "Detected inverter count"
           - entity: sensor.hoymiles_hit_communication_address_1_master_device
-            name: "Communication Address 1 (Master Device)"
+            name: "Address 1 (Master)"
           - entity: sensor.hoymiles_hit_communication_address_2_slave_device_1
-            name: "Communication Address 2 (Slave Device 1)"
+            name: "Address 2 (Slave 1)"
           - entity: sensor.hoymiles_hit_communication_address_3_slave_device_2
-            name: "Communication Address 3 (Slave Device 2)"
+            name: "Address 3 (Slave 2)"
           - entity: sensor.hoymiles_hit_communication_address_4_slave_device_3
-            name: "Communication Address 4 (Slave Device 3)"
+            name: "Address 4 (Slave 3)"
           - entity: sensor.hoymiles_hit_communication_address_5_slave_device_4
-            name: "Communication Address 5 (Slave Device 4)"
+            name: "Address 5 (Slave 4)"
           - entity: sensor.hoymiles_hit_communication_address_6_slave_device_5
-            name: "Communication Address 6 (Slave Device 5)"
+            name: "Address 6 (Slave 5)"
           - entity: sensor.hoymiles_hit_communication_address_7_slave_device_6
-            name: "Communication Address 7 (Slave Device 6)"
+            name: "Address 7 (Slave 6)"
           - entity: sensor.hoymiles_hit_communication_address_8_slave_device_7
-            name: "Communication Address 8 (Slave Device 7)"
+            name: "Address 8 (Slave 7)"
           - entity: sensor.hoymiles_hit_communication_address_9_slave_device_8
-            name: "Communication Address 9 (Slave Device 8)"
+            name: "Address 9 (Slave 8)"
           - entity: sensor.hoymiles_hit_communication_address_10_slave_device_9
-            name: "Communication Address 10 (Slave Device 9)"
+            name: "Address 10 (Slave 9)"

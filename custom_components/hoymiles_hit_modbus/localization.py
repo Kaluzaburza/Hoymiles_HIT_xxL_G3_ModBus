@@ -33,6 +33,55 @@ SIMPLE_STATE_TRANSLATIONS: dict[str, tuple[str, str]] = {
     "Symulowana": ("Simulated", "Symulowana"),
     "Ładowanie": ("Charging", "Ładowanie"),
     "Rozładowanie": ("Discharging", "Rozładowanie"),
+    "Falownik pojedynczy": ("Single inverter", "Falownik pojedynczy"),
+    "Master": ("Master", "Master"),
+    "Slave": ("Slave", "Slave"),
+    "Nieznana topologia": ("Unknown topology", "Nieznana topologia"),
+    "Nieprawidłowa topologia": ("Invalid topology", "Nieprawidłowa topologia"),
+    "Gotowe - sterowanie bezpośrednie": (
+        "Ready - direct control",
+        "Gotowe - sterowanie bezpośrednie",
+    ),
+    "Gotowe - wszystkie falowniki zsynchronizowane": (
+        "Ready - all inverters synchronized",
+        "Gotowe - wszystkie falowniki zsynchronizowane",
+    ),
+    "Gotowe - Master steruje siecią równoległą": (
+        "Ready - Master controls the parallel network",
+        "Gotowe - Master steruje siecią równoległą",
+    ),
+    "Zablokowane - ESP32 podłączone do Slave": (
+        "Blocked - ESP32 connected to Slave",
+        "Zablokowane - ESP32 podłączone do Slave",
+    ),
+    "Oczekiwanie na wykrycie sieci": (
+        "Waiting for network detection",
+        "Oczekiwanie na wykrycie sieci",
+    ),
+    "Oczekiwanie na tryb EMS Mastera": (
+        "Waiting for Master EMS mode",
+        "Oczekiwanie na tryb EMS Mastera",
+    ),
+    "Oczekiwanie na potwierdzenie Slave": (
+        "Waiting for Slave confirmation",
+        "Oczekiwanie na potwierdzenie Slave",
+    ),
+    "Błąd adresów sieci równoległej": (
+        "Parallel-network address error",
+        "Błąd adresów sieci równoległej",
+    ),
+    "Błąd - Slave nie odpowiada": (
+        "Error - Slave is not responding",
+        "Błąd - Slave nie odpowiada",
+    ),
+    "Błąd - tryb EMS Slave niezgodny": (
+        "Error - Slave EMS mode mismatch",
+        "Błąd - tryb EMS Slave niezgodny",
+    ),
+    "Nieprawidłowa liczba falowników": (
+        "Invalid inverter count",
+        "Nieprawidłowa liczba falowników",
+    ),
 }
 
 

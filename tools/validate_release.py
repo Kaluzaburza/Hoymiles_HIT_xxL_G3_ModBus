@@ -69,8 +69,8 @@ def validate_fresh_asset_install() -> None:
         )
         polish_written = assets._copy_assets(config_path, "pl-PL", False)
         require(
-            len(polish_written) == 3,
-            "Fresh Polish installation did not copy all three assets",
+            len(polish_written) == 4,
+            "Fresh Polish installation did not copy all four assets",
         )
         require(
             dashboard_path.read_text(encoding="utf-8")
@@ -144,8 +144,8 @@ script:
 
         english_written = assets._copy_assets(config_path, "en-GB", True)
         require(
-            len(english_written) == 3,
-            "English overwrite installation did not copy all three assets",
+            len(english_written) == 4,
+            "English overwrite installation did not copy all four assets",
         )
         require(
             (config_path / "dashboard_hoymiles.yaml").read_text(
@@ -205,7 +205,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.1.0", "Release version must be 1.1.0")
+    require(manifest["version"] == "1.2.0", "Release version must be 1.2.0")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -240,6 +240,24 @@ def main() -> int:
         and "controller, 3004, 1" in system_package,
         "Clear Fault must write value 1 to holding register 3004",
     )
+    meter_package = (ROOT / "packages" / "meters.yaml").read_text(
+        encoding="utf-8"
+    )
+    for power_name in (
+        "Meter Grid Active Power L1",
+        "Meter Grid Active Power L2",
+        "Meter Grid Active Power L3",
+        "Meter Grid Total Active Power",
+    ):
+        require(
+            re.search(
+                rf"modbus_controller_id: \$\{{modbus_fast_controller_id\}}\s+"
+                rf'name: "{re.escape(power_name)}"',
+                meter_package,
+            )
+            is not None,
+            f"{power_name} must use the fast Modbus polling controller",
+        )
 
     english = load_json(COMPONENT / "translations" / "en.json")
     polish = load_json(COMPONENT / "translations" / "pl.json")
@@ -259,6 +277,7 @@ def main() -> int:
         RESOURCES / "home_assistant" / "en" / "hoymiles_ems_scheduler.yaml",
         RESOURCES / "home_assistant" / "pl" / "hoymiles_ems_scheduler.yaml",
         RESOURCES / "www" / "hoymiles-rce-chart-card.js",
+        RESOURCES / "www" / "hoymiles-inverter.png",
     ]
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
@@ -309,7 +328,11 @@ def main() -> int:
             "sensor.hoymiles_night_protected_load_power",
             "sensor.hoymiles_night_protection_window_remaining",
             "sensor.hoymiles_protected_window_expected_load",
+            "{% set upcoming_start = setting - buffer %}",
+            "{% set upcoming_end = rising + buffer %}",
+            "upcoming_end - upcoming_start",
             "sensor.hoymiles_rce_protected_home_energy",
+            "[night, 0] | max + [deficit, 0] | max",
             "state_attr('sun.sun', 'next_rising')",
             "state_attr('sun.sun', 'next_setting')",
             "reserve + (protected / capacity * 100) + margin",
@@ -370,6 +393,45 @@ def main() -> int:
             included_packages == required_esphome_packages,
             f"ESPHome package list differs in {entry_file.name}",
         )
+        require(
+            entry_text.index("- packages/parallel_network.yaml")
+            < entry_text.index("- packages/settings.yaml"),
+            f"Parallel topology must load before EMS settings in {entry_file.name}",
+        )
+
+    parallel_source = (ROOT / "packages" / "parallel_network.yaml").read_text(
+        encoding="utf-8"
+    )
+    settings_source = (ROOT / "packages" / "settings.yaml").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "address: 6048",
+        "address: 6049",
+        'name: "Parallel Topology"',
+        'name: "Parallel EMS Control Status"',
+        "count < 2 || count > 10",
+        "Gotowe - Master steruje siecią równoległą",
+    ):
+        require(
+            marker in parallel_source,
+            f"Parallel topology marker missing: {marker}",
+        )
+    for marker in (
+        "machine_type == 2",
+        "machine_count < 2 || machine_count > 10",
+        "Master rozsyła EMS i dispatch",
+        "Master steruje siecią",
+    ):
+        require(
+            marker in settings_source,
+            f"Parallel EMS safety marker missing: {marker}",
+        )
+    require(
+        "hoymiles_modbus_slave_" not in parallel_source
+        and "hoymiles_modbus_slave_" not in settings_source,
+        "External Modbus must not poll or write internal parallel Slave addresses",
+    )
 
     for asset in required_assets[:4]:
         text = asset.read_text(encoding="utf-8")
@@ -516,14 +578,53 @@ def main() -> int:
     )
     require(
         "title: Sieć — napięcia i częstotliwość" in polish_dashboard
-        and "title: Sieć — prądy" in polish_dashboard,
-        "Polish dashboard does not split live grid values into two cards",
+        and "title: Sieć — moc" in polish_dashboard,
+        "Polish dashboard does not split live grid voltage and power into two cards",
     )
     require(
         "title: Grid — voltages and frequency" in english_dashboard
-        and "title: Grid — currents" in english_dashboard,
-        "English dashboard does not split live grid values into two cards",
+        and "title: Grid — power" in english_dashboard,
+        "English dashboard does not split live grid voltage and power into two cards",
     )
+    require(
+        "potrzebna domowi" not in english_dashboard,
+        "English dashboard contains an untranslated RCE reserve explanation",
+    )
+    for dashboard_text, language in (
+        (polish_dashboard, "Polish"),
+        (english_dashboard, "English"),
+    ):
+        for entity_id in (
+            "sensor.hoymiles_hit_meter_grid_active_power_l1",
+            "sensor.hoymiles_hit_meter_grid_active_power_l2",
+            "sensor.hoymiles_hit_meter_grid_active_power_l3",
+            "sensor.hoymiles_hit_meter_grid_total_active_power",
+        ):
+            require(
+                entity_id in dashboard_text,
+                f"{language} dashboard lacks live grid power entity {entity_id}",
+            )
+    for dashboard_text, language, topology_name, status_name in (
+        (
+            polish_dashboard,
+            "Polish",
+            'name: "Topologia sieci"',
+            'name: "Gotowość sterowania EMS"',
+        ),
+        (
+            english_dashboard,
+            "English",
+            'name: "Network topology"',
+            'name: "EMS control readiness"',
+        ),
+    ):
+        require(
+            "sensor.hoymiles_hit_parallel_topology" in dashboard_text
+            and "sensor.hoymiles_hit_parallel_ems_control_status" in dashboard_text
+            and topology_name in dashboard_text
+            and status_name in dashboard_text,
+            f"{language} dashboard lacks localized parallel EMS diagnostics",
+        )
 
     english_assets = [required_assets[0], required_assets[2]]
     polish_characters = re.compile(r"[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
@@ -557,6 +658,20 @@ def main() -> int:
     require(
         localization.localized_text_state("Brak błędu", "en") == "No error",
         "English fault state localization failed",
+    )
+    require(
+        localization.localized_text_state(
+            "Gotowe - Master steruje siecią równoległą", "en"
+        )
+        == "Ready - Master controls the parallel network",
+        "English parallel EMS state localization failed",
+    )
+    require(
+        localization.localized_text_state(
+            "Zablokowane - ESP32 podłączone do Slave", "pl"
+        )
+        == "Zablokowane - ESP32 podłączone do Slave",
+        "Polish parallel EMS state localization failed",
     )
     validate_fresh_asset_install()
 

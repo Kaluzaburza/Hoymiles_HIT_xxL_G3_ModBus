@@ -15,6 +15,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pnpm-store/
 
 # Editors and operating systems
 .DS_Store

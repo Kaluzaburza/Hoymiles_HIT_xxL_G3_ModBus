@@ -33,12 +33,13 @@ esp32:
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.1.0
+    ref: v1.2.0
     refresh: 1d
     files:
       - packages/core.yaml
       - packages/network.yaml
       - packages/modbus_connection.yaml
+      - packages/parallel_network.yaml
       - packages/settings.yaml
       - packages/system.yaml
       - packages/states_alarms.yaml
@@ -50,6 +51,5 @@ packages:
       - packages/battery.yaml
       - packages/energy_flow.yaml
       - packages/meters.yaml
-      - packages/parallel_network.yaml
       - packages/overview.yaml
       - packages/diagnostics.yaml
