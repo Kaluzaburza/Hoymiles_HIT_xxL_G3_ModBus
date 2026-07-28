@@ -2990,24 +2990,6 @@
   {
     "domain": "sensor",
     "source_component": "sensor",
-    "translation_key": "overview_pv_total_power",
-    "source_name": "Overview PV Total Power",
-    "source_id": "pv_total_power_30001",
-    "source_object_id": "overview_pv_total_power",
-    "entity_category": null,
-    "name": {
-      "en": "Overview PV Total Power",
-      "pl": "Podgląd łącznej mocy PV"
-    },
-    "description": {
-      "en": "Hoymiles HIT xxL G3 Modbus value: Overview PV Total Power.",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy PV."
-    },
-    "options": []
-  },
-  {
-    "domain": "sensor",
-    "source_component": "sensor",
     "translation_key": "overview_internal_pv_total_power",
     "source_name": "Overview Internal PV Total Power",
     "source_id": "internal_pv_total_power_30003",
@@ -3038,6 +3020,60 @@
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Overview External PV Total Power.",
       "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy zewnętrznych źródeł PV."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_generator_active_power",
+    "source_name": "Overview Generator Active Power",
+    "source_id": "generator_active_power_30013",
+    "source_object_id": "overview_generator_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Generator Active Power",
+      "pl": "Podgląd mocy czynnej generatora"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Generator Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej generatora."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_smart_load_active_power",
+    "source_name": "Overview Smart Load Active Power",
+    "source_id": "smart_load_active_power_30017",
+    "source_object_id": "overview_smart_load_active_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview Smart Load Active Power",
+      "pl": "Podgląd mocy czynnej Smart Load"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Smart Load Active Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej Smart Load."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "overview_pv_total_power",
+    "source_name": "Overview PV Total Power",
+    "source_id": "pv_total_power_30001",
+    "source_object_id": "overview_pv_total_power",
+    "entity_category": null,
+    "name": {
+      "en": "Overview PV Total Power",
+      "pl": "Podgląd łącznej mocy PV"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Overview PV Total Power.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd łącznej mocy PV."
     },
     "options": []
   },
@@ -3098,24 +3134,6 @@
   {
     "domain": "sensor",
     "source_component": "sensor",
-    "translation_key": "overview_generator_active_power",
-    "source_name": "Overview Generator Active Power",
-    "source_id": "generator_active_power_30013",
-    "source_object_id": "overview_generator_active_power",
-    "entity_category": null,
-    "name": {
-      "en": "Overview Generator Active Power",
-      "pl": "Podgląd mocy czynnej generatora"
-    },
-    "description": {
-      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Generator Active Power.",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej generatora."
-    },
-    "options": []
-  },
-  {
-    "domain": "sensor",
-    "source_component": "sensor",
     "translation_key": "overview_load_active_power",
     "source_name": "Overview Load Active Power",
     "source_id": "load_active_power_30015",
@@ -3128,24 +3146,6 @@
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Overview Load Active Power.",
       "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej odbiorników."
-    },
-    "options": []
-  },
-  {
-    "domain": "sensor",
-    "source_component": "sensor",
-    "translation_key": "overview_smart_load_active_power",
-    "source_name": "Overview Smart Load Active Power",
-    "source_id": "smart_load_active_power_30017",
-    "source_object_id": "overview_smart_load_active_power",
-    "entity_category": null,
-    "name": {
-      "en": "Overview Smart Load Active Power",
-      "pl": "Podgląd mocy czynnej Smart Load"
-    },
-    "description": {
-      "en": "Hoymiles HIT xxL G3 Modbus value: Overview Smart Load Active Power.",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Podgląd mocy czynnej Smart Load."
     },
     "options": []
   },
@@ -3177,11 +3177,11 @@
     "entity_category": null,
     "name": {
       "en": "Machines Type",
-      "pl": "Machines typ"
+      "pl": "Rola urządzenia w sieci równoległej"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Machines Type.",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Machines typ."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Rola urządzenia w sieci równoległej."
     },
     "options": []
   },
@@ -3195,11 +3195,11 @@
     "entity_category": null,
     "name": {
       "en": "Number of Machines (Master and Slave)",
-      "pl": "Number of Machines (Master and Slave)"
+      "pl": "Liczba falowników (Master i Slave)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Number of Machines (Master and Slave).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Number of Machines (Master and Slave)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Liczba falowników (Master i Slave)."
     },
     "options": []
   },
@@ -3213,11 +3213,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 1 (Master Device)",
-      "pl": "Komunikacja adres 1 (Master Device)"
+      "pl": "Adres komunikacyjny 1 (Master)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 1 (Master Device).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 1 (Master Device)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 1 (Master)."
     },
     "options": []
   },
@@ -3231,11 +3231,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 2 (Slave Device 1)",
-      "pl": "Komunikacja adres 2 (Slave Device 1)"
+      "pl": "Adres komunikacyjny 2 (Slave 1)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 2 (Slave Device 1).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 2 (Slave Device 1)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 2 (Slave 1)."
     },
     "options": []
   },
@@ -3249,11 +3249,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 3 (Slave Device 2)",
-      "pl": "Komunikacja adres 3 (Slave Device 2)"
+      "pl": "Adres komunikacyjny 3 (Slave 2)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 3 (Slave Device 2).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 3 (Slave Device 2)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 3 (Slave 2)."
     },
     "options": []
   },
@@ -3267,11 +3267,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 4 (Slave Device 3)",
-      "pl": "Komunikacja adres 4 (Slave Device 3)"
+      "pl": "Adres komunikacyjny 4 (Slave 3)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 4 (Slave Device 3).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 4 (Slave Device 3)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 4 (Slave 3)."
     },
     "options": []
   },
@@ -3285,11 +3285,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 5 (Slave Device 4)",
-      "pl": "Komunikacja adres 5 (Slave Device 4)"
+      "pl": "Adres komunikacyjny 5 (Slave 4)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 5 (Slave Device 4).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 5 (Slave Device 4)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 5 (Slave 4)."
     },
     "options": []
   },
@@ -3303,11 +3303,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 6 (Slave Device 5)",
-      "pl": "Komunikacja adres 6 (Slave Device 5)"
+      "pl": "Adres komunikacyjny 6 (Slave 5)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 6 (Slave Device 5).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 6 (Slave Device 5)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 6 (Slave 5)."
     },
     "options": []
   },
@@ -3321,11 +3321,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 7 (Slave Device 6)",
-      "pl": "Komunikacja adres 7 (Slave Device 6)"
+      "pl": "Adres komunikacyjny 7 (Slave 6)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 7 (Slave Device 6).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 7 (Slave Device 6)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 7 (Slave 6)."
     },
     "options": []
   },
@@ -3339,11 +3339,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 8 (Slave Device 7)",
-      "pl": "Komunikacja adres 8 (Slave Device 7)"
+      "pl": "Adres komunikacyjny 8 (Slave 7)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 8 (Slave Device 7).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 8 (Slave Device 7)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 8 (Slave 7)."
     },
     "options": []
   },
@@ -3357,11 +3357,11 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 9 (Slave Device 8)",
-      "pl": "Komunikacja adres 9 (Slave Device 8)"
+      "pl": "Adres komunikacyjny 9 (Slave 8)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 9 (Slave Device 8).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 9 (Slave Device 8)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 9 (Slave 8)."
     },
     "options": []
   },
@@ -3375,11 +3375,47 @@
     "entity_category": null,
     "name": {
       "en": "Communication Address 10 (Slave Device 9)",
-      "pl": "Komunikacja adres 10 (Slave Device 9)"
+      "pl": "Adres komunikacyjny 10 (Slave 9)"
     },
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: Communication Address 10 (Slave Device 9).",
-      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Komunikacja adres 10 (Slave Device 9)."
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Adres komunikacyjny 10 (Slave 9)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "parallel_topology",
+    "source_name": "Parallel Topology",
+    "source_id": "parallel_topology",
+    "source_object_id": "parallel_topology",
+    "entity_category": null,
+    "name": {
+      "en": "Parallel Topology",
+      "pl": "Topologia sieci równoległej"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Parallel Topology.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Topologia sieci równoległej."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "text_sensor",
+    "translation_key": "parallel_ems_control_status",
+    "source_name": "Parallel EMS Control Status",
+    "source_id": "parallel_ems_control_status",
+    "source_object_id": "parallel_ems_control_status",
+    "entity_category": null,
+    "name": {
+      "en": "Parallel EMS Control Status",
+      "pl": "Stan sterowania EMS sieci równoległej"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Parallel EMS Control Status.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Stan sterowania EMS sieci równoległej."
     },
     "options": []
   },

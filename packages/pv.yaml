@@ -194,9 +194,9 @@ sensor:
       return id(battery_power_1914).state;
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "Battery 1 Voltage"
-    id: bat1_voltage_46
+    modbus_controller_id: ${modbus_fast_controller_id}
+    id: bat1_voltage_master_46
+    internal: true
     register_type: read
     address: 46
     unit_of_measurement: "V"
@@ -208,9 +208,9 @@ sensor:
     - multiply: 0.1
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "Battery Current (Inverter)"
-    id: battery_current_inverter_48
+    modbus_controller_id: ${modbus_fast_controller_id}
+    id: battery_current_inverter_master_48
+    internal: true
     register_type: read
     address: 48
     unit_of_measurement: "A"
@@ -220,6 +220,39 @@ sensor:
     value_type: S_DWORD
     filters:
     - multiply: 0.01
+
+  - platform: template
+    name: "Battery 1 Voltage"
+    id: bat1_voltage_46
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 1s
+    lambda: |-
+      if (!id(bat1_voltage_master_46).has_state()) return {};
+      return id(bat1_voltage_master_46).state;
+
+  - platform: template
+    name: "Battery Current (Inverter)"
+    id: battery_current_inverter_48
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: 1s
+    lambda: |-
+      if (!id(battery_current_inverter_master_48).has_state()) return {};
+      if (!id(machines_type_6048).has_state() ||
+          std::lround(id(machines_type_6048).state) != 1) {
+        return id(battery_current_inverter_master_48).state;
+      }
+      if (!id(bat_total_power_8546).has_state() ||
+          !id(bat1_voltage_master_46).has_state() ||
+          std::fabs(id(bat1_voltage_master_46).state) < 1.0f) return {};
+      // Wartość systemowa: suma mocy baterii wszystkich falowników podzielona
+      // przez wspólne napięcie magistrali baterii.
+      return id(bat_total_power_8546).state / id(bat1_voltage_master_46).state;
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
@@ -654,7 +687,7 @@ sensor:
     - multiply: 0.1
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "PV Total Power (Energy Block)"
     id: pv_total_power_8528
     register_type: read

@@ -553,7 +553,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "esp_wifi_ssid": {
@@ -578,7 +593,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "esp_mac_address": {
@@ -603,17 +633,38 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
-      },
-      "overview_pv_total_power": {
-        "name": "Overview PV Total Power"
       },
       "overview_internal_pv_total_power": {
         "name": "Overview Internal PV Total Power"
       },
       "overview_external_pv_total_power": {
         "name": "Overview External PV Total Power"
+      },
+      "overview_generator_active_power": {
+        "name": "Overview Generator Active Power"
+      },
+      "overview_smart_load_active_power": {
+        "name": "Overview Smart Load Active Power"
+      },
+      "overview_pv_total_power": {
+        "name": "Overview PV Total Power"
       },
       "overview_inverter_active_power": {
         "name": "Overview Inverter Active Power"
@@ -624,14 +675,8 @@
       "overview_grid_total_active_power": {
         "name": "Overview Grid Total Active Power"
       },
-      "overview_generator_active_power": {
-        "name": "Overview Generator Active Power"
-      },
       "overview_load_active_power": {
         "name": "Overview Load Active Power"
-      },
-      "overview_smart_load_active_power": {
-        "name": "Overview Smart Load Active Power"
       },
       "overview_battery_soc": {
         "name": "Overview Battery SOC"
@@ -671,6 +716,86 @@
       },
       "communication_address_10_slave_device_9": {
         "name": "Communication Address 10 (Slave Device 9)"
+      },
+      "parallel_topology": {
+        "name": "Parallel Topology",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
+        }
+      },
+      "parallel_ems_control_status": {
+        "name": "Parallel EMS Control Status",
+        "state": {
+          "unavailable": "Unavailable",
+          "power_initialization": "Power initialization",
+          "standby": "Standby",
+          "grid_test": "Grid test",
+          "on_grid": "On-grid operation",
+          "fault": "Fault",
+          "off_grid": "Off-grid operation",
+          "bypass": "Bypass",
+          "no_error": "No error",
+          "no_errors": "No faults",
+          "offline": "Offline",
+          "online": "Online",
+          "hmid_connected": "HMID: connected",
+          "hmid_connection_error": "HMID: connection error",
+          "no_battery": "No battery",
+          "lithium": "Lithium-ion",
+          "lead_acid": "Lead-acid",
+          "simulated": "Simulated",
+          "charging": "Charging",
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
+        }
       },
       "pv_total_power_direct": {
         "name": "PV Total Power (Direct)"
@@ -835,7 +960,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "sw_fault": {
@@ -860,7 +1000,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "hw_fault": {
@@ -885,7 +1040,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "meter_link_status": {
@@ -910,7 +1080,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "pv_link_status": {
@@ -935,7 +1120,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "battery_type_bms": {
@@ -960,7 +1160,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "battery_link_status": {
@@ -985,7 +1200,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "battery_work_status_bms": {
@@ -1010,7 +1240,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "overview_system_work_status": {
@@ -1035,7 +1280,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "overview_battery_work_status": {
@@ -1060,7 +1320,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "battery_fault_code_bms": {
@@ -1085,7 +1360,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "overview_battery_faults": {
@@ -1110,7 +1400,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "overview_dsp_power_faults": {
@@ -1135,7 +1440,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "dsp_safety_faults": {
@@ -1160,7 +1480,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "arm_communication_faults": {
@@ -1185,7 +1520,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "arm_peripheral_faults": {
@@ -1210,7 +1560,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       },
       "arm_system_faults": {
@@ -1235,7 +1600,22 @@
           "lead_acid": "Lead-acid",
           "simulated": "Simulated",
           "charging": "Charging",
-          "discharging": "Discharging"
+          "discharging": "Discharging",
+          "single_inverter": "Single inverter",
+          "parallel_master": "Master",
+          "parallel_slave": "Slave",
+          "unknown_topology": "Unknown topology",
+          "invalid_topology": "Invalid topology",
+          "parallel_ems_ready_direct": "Ready - direct control",
+          "parallel_ems_ready_master": "Ready - Master controls the parallel network",
+          "parallel_ems_blocked_slave": "Blocked - ESP32 connected to Slave",
+          "parallel_ems_waiting": "Waiting for network detection",
+          "parallel_ems_waiting_master_mode": "Waiting for Master EMS mode",
+          "parallel_ems_waiting_slave_confirmation": "Waiting for Slave confirmation",
+          "parallel_address_error": "Parallel-network address error",
+          "parallel_slave_offline": "Error - Slave is not responding",
+          "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
+          "parallel_invalid_count": "Invalid inverter count"
         }
       }
     },

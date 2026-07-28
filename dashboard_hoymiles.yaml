@@ -60,18 +60,18 @@ views:
               - entity: sensor.hoymiles_hit_inverter_grid_frequency
                 name: Częstotliwość
           - type: entities
-            title: Sieć — prądy
+            title: Sieć — moc
             show_header_toggle: false
             state_color: true
             entities:
-              - entity: sensor.hoymiles_hit_grid_current_l1n
-                name: Prąd L1
-              - entity: sensor.hoymiles_hit_grid_current_l2n
-                name: Prąd L2
-              - entity: sensor.hoymiles_hit_grid_current_l3n
-                name: Prąd L3
-              - entity: sensor.hoymiles_hit_grid_total_current
-                name: Prąd łączny (suma faz)
+              - entity: sensor.hoymiles_hit_meter_grid_active_power_l1
+                name: Moc L1
+              - entity: sensor.hoymiles_hit_meter_grid_active_power_l2
+                name: Moc L2
+              - entity: sensor.hoymiles_hit_meter_grid_active_power_l3
+                name: Moc L3
+              - entity: sensor.hoymiles_hit_meter_grid_total_active_power
+                name: Moc łączna
       - type: entities
         title: Sterowanie EMS
         show_header_toggle: false
@@ -81,6 +81,10 @@ views:
         entities:
           - entity: select.hoymiles_hit_ems_mode
             name: Tryb pracy
+          - entity: sensor.hoymiles_hit_parallel_ems_control_status
+            name: "Gotowość sterowania EMS"
+          - entity: sensor.hoymiles_hit_number_of_machines_master_and_slave
+            name: "Wykryta liczba falowników"
           - entity: button.hoymiles_hit_clear_fault
             name: "Wyczyść alarmy falownika"
       - type: entities
@@ -102,7 +106,7 @@ views:
             name: Rezystancja izolacji
           - entity: sensor.hoymiles_hit_residual_current
             name: Prąd różnicowy
-      - type: custom:sunsynk-power-flow-card
+      - type: custom:hoymiles-power-flow-card
         title: Bieżący przepływ energii
         cardstyle: lite
         wide: true
@@ -117,6 +121,7 @@ views:
           modern: true
           autarky: "no"
           auto_scale: true
+        inverter_image: /local/hoymiles-inverter.png?v=1
         battery:
           energy: 21000
           shutdown_soc: 10
@@ -321,11 +326,11 @@ views:
           - entity: sensor.hoymiles_load_average_4_days
             name: Średnie dobowe zużycie LOAD — 4 dni
           - entity: binary_sensor.hoymiles_night_protection_window
-            name: Chronione okno nocne aktywne
+            name: Pomiar zużycia okna nocnego aktywny
           - entity: sensor.hoymiles_night_protection_window_duration
             name: Pełne okno nocne — zachód/wschód ± 1,5 h
           - entity: sensor.hoymiles_night_protection_window_remaining
-            name: Pozostało do końca chronionego okna
+            name: Chroniony czas pracy domu — najbliższa noc
           - entity: sensor.hoymiles_night_load_average_4_days
             name: Średnie zużycie w oknie nocnym — 4 dni
           - entity: sensor.hoymiles_protected_window_expected_load
@@ -376,15 +381,16 @@ views:
 
           Wyliczenie:
 
-          **rezerwa awaryjna Self-Use + większa z wartości: pozostałe zużycie
-          domu do końca okna nocnego albo dobowy deficyt prognozy PV + korekta
+          **rezerwa awaryjna Self-Use + pozostałe zużycie domu w najbliższym
+          oknie nocnym + dodatkowy dobowy deficyt prognozy PV + korekta
           bezpieczeństwa użytkownika**.
 
           Okno nocne rozpoczyna się **90 minut przed zachodem** i kończy
-          **90 minut po wschodzie słońca**. W trakcie nocy chroniona energia
-          maleje wraz z pozostałym czasem, dzięki czemu automat może sprzedać
-          tylko tę część magazynu, która nie będzie potrzebna domowi do
-          rozpoczęcia produkcji PV.
+          **90 minut po wschodzie słońca**. W ciągu dnia automatyka chroni
+          energię dla całego nadchodzącego okna nocnego. Od 90 minut przed
+          zachodem chroniona energia maleje wraz z pozostałym czasem, dzięki
+          czemu automat może sprzedać tylko tę część magazynu, która nie będzie
+          potrzebna domowi do rozpoczęcia produkcji PV.
 
           Przez pierwszą dobę zużycie nocne jest szacowane z czterodniowej
           średniej dobowej. Później automat korzysta z rzeczywistego zużycia
@@ -1288,27 +1294,31 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
+          - entity: sensor.hoymiles_hit_parallel_topology
+            name: "Topologia sieci"
+          - entity: sensor.hoymiles_hit_parallel_ems_control_status
+            name: "Gotowość sterowania EMS"
           - entity: sensor.hoymiles_hit_machines_type
-            name: "Machines typ"
+            name: "Typ urządzenia (kod)"
           - entity: sensor.hoymiles_hit_number_of_machines_master_and_slave
-            name: "Number of Machines (Master and Slave)"
+            name: "Wykryta liczba falowników"
           - entity: sensor.hoymiles_hit_communication_address_1_master_device
-            name: "Komunikacja adres 1 (Master Device)"
+            name: "Adres 1 (Master)"
           - entity: sensor.hoymiles_hit_communication_address_2_slave_device_1
-            name: "Komunikacja adres 2 (Slave Device 1)"
+            name: "Adres 2 (Slave 1)"
           - entity: sensor.hoymiles_hit_communication_address_3_slave_device_2
-            name: "Komunikacja adres 3 (Slave Device 2)"
+            name: "Adres 3 (Slave 2)"
           - entity: sensor.hoymiles_hit_communication_address_4_slave_device_3
-            name: "Komunikacja adres 4 (Slave Device 3)"
+            name: "Adres 4 (Slave 3)"
           - entity: sensor.hoymiles_hit_communication_address_5_slave_device_4
-            name: "Komunikacja adres 5 (Slave Device 4)"
+            name: "Adres 5 (Slave 4)"
           - entity: sensor.hoymiles_hit_communication_address_6_slave_device_5
-            name: "Komunikacja adres 6 (Slave Device 5)"
+            name: "Adres 6 (Slave 5)"
           - entity: sensor.hoymiles_hit_communication_address_7_slave_device_6
-            name: "Komunikacja adres 7 (Slave Device 6)"
+            name: "Adres 7 (Slave 6)"
           - entity: sensor.hoymiles_hit_communication_address_8_slave_device_7
-            name: "Komunikacja adres 8 (Slave Device 7)"
+            name: "Adres 8 (Slave 7)"
           - entity: sensor.hoymiles_hit_communication_address_9_slave_device_8
-            name: "Komunikacja adres 9 (Slave Device 8)"
+            name: "Adres 9 (Slave 8)"
           - entity: sensor.hoymiles_hit_communication_address_10_slave_device_9
-            name: "Komunikacja adres 10 (Slave Device 9)"
+            name: "Adres 10 (Slave 9)"

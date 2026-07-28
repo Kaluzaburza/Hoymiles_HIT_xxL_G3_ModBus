@@ -639,3 +639,152 @@ window.customCards.push({
   description: "Readable chart of 96 RCE prices with a 48-block EMS plan.",
   preview: true,
 });
+
+class HoymilesPowerFlowCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._renderVersion = 0;
+    this._inverterObserver = null;
+  }
+
+  setConfig(config) {
+    if (!config) {
+      throw new Error("Power-flow card configuration is required");
+    }
+    this._config = { ...config };
+    this._mount();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._card) {
+      this._card.hass = hass;
+    }
+  }
+
+  connectedCallback() {
+    this._mount();
+  }
+
+  disconnectedCallback() {
+    this._inverterObserver?.disconnect();
+    this._inverterObserver = null;
+  }
+
+  _installInverterImage(card, inverterImage) {
+    const inverterGroup = card.shadowRoot?.querySelector("svg#Inverter");
+    if (!inverterGroup) return false;
+
+    // Hide both variants of the inverter supplied by the underlying card.
+    // Leaving them in the SVG keeps the original layout and connection points.
+    inverterGroup
+      .querySelectorAll(
+        'svg[width="54"][height="79"], image[width="54"][height="72"]'
+      )
+      .forEach((element) => {
+        element.style.display = "none";
+      });
+
+    let image = inverterGroup.querySelector("#hoymiles-inverter-image");
+    if (!image) {
+      image = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "image"
+      );
+      image.id = "hoymiles-inverter-image";
+      inverterGroup.append(image);
+    }
+
+    // Coordinates are expressed in the original 720 x 405 SVG viewBox.
+    // The image therefore follows the diagram scale automatically on phones,
+    // tablets and desktop browsers.
+    image.setAttribute("x", "205");
+    image.setAttribute("y", "177");
+    image.setAttribute("width", "70");
+    image.setAttribute("height", "84");
+    image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    image.setAttribute("href", inverterImage);
+    image.setAttribute("aria-hidden", "true");
+    image.style.pointerEvents = "none";
+    return true;
+  }
+
+  async _mount() {
+    if (!this.isConnected || !this._config) return;
+
+    const renderVersion = ++this._renderVersion;
+    this._inverterObserver?.disconnect();
+    this._inverterObserver = null;
+    await customElements.whenDefined("sunsynk-power-flow-card");
+    if (renderVersion !== this._renderVersion) return;
+
+    const powerFlowConfig = { ...this._config };
+    const inverterImage =
+      powerFlowConfig.inverter_image ?? "/local/hoymiles-inverter.png?v=1";
+    delete powerFlowConfig.inverter_image;
+    delete powerFlowConfig.inverter_image_left;
+    delete powerFlowConfig.inverter_image_top;
+    delete powerFlowConfig.inverter_image_width;
+
+    const card = document.createElement("sunsynk-power-flow-card");
+    card.setConfig({
+      ...powerFlowConfig,
+      type: "custom:sunsynk-power-flow-card",
+    });
+    if (this._hass) {
+      card.hass = this._hass;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "wrapper";
+    wrapper.append(card);
+
+    const style = document.createElement("style");
+    style.textContent = `
+      :host {
+        display: block;
+      }
+      .wrapper {
+        position: relative;
+      }
+    `;
+
+    this.shadowRoot.replaceChildren(style, wrapper);
+    this._card = card;
+
+    await card.updateComplete;
+    if (renderVersion !== this._renderVersion || this._card !== card) return;
+
+    this._installInverterImage(card, inverterImage);
+    if (card.shadowRoot) {
+      this._inverterObserver = new MutationObserver(() => {
+        this._installInverterImage(card, inverterImage);
+      });
+      this._inverterObserver.observe(card.shadowRoot, {
+        childList: true,
+        subtree: true,
+      });
+    }
+  }
+
+  getCardSize() {
+    return this._card?.getCardSize?.() ?? 6;
+  }
+
+  getGridOptions() {
+    return this._card?.getGridOptions?.();
+  }
+}
+
+if (!customElements.get("hoymiles-power-flow-card")) {
+  customElements.define("hoymiles-power-flow-card", HoymilesPowerFlowCard);
+}
+
+window.customCards.push({
+  type: "hoymiles-power-flow-card",
+  name: "Hoymiles Power Flow",
+  description:
+    "Sunsynk power-flow card wrapper with a Hoymiles inverter illustration.",
+  preview: false,
+});

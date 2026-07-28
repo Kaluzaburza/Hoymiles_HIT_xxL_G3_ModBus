@@ -5,9 +5,9 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
 
-Version **1.1.0** is the current public release. It contains:
+Version **1.2.0** is the current public release. It contains:
 
-- 273 localized read-only and writable Modbus entities;
+- 275 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
 - grid, load/EPS, battery/BMS, generator and inverter registers;
 - safe atomic EMS writes for registers 4300–4306;
@@ -15,6 +15,9 @@ Version **1.1.0** is the current public release. It contains:
 - PSE RCE price-based discharge automation with an export lockout window;
 - optional Solcast- and LOAD-based dynamic SOC reserve with protected
   night-time home demand;
+- automatic single/Master/Slave topology detection and system-wide live power
+  values for parallel installations;
+- 5-second grid voltage, phase-power and live energy-flow polling;
 - a ready-to-import Home Assistant dashboard and RCE chart card;
 - English and Polish entity names, select options, config flow and services.
 
@@ -152,7 +155,7 @@ Home Assistant.
 Add the dashboard resource:
 
 ```text
-/local/hoymiles-rce-chart-card.js?v=1.1.0
+/local/hoymiles-rce-chart-card.js?v=1.2.0
 ```
 
 with resource type **JavaScript module**, then import
@@ -209,6 +212,41 @@ uses the measured average consumption from up to four previous protected
 windows; before that, it falls back to a proportional share of the four-day
 daily LOAD average.
 
+## Parallel inverter systems
+
+The standard ESPHome configuration reads the manufacturer topology registers
+`6048-6095` and automatically distinguishes a single inverter, a Master and a
+Slave. No manual inverter-count selector is required. Connect the ESP32 Modbus
+converter to the **Master**. For a detected Master, the integration writes the
+complete EMS block `4300-4306` once to that device; the Master is responsible
+for dispatching the settings to all detected Slave inverters. A write is
+blocked if the connected inverter explicitly reports the Slave role or if a
+Master reports an invalid device count.
+
+When a Master is detected, the overview entities used by the Home Assistant
+dashboard and its animated energy-flow card automatically switch to the
+manufacturer's system-wide registers for PV power, battery power, LOAD power
+and grid power. The physical battery voltage still comes from the Master DC
+port, while the displayed battery current is calculated from the total
+parallel-system battery power. In single-inverter mode the same public entity
+IDs continue to expose the direct inverter readings.
+
+The communication addresses listed in registers `6050-6095` belong to the
+inverter's internal parallel network. They are topology diagnostics, not
+additional Modbus devices routed through the Master's external RS485 port, so
+the ESP32 does not poll them as separate slave IDs.
+
+The `Parallel Networking Command` entity for register `3016` remains disabled
+by default. It is a commissioning command that creates or disassembles the
+parallel network, not a normal EMS control. The integration never invokes it
+automatically.
+
+According to the Hoymiles HIT-(5-20)L-G3 user manual, an on-grid parallel
+system supports up to 10 inverters. Off-grid operation supports up to three
+units without AC contactors or up to 10 with the required contactors. The
+meter and DTS must be connected to the Master, and the first and last devices
+on the dedicated parallel communication bus require termination.
+
 ## Repository structure
 
 ```text
@@ -244,7 +282,7 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.1.0** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.2.0** udostępnia
 273 encje, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 automatykę cenową RCE PSE, dynamiczną rezerwę SOC na podstawie Solcast i LOAD,
 ochronę nocnego zapotrzebowania domu, blokadę sprzedaży oraz gotowy dashboard.

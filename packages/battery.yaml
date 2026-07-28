@@ -239,7 +239,7 @@ sensor:
     - multiply: 0.1
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Battery Total Power (Energy Block)"
     id: bat_total_power_8546
     register_type: read

@@ -1,4 +1,10 @@
-# Sieć równoległa falowników (parametry statyczne)
+# Sieć równoległa falowników (parametry statyczne).
+#
+# Port Modbus Mastera nie przekazuje zapytań kierowanych bezpośrednio do
+# adresów urządzeń Slave. Rejestry 6050/6055/... opisują wewnętrzną sieć
+# równoległą, ale nie są dodatkowymi urządzeniami na zewnętrznej magistrali
+# RS485. Zgodnie z instrukcją Hoymiles ustawienia EMS i dispatch zapisane do
+# Mastera są rozsyłane przez Master do całej wykrytej sieci.
 
 sensor:
   - platform: modbus_controller
@@ -120,3 +126,82 @@ sensor:
     accuracy_decimals: 0
     value_type: U_WORD
     skip_updates: 9
+
+text_sensor:
+  - platform: template
+    name: "Parallel Topology"
+    id: parallel_topology
+    icon: mdi:lan
+    update_interval: 5s
+    lambda: |-
+      if (!id(machines_type_6048).has_state()) {
+        return std::string("Oczekiwanie na wykrycie sieci");
+      }
+      const uint16_t machine_type =
+          static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+      if (machine_type == 0) return std::string("Falownik pojedynczy");
+      if (machine_type == 1) return std::string("Master");
+      if (machine_type == 2) return std::string("Slave");
+      return std::string("Nieznana topologia");
+
+  - platform: template
+    name: "Parallel EMS Control Status"
+    id: parallel_ems_control_status
+    icon: mdi:lan-check
+    update_interval: 5s
+    lambda: |-
+      if (!id(machines_type_6048).has_state()) {
+        return std::string("Oczekiwanie na wykrycie sieci");
+      }
+
+      const uint16_t machine_type =
+          static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+      if (machine_type == 0) {
+        return std::string("Gotowe - sterowanie bezpośrednie");
+      }
+      if (machine_type == 2) {
+        return std::string("Zablokowane - ESP32 podłączone do Slave");
+      }
+      if (machine_type != 1) {
+        return std::string("Nieznana topologia");
+      }
+      if (!id(number_of_machines_master_and_slave_6049).has_state()) {
+        return std::string("Oczekiwanie na wykrycie sieci");
+      }
+
+      const int count = static_cast<int>(
+          std::lround(id(number_of_machines_master_and_slave_6049).state));
+      if (count < 2 || count > 10) {
+        return std::string("Nieprawidłowa liczba falowników");
+      }
+
+      std::array<esphome::sensor::Sensor *, 10> address_sensors{
+          id(communication_address_1_master_device_6050),
+          id(communication_address_2_slave_device_1_6055),
+          id(communication_address_3_slave_device_2_6060),
+          id(communication_address_4_slave_device_3_6065),
+          id(communication_address_5_slave_device_4_6070),
+          id(communication_address_6_slave_device_5_6075),
+          id(communication_address7_slave_device_6_6080),
+          id(communication_address8_slave_device_7_6085),
+          id(communication_address9_slave_device_8_6090),
+          id(communication_address10_slave_device_9_6095),
+      };
+      std::array<uint16_t, 10> addresses{};
+      for (int slot = 0; slot < count; slot++) {
+        if (!address_sensors[slot]->has_state()) {
+          return std::string("Oczekiwanie na wykrycie sieci");
+        }
+        const int address =
+            static_cast<int>(std::lround(address_sensors[slot]->state));
+        if (address < 1 || address > 247) {
+          return std::string("Błąd adresów sieci równoległej");
+        }
+        addresses[slot] = static_cast<uint16_t>(address);
+        for (int previous = 0; previous < slot; previous++) {
+          if (addresses[previous] == addresses[slot]) {
+            return std::string("Błąd adresów sieci równoległej");
+          }
+        }
+      }
+      return std::string("Gotowe - Master steruje siecią równoległą");

@@ -118,7 +118,7 @@ sensor:
              std::abs(id(grid_current_cn_1806).state);
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Meter Grid Active Power L1"
     id: grid_active_power_an_1808
     register_type: read
@@ -131,7 +131,7 @@ sensor:
     value_type: S_DWORD
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Meter Grid Active Power L2"
     id: grid_active_power_bn_1810
     register_type: read
@@ -144,7 +144,7 @@ sensor:
     value_type: S_DWORD
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Meter Grid Active Power L3"
     id: grid_active_power_cn_1812
     register_type: read
@@ -157,7 +157,7 @@ sensor:
     value_type: S_DWORD
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Meter Grid Total Active Power"
     id: grid_total_active_power_1814
     register_type: read

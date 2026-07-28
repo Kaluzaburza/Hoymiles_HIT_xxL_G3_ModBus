@@ -236,17 +236,18 @@ template:
           {% set shortly_after_rising =
             is_state('sun.sun', 'above_horizon')
             and 0 <= current - previous_rising <= buffer %}
-          {% set shortly_before_setting =
-            is_state('sun.sun', 'above_horizon')
-            and 0 <= setting - current <= buffer %}
+          {% set upcoming_start = setting - buffer %}
+          {% set upcoming_end = rising + buffer %}
           {% if shortly_after_rising %}
             {{ (([previous_rising + buffer - current, 0] | max) / 3600)
                | round(2) }}
-          {% elif is_state('sun.sun', 'below_horizon')
-                 or shortly_before_setting %}
-            {{ (([rising + buffer - current, 0] | max) / 3600) | round(2) }}
+          {% elif is_state('sun.sun', 'below_horizon') %}
+            {{ (([upcoming_end - current, 0] | max) / 3600) | round(2) }}
+          {% elif current >= upcoming_start %}
+            {{ (([upcoming_end - current, 0] | max) / 3600) | round(2) }}
           {% else %}
-            0
+            {{ (([upcoming_end - upcoming_start, 0] | max) / 3600)
+               | round(2) }}
           {% endif %}
 
       - name: "Hoymiles Night Protected Load Power"
@@ -514,7 +515,7 @@ template:
             | float(0) %}
           {% set deficit =
             states('sensor.hoymiles_rce_energy_deficit_tomorrow') | float(0) %}
-          {{ ([night, deficit] | max) | round(2) }}
+          {{ ([night, 0] | max + [deficit, 0] | max) | round(2) }}
 
       - name: "Hoymiles RCE Dynamic Minimum SOC"
         unique_id: hoymiles_rce_dynamic_minimum_soc
@@ -982,7 +983,8 @@ automation:
     description: >-
       Zapisuje do falownika wyliczony minimalny SOC rozładowania. Próg obejmuje
       rezerwę awaryjną Self-Use, energię domu chronioną w nocnym oknie,
-      prognozowany deficyt energii i korektę bezpieczeństwa użytkownika.
+      dodatkowy prognozowany deficyt energii następnego dnia i korektę
+      bezpieczeństwa użytkownika.
     mode: restart
     triggers:
       - trigger: state
@@ -1080,8 +1082,8 @@ automation:
       Co minutę porównuje bieżący półgodzinny blok RCE z progiem użytkownika.
       Rozładowuje tylko powyżej progu i dynamicznej rezerwy SOC. Rezerwa
       obejmuje awaryjny SOC Self-Use, pozostałe zużycie domu w chronionym oknie
-      nocnym, deficyt prognozy Solcast oraz korektę bezpieczeństwa. Ręczne
-      timery mają pierwszeństwo.
+      nocnym, dodatkowy deficyt prognozy Solcast na następny dzień oraz korektę
+      bezpieczeństwa. Ręczne timery mają pierwszeństwo.
     mode: restart
     triggers:
       - trigger: time_pattern

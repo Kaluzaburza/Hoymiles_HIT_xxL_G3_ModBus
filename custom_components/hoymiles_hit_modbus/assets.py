@@ -78,6 +78,9 @@ def _copy_assets(config_path: Path, language: str, overwrite: bool) -> list[Path
         RESOURCE_ROOT / "www" / "hoymiles-rce-chart-card.js": (
             config_path / "www" / "hoymiles-rce-chart-card.js"
         ),
+        RESOURCE_ROOT / "www" / "hoymiles-inverter.png": (
+            config_path / "www" / "hoymiles-inverter.png"
+        ),
     }
     written: list[Path] = []
     for source, destination in sources.items():
