@@ -27,6 +27,7 @@ from .models import RuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 STATIC_URL = f"/api/{DOMAIN}/static"
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 INSTALL_ASSETS_SCHEMA = vol.Schema(
     {

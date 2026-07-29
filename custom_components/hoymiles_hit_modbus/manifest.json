@@ -6,7 +6,8 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "esphome"
+    "esphome",
+    "http"
   ],
   "documentation": "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus",
   "integration_type": "device",
