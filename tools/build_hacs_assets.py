@@ -14,6 +14,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = ROOT / "packages"
@@ -259,11 +261,70 @@ ENGLISH_REPLACEMENTS = {
         "The most important values for everyday inverter operation. Detailed"
     ),
     "rejestry są w osobnych zakładkach.": "registers are available on separate tabs.",
+    "Automatyka wymaga zewnętrznej integracji": (
+        "The automation requires the external integration"
+    ),
+    "Wymagane są prognozy **Forecast Today** i **Forecast Tomorrow**.": (
+        "**Forecast Today** and **Forecast Tomorrow** are required."
+    ),
+    "Encje są wykrywane automatycznie w polskiej i angielskiej wersji HA;": (
+        "The entities are detected automatically in Polish and English HA;"
+    ),
+    "w razie niestandardowych nazw można wpisać je u góry.": (
+        "custom entity ids can be entered above."
+    ),
+    "Algorytm symuluje bilans co 30 minut od teraz przez dzisiejszą noc,": (
+        "The optimizer simulates the balance every 30 minutes from now through tonight,"
+    ),
+    "cały kolejny dzień i następną noc do **90 minut po wschodzie**.": (
+        "the whole next day and the following night until **90 minutes after sunrise**."
+    ),
+    "Najpierw zabezpiecza zasilanie domu, rezerwę awaryjną Self-Use oraz": (
+        "It first protects the home supply, the Self-Use outage reserve, and"
+    ),
+    "korektę bezpieczeństwa. Dopiero pozostałą energię przydziela do": (
+        "the safety correction. Only the remaining energy is assigned to"
+    ),
+    "najdroższych dostępnych bloków RCE dzisiaj lub jutro.": (
+        "the most valuable available RCE slots today or tomorrow."
+    ),
+    "wykryta liczba falowników × ustawiony procent rozładowania**.": (
+        "detected inverter count × configured discharge percentage**."
+    ),
+    "Przez pierwsze 24 godziny używane jest awaryjne zużycie dobowe z pola": (
+        "For the first 24 hours, the fallback daily consumption entered"
+    ),
+    "u góry; później zastępuje je średnia z ostatnich czterech dni.": (
+        "above is used; it is then replaced by the four-day average."
+    ),
+    "Pole rezerwy Self-Use nie jest zmieniane. Pozostaje energią dostępną": (
+        "The Self-Use reserve setting is not changed. This energy remains available"
+    ),
+    "poniżej normalnego progu wyłącznie podczas zaniku sieci.": (
+        "below the normal threshold only during a grid outage."
+    ),
+    "Automatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu": (
+        "The automation returns to **Self-Use** after the selected"
+    ),
+    "wybranego bloku, po osiągnięciu minimalnego SOC albo po wyłączeniu": (
+        "slot ends, the minimum SOC is reached, or the"
+    ),
+    "przełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu.": (
+        "switch is disabled. The export lockout excludes the configured hours."
+    ),
     "Automatyka RCE — ustawienia": "RCE automation — settings",
+    "Automatyka RCE — konfiguracja wymagana": (
+        "RCE automation — required configuration"
+    ),
     "Włącz automatyczne rozładowanie według RCE": "Enable automatic discharge using RCE prices",
     "Minimalna cena sprzedaży": "Minimum export price",
+    "Moc znamionowa jednego falownika": "Rated power of one inverter",
     "Moc rozładowania do sieci": "Grid discharge power",
+    "Encja Solcast — prognoza na dzisiaj": "Solcast entity — today forecast",
     "Minimalny SOC akumulatora": "Minimum battery SOC",
+    "Zużycie dobowe przed zebraniem historii": (
+        "Daily consumption before history is available"
+    ),
     "Dynamiczna rezerwa SOC": "Dynamic SOC reserve",
     "Automatycznie wyliczaj minimalny SOC": "Automatically calculate minimum SOC",
     "Korekta bezpieczeństwa SOC (+)": "SOC safety correction (+)",
@@ -271,6 +332,12 @@ ENGLISH_REPLACEMENTS = {
     "Próg zapisany do falownika": "Threshold written to the inverter",
     "Prognoza energii i rezerwa SOC": "Energy forecast and SOC reserve",
     "Encja Solcast — prognoza na jutro": "Solcast entity — tomorrow forecast",
+    "RCE — stan, prognoza i wynik": "RCE — status, forecast and result",
+    "Stan optymalizatora": "Optimizer status",
+    "Prognozowana produkcja PV dzisiaj": "Forecast PV production today",
+    "Pozostała prognozowana produkcja dzisiaj": (
+        "Remaining forecast PV production today"
+    ),
     "Prognozowana produkcja PV jutro": "Forecast PV production tomorrow",
     "Średnie dobowe zużycie LOAD — 4 dni": "Average daily LOAD — 4 days",
     "Pomiar zużycia okna nocnego aktywny": (
@@ -293,6 +360,8 @@ ENGLISH_REPLACEMENTS = {
     "Energia domu chroniona przed sprzedażą": (
         "Home energy protected from export"
     ),
+    "Energia wysłana do sieci dzisiaj": "Energy exported to grid today",
+    "Szacunkowy przychód RCE dzisiaj": "Estimated RCE revenue today",
     "Pojemność magazynu z falownika": "Battery capacity from inverter",
     "Rezerwa awaryjna SOC — zanik sieci": "Outage SOC reserve",
     "Wyliczony minimalny SOC dla RCE": "Calculated minimum SOC for RCE",
@@ -382,7 +451,18 @@ ENGLISH_REPLACEMENTS = {
     "Bieżąca cena RCE": "Current RCE price",
     "Stan automatyki": "Automation status",
     "RCE — ceny i plan rozładowania": "RCE — prices and discharge plan",
+    "RCE — dzisiaj": "RCE — today",
+    "RCE — jutro": "RCE — tomorrow",
     "Plan rozładowań RCE": "RCE discharge plan",
+    "**Horyzont:**": "**Horizon:**",
+    "**Najbardziej opłacalne okresy wybrane przez algorytm:**": (
+        "**Most profitable periods selected by the optimizer:**"
+    ),
+    "Brak danych do przygotowania planu.": "No data available to build a plan.",
+    "**Łączny plan:**": "**Total plan:**",
+    "bloków po 30 min": "30-minute slots",
+    "**Prognozowany eksport:**": "**Forecast export:**",
+    "**Szacunkowy przychód:**": "**Estimated revenue:**",
     "Rozładowanie do sieci": "Grid discharge",
     "Ładowanie z sieci": "Grid charge",
     "Włącz harmonogram codzienny": "Enable daily schedule",
@@ -605,8 +685,20 @@ ENGLISH_REPLACEMENTS = {
     "EMS — czas ładowania": "EMS — charge duration",
     "EMS RCE — minimalna cena sprzedaży": "EMS RCE — minimum export price",
     "EMS RCE — dynamiczna rezerwa SOC": "EMS RCE — dynamic SOC reserve",
+    "EMS RCE — encja prognozy Solcast na dzisiaj": (
+        "EMS RCE — Solcast today forecast entity"
+    ),
     "EMS RCE — encja prognozy Solcast na jutro": (
         "EMS RCE — Solcast tomorrow forecast entity"
+    ),
+    "EMS RCE — moc znamionowa jednego falownika": (
+        "EMS RCE — rated power of one inverter"
+    ),
+    "EMS RCE — dobowe zużycie awaryjne przed zebraniem historii": (
+        "EMS RCE — fallback daily consumption before history is available"
+    ),
+    "EMS RCE — sprawność eksportu z baterii": (
+        "EMS RCE — battery export efficiency"
     ),
     "EMS RCE — korekta bezpieczeństwa SOC": (
         "EMS RCE — SOC safety correction"
@@ -622,6 +714,25 @@ ENGLISH_REPLACEMENTS = {
     ),
     "Tryb ręczny — używany jest próg rozładowania falownika": (
         "Manual mode — using the inverter discharge threshold"
+    ),
+    "Gotowa — plan zoptymalizowany": "Ready — optimized plan",
+    "Oczekiwanie — brak opłacalnego okna": (
+        "Waiting — no profitable window"
+    ),
+    "Zasilanie domu zabezpieczone — brak energii na sprzedaż": (
+        "Home supply protected — no energy available for export"
+    ),
+    "Za mało energii na potrzeby domu — sprzedaż zablokowana": (
+        "Insufficient home energy — export blocked"
+    ),
+    "Brak wymaganych danych — sprzedaż zablokowana": (
+        "Required data missing — export blocked"
+    ),
+    "Błąd obliczeń — sprzedaż zablokowana": (
+        "Calculation error — export blocked"
+    ),
+    "Brak zaplanowanych okresów sprzedaży.": (
+        "No export periods are currently planned."
     ),
     "Brak danych Solcast — sprzedaż zablokowana": (
         "No Solcast data — export blocked"
@@ -652,12 +763,27 @@ ENGLISH_REPLACEMENTS = {
     "Wykrywa angielską albo polską encję Forecast Tomorrow integracji Solcast": (
         "Detects the English or Polish Forecast Tomorrow entity from the Solcast"
     ),
+    "Wykrywa angielskie albo polskie encje Forecast Today i Forecast Tomorrow": (
+        "Detects the English or Polish Forecast Today and Forecast Tomorrow entities"
+    ),
+    "integracji Solcast PV Forecast producenta BJReplay. Poprawne własne encje": (
+        "from the BJReplay Solcast PV Forecast integration. Valid custom entities"
+    ),
     "PV Forecast producenta BJReplay. Poprawna własna encja użytkownika jest": (
         "PV Forecast integration by BJReplay. A valid custom entity entered by the user is"
     ),
     "zachowywana.": "preserved.",
     "Zapisuje do falownika wyliczony minimalny SOC rozładowania. Próg obejmuje": (
         "Writes the calculated minimum discharge SOC to the inverter. The threshold includes"
+    ),
+    "Zapisuje do falownika wyliczony minimalny SOC rozładowania. Plan chroni": (
+        "Writes the calculated minimum discharge SOC to the inverter. The plan protects"
+    ),
+    "zasilanie domu od teraz, przez dzisiejszą noc, kolejny dzień i następną": (
+        "home supply from now through tonight, the next day, and the following"
+    ),
+    "noc do 90 minut po wschodzie, a następnie wybiera najdroższe okna RCE.": (
+        "night until 90 minutes after sunrise, then selects the most valuable RCE slots."
     ),
     "rezerwę awaryjną Self-Use, energię domu chronioną w nocnym oknie,": (
         "the Self-Use outage reserve, home energy protected in the night window,"
@@ -725,6 +851,15 @@ ENGLISH_REPLACEMENTS = {
     ),
     "Co minutę porównuje bieżący półgodzinny blok RCE z progiem użytkownika.": (
         "Every minute, compares the current 30-minute RCE block with the user threshold."
+    ),
+    "Co minutę sprawdza dwudniowy plan optymalizatora. Rozładowuje tylko w": (
+        "Every minute, checks the optimizer's two-day plan. It discharges only in"
+    ),
+    "wybranych najdroższych blokach, powyżej progu użytkownika i ponad SOC": (
+        "selected highest-value slots, above the user threshold and above the SOC"
+    ),
+    "potrzebnym do zasilenia domu. Ręczne timery mają pierwszeństwo.": (
+        "required to supply the home. Manual timers take priority."
     ),
     "Rozładowuje tylko powyżej progu i powyżej minimalnego SOC. Ręczne timery": (
         "Discharges only above the threshold and minimum SOC. Manual charge and"
@@ -1282,6 +1417,27 @@ def build() -> None:
     for destination, content in localized_assets.items():
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding="utf-8")
+
+    for language in ("pl", "en"):
+        dashboard_yaml = (
+            RESOURCES / f"dashboard_hoymiles_{language}.yaml"
+        ).read_text(encoding="utf-8")
+        dashboard_data = yaml.safe_load(dashboard_yaml)
+        if (
+            not isinstance(dashboard_data, dict)
+            or not isinstance(dashboard_data.get("views"), list)
+        ):
+            raise ValueError(
+                f"Generated {language} dashboard has no top-level views list"
+            )
+        dashboard_json = (
+            RESOURCES / "www" / f"dashboard_hoymiles_{language}.json"
+        )
+        dashboard_json.parent.mkdir(parents=True, exist_ok=True)
+        dashboard_json.write_text(
+            json.dumps(dashboard_data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     for bundled_www_asset in (
         "hoymiles-rce-chart-card.js",

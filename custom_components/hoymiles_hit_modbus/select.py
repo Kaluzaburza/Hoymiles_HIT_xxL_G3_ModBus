@@ -14,6 +14,7 @@ from homeassistant.components.select import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
@@ -78,6 +79,10 @@ class HoymilesSelect(HoymilesProxyEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Forward a selected canonical option to ESPHome."""
+        if self._source_entity_id is None:
+            raise HomeAssistantError(
+                "This setting requires a newer Hoymiles ESPHome firmware"
+            )
         raw_option = self._key_to_raw.get(option, option)
         await self.hass.services.async_call(
             SELECT_DOMAIN,

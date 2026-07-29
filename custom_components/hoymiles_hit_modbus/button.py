@@ -10,6 +10,7 @@ from homeassistant.components.button import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
@@ -41,6 +42,10 @@ class HoymilesButton(HoymilesProxyEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Forward a button press to ESPHome."""
+        if self._source_entity_id is None:
+            raise HomeAssistantError(
+                "This command requires a newer Hoymiles ESPHome firmware"
+            )
         await self.hass.services.async_call(
             BUTTON_DOMAIN,
             SERVICE_PRESS,

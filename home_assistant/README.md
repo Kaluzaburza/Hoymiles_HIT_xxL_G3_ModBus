@@ -75,9 +75,12 @@ rozładowanie nie będą działały jednocześnie.
    `packages:` — nie twórz drugiej sekcji o tej samej nazwie.
 3. W Home Assistant wybierz **Narzędzia deweloperskie → YAML → Sprawdź
    konfigurację**, a następnie uruchom Home Assistant ponownie.
-4. Wklej zaktualizowany `dashboard_hoymiles.yaml` do surowego edytora
-   dashboardu. Sam update HACS nie nadpisuje konfiguracji wklejonej wcześniej
-   do dashboardu w trybie pamięci masowej.
+4. Dodaj zasób JavaScript:
+   `/api/hoymiles_hit_modbus/static/hoymiles-rce-chart-card.js` jako moduł,
+   a następnie utwórz panel społecznościowy **Hoymiles HIT xxL G3**.
+   Panel zapisuje tylko strategię
+   `custom:hoymiles-hit-xxl-g3`, dlatego po aktualizacji HACS automatycznie
+   ładuje najnowszy dashboard PL albo EN z integracji.
 5. Przy pierwszym uruchomieniu ustaw na dashboardzie godzinę i czas trwania,
    np. `20:00` oraz `90 min`, a następnie włącz harmonogram. Home Assistant
    będzie później odtwarzał ustawione wartości po restarcie.
@@ -98,3 +101,7 @@ Pakiet oczekuje stabilnej encji integracji
 - `self_use`,
 - `grid_charge`,
 - `grid_discharge`.
+
+Starsze instalacje mogą nadal importować plik `dashboard_hoymiles.yaml`.
+Instalator automatycznie aktualizuje go tylko wtedy, gdy plik nie został
+zmodyfikowany przez użytkownika. Własne modyfikacje są zachowywane.

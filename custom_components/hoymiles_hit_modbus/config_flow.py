@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers import selector
 
-from .catalog import async_match_entities
+from .catalog import async_match_entities, matched_source_count
 from .const import CONF_COPY_ASSETS, CONF_SOURCE_DEVICE_ID, DOMAIN
 
 
@@ -29,13 +29,13 @@ class HoymilesHitModbusConfigFlow(
         errors: dict[str, str] = {}
         if user_input is not None:
             source_device_id = user_input[CONF_SOURCE_DEVICE_ID]
-            source_device, matched = async_match_entities(
+            source_device, matched = await async_match_entities(
                 self.hass,
                 source_device_id,
             )
             if source_device is None:
                 errors["base"] = "device_not_found"
-            elif not any(matched.values()):
+            elif matched_source_count(matched) == 0:
                 errors["base"] = "no_entities"
             else:
                 await self.async_set_unique_id(source_device_id)

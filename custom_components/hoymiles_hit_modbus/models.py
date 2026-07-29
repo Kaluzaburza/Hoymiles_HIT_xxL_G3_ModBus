@@ -11,10 +11,10 @@ from homeassistant.helpers import entity_registry as er
 
 @dataclass(slots=True)
 class MatchedEntity:
-    """A localized catalog entry matched to an ESPHome source entity."""
+    """A catalog entry and its optional ESPHome source entity."""
 
     catalog: dict[str, Any]
-    source: er.RegistryEntry
+    source: er.RegistryEntry | None
 
 
 @dataclass(slots=True)

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import re
 import shutil
 from pathlib import Path
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
+
+from .const import DOMAIN, VERSION
 
 
 RESOURCE_ROOT = Path(__file__).with_name("resources")
@@ -16,6 +21,28 @@ LEGACY_ENTITY_BACKUP_SUFFIX = ".pre-stable-entity-ids.bak"
 ENTITY_ID_PATTERN = re.compile(
     r"\b(button|sensor|number|select)\.([a-z0-9_]+)\b"
 )
+ASSET_STORAGE_VERSION = 1
+ASSET_STORAGE_KEY = f"{DOMAIN}.assets"
+
+# v1.2.0 was the last release without managed-asset metadata. These checksums
+# let the first newer release upgrade untouched files while preserving user
+# modifications.
+LEGACY_MANAGED_HASHES: dict[str, set[str]] = {
+    "dashboard_hoymiles.yaml": {
+        "86d43b9126b16e1fcb710e298ac80f8793e9a08e377105c6fa1c26c96e8a5d7f",
+        "1cdf745154d565ce2dddb8c8a64c96075a1fac813171872445e716521199d21a",
+    },
+    "packages/hoymiles_ems_scheduler.yaml": {
+        "6df876b47f18223ce905e0cc052921393325703f1ecef31d013dbe1aec237750",
+        "82d3250cf87b316d7eb95e3ed1939e6bdf8f2845c17e9549f1b7d270490cf09a",
+    },
+    "www/hoymiles-rce-chart-card.js": {
+        "bdc80c03d40d811835697f4d5c126ec90a8a6f2c59be9bdd29de1c05b96f09a6",
+    },
+    "www/hoymiles-inverter.png": {
+        "4531e85081e78cf94dee82dbde75b2f931860886457ce9800f546afb4a3b3d15",
+    },
+}
 
 
 def _stable_entity_id_map() -> dict[tuple[str, str], str]:
@@ -62,8 +89,25 @@ def _migrate_legacy_entity_ids(path: Path) -> bool:
     return True
 
 
-def _copy_assets(config_path: Path, language: str, overwrite: bool) -> list[Path]:
-    """Copy bundled assets and return paths that were written."""
+def _sha256(path: Path) -> str:
+    """Return a file SHA-256 digest."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _atomic_copy(source: Path, destination: Path) -> None:
+    """Copy a managed asset without exposing a partially written file."""
+    temporary = destination.with_name(f".{destination.name}.{DOMAIN}.tmp")
+    shutil.copy2(source, temporary)
+    os.replace(temporary, destination)
+
+
+def _sync_assets(
+    config_path: Path,
+    language: str,
+    overwrite: bool,
+    managed_hashes: dict[str, str] | None,
+) -> tuple[list[Path], dict[str, str]]:
+    """Install assets and safely update files deployed by an older release."""
     localized = "pl" if language.startswith("pl") else "en"
     sources = {
         RESOURCE_ROOT / f"dashboard_hoymiles_{localized}.yaml": (
@@ -83,18 +127,45 @@ def _copy_assets(config_path: Path, language: str, overwrite: bool) -> list[Path
         ),
     }
     written: list[Path] = []
+    previous_hashes = managed_hashes or {}
+    next_hashes: dict[str, str] = {}
     for source, destination in sources.items():
+        relative = destination.relative_to(config_path).as_posix()
+        source_hash = _sha256(source)
         if destination.exists() and not overwrite:
+            destination_hash = _sha256(destination)
+            managed = (
+                previous_hashes.get(relative) == destination_hash
+                or destination_hash in LEGACY_MANAGED_HASHES.get(relative, set())
+            )
+            if managed and destination_hash != source_hash:
+                _atomic_copy(source, destination)
+                written.append(destination)
+                destination_hash = source_hash
+            elif managed:
+                next_hashes[relative] = source_hash
+                continue
+
             if (
                 destination.name
                 in {"dashboard_hoymiles.yaml", "hoymiles_ems_scheduler.yaml"}
                 and _migrate_legacy_entity_ids(destination)
             ):
                 written.append(destination)
+                destination_hash = _sha256(destination)
+            if destination_hash == source_hash:
+                next_hashes[relative] = source_hash
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        _atomic_copy(source, destination)
         written.append(destination)
+        next_hashes[relative] = source_hash
+    return written, next_hashes
+
+
+def _copy_assets(config_path: Path, language: str, overwrite: bool) -> list[Path]:
+    """Compatibility wrapper used by structural release tests."""
+    written, _ = _sync_assets(config_path, language, overwrite, None)
     return written
 
 
@@ -105,9 +176,24 @@ async def async_install_assets(
 ) -> list[Path]:
     """Install the optional assets without blocking Home Assistant."""
     config_path = Path(hass.config.config_dir)
-    return await hass.async_add_executor_job(
-        _copy_assets,
+    store: Store[dict] = Store(
+        hass,
+        ASSET_STORAGE_VERSION,
+        ASSET_STORAGE_KEY,
+    )
+    stored = await store.async_load() or {}
+    managed_hashes = stored.get("assets", {})
+    written, next_hashes = await hass.async_add_executor_job(
+        _sync_assets,
         config_path,
         hass.config.language,
         overwrite,
+        managed_hashes,
     )
+    await store.async_save(
+        {
+            "integration_version": VERSION,
+            "assets": next_hashes,
+        }
+    )
+    return written

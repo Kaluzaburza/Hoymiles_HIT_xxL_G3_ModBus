@@ -13,6 +13,7 @@ from .const import DOMAIN
 from .entity import HoymilesProxyEntity
 from .localization import localized_text_state
 from .models import RuntimeData
+from .rce_sensor import HoymilesRCEOptimizerSensor
 
 
 async def async_setup_entry(
@@ -22,10 +23,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up localized sensors."""
     runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
+    entities = [
         HoymilesSensor(hass, entry, runtime, matched)
         for matched in runtime.entities["sensor"]
-    )
+    ]
+    entities.append(HoymilesRCEOptimizerSensor(hass, entry, runtime))
+    async_add_entities(entities)
 
 
 class HoymilesSensor(HoymilesProxyEntity, SensorEntity):
