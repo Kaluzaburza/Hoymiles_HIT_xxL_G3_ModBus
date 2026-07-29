@@ -30,6 +30,29 @@ const context = {
   document: { documentElement: { lang: "pl" } },
   HTMLElement: TestElement,
   Intl,
+  fetch: async (url, options) => {
+    const match = String(url).match(/dashboard_hoymiles_(pl|en)\.json$/);
+    if (!match) {
+      throw new Error(`Unexpected dashboard request: ${url}`);
+    }
+    if (options?.cache !== "no-store") {
+      throw new Error("Dashboard strategy must bypass the browser cache");
+    }
+    const payload = JSON.parse(
+      fs.readFileSync(
+        `custom_components/hoymiles_hit_modbus/resources/www/dashboard_hoymiles_${match[1]}.json`,
+        "utf8",
+      ),
+    );
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      async json() {
+        return payload;
+      },
+    };
+  },
   window: {},
   customElements: {
     define(name, constructor) {
@@ -54,6 +77,7 @@ const card = new Card();
 card.setConfig({
   type: "custom:hoymiles-rce-chart-card",
   entity: "sensor.hoymiles_rce_day",
+  plan_entity: "sensor.hoymiles_hit_rce_optimized_plan",
   threshold_entity: "input_number.hoymiles_rce_price_threshold",
   current_price_entity: "sensor.hoymiles_rce_current_price",
   active_entity: "input_boolean.hoymiles_rce_discharge_active",
@@ -80,6 +104,26 @@ card.hass = {
   language: "pl",
   states: {
     "sensor.hoymiles_rce_day": state("2026-07-26", { value: rows }),
+    "sensor.hoymiles_hit_rce_optimized_plan": state("Gotowa", {
+      planned_slots: [
+        {
+          date: "2026-07-26",
+          start: "20:00",
+          end: "20:30",
+          price: 0.9,
+          energy: 2.5,
+          revenue: 2.25,
+        },
+        {
+          date: "2026-07-27",
+          start: "06:00",
+          end: "06:30",
+          price: 1.1,
+          energy: 2.5,
+          revenue: 2.75,
+        },
+      ],
+    }),
     "input_number.hoymiles_rce_price_threshold": state("0.65"),
     "sensor.hoymiles_rce_current_price": state("0.669"),
     "input_boolean.hoymiles_rce_discharge_active": state("off"),
@@ -96,6 +140,9 @@ for (const expected of [
   "96 okresów po 15 min",
   "48 bloków sterowania po 30 min",
   "22:00–06:00",
+  "1 × 30 min",
+  "2,50 kWh",
+  "2,25 PLN",
 ]) {
   if (!output.includes(expected)) {
     throw new Error(`Rendered RCE card is missing: ${expected}`);
@@ -103,3 +150,43 @@ for (const expected of [
 }
 
 console.log("RCE custom card: registered and rendered successfully");
+
+const Strategy = registry.get(
+  "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
+);
+if (!Strategy) {
+  throw new Error("The Hoymiles dashboard strategy was not registered");
+}
+if (
+  !context.window.customStrategies?.some(
+    (strategy) =>
+      strategy.type === "hoymiles-hit-xxl-g3" &&
+      strategy.strategyType === "dashboard",
+  )
+) {
+  throw new Error("The dashboard strategy is absent from the community picker");
+}
+
+Promise.all([
+  Strategy.generate({}, { locale: { language: "pl-PL" } }),
+  Strategy.generate({}, { locale: { language: "en-GB" } }),
+])
+  .then(([polishDashboard, englishDashboard]) => {
+    if (
+      polishDashboard.views?.length < 10 ||
+      englishDashboard.views?.length < 10
+    ) {
+      throw new Error("Dashboard strategy returned an incomplete dashboard");
+    }
+    if (
+      polishDashboard.views[5]?.title !== "Sieć" ||
+      englishDashboard.views[5]?.title !== "Grid"
+    ) {
+      throw new Error("Dashboard strategy did not select the HA language");
+    }
+    console.log("Dashboard strategy: PL/EN payloads loaded successfully");
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

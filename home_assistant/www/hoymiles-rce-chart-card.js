@@ -51,6 +51,7 @@ class HoymilesRceChartCard extends HTMLElement {
     if (!this._config) return;
     const ids = [
       this._config.entity,
+      this._config.plan_entity,
       this._config.threshold_entity,
       this._config.current_price_entity,
       this._config.active_entity,
@@ -87,6 +88,7 @@ class HoymilesRceChartCard extends HTMLElement {
   static getStubConfig() {
     return {
       entity: "sensor.hoymiles_rce_day",
+      plan_entity: "sensor.hoymiles_hit_rce_optimized_plan",
       threshold_entity: "input_number.hoymiles_rce_price_threshold",
       current_price_entity: "sensor.hoymiles_rce_current_price",
       active_entity: "input_boolean.hoymiles_rce_discharge_active",
@@ -121,6 +123,9 @@ class HoymilesRceChartCard extends HTMLElement {
           defaultTitle: "RCE — ceny na dziś",
           noData: "Brak kompletnych danych PSE",
           noDataHint: "Automatyka nie uruchomi rozładowania bez aktualnego planu.",
+          futureNoData: "Dane PSE na jutro nie są jeszcze opublikowane",
+          futureNoDataHint:
+            "Automatyka realizuje plan dzisiejszy i przeliczy go automatycznie po publikacji danych.",
           current: "Bieżąca",
           threshold: "Próg",
           exportLockout: "Blokada sprzedaży",
@@ -141,6 +146,8 @@ class HoymilesRceChartCard extends HTMLElement {
           minimum: "Min.",
           maximum: "Maks.",
           plan: "Plan:",
+          expectedExport: "Prognozowany eksport:",
+          expectedRevenue: "Szacunkowy przychód:",
           active: "● RCE rozładowuje",
           inactive: "○ RCE nieaktywne",
         }
@@ -148,6 +155,9 @@ class HoymilesRceChartCard extends HTMLElement {
           defaultTitle: "RCE — today's prices",
           noData: "No complete PSE data",
           noDataHint: "The automation will not discharge without a current plan.",
+          futureNoData: "Tomorrow's PSE data has not been published yet",
+          futureNoDataHint:
+            "The automation is following today's plan and will recalculate automatically after publication.",
           current: "Current",
           threshold: "Threshold",
           exportLockout: "Export lockout",
@@ -168,6 +178,8 @@ class HoymilesRceChartCard extends HTMLElement {
           minimum: "Min.",
           maximum: "Max.",
           plan: "Plan:",
+          expectedExport: "Forecast export:",
+          expectedRevenue: "Estimated revenue:",
           active: "● RCE discharging",
           inactive: "○ RCE inactive",
         };
@@ -188,6 +200,9 @@ class HoymilesRceChartCard extends HTMLElement {
 
   _render() {
     const source = this._states[this._config.entity];
+    const planState = this._config.plan_entity
+      ? this._states[this._config.plan_entity]
+      : undefined;
     const thresholdState = this._states[this._config.threshold_entity];
     const currentState = this._config.current_price_entity
       ? this._states[this._config.current_price_entity]
@@ -219,14 +234,23 @@ class HoymilesRceChartCard extends HTMLElement {
 
     const title = this._escape(this._config.title || this._t("defaultTitle"));
     if (points.length < 2) {
+      const futureData =
+        this._config.future_data ||
+        String(this._config.entity).endsWith("_tomorrow");
+      const noData = futureData
+        ? this._t("futureNoData")
+        : this._t("noData");
+      const noDataHint = futureData
+        ? this._t("futureNoDataHint")
+        : this._t("noDataHint");
       this._setContent(`
         <ha-card>
           <div class="header">${title}</div>
           <div class="empty">
             <ha-icon icon="mdi:cloud-alert"></ha-icon>
             <div>
-              <strong>${this._t("noData")}</strong>
-              <span>${this._t("noDataHint")}</span>
+              <strong>${noData}</strong>
+              <span>${noDataHint}</span>
             </div>
           </div>
         </ha-card>
@@ -260,10 +284,31 @@ class HoymilesRceChartCard extends HTMLElement {
     for (let index = 0; index + 1 < points.length; index += 2) {
       halfHours.push((points[index].price + points[index + 1].price) / 2);
     }
-    const plannedBlocks = Number.isFinite(threshold)
-      ? halfHours.filter((price, index) => price > threshold && !isBlocked(index * 30))
-          .length
-      : 0;
+    const optimizedSlots = Array.isArray(planState?.attributes?.planned_slots)
+      ? planState.attributes.planned_slots
+      : [];
+    const optimizedForDay = optimizedSlots.filter(
+      (slot) => String(slot?.date ?? "") === date,
+    );
+    const optimizedStarts = new Set(
+      optimizedForDay.map((slot) => String(slot?.start ?? "").slice(0, 5)),
+    );
+    const hasOptimizedPlan = Boolean(this._config.plan_entity && planState);
+    const plannedBlocks = hasOptimizedPlan
+      ? optimizedStarts.size
+      : Number.isFinite(threshold)
+        ? halfHours.filter(
+            (price, index) => price > threshold && !isBlocked(index * 30),
+          ).length
+        : 0;
+    const expectedExport = optimizedForDay.reduce(
+      (total, slot) => total + (Number(slot?.energy) || 0),
+      0,
+    );
+    const expectedRevenue = optimizedForDay.reduce(
+      (total, slot) => total + (Number(slot?.revenue) || 0),
+      0,
+    );
 
     const now = new Date();
     const localDate = [
@@ -319,8 +364,12 @@ class HoymilesRceChartCard extends HTMLElement {
     const bars = points.map((point, index) => {
       const pair = Math.floor(index / 2);
       const blocked = isBlocked(pair * 30);
-      const planned =
-        !blocked && Number.isFinite(threshold) && halfHours[pair] > threshold;
+      const pairStart = String(points[pair * 2]?.period ?? "")
+        .split(" - ")[0]
+        .slice(0, 5);
+      const planned = hasOptimizedPlan
+        ? optimizedStarts.has(pairStart)
+        : !blocked && Number.isFinite(threshold) && halfHours[pair] > threshold;
       const barX = left + index * slotWidth + slotWidth * 0.09;
       const valueY = y(point.price);
       const barY = Math.min(valueY, zeroY);
@@ -372,10 +421,14 @@ ${blocked ? `${this._t("lockoutHint")} ${blockWindow} — Self-Use` : planned ? 
             <div class="subheader">${this._escape(date)} • ${points.length} ${this._t("periods15")} • ${halfHours.length} ${this._t("blocks30")}</div>
           </div>
           <div class="badges">
-            <div class="badge">
+            ${
+              date === localDate
+                ? `<div class="badge">
               <span>${this._t("current")}</span>
               <strong>${this._number(currentPrice, 4)} PLN/kWh</strong>
-            </div>
+            </div>`
+                : ""
+            }
             <div class="badge threshold">
               <span>${this._t("threshold")}</span>
               <strong>${this._number(threshold, 2)} PLN/kWh</strong>
@@ -413,6 +466,8 @@ ${blocked ? `${this._t("lockoutHint")} ${blockWindow} — Self-Use` : planned ? 
           <span>${this._t("minimum")} <strong>${this._number(minimum, 3)}</strong></span>
           <span>${this._t("maximum")} <strong>${this._number(maximum, 3)}</strong></span>
           <span>${this._t("plan")} <strong>${plannedBlocks} × 30 min</strong></span>
+          <span>${this._t("expectedExport")} <strong>${this._number(expectedExport, 2)} kWh</strong></span>
+          <span>${this._t("expectedRevenue")} <strong>${this._number(expectedRevenue, 2)} PLN</strong></span>
           <span class="${automationActive ? "active" : "inactive"}">
             ${automationActive ? this._t("active") : this._t("inactive")}
           </span>
@@ -721,7 +776,8 @@ class HoymilesPowerFlowCard extends HTMLElement {
 
     const powerFlowConfig = { ...this._config };
     const inverterImage =
-      powerFlowConfig.inverter_image ?? "/local/hoymiles-inverter.png?v=1";
+      powerFlowConfig.inverter_image ??
+      "/api/hoymiles_hit_modbus/static/hoymiles-inverter.png";
     delete powerFlowConfig.inverter_image;
     delete powerFlowConfig.inverter_image_left;
     delete powerFlowConfig.inverter_image_top;
@@ -788,3 +844,71 @@ window.customCards.push({
     "Sunsynk power-flow card wrapper with a Hoymiles inverter illustration.",
   preview: false,
 });
+
+class HoymilesHitDashboardStrategy extends HTMLElement {
+  static noEditor = true;
+
+  static getCreateSuggestions(hass) {
+    const language = (
+      hass?.locale?.language ??
+      hass?.language ??
+      "en"
+    ).toLowerCase();
+    return {
+      title: language.startsWith("pl")
+        ? "Hoymiles — falownik"
+        : "Hoymiles — inverter",
+      icon: "mdi:solar-power-variant",
+    };
+  }
+
+  static async generate(config, hass) {
+    const requestedLanguage = (
+      config?.language ??
+      hass?.locale?.language ??
+      hass?.language ??
+      "en"
+    ).toLowerCase();
+    const language = requestedLanguage.startsWith("pl") ? "pl" : "en";
+    const response = await fetch(
+      `/api/hoymiles_hit_modbus/static/dashboard_hoymiles_${language}.json`,
+      { cache: "no-store" }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Cannot load Hoymiles dashboard (${response.status} ${response.statusText})`
+      );
+    }
+    const dashboard = await response.json();
+    if (config?.title) {
+      dashboard.title = config.title;
+    }
+    return dashboard;
+  }
+}
+
+if (!customElements.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3")) {
+  customElements.define(
+    "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
+    HoymilesHitDashboardStrategy
+  );
+}
+
+window.customStrategies = window.customStrategies || [];
+if (
+  !window.customStrategies.some(
+    (strategy) =>
+      strategy.type === "hoymiles-hit-xxl-g3" &&
+      strategy.strategyType === "dashboard"
+  )
+) {
+  window.customStrategies.push({
+    type: "hoymiles-hit-xxl-g3",
+    strategyType: "dashboard",
+    name: "Hoymiles HIT xxL G3",
+    description:
+      "Always-current dashboard for the Hoymiles HIT xxL G3 Modbus integration.",
+    documentationURL:
+      "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus",
+  });
+}

@@ -5,7 +5,7 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
 
-Version **1.2.0** is the current public release. It contains:
+Version **1.2.1** is the current release. It contains:
 
 - 275 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -152,20 +152,36 @@ homeassistant:
 Do not create a second `homeassistant:` key. Check the configuration and restart
 Home Assistant.
 
-Add the dashboard resource:
+Add the integration-served dashboard resource once:
 
 ```text
-/local/hoymiles-rce-chart-card.js?v=1.2.0
+/api/hoymiles_hit_modbus/static/hoymiles-rce-chart-card.js
 ```
 
-with resource type **JavaScript module**, then import
-`/config/dashboard_hoymiles.yaml` in the raw dashboard editor.
+with resource type **JavaScript module**. This URL is served without browser
+cache by the integration, so it does not need a version query after future
+HACS updates.
 
-Updating the integration in HACS does not rewrite a dashboard previously pasted
-into Home Assistant's storage-mode raw editor. After an update that changes
-entity references, reinstall the bundled assets and import the dashboard file
-again. The installer migrates legacy device-name-dependent IDs in the file and
-keeps a `.pre-stable-entity-ids.bak` backup before changing it.
+On Home Assistant 2026.5 or newer, open **Settings → Dashboards → Add
+dashboard**, select **Hoymiles HIT xxL G3** under Community dashboards and
+finish the dialog. The stored dashboard contains only this strategy:
+
+```yaml
+strategy:
+  type: custom:hoymiles-hit-xxl-g3
+```
+
+The strategy loads the current Polish or English dashboard bundled with the
+installed integration. After a HACS update and Home Assistant restart, the
+dashboard therefore uses the new version automatically instead of retaining a
+stale storage-mode copy.
+
+The copied `/config/dashboard_hoymiles.yaml` remains available for legacy and
+manual installations. The managed-asset installer updates an unchanged
+dashboard, EMS package, chart card and inverter image automatically. If a user
+has modified one of these files, it is preserved; an explicit overwrite is
+still available through the service below. Legacy device-name-dependent IDs
+are migrated with a `.pre-stable-entity-ids.bak` backup.
 
 To reinstall the bundled assets later, call:
 
@@ -211,6 +227,15 @@ time until 90 minutes after sunrise. After the first complete day, the estimate
 uses the measured average consumption from up to four previous protected
 windows; before that, it falls back to a proportional share of the four-day
 daily LOAD average.
+
+## Firmware compatibility
+
+The integration creates stable proxy entities for the complete catalog even
+when the installed ESPHome firmware predates a newly added register. Such an
+entity is shown as unavailable and includes
+`firmware_update_required: true` instead of appearing as a missing dashboard
+entity. Updating ESPHome makes the same entity available without changing its
+entity ID or unique ID.
 
 ## Parallel inverter systems
 
@@ -282,8 +307,8 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.2.0** udostępnia
-273 encje, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.2.1** udostępnia
+275 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 automatykę cenową RCE PSE, dynamiczną rezerwę SOC na podstawie Solcast i LOAD,
 ochronę nocnego zapotrzebowania domu, blokadę sprzedaży oraz gotowy dashboard.
 
@@ -337,15 +362,23 @@ modbus:
    wersjonowane pakiety rejestrów z GitHuba — nie kopiuj katalogu `packages`.
 3. Dodaj urządzenie przez standardową integrację ESPHome.
 4. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz urządzenie ESPHome.
-5. Włącz pakiety Home Assistanta, dodaj zasób karty JavaScript i zaimportuj
-   skopiowany dashboard zgodnie z instrukcją powyżej.
+5. Włącz pakiety Home Assistanta i dodaj zasób:
+   `/api/hoymiles_hit_modbus/static/hoymiles-rce-chart-card.js`.
+6. W **Ustawienia → Panele → Dodaj panel** wybierz społecznościowy dashboard
+   **Hoymiles HIT xxL G3**. Będzie on automatycznie korzystał z wersji
+   dostarczonej przez aktualnie zainstalowaną integrację.
 
-Aktualizacja integracji w HACS nie nadpisuje dashboardu wklejonego wcześniej do
-surowego edytora działającego w trybie pamięci masowej. Po wydaniu zmieniającym
-identyfikatory encji trzeba ponownie zainstalować zasoby i jeszcze raz
-zaimportować `/config/dashboard_hoymiles.yaml`. Instalator zamienia stare
-identyfikatory zależne od nazwy urządzenia i przed zmianą tworzy kopię
+Nowy dashboard strategiczny nie wymaga ponownego wklejania konfiguracji po
+aktualizacji HACS. Po restarcie Home Assistanta pobiera bieżącą wersję PL albo
+EN bezpośrednio z integracji. Stary sposób z plikiem
+`/config/dashboard_hoymiles.yaml` pozostaje obsługiwany. Instalator aktualizuje
+niezmodyfikowane pliki automatycznie, a pliki zmienione przez użytkownika
+pozostawia bez nadpisania. Migracja starych identyfikatorów nadal tworzy kopię
 `.pre-stable-entity-ids.bak`.
+
+Jeżeli firmware ESP32 jest starszy od integracji HACS, nowe encje pojawią się
+jako **niedostępne**, a nie jako brakujące. Atrybut
+`firmware_update_required: true` wskazuje konieczność aktualizacji ESPHome.
 
 Nazwy encji i opcje wyboru są tłumaczone automatycznie na polski lub angielski
 zależnie od języka Home Assistanta. Pierwsze tłumaczenia są celowo opisowe i

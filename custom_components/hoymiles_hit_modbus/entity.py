@@ -33,16 +33,19 @@ class HoymilesProxyEntity(Entity):
         self._entry = entry
         self._runtime = runtime
         self._matched = matched
-        self._source_entity_id = matched.source.entity_id
+        self._source_entity_id = (
+            matched.source.entity_id if matched.source is not None else None
+        )
         self._catalog = matched.catalog
 
         self._attr_translation_key = self._catalog["translation_key"]
         self._attr_unique_id = (
-            f"{entry.entry_id}_{matched.source.unique_id}_localized"
+            f"{entry.entry_id}_{self._catalog['translation_key']}"
         )
-        self._attr_entity_registry_enabled_default = (
-            matched.source.disabled_by is None
-        )
+        # Firmware and the HACS integration can be updated independently.
+        # Keep every catalog entity enabled so dashboards see an unavailable
+        # entity instead of a missing one until ESPHome is upgraded.
+        self._attr_entity_registry_enabled_default = True
         category = self._catalog.get("entity_category")
         if category in {EntityCategory.CONFIG.value, EntityCategory.DIAGNOSTIC.value}:
             self._attr_entity_category = EntityCategory(category)
@@ -55,6 +58,8 @@ class HoymilesProxyEntity(Entity):
     @property
     def source_state(self) -> State | None:
         """Return the source entity state."""
+        if self._source_entity_id is None:
+            return None
         return self.hass.states.get(self._source_entity_id)
 
     @property
@@ -79,6 +84,7 @@ class HoymilesProxyEntity(Entity):
         return {
             "source_entity_id": self._source_entity_id,
             "description": self._catalog["description"][language],
+            "firmware_update_required": self._source_entity_id is None,
         }
 
     @property
@@ -96,6 +102,8 @@ class HoymilesProxyEntity(Entity):
     async def async_added_to_hass(self) -> None:
         """Subscribe to state changes from the native ESPHome entity."""
         await super().async_added_to_hass()
+        if self._source_entity_id is None:
+            return
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,

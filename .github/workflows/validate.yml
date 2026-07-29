@@ -33,11 +33,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Install project validation dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
       - name: Generate assets
         run: python tools/build_hacs_assets.py
       - name: Verify generated files are committed
         run: git diff --exit-code
       - name: Run structural tests
         run: python tools/validate_release.py
+      - name: Test RCE optimizer
+        run: python tools/test_rce_optimizer.py
       - name: Test RCE custom card
         run: node tools/validate_rce_card.js

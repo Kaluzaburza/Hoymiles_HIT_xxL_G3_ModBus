@@ -69,11 +69,11 @@ def _name_matches(
     return _slugify(friendly_name) == source_object_id
 
 
-def async_match_entities(
+async def async_match_entities(
     hass: HomeAssistant,
     source_device_id: str,
 ) -> tuple[dr.DeviceEntry | None, dict[str, list[MatchedEntity]]]:
-    """Match all enabled and disabled ESPHome entities to the catalog."""
+    """Match ESPHome entities and retain placeholders for newer firmware."""
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
     source_device = device_registry.async_get(source_device_id)
@@ -95,18 +95,30 @@ def async_match_entities(
     ]
     used_entity_ids: set[str] = set()
 
-    for catalog in load_catalog():
+    catalogs = await hass.async_add_executor_job(load_catalog)
+    for catalog in catalogs:
         domain = catalog["domain"]
+        matched_source: er.RegistryEntry | None = None
         for source in source_entries:
             if (
                 source.entity_id not in used_entity_ids
                 and source.domain == domain
                 and _name_matches(source, catalog, source_device)
             ):
-                matched[domain].append(
-                    MatchedEntity(catalog=catalog, source=source)
-                )
+                matched_source = source
                 used_entity_ids.add(source.entity_id)
                 break
+        matched[domain].append(
+            MatchedEntity(catalog=catalog, source=matched_source)
+        )
 
     return source_device, matched
+
+
+def matched_source_count(matched: dict[str, list[MatchedEntity]]) -> int:
+    """Return the number of catalog records backed by ESPHome entities."""
+    return sum(
+        entity.source is not None
+        for entities in matched.values()
+        for entity in entities
+    )

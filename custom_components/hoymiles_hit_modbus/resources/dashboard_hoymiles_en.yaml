@@ -121,7 +121,7 @@ views:
           modern: true
           autarky: "no"
           auto_scale: true
-        inverter_image: /local/hoymiles-inverter.png?v=1
+        inverter_image: /api/hoymiles_hit_modbus/static/hoymiles-inverter.png
         battery:
           energy: 21000
           shutdown_soc: 10
@@ -280,7 +280,7 @@ views:
     badges: []
     cards:
       - type: entities
-        title: RCE automation — settings
+        title: RCE automation — required configuration
         show_header_toggle: false
         state_color: true
         entities:
@@ -288,72 +288,74 @@ views:
             name: Enable automatic discharge using RCE prices
           - entity: input_number.hoymiles_rce_price_threshold
             name: Minimum export price
+          - entity: input_select.hoymiles_rce_inverter_rated_power
+            name: Rated power of one inverter
           - entity: number.hoymiles_hit_maximum_discharge_power
             name: Grid discharge power
-          - type: section
-            label: Dynamic SOC reserve
+          - entity: input_text.hoymiles_solcast_forecast_today_entity
+            name: Solcast entity — today forecast
+          - entity: input_text.hoymiles_solcast_forecast_tomorrow_entity
+            name: Solcast entity — tomorrow forecast
+          - entity: input_number.hoymiles_rce_fallback_daily_load
+            name: Daily consumption before history is available
           - entity: input_boolean.hoymiles_rce_dynamic_soc_enabled
             name: Automatically calculate minimum SOC
           - entity: input_number.hoymiles_rce_soc_safety_margin
             name: SOC safety correction (+)
-          - entity: sensor.hoymiles_rce_effective_minimum_soc
-            name: Effective minimum SOC
-          - entity: number.hoymiles_hit_force_discharge_soc
-            name: Threshold written to the inverter
-          - type: section
-            label: Export lockout
           - entity: input_boolean.hoymiles_sale_block_enabled
             name: Enable export lockout
           - entity: input_datetime.hoymiles_sale_block_start
             name: Lockout start
           - entity: input_datetime.hoymiles_sale_block_end
             name: Lockout end
-          - entity: binary_sensor.hoymiles_sale_block_active
-            name: Lockout active now
-          - entity: sensor.hoymiles_rce_current_price
-            name: Current RCE price
-          - entity: sensor.hoymiles_rce_status
-            name: Automation status
       - type: entities
-        title: Energy forecast and SOC reserve
+        title: RCE — status, forecast and result
         show_header_toggle: false
         state_color: true
         entities:
-          - entity: input_text.hoymiles_solcast_forecast_tomorrow_entity
-            name: Solcast entity — tomorrow forecast
+          - entity: sensor.hoymiles_rce_status
+            name: Automation status
+          - entity: sensor.hoymiles_hit_rce_optimized_plan
+            name: Optimizer status
+          - entity: sensor.hoymiles_rce_current_price
+            name: Current RCE price
+          - entity: binary_sensor.hoymiles_sale_block_active
+            name: Lockout active now
+          - entity: sensor.hoymiles_solcast_forecast_today
+            name: Forecast PV production today
+          - entity: sensor.hoymiles_solcast_forecast_remaining_today
+            name: Remaining forecast PV production today
           - entity: sensor.hoymiles_solcast_forecast_tomorrow
             name: Forecast PV production tomorrow
           - entity: sensor.hoymiles_load_average_4_days
             name: Average daily LOAD — 4 days
-          - entity: binary_sensor.hoymiles_night_protection_window
-            name: Night-window consumption sampling active
-          - entity: sensor.hoymiles_night_protection_window_duration
-            name: Full night window — sunset/sunrise ± 1.5 h
-          - entity: sensor.hoymiles_night_protection_window_remaining
-            name: Protected home runtime — nearest night
           - entity: sensor.hoymiles_night_load_average_4_days
             name: Average protected-window consumption — 4 days
-          - entity: sensor.hoymiles_protected_window_expected_load
-            name: Energy required until PV production starts
-          - entity: sensor.hoymiles_rce_energy_deficit_tomorrow
-            name: Daily deficit from PV forecast
           - entity: sensor.hoymiles_rce_protected_home_energy
             name: Home energy protected from export
-          - entity: sensor.hoymiles_hit_battery_capacity
-            name: Battery capacity from inverter
-          - entity: number.hoymiles_hit_self_use_soc
-            name: Outage SOC reserve
           - entity: sensor.hoymiles_rce_dynamic_minimum_soc
             name: Calculated minimum SOC for RCE
-          - entity: binary_sensor.hoymiles_rce_reserve_ready
-            name: Reserve data complete
-          - entity: sensor.hoymiles_rce_reserve_status
-            name: Reserve calculation status
+          - entity: sensor.hoymiles_rce_grid_export_energy_daily
+            name: Energy exported to grid today
+          - entity: sensor.hoymiles_rce_revenue_daily
+            name: Estimated RCE revenue today
       - type: vertical-stack
         cards:
           - type: custom:hoymiles-rce-chart-card
-            title: RCE — prices and discharge plan
+            title: RCE — today
             entity: sensor.hoymiles_rce_day
+            plan_entity: sensor.hoymiles_hit_rce_optimized_plan
+            current_price_entity: sensor.hoymiles_rce_current_price
+            threshold_entity: input_number.hoymiles_rce_price_threshold
+            active_entity: input_boolean.hoymiles_rce_discharge_active
+            block_enabled_entity: input_boolean.hoymiles_sale_block_enabled
+            block_start_entity: input_datetime.hoymiles_sale_block_start
+            block_end_entity: input_datetime.hoymiles_sale_block_end
+          - type: custom:hoymiles-rce-chart-card
+            title: RCE — tomorrow
+            entity: sensor.hoymiles_rce_day_tomorrow
+            future_data: true
+            plan_entity: sensor.hoymiles_hit_rce_optimized_plan
             current_price_entity: sensor.hoymiles_rce_current_price
             threshold_entity: input_number.hoymiles_rce_price_threshold
             active_entity: input_boolean.hoymiles_rce_discharge_active
@@ -369,35 +371,27 @@ views:
           - sensor.hoymiles_rce_reserve_status
           - sensor.hoymiles_rce_dynamic_minimum_soc
         content: |-
-          Dynamic reserve requires the external integration
+          The automation requires the external integration
           **Solcast PV Forecast** by **BJReplay**:
           [installation and configuration](https://github.com/BJReplay/ha-solcast-solar).
 
-          The default entity is
-          `sensor.solcast_pv_forecast_forecast_tomorrow` (English HA) or
-          `sensor.solcast_pv_forecast_prognoza_na_jutro` (Polish HA).
-          If your installation uses a different name, enter it in the
-          **Solcast entity** field.
+          **Forecast Today** and **Forecast Tomorrow** are required.
+          The entities are detected automatically in Polish and English HA;
+          custom entity ids can be entered above.
 
-          Calculation:
+          The optimizer simulates the balance every 30 minutes from now through tonight,
+          the whole next day and the following night until **90 minutes after sunrise**.
+          It first protects the home supply, the Self-Use outage reserve, and
+          the safety correction. Only the remaining energy is assigned to
+          the most valuable available RCE slots today or tomorrow.
 
-          **Self-Use outage reserve + remaining home demand in the nearest
-          night window + the additional daily PV forecast deficit +
-          user safety correction**.
+          Moc systemu jest liczona jako **moc jednego falownika × automatycznie
+          detected inverter count × configured discharge percentage**.
+          For the first 24 hours, the fallback daily consumption entered
+          above is used; it is then replaced by the four-day average.
 
-          The night window starts **90 minutes before sunset** and ends
-          **90 minutes after sunrise**. During the day, the automation protects
-          energy for the entire upcoming night window. From 90 minutes before
-          sunset, protected energy decreases with the remaining time, so the
-          automation can export only the part of the battery that the home will not
-          need before PV production starts.
-
-          For the first day, night consumption is estimated from the four-day
-          daily average. Afterwards, the automation uses measured consumption
-          from up to four previous protected windows. The correction is
-          added in percentage points. If Solcast, LOAD, sun, or battery
-          capacity data is missing, RCE export is safely
-          blocked.
+          The Self-Use reserve setting is not changed. This energy remains available
+          below the normal threshold only during a grid outage.
       - type: markdown
         title: RCE discharge plan
         entity_id:
@@ -410,19 +404,24 @@ views:
           {% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}
           {% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',
                                      'planned_duration_minutes') | int(0) %}
-          {% set date = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_date') %}
-          **Day:** {{ date }}<br>
-          **Periods above the configured threshold:**<br>
-          {{ periods or 'No data do przyreadynia planu.' }}
+          {% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}
+          {% set export = state_attr('sensor.hoymiles_rce_discharge_plan',
+                                     'expected_export_kwh') | float(0) %}
+          {% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',
+                                      'estimated_revenue_pln') | float(0) %}
+          **Horizon:** {{ dates }}<br>
+          **Most profitable periods selected by the optimizer:**<br>
+          {{ periods or 'No data available to build a plan.' }}
 
           **Total plan:** {{ minutes // 60 }} h
           {{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}
-          30-minute blocks)
+          30-minute blocks)<br>
+          **Forecast export:** {{ export | round(2) }} kWh<br>
+          **Estimated revenue:** {{ revenue | round(2) }} PLN
 
-          The automation returns to **Self-Use** when the price falls to
-          the threshold or below, when minimum SOC is reached, or when the
-          switch is disabled. Periods inside the active export lockout are skipped,
-          and the inverter remains in Self-Use mode.
+          The automation returns to **Self-Use** after the selected
+          slot ends, the minimum SOC is reached, or the
+          switch is disabled. The export lockout excludes the configured hours.
       - type: markdown
         view_layout:
           position: sidebar

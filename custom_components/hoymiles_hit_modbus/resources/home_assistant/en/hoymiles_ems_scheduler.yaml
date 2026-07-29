@@ -63,10 +63,28 @@ input_datetime:
     icon: mdi:clock-end
 
 input_text:
+  hoymiles_solcast_forecast_today_entity:
+    name: "EMS RCE — Solcast today forecast entity"
+    max: 255
+    icon: mdi:solar-power-variant
+
   hoymiles_solcast_forecast_tomorrow_entity:
     name: "EMS RCE — Solcast tomorrow forecast entity"
     max: 255
     icon: mdi:solar-power-variant
+
+input_select:
+  hoymiles_rce_inverter_rated_power:
+    name: "EMS RCE — rated power of one inverter"
+    options:
+      - "5 kW"
+      - "8 kW"
+      - "10 kW"
+      - "12 kW"
+      - "15 kW"
+      - "20 kW"
+    initial: "10 kW"
+    icon: mdi:solar-power
 
 input_number:
   hoymiles_discharge_duration:
@@ -104,6 +122,26 @@ input_number:
     mode: slider
     unit_of_measurement: "%"
     icon: mdi:shield-plus-outline
+
+  hoymiles_rce_fallback_daily_load:
+    name: "EMS RCE — fallback daily consumption before history is available"
+    min: 1
+    max: 200
+    step: 0.5
+    initial: 10
+    mode: box
+    unit_of_measurement: "kWh"
+    icon: mdi:home-lightning-bolt-outline
+
+  hoymiles_rce_export_efficiency:
+    name: "EMS RCE — battery export efficiency"
+    min: 80
+    max: 100
+    step: 1
+    initial: 95
+    mode: slider
+    unit_of_measurement: "%"
+    icon: mdi:percent-outline
 
 # The daily LOAD meter increases during the day and resets at midnight.
 # sum_differences_nonnegative sums only positive increments from the last
@@ -143,6 +181,35 @@ sensor:
     keep_last_sample: true
     precision: 3
 
+  - platform: integration
+    source: sensor.hoymiles_rce_grid_export_power
+    name: "Hoymiles RCE Grid Export Energy Total"
+    unique_id: hoymiles_rce_grid_export_energy_total
+    unit_time: h
+    round: 3
+    method: left
+
+  - platform: integration
+    source: sensor.hoymiles_rce_revenue_rate
+    name: "Hoymiles RCE Revenue Total"
+    unique_id: hoymiles_rce_revenue_total
+    unit_time: h
+    round: 3
+    method: left
+
+utility_meter:
+  hoymiles_rce_grid_export_energy_daily:
+    name: "Hoymiles RCE Grid Export Energy Daily"
+    unique_id: hoymiles_rce_grid_export_energy_daily
+    source: sensor.hoymiles_rce_grid_export_energy_total
+    cycle: daily
+
+  hoymiles_rce_revenue_daily:
+    name: "Hoymiles RCE Revenue Daily"
+    unique_id: hoymiles_rce_revenue_daily
+    source: sensor.hoymiles_rce_revenue_total
+    cycle: daily
+
 # Oficjalne API PSE publikuje RCE w PLN/MWh w 96 okresach po 15 minut.
 # Automatyka oraz dashboard łączą każde dwa kolejne okresy w 48 bloków
 # półgodzinnych i przeliczają cenę na PLN/kWh.
@@ -157,6 +224,21 @@ rest:
     sensor:
       - name: "Hoymiles RCE Day"
         unique_id: hoymiles_rce_day
+        icon: mdi:chart-areaspline
+        value_template: "{{ value_json.value | count }}"
+        json_attributes:
+          - value
+
+  - resource_template: >-
+      https://api.raporty.pse.pl/api/rce-pln?%24select=rce_pln%2Cperiod%2Cbusiness_date&%24filter=business_date%20eq%20%27{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}%27
+    method: GET
+    scan_interval: 900
+    timeout: 30
+    headers:
+      Accept: application/json
+    sensor:
+      - name: "Hoymiles RCE Day Tomorrow"
+        unique_id: hoymiles_rce_day_tomorrow
         icon: mdi:chart-areaspline
         value_template: "{{ value_json.value | count }}"
         json_attributes:
@@ -285,6 +367,36 @@ template:
           {{ ([load, 0] | max if in_window else 0) | round(0) }}
 
   - sensor:
+      - name: "Hoymiles RCE Grid Export Power"
+        unique_id: hoymiles_rce_grid_export_power
+        icon: mdi:transmission-tower-export
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        availability: >-
+          {{ is_number(
+               states('sensor.hoymiles_hit_overview_grid_total_active_power')) }}
+        state: >-
+          {% set grid =
+            states('sensor.hoymiles_hit_overview_grid_total_active_power')
+            | float(0) %}
+          {{ ([-grid / 1000, 0] | max) | round(3) }}
+
+      - name: "Hoymiles RCE Revenue Rate"
+        unique_id: hoymiles_rce_revenue_rate
+        icon: mdi:cash-fast
+        unit_of_measurement: "PLN/h"
+        state_class: measurement
+        availability: >-
+          {{ is_number(states('sensor.hoymiles_rce_grid_export_power'))
+             and is_number(states('sensor.hoymiles_rce_current_price')) }}
+        state: >-
+          {% set power =
+            states('sensor.hoymiles_rce_grid_export_power') | float(0) %}
+          {% set price =
+            states('sensor.hoymiles_rce_current_price') | float(0) %}
+          {{ (power * price) | round(4) }}
+
       - name: "Hoymiles RCE Current Price"
         unique_id: hoymiles_rce_current_price
         icon: mdi:cash-clock
@@ -303,6 +415,111 @@ template:
                   (rows[index + 1]['rce_pln'] | float(0))) / 2000) | round(4) }}
           {% else %}
             {{ none }}
+          {% endif %}
+
+      - name: "Hoymiles Solcast Forecast Today"
+        unique_id: hoymiles_solcast_forecast_today
+        icon: mdi:weather-sunny
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        availability: >-
+          {% set refresh = now().minute %}
+          {% set configured =
+            states('input_text.hoymiles_solcast_forecast_today_entity')
+            | trim %}
+          {% set candidates = [
+            configured,
+            'sensor.solcast_pv_forecast_forecast_today',
+            'sensor.solcast_pv_forecast_prognoza_na_dzisiaj',
+            'sensor.solcast_forecast_today'
+          ] %}
+          {% set ns = namespace(value=none) %}
+          {% for entity in candidates if entity and ns.value is none %}
+            {% if is_number(states(entity)) %}
+              {% set ns.value = states(entity) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.value is not none }}
+        state: >-
+          {% set refresh = now().minute %}
+          {% set configured =
+            states('input_text.hoymiles_solcast_forecast_today_entity')
+            | trim %}
+          {% set candidates = [
+            configured,
+            'sensor.solcast_pv_forecast_forecast_today',
+            'sensor.solcast_pv_forecast_prognoza_na_dzisiaj',
+            'sensor.solcast_forecast_today'
+          ] %}
+          {% set ns = namespace(value=none) %}
+          {% for entity in candidates if entity and ns.value is none %}
+            {% if is_number(states(entity)) %}
+              {% set ns.value = states(entity) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.value | round(2) if ns.value is not none else none }}
+        attributes:
+          source_entity: >-
+            {% set configured =
+              states('input_text.hoymiles_solcast_forecast_today_entity')
+              | trim %}
+            {% set candidates = [
+              configured,
+              'sensor.solcast_pv_forecast_forecast_today',
+              'sensor.solcast_pv_forecast_prognoza_na_dzisiaj',
+              'sensor.solcast_forecast_today'
+            ] %}
+            {% set ns = namespace(entity='') %}
+            {% for entity in candidates if entity and not ns.entity %}
+              {% if is_number(states(entity)) %}
+                {% set ns.entity = entity %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.entity or 'none' }}
+
+      - name: "Hoymiles Solcast Forecast Remaining Today"
+        unique_id: hoymiles_solcast_forecast_remaining_today
+        icon: mdi:weather-sunset-up
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        availability: >-
+          {% set candidates = [
+            'sensor.solcast_pv_forecast_forecast_remaining_today',
+            'sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis',
+            'sensor.solcast_forecast_remaining_today'
+          ] %}
+          {% set ns = namespace(value=none) %}
+          {% for entity in candidates if ns.value is none %}
+            {% if is_number(states(entity)) %}
+              {% set ns.value = states(entity) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.value is not none
+             or (is_number(states('sensor.hoymiles_solcast_forecast_today'))
+                 and is_number(
+                   states('sensor.hoymiles_hit_pv_total_energy_today'))) }}
+        state: >-
+          {% set candidates = [
+            'sensor.solcast_pv_forecast_forecast_remaining_today',
+            'sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis',
+            'sensor.solcast_forecast_remaining_today'
+          ] %}
+          {% set ns = namespace(value=none) %}
+          {% for entity in candidates if ns.value is none %}
+            {% if is_number(states(entity)) %}
+              {% set ns.value = states(entity) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.value is not none %}
+            {{ ns.value | round(2) }}
+          {% else %}
+            {% set forecast =
+              states('sensor.hoymiles_solcast_forecast_today') | float(0) %}
+            {% set actual =
+              states('sensor.hoymiles_hit_pv_total_energy_today') | float(0) %}
+            {{ ([forecast - actual, 0] | max) | round(2) }}
           {% endif %}
 
       - name: "Hoymiles Solcast Forecast Tomorrow"
@@ -505,17 +722,11 @@ template:
         device_class: energy
         state_class: measurement
         availability: >-
-          {{ is_number(
-               states('sensor.hoymiles_protected_window_expected_load'))
-             and is_number(
-               states('sensor.hoymiles_rce_energy_deficit_tomorrow')) }}
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'protected_home_energy_kwh') is number }}
         state: >-
-          {% set night =
-            states('sensor.hoymiles_protected_window_expected_load')
-            | float(0) %}
-          {% set deficit =
-            states('sensor.hoymiles_rce_energy_deficit_tomorrow') | float(0) %}
-          {{ ([night, 0] | max + [deficit, 0] | max) | round(2) }}
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'protected_home_energy_kwh') | float(0) | round(2) }}
 
       - name: "Hoymiles RCE Dynamic Minimum SOC"
         unique_id: hoymiles_rce_dynamic_minimum_soc
@@ -523,31 +734,20 @@ template:
         unit_of_measurement: "%"
         state_class: measurement
         availability: >-
-          {{ is_number(states('number.hoymiles_hit_self_use_soc'))
-             and is_number(states('sensor.hoymiles_hit_battery_capacity'))
-             and (states('sensor.hoymiles_hit_battery_capacity')
-                  | float(0)) > 0
-             and is_number(
-               states('sensor.hoymiles_rce_protected_home_energy'))
-             and is_number(states('input_number.hoymiles_rce_soc_safety_margin')) }}
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'minimum_soc') is number }}
         state: >-
-          {% set reserve =
-            states('number.hoymiles_hit_self_use_soc') | float(0) %}
-          {% set capacity =
-            states('sensor.hoymiles_hit_battery_capacity') | float(0) %}
-          {% set protected =
-            states('sensor.hoymiles_rce_protected_home_energy') | float(0) %}
-          {% set margin =
-            states('input_number.hoymiles_rce_soc_safety_margin') | float(0) %}
-          {% set calculated =
-            reserve + (protected / capacity * 100) + margin %}
-          {{ ([[calculated | round(0, 'ceil'), reserve] | max, 100] | min)
-             | int }}
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'minimum_soc') | int(100) }}
         attributes:
           base_outage_reserve_soc: >-
             {{ states('number.hoymiles_hit_self_use_soc') }}
           forecast_tomorrow_kwh: >-
             {{ states('sensor.hoymiles_solcast_forecast_tomorrow') }}
+          forecast_today_kwh: >-
+            {{ states('sensor.hoymiles_solcast_forecast_today') }}
+          forecast_remaining_today_kwh: >-
+            {{ states('sensor.hoymiles_solcast_forecast_remaining_today') }}
           average_load_4d_kwh: >-
             {{ states('sensor.hoymiles_load_average_4_days') }}
           expected_deficit_kwh: >-
@@ -560,6 +760,9 @@ template:
             {{ states('sensor.hoymiles_hit_battery_capacity') }}
           safety_margin_percentage_points: >-
             {{ states('input_number.hoymiles_rce_soc_safety_margin') }}
+          optimizer_status: >-
+            {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                          'status_code') }}
 
       - name: "Hoymiles RCE Effective Minimum SOC"
         unique_id: hoymiles_rce_effective_minimum_soc
@@ -585,147 +788,42 @@ template:
         state: >-
           {% if is_state('input_boolean.hoymiles_rce_dynamic_soc_enabled', 'off') %}
             Manual mode — using the inverter discharge threshold
-          {% elif not is_number(
-              states('sensor.hoymiles_solcast_forecast_tomorrow')) %}
-            No Solcast data — export blocked
-          {% elif not is_number(states('sensor.hoymiles_load_average_4_days')) %}
-            Insufficient LOAD history — at least 24 hours required
-          {% elif not is_number(
-              states('sensor.hoymiles_night_protection_window_remaining'))
-              or not is_number(
-              states('sensor.hoymiles_protected_window_expected_load')) %}
-            Missing sunrise or sunset data — export blocked
-          {% elif not is_number(
-              states('sensor.hoymiles_hit_battery_capacity'))
-              or (states('sensor.hoymiles_hit_battery_capacity')
-                  | float(0)) <= 0 %}
-            No inverter battery capacity — export blocked
-          {% elif not is_number(
-              states('sensor.hoymiles_rce_dynamic_minimum_soc')) %}
-            Cannot calculate reserve — export blocked
           {% else %}
-            Ready — dynamic threshold
-            {{ states('sensor.hoymiles_rce_dynamic_minimum_soc') }}%
+            {{ states('sensor.hoymiles_hit_rce_optimized_plan') }}
           {% endif %}
 
       - name: "Hoymiles RCE Discharge Plan"
         unique_id: hoymiles_rce_discharge_plan
         icon: mdi:calendar-clock
         state: >-
-          {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
-          {% set threshold = states('input_number.hoymiles_rce_price_threshold') | float(0) %}
-          {% set start_parts =
-            states('input_datetime.hoymiles_sale_block_start').split(':') %}
-          {% set end_parts =
-            states('input_datetime.hoymiles_sale_block_end').split(':') %}
-          {% set block_start = (start_parts[0] | int(0)) * 60
-                             + (start_parts[1] | int(0)) %}
-          {% set block_end = (end_parts[0] | int(0)) * 60
-                           + (end_parts[1] | int(0)) %}
-          {% set block_enabled =
-            is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
-            and block_start != block_end %}
-          {% set ns = namespace(blocks=0) %}
-          {% for index in range(0, (rows | count) - 1, 2) %}
-            {% set slot_minute = loop.index0 * 30 %}
-            {% set blocked = block_enabled and
-              ((block_start < block_end
-                and block_start <= slot_minute < block_end)
-               or (block_start > block_end
-                and (slot_minute >= block_start or slot_minute < block_end))) %}
-            {% set price = (((rows[index]['rce_pln'] | float(0)) +
-                             (rows[index + 1]['rce_pln'] | float(0))) / 2000) %}
-            {% if price > threshold and not blocked %}
-              {% set ns.blocks = ns.blocks + 1 %}
-            {% endif %}
-          {% endfor %}
-          {{ ns.blocks }}
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'planned_slots') | default([], true) | count }}
         attributes:
-          data_date: >-
-            {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
-            {{ rows[0]['business_date'] if rows | count > 0 else 'brak danych' }}
+          data_dates: >-
+            {{ now().strftime('%Y-%m-%d') }},
+            {{ (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}
           planned_duration_minutes: >-
-            {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
-            {% set threshold = states('input_number.hoymiles_rce_price_threshold') | float(0) %}
-            {% set start_parts =
-              states('input_datetime.hoymiles_sale_block_start').split(':') %}
-            {% set end_parts =
-              states('input_datetime.hoymiles_sale_block_end').split(':') %}
-            {% set block_start = (start_parts[0] | int(0)) * 60
-                               + (start_parts[1] | int(0)) %}
-            {% set block_end = (end_parts[0] | int(0)) * 60
-                             + (end_parts[1] | int(0)) %}
-            {% set block_enabled =
-              is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
-              and block_start != block_end %}
-            {% set ns = namespace(blocks=0) %}
-            {% for index in range(0, (rows | count) - 1, 2) %}
-              {% set slot_minute = loop.index0 * 30 %}
-              {% set blocked = block_enabled and
-                ((block_start < block_end
-                  and block_start <= slot_minute < block_end)
-                 or (block_start > block_end
-                  and (slot_minute >= block_start or slot_minute < block_end))) %}
-              {% set price = (((rows[index]['rce_pln'] | float(0)) +
-                               (rows[index + 1]['rce_pln'] | float(0))) / 2000) %}
-              {% if price > threshold and not blocked %}
-                {% set ns.blocks = ns.blocks + 1 %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.blocks * 30 }}
+            {{ (state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                           'planned_slots') | default([], true) | count) * 30 }}
           periods: >-
-            {% set rows = state_attr('sensor.hoymiles_rce_day', 'value') or [] %}
-            {% set threshold = states('input_number.hoymiles_rce_price_threshold') | float(0) %}
-            {% set start_parts =
-              states('input_datetime.hoymiles_sale_block_start').split(':') %}
-            {% set end_parts =
-              states('input_datetime.hoymiles_sale_block_end').split(':') %}
-            {% set block_start = (start_parts[0] | int(0)) * 60
-                               + (start_parts[1] | int(0)) %}
-            {% set block_end = (end_parts[0] | int(0)) * 60
-                             + (end_parts[1] | int(0)) %}
-            {% set block_enabled =
-              is_state('input_boolean.hoymiles_sale_block_enabled', 'on')
-              and block_start != block_end %}
-            {% set ns = namespace(active=false, start='', finish='',
-                                  start_slot=0, last_slot=0, periods=[]) %}
-            {% for index in range(0, (rows | count) - 1, 2) %}
-              {% set slot = loop.index0 %}
-              {% set slot_minute = slot * 30 %}
-              {% set blocked = block_enabled and
-                ((block_start < block_end
-                  and block_start <= slot_minute < block_end)
-                 or (block_start > block_end
-                  and (slot_minute >= block_start or slot_minute < block_end))) %}
-              {% set price = (((rows[index]['rce_pln'] | float(0)) +
-                               (rows[index + 1]['rce_pln'] | float(0))) / 2000) %}
-              {% set is_high = price > threshold and not blocked %}
-              {% if is_high %}
-                {% if not ns.active %}
-                  {% set ns.active = true %}
-                  {% set ns.start = rows[index]['period'].split(' - ')[0] %}
-                  {% set ns.start_slot = slot %}
-                {% endif %}
-                {% set ns.finish = rows[index + 1]['period'].split(' - ')[1] %}
-                {% set ns.last_slot = slot %}
-              {% elif ns.active %}
-                {% set minutes = (ns.last_slot - ns.start_slot + 1) * 30 %}
-                {% set duration = (minutes // 60) ~ ' h'
-                  ~ ((' ' ~ (minutes % 60) ~ ' min') if minutes % 60 else '') %}
-                {% set ns.periods = ns.periods +
-                  [ns.start ~ '–' ~ ns.finish ~ ' (' ~ duration ~ ')'] %}
-                {% set ns.active = false %}
-              {% endif %}
+            {% set slots = state_attr(
+              'sensor.hoymiles_hit_rce_optimized_plan',
+              'planned_slots') | default([], true) %}
+            {% set ns = namespace(items=[]) %}
+            {% for slot in slots %}
+              {% set ns.items = ns.items + [
+                slot['date'] ~ ' ' ~ slot['start'] ~ '–' ~ slot['end']
+                ~ ' (' ~ slot['energy'] ~ ' kWh; '
+                ~ slot['price'] ~ ' PLN/kWh)'] %}
             {% endfor %}
-            {% if ns.active %}
-              {% set minutes = (ns.last_slot - ns.start_slot + 1) * 30 %}
-              {% set duration = (minutes // 60) ~ ' h'
-                ~ ((' ' ~ (minutes % 60) ~ ' min') if minutes % 60 else '') %}
-              {% set ns.periods = ns.periods +
-                [ns.start ~ '–' ~ ns.finish ~ ' (' ~ duration ~ ')'] %}
-            {% endif %}
-            {{ ns.periods | join(', ') if ns.periods
-               else 'No periods above the threshold outside the export lockout.' }}
+            {{ ns.items | join(', ') if ns.items
+               else 'No export periods are currently planned.' }}
+          expected_export_kwh: >-
+            {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                          'expected_total_export_kwh') }}
+          estimated_revenue_pln: >-
+            {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                          'estimated_revenue_pln') }}
 
       - name: "Hoymiles RCE Status"
         unique_id: hoymiles_rce_status
@@ -737,54 +835,34 @@ template:
             Export lockout — Self-Use
           {% elif is_state('input_boolean.hoymiles_rce_discharge_active', 'on') %}
             Grid discharge
-          {% elif not is_number(states('sensor.hoymiles_rce_current_price')) %}
-            No data RCE
-          {% elif is_state('binary_sensor.hoymiles_rce_reserve_ready', 'off') %}
-            No SOC reserve data — export blocked
           {% elif (states('sensor.hoymiles_hit_overview_battery_soc') | float(0))
                    <= (states('sensor.hoymiles_rce_effective_minimum_soc') | float(100)) %}
             Waiting — minimum SOC reached
           {% elif is_state('input_boolean.hoymiles_discharge_cycle_active', 'on')
                or is_state('input_boolean.hoymiles_charge_cycle_active', 'on') %}
             Waiting — manual schedule active
-          {% elif is_state('binary_sensor.hoymiles_rce_price_above_threshold', 'on') %}
-            Price above threshold — ready
           {% else %}
-            Waiting for price
+            {{ states('sensor.hoymiles_hit_rce_optimized_plan') }}
           {% endif %}
 
     binary_sensor:
       - name: "Hoymiles RCE Price Above Threshold"
         unique_id: hoymiles_rce_price_above_threshold
-        icon: mdi:trending-up
-        availability: "{{ is_number(states('sensor.hoymiles_rce_current_price')) }}"
+        icon: mdi:calendar-check
+        availability: >-
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'current_slot_planned') is not none }}
         state: >-
-          {{ (states('sensor.hoymiles_rce_current_price') | float(0))
-             > (states('input_number.hoymiles_rce_price_threshold') | float(0)) }}
+          {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                        'current_slot_planned') | default(false, true) }}
 
       - name: "Hoymiles RCE Reserve Ready"
         unique_id: hoymiles_rce_reserve_ready
         icon: mdi:shield-check-outline
         state: >-
-          {% if is_state('input_boolean.hoymiles_rce_dynamic_soc_enabled', 'on') %}
-            {{ is_number(states('sensor.hoymiles_solcast_forecast_tomorrow'))
-               and is_number(states('sensor.hoymiles_load_average_4_days'))
-               and is_number(
-                 states('sensor.hoymiles_protected_window_expected_load'))
-               and is_number(
-                 states('sensor.hoymiles_rce_protected_home_energy'))
-               and is_number(
-                 states('sensor.hoymiles_hit_battery_capacity'))
-               and (states('sensor.hoymiles_hit_battery_capacity')
-                    | float(0)) > 0
-               and is_number(
-                 states('number.hoymiles_hit_self_use_soc'))
-               and is_number(
-                 states('sensor.hoymiles_rce_dynamic_minimum_soc')) }}
-          {% else %}
-            {{ is_number(
-                 states('number.hoymiles_hit_force_discharge_soc')) }}
-          {% endif %}
+          {% set status = state_attr(
+            'sensor.hoymiles_hit_rce_optimized_plan', 'status_code') %}
+          {{ status in ['ready', 'waiting_for_price', 'home_protected'] }}
 
       - name: "Hoymiles Sale Block Active"
         unique_id: hoymiles_sale_block_active
@@ -927,15 +1005,56 @@ automation:
   - id: hoymiles_initialize_solcast_forecast_entity
     alias: "EMS RCE — set default Solcast entity"
     description: >-
-      Detects the English or Polish Forecast Tomorrow entity from the Solcast
-      PV Forecast integration by BJReplay. A valid custom entity entered by the user is
-      preserved.
+      Detects the English or Polish Forecast Today and Forecast Tomorrow entities
+      from the BJReplay Solcast PV Forecast integration. Valid custom entities
+      made by the user are preserved.
     mode: single
     triggers:
       - trigger: homeassistant
         event: start
     actions:
       - delay: "00:00:15"
+      - if:
+          - condition: template
+            value_template: >-
+              {% set configured =
+                states('input_text.hoymiles_solcast_forecast_today_entity')
+                | trim %}
+              {% set candidates = [
+                configured,
+                'sensor.solcast_pv_forecast_forecast_today',
+                'sensor.solcast_pv_forecast_prognoza_na_dzisiaj',
+                'sensor.solcast_forecast_today'
+              ] %}
+              {% set ns = namespace(entity='') %}
+              {% for entity in candidates if entity and not ns.entity %}
+                {% if is_number(states(entity)) %}
+                  {% set ns.entity = entity %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.entity != '' and ns.entity != configured }}
+        then:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.hoymiles_solcast_forecast_today_entity
+            data:
+              value: >-
+                {% set configured =
+                  states('input_text.hoymiles_solcast_forecast_today_entity')
+                  | trim %}
+                {% set candidates = [
+                  configured,
+                  'sensor.solcast_pv_forecast_forecast_today',
+                  'sensor.solcast_pv_forecast_prognoza_na_dzisiaj',
+                  'sensor.solcast_forecast_today'
+                ] %}
+                {% set ns = namespace(entity='') %}
+                {% for entity in candidates if entity and not ns.entity %}
+                  {% if is_number(states(entity)) %}
+                    {% set ns.entity = entity %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.entity }}
       - if:
           - condition: template
             value_template: >-
@@ -981,10 +1100,9 @@ automation:
   - id: hoymiles_rce_sync_dynamic_minimum_soc
     alias: "EMS RCE — write dynamic SOC reserve"
     description: >-
-      Writes the calculated minimum discharge SOC to the inverter. The threshold includes
-      the Self-Use outage reserve, home energy protected in the night window,
-      the additional forecast energy deficit for the next day, and the
-      safety correction.
+      Writes the calculated minimum discharge SOC to the inverter. The plan protects
+      home supply from now through tonight, the next day, and the following
+      night until 90 minutes after sunrise, then selects the most valuable RCE slots.
     mode: restart
     triggers:
       - trigger: state
@@ -993,6 +1111,8 @@ automation:
           - input_number.hoymiles_rce_soc_safety_margin
           - number.hoymiles_hit_self_use_soc
           - sensor.hoymiles_hit_battery_capacity
+          - sensor.hoymiles_solcast_forecast_today
+          - sensor.hoymiles_solcast_forecast_remaining_today
           - sensor.hoymiles_solcast_forecast_tomorrow
           - sensor.hoymiles_load_average_4_days
           - sensor.hoymiles_night_load_average_4_days
@@ -1002,6 +1122,7 @@ automation:
           - sensor.hoymiles_rce_protected_home_energy
           - sensor.hoymiles_rce_dynamic_minimum_soc
           - binary_sensor.hoymiles_rce_reserve_ready
+          - sensor.hoymiles_hit_rce_optimized_plan
       - trigger: time_pattern
         minutes: "/5"
       - trigger: homeassistant
@@ -1079,11 +1200,9 @@ automation:
   - id: hoymiles_rce_grid_discharge_control
     alias: "EMS RCE — price-based discharge control"
     description: >-
-      Every minute, compares the current 30-minute RCE block with the user threshold.
-      Discharges only above the price threshold and dynamic SOC reserve. The reserve
-      includes the Self-Use outage SOC, remaining home demand in the protected
-      night window, the additional Solcast forecast deficit for the next day, and the safety
-      correction. Manual timers take priority.
+      Every minute, checks the optimizer's two-day plan. It discharges only in
+      selected highest-value slots, above the user threshold and above the SOC
+      required to supply the home. Manual timers take priority.
     mode: restart
     triggers:
       - trigger: time_pattern
@@ -1091,6 +1210,7 @@ automation:
       - trigger: state
         entity_id:
           - sensor.hoymiles_rce_current_price
+          - sensor.hoymiles_hit_rce_optimized_plan
           - binary_sensor.hoymiles_rce_price_above_threshold
           - input_boolean.hoymiles_rce_discharge_enabled
           - input_boolean.hoymiles_sale_block_enabled

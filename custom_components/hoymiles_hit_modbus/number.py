@@ -12,6 +12,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
@@ -82,6 +83,10 @@ class HoymilesNumber(HoymilesProxyEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Forward a value write to ESPHome."""
+        if self._source_entity_id is None:
+            raise HomeAssistantError(
+                "This setting requires a newer Hoymiles ESPHome firmware"
+            )
         await self.hass.services.async_call(
             NUMBER_DOMAIN,
             SERVICE_SET_VALUE,

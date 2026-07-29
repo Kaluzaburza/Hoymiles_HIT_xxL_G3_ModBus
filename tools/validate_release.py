@@ -45,15 +45,37 @@ def load_assets_module():
     """Load the asset installer with a minimal Home Assistant type stub."""
     homeassistant = types.ModuleType("homeassistant")
     core = types.ModuleType("homeassistant.core")
+    helpers = types.ModuleType("homeassistant.helpers")
+    storage = types.ModuleType("homeassistant.helpers.storage")
     core.HomeAssistant = object
+    storage.Store = object
     homeassistant.core = core
+    homeassistant.helpers = helpers
+    helpers.storage = storage
     sys.modules.setdefault("homeassistant", homeassistant)
     sys.modules.setdefault("homeassistant.core", core)
+    sys.modules.setdefault("homeassistant.helpers", helpers)
+    sys.modules.setdefault("homeassistant.helpers.storage", storage)
+
+    custom_components = types.ModuleType("custom_components")
+    package = types.ModuleType("custom_components.hoymiles_hit_modbus")
+    package.__path__ = [str(COMPONENT)]
+    sys.modules.setdefault("custom_components", custom_components)
+    sys.modules.setdefault("custom_components.hoymiles_hit_modbus", package)
+
+    const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
+    const_module.DOMAIN = "hoymiles_hit_modbus"
+    const_module.VERSION = "1.2.1"
+    sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
-    spec = importlib.util.spec_from_file_location("hoymiles_assets", path)
+    spec = importlib.util.spec_from_file_location(
+        "custom_components.hoymiles_hit_modbus.assets",
+        path,
+    )
     require(spec is not None and spec.loader is not None, "Cannot load assets")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -157,6 +179,39 @@ script:
             "English installation copied the wrong dashboard",
         )
 
+    with tempfile.TemporaryDirectory(prefix="hoymiles_managed_upgrade_") as tmp:
+        config_path = Path(tmp)
+        dashboard_path = config_path / "dashboard_hoymiles.yaml"
+        dashboard_path.write_text("title: previous managed release\n", encoding="utf-8")
+        previous_hash = assets._sha256(dashboard_path)
+        written, managed = assets._sync_assets(
+            config_path,
+            "pl-PL",
+            False,
+            {"dashboard_hoymiles.yaml": previous_hash},
+        )
+        require(
+            dashboard_path in written
+            and managed["dashboard_hoymiles.yaml"]
+            == assets._sha256(dashboard_path),
+            "An unchanged managed dashboard was not upgraded",
+        )
+
+        dashboard_path.write_text("title: user customization\n", encoding="utf-8")
+        custom_content = dashboard_path.read_text(encoding="utf-8")
+        written, managed = assets._sync_assets(
+            config_path,
+            "pl-PL",
+            False,
+            {"dashboard_hoymiles.yaml": previous_hash},
+        )
+        require(
+            dashboard_path not in written
+            and dashboard_path.read_text(encoding="utf-8") == custom_content
+            and "dashboard_hoymiles.yaml" not in managed,
+            "A user-modified dashboard was overwritten",
+        )
+
 
 def png_dimensions(path: Path) -> tuple[int, int]:
     """Return PNG dimensions using only the Python standard library."""
@@ -205,7 +260,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.2.0", "Release version must be 1.2.0")
+    require(manifest["version"] == "1.2.1", "Release version must be 1.2.1")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -214,8 +269,18 @@ def main() -> int:
         "Proxy entities need an explicit stable suggested_object_id property",
     )
     require(
-        "_async_migrate_entity_ids(hass, entry)" in init_source,
+        "_async_migrate_entity_registry(hass, entry)" in init_source,
         "Existing localized entity ids are not migrated",
+    )
+    require(
+        "firmware_update_required" in entity_source
+        and "matched.source is not None" in entity_source,
+        "Missing-firmware proxy entities are not represented safely",
+    )
+    require(
+        "StaticPathConfig" in init_source
+        and 'STATIC_URL = f"/api/{DOMAIN}/static"' in init_source,
+        "Integration assets are not exposed through the stable no-cache URL",
     )
 
     catalog = load_json(COMPONENT / "entity_catalog.json")
@@ -278,9 +343,59 @@ def main() -> int:
         RESOURCES / "home_assistant" / "pl" / "hoymiles_ems_scheduler.yaml",
         RESOURCES / "www" / "hoymiles-rce-chart-card.js",
         RESOURCES / "www" / "hoymiles-inverter.png",
+        RESOURCES / "www" / "dashboard_hoymiles_en.json",
+        RESOURCES / "www" / "dashboard_hoymiles_pl.json",
     ]
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
+
+    for dashboard_json in required_assets[-2:]:
+        dashboard_data = load_json(dashboard_json)
+        require(
+            isinstance(dashboard_data, dict)
+            and isinstance(dashboard_data.get("views"), list)
+            and len(dashboard_data["views"]) >= 10,
+            f"Invalid dashboard strategy payload: {dashboard_json.name}",
+        )
+
+    card_source = required_assets[4].read_text(encoding="utf-8")
+    require(
+        "ll-strategy-dashboard-hoymiles-hit-xxl-g3" in card_source
+        and "dashboard_hoymiles_${language}.json" in card_source
+        and "window.customStrategies" in card_source,
+        "Dashboard card does not register the update-safe dashboard strategy",
+    )
+    require(
+        "futureNoData" in card_source
+        and "will recalculate automatically after publication" in card_source,
+        "RCE chart does not explain automatic replanning after tomorrow's data",
+    )
+    for dashboard_path in required_assets[:2]:
+        dashboard_text = dashboard_path.read_text(encoding="utf-8")
+        require(
+            "entity: sensor.hoymiles_rce_day_tomorrow\n"
+            "            future_data: true" in dashboard_text,
+            f"{dashboard_path.name} does not mark the tomorrow chart as future data",
+        )
+
+    rce_sensor_source = (
+        COMPONENT / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    require(
+        '"planning_scope": (' in rce_sensor_source
+        and '"tomorrow_data_pending": not tomorrow_rows_complete' in rce_sensor_source
+        and '"automatic_replan": True' in rce_sensor_source
+        and "[*today_rows, *usable_tomorrow_rows]" in rce_sensor_source,
+        "RCE sensor lacks the safe today-only planning fallback",
+    )
+    rce_optimizer_source = (
+        COMPONENT / "rce_optimizer.py"
+    ).read_text(encoding="utf-8")
+    require(
+        "exports[candidate.start] = low" in rce_optimizer_source
+        and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source,
+        "RCE optimizer can still invalidate feasible plans by rounding upward",
+    )
 
     stable_entity_assets = [
         ROOT / "dashboard_hoymiles.yaml",
@@ -297,6 +412,9 @@ def main() -> int:
         r"\b(?:button|sensor|number|select)\."
         r"[a-z0-9_]*hoymiles_inverter[a-z0-9_]*\b"
     )
+    native_integration_entities = {
+        ("sensor", "rce_optimized_plan"),
+    }
     for asset_path in stable_entity_assets:
         asset_text = asset_path.read_text(encoding="utf-8")
         require(
@@ -308,7 +426,8 @@ def main() -> int:
             asset_text
         ):
             require(
-                (domain, translation_key) in identities,
+                (domain, translation_key) in identities
+                or (domain, translation_key) in native_integration_entities,
                 f"Asset references an entity absent from the catalog: "
                 f"{domain}.hoymiles_hit_{translation_key}",
             )
@@ -318,9 +437,16 @@ def main() -> int:
         dynamic_reserve_markers = (
             "input_boolean.hoymiles_rce_dynamic_soc_enabled",
             "input_number.hoymiles_rce_soc_safety_margin",
+            "input_text.hoymiles_solcast_forecast_today_entity",
             "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+            "hoymiles_rce_inverter_rated_power:",
+            "hoymiles_rce_fallback_daily_load:",
+            "hoymiles_rce_export_efficiency:",
+            "sensor.solcast_pv_forecast_forecast_today",
             "sensor.solcast_pv_forecast_forecast_tomorrow",
+            "sensor.solcast_pv_forecast_prognoza_na_dzisiaj",
             "sensor.solcast_pv_forecast_prognoza_na_jutro",
+            "unique_id: hoymiles_rce_day_tomorrow",
             "state_characteristic: sum_differences_nonnegative",
             "max_age:\n      days: 4",
             "sensor.hoymiles_hit_load_energy_use_today",
@@ -332,14 +458,15 @@ def main() -> int:
             "{% set upcoming_end = rising + buffer %}",
             "upcoming_end - upcoming_start",
             "sensor.hoymiles_rce_protected_home_energy",
-            "[night, 0] | max + [deficit, 0] | max",
             "state_attr('sun.sun', 'next_rising')",
             "state_attr('sun.sun', 'next_setting')",
-            "reserve + (protected / capacity * 100) + margin",
             "sensor.hoymiles_hit_battery_capacity",
             "number.hoymiles_hit_self_use_soc",
+            "sensor.hoymiles_hit_rce_optimized_plan",
             "sensor.hoymiles_rce_dynamic_minimum_soc",
             "sensor.hoymiles_rce_effective_minimum_soc",
+            "hoymiles_rce_grid_export_energy_daily:",
+            "hoymiles_rce_revenue_daily:",
             "binary_sensor.hoymiles_rce_reserve_ready",
             "or is_state('binary_sensor.hoymiles_rce_reserve_ready', 'off')",
         )
@@ -538,19 +665,22 @@ def main() -> int:
         for entity_id in (
             "input_boolean.hoymiles_rce_dynamic_soc_enabled",
             "input_number.hoymiles_rce_soc_safety_margin",
+            "input_text.hoymiles_solcast_forecast_today_entity",
             "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+            "input_select.hoymiles_rce_inverter_rated_power",
+            "input_number.hoymiles_rce_fallback_daily_load",
+            "sensor.hoymiles_hit_rce_optimized_plan",
+            "sensor.hoymiles_solcast_forecast_today",
+            "sensor.hoymiles_solcast_forecast_remaining_today",
             "sensor.hoymiles_solcast_forecast_tomorrow",
             "sensor.hoymiles_load_average_4_days",
-            "binary_sensor.hoymiles_night_protection_window",
-            "sensor.hoymiles_night_protection_window_duration",
-            "sensor.hoymiles_night_protection_window_remaining",
             "sensor.hoymiles_night_load_average_4_days",
-            "sensor.hoymiles_protected_window_expected_load",
-            "sensor.hoymiles_rce_energy_deficit_tomorrow",
             "sensor.hoymiles_rce_protected_home_energy",
             "sensor.hoymiles_rce_dynamic_minimum_soc",
-            "sensor.hoymiles_rce_effective_minimum_soc",
-            "binary_sensor.hoymiles_rce_reserve_ready",
+            "sensor.hoymiles_rce_grid_export_energy_daily",
+            "sensor.hoymiles_rce_revenue_daily",
+            "sensor.hoymiles_rce_day",
+            "sensor.hoymiles_rce_day_tomorrow",
         ):
             require(
                 entity_id in dashboard_text,

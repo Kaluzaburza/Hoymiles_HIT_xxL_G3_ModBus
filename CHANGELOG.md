@@ -4,6 +4,61 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-29
+
+### Added
+
+- Added an official Home Assistant dashboard strategy. A dashboard created
+  from `custom:hoymiles-hit-xxl-g3` always loads the Polish or English
+  configuration bundled with the installed HACS version.
+- Added a stable, no-cache integration URL for the dashboard card and inverter
+  image, removing the need to change resource query strings after updates.
+- Added managed-asset metadata. Files installed by an older release are
+  updated automatically only while they remain unmodified by the user.
+- Added a native two-day RCE optimizer using today's and tomorrow's PSE
+  prices, Solcast forecasts, battery capacity, inverter power, parallel
+  inverter count and the four-day LOAD model.
+- Added forecast export-energy and estimated RCE-revenue statistics.
+- Added explicit optimizer diagnostics, including the protected home energy,
+  calculated minimum SOC, planning horizon and selected 30-minute export
+  blocks.
+
+### Fixed
+
+- New catalog entities now exist as unavailable proxies when ESPHome firmware
+  is older than the HACS integration. Dashboards no longer report missing
+  entities while waiting for a firmware update.
+- Proxy unique IDs are independent of ESPHome source unique IDs, so an entity
+  created before a firmware update becomes available in place without being
+  duplicated.
+- Writable proxy entities now reject commands with a clear firmware-update
+  error when their corresponding ESPHome source does not exist.
+- Missing or incomplete PSE prices for tomorrow no longer block profitable
+  exports today. The optimizer creates a safe today-only plan and
+  automatically expands and recalculates it when the complete next-day data
+  appears.
+- Fixed a numerical rounding error that could make the final export plan
+  exceed the protected battery reserve by a fraction of a kilowatt-hour and
+  incorrectly end with `optimizer_error`.
+- The tomorrow RCE chart now explains that today's plan remains active while
+  the next-day prices are waiting for publication.
+
+### Migration
+
+- Existing storage-mode dashboards can be reduced to:
+  `strategy: {type: custom:hoymiles-hit-xxl-g3}` after adding the stable
+  integration resource URL once.
+- ESPHome remains a separate firmware component. New register data becomes
+  live after compiling and flashing the matching tagged ESPHome package.
+
+### Validation
+
+- Added deterministic optimizer scenarios for today-only operation, reserve
+  safety, price selection across two days, parallel power scaling, lockout
+  periods and fractional final export slots.
+- Rebuilt and validated 275 localized entities, both dashboard languages,
+  Home Assistant packages and the custom RCE chart card.
+
 ## [1.2.0] - 2026-07-28
 
 ### Added
