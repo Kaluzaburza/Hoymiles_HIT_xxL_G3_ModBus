@@ -4,6 +4,136 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-01
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to the new version.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS.
+2. **Home Assistant:** restart Home Assistant after HACS finishes installing
+   the update.
+   **PL:** po zakończeniu instalacji przez HACS uruchom Home Assistant ponownie.
+3. **ESP32 / ESPHome:** this update changes the ESPHome firmware packages.
+   Download or refresh `hoymiles-inverter.yaml` from the same release, preserve
+   your substitutions and secrets, then compile and upload the firmware to the
+   ESP32. A HACS update alone does not update ESP32 firmware.
+   **PL:** ta aktualizacja zmienia pakiety firmware ESPHome. Pobierz lub odśwież
+   `hoymiles-inverter.yaml` z tego samego wydania, zachowaj własne podstawienia
+   i sekrety, a następnie skompiluj i wgraj firmware do ESP32. Sama aktualizacja
+   HACS nie aktualizuje ESP32.
+4. **Verification / Weryfikacja:** wait until the ESPHome device reconnects,
+   reload the integration if necessary and confirm that
+   `firmware_update_required` is no longer active and the dashboard has no new
+   unavailable entities.
+   **PL:** poczekaj na ponowne połączenie ESPHome, w razie potrzeby przeładuj
+   integrację i sprawdź, czy `firmware_update_required` nie jest aktywne oraz
+   czy dashboard nie pokazuje nowych niedostępnych encji.
+
+### Added
+
+- Added GitHub sponsorship metadata and bilingual support links in the
+  repository documentation and Home Assistant dashboard.
+- Added a two-day RCE profit optimizer that selects the most valuable allowed
+  30-minute export blocks across the complete today/tomorrow horizon instead
+  of relying on a fixed user price threshold.
+- Added reconstructed four-day LOAD and protected-night history from Home
+  Assistant Recorder, including separate PV-to-load, battery-to-load and
+  grid-to-load accounting.
+- Added BMS-aware discharge-power diagnostics and automatic limiting based on
+  the battery voltage/current capability, inverter count and configured power.
+- Added realized RCE-controlled export, natural PV surplus, unclassified
+  export, revenue and optimization-benefit statistics.
+- Added dedicated **Profits** and **PV production** dashboard views with daily,
+  weekly, monthly and yearly statistics, plus GEN live values and chart data.
+- Added optional mobile push notifications for EMS mode and inverter work-state
+  changes.
+- Added Generation Control Function export limiting and GEN-port mode controls.
+
+### Changed
+
+- The RCE reserve now protects the emergency Self-Use reserve, user safety
+  correction and the modeled home demand through the next protected night,
+  while still making room for forecast PV that would otherwise be exported at
+  a lower price.
+- The RCE plan works safely with today's prices before PSE publishes tomorrow's
+  complete dataset and automatically expands to 48 hours when it becomes
+  available.
+- Dashboard LOAD values and the power-flow animation now use the dedicated
+  system load registers `2169-2172`, polled by the fast controller, rather than
+  inverter conversion consumption or BMS-derived approximations.
+- The dashboard uses compact localized labels without the repeated
+  `Hoymiles Inverter` prefix, presents four separate PV string cards, a GEN
+  card, clearer grid/load tables and two-decimal power-flow values.
+- Battery charge/discharge time uses the reported effective battery capacity,
+  so single and parallel storage systems scale automatically.
+
+### Fixed
+
+- EMS mode and the related `4300-4306` SOC/power settings are now refreshed
+  as one dedicated Modbus block every 5 seconds. Other user-facing inverter,
+  battery, GCF and GEN settings refresh in grouped ranges every 15 seconds.
+  Changes made in the S-Miles application are therefore reflected promptly
+  without accelerating the full diagnostic register map.
+- Increased the ESPHome API connection backlog and send queue for the large
+  inverter entity set, reducing disconnects while Home Assistant and ESPHome
+  diagnostics are connected at the same time.
+- The dashboard energy-flow animation now calculates charging and discharging
+  time from the inverter's effective battery-capacity entity instead of a
+  hardcoded 21 kWh. The dashboard wrapper converts the entity from kWh to the
+  Wh required by the underlying power-flow card and follows later capacity
+  changes automatically.
+- Parallel EMS mode changes now send the complete `4300-4306` block as an
+  FC16 broadcast to Modbus address `0` after a valid Master topology is
+  detected. A live two-inverter HIT-20L-G3 test reached 34.86 kW export at an
+  80% discharge setting, confirming that both Master and Slave receive the
+  command.
+- Broadcast frames bypass the response-waiting `ModbusController` queue,
+  preventing polling from stalling because Modbus broadcast address `0` never
+  returns a response. Single-inverter installations keep the normal addressed
+  write path.
+- Corrected the sign convention used by the animated battery and grid flows.
+- Corrected 0.1% scaling for battery charge/discharge limits and limited the
+  low-SOC grid-charge register to the inverter-safe maximum of 1000 W.
+- Removed the unverified writable Three Phase Unbalance entity and dashboard
+  control. It must not be published again until its Master/Slave write
+  semantics are confirmed.
+- Improved ESP32 Wi-Fi/API stability and separated fast live registers,
+  5-second EMS reads, 15-second user settings and slow diagnostic polling so
+  frequent dashboard refreshes do not overload Modbus.
+
+### Safety
+
+- Parallel EMS writes remain blocked for an ESP32 connected to a Slave, for an
+  incomplete topology, or for an invalid reported inverter count.
+- RCE export cannot reduce the modeled end-of-horizon SOC below the protected
+  Self-Use reserve plus safety correction and protected home demand.
+- Automatic Three Phase Unbalance control is intentionally absent from this
+  release after live testing showed unsafe/ambiguous parallel behavior.
+
+### Validation
+
+- Verified the complete production configuration on a live two-inverter
+  HIT-20L-G3 installation: 15 dashboard views, 276 localized entities, complete
+  Solcast/PSE data, four-day LOAD history and a two-day optimized RCE plan.
+- Compiled and uploaded the matching ESPHome configuration, then verified the
+  device reconnect, all dashboard entities and stable Modbus polling.
+- Added deterministic optimizer and Recorder-history tests and expanded the
+  release validator for generated PL/EN assets, firmware markers, safety
+  limits, dashboards and HACS-visible update instructions.
+
+### Polski
+
+- Przebudowano automatykę RCE: wybiera najdroższe bloki z pełnego horyzontu
+  dzisiaj/jutro, chroni energię domu do końca kolejnej nocy i rozdziela eksport
+  sterowany od naturalnej nadwyżki PV.
+- Dodano historię LOAD z czterech dni, ograniczenie mocy według BMS, statystyki
+  przychodu, zakładki **Zyski** i **Produkcja PV**, powiadomienia push, sterowanie
+  GCF/GEN oraz szybkie rzeczywiste pomiary odbiorników.
+- Uporządkowano odświeżanie Modbus i stabilność API ESP32, naprawiono skalowanie
+  limitów mocy oraz kierunki animacji przepływu energii.
+- Usunięto niezweryfikowaną encję asymetrii trójfazowej, aby nie dopuścić do
+  niejednoznacznego zapisu w układach Master/Slave.
+
 ## [1.2.1] - 2026-07-29
 
 ### Added

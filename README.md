@@ -5,16 +5,33 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
 
-Version **1.2.1** is the current release. It contains:
+## Support the project / Wesprzyj projekt
 
-- 275 localized read-only and writable Modbus entities;
+This independent project was built from a real need for reliable, transparent
+Hoymiles control in Home Assistant. Your support helps fund testing on real
+installations, documentation, and safer EMS/RCE automation. If the integration
+has saved you time or helps you use your energy more effectively, you can
+support its continued development:
+
+Ten niezależny projekt powstał z realnej potrzeby niezawodnego i przejrzystego
+sterowania falownikiem Hoymiles w Home Assistant. Wsparcie pomaga rozwijać
+automatykę EMS/RCE, prowadzić testy na rzeczywistych instalacjach i tworzyć
+lepszą dokumentację. Jeśli integracja oszczędziła Ci czas lub pomaga lepiej
+wykorzystać energię:
+
+[☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
+
+Version **1.3.0** is the current release. It contains:
+
+- 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
 - grid, load/EPS, battery/BMS, generator and inverter registers;
 - safe atomic EMS writes for registers 4300–4306;
 - daily grid charge/discharge schedules;
-- PSE RCE price-based discharge automation with an export lockout window;
-- optional Solcast- and LOAD-based dynamic SOC reserve with protected
-  night-time home demand;
+- a two-day PSE RCE profit optimizer with an export lockout window, realized
+  revenue statistics and automatic selection of the most valuable blocks;
+- a Solcast-, Recorder- and LOAD-based dynamic SOC reserve protecting the
+  next night-time home demand;
 - automatic single/Master/Slave topology detection and system-wide live power
   values for parallel installations;
 - 5-second grid voltage, phase-power and live energy-flow polling;
@@ -53,61 +70,117 @@ add another Modbus polling cycle.
 ## Requirements
 
 - a compatible Hoymiles HIT xxL G3 inverter (tested primarily with HIT-10L-G3);
-- ESP32 with a 3.3 V RS485 transceiver such as MAX3485 or Waveshare RS485;
+- ESP32;
+- a UART/TTL ↔ RS485 converter compatible with **3.3 V logic**:
+  an automatic-direction module is recommended, while MAX3485/MAX485-style
+  modules require one additional GPIO for `DE` and `/RE`;
 - ESPHome 2026.7 or newer;
 - Home Assistant 2026.7 or newer;
 - HACS 2.x.
 
 ## ESP32 and RS485 wiring
 
-The default configuration assumes a **3.3 V TTL ↔ RS485 converter with
-automatic direction control**.
+### First identify the converter
+
+There are two common converter types and they must not be wired or configured
+the same way:
+
+| Converter type | Typical TTL-side pins | Extra ESPHome configuration |
+|---|---|---|
+| **Automatic direction — recommended** | `VCC`, `GND`, `TXD`, `RXD` (sometimes `DI` and `RO`) | None |
+| **Manual direction, e.g. bare MAX3485/MAX485 module** | `VCC`, `GND`, `DI`, `RO`, `DE`, `/RE` | Join `DE` with `/RE`, connect them to an ESP32 GPIO and configure `flow_control_pin` |
+
+Do not decide only from the product name. Confirm in the module datasheet
+whether direction switching is automatic and whether its supply and UART logic
+are compatible with 3.3 V.
+
+### Option A — automatic-direction converter (recommended)
 
 ```text
-ESP32                         RS485 converter                    Inverter
-GPIO17 (TX)  ---------------> DI
-GPIO16 (RX)  <--------------- RO
-3.3 V        ---------------> VCC (3.3 V)
-GND          ---------------- GND ------------------------------ GND (Modbus)
-                                A+ ------------------------------ A+ (Modbus)
-                                B- ------------------------------ B- (Modbus)
+ESP32                        Converter                         Inverter
+GPIO17 (TX)  ------------->  RXD / DI  (input from ESP32)
+GPIO16 (RX)  <-------------  TXD / RO  (output to ESP32)
+3.3 V        ------------->  VCC (only on a 3.3 V-rated module)
+GND          --------------  GND  ---------------------------- GND / reference
+                              A / D+ -------------------------- A+ / D+
+                              B / D- -------------------------- B- / D-
 ```
 
-| ESP32 | Converter — TTL side | Converter — RS485 side | Inverter |
+| ESP32 | Converter — TTL/UART side | Converter — RS485 side | Inverter Modbus terminal |
 |---|---|---|---|
-| GPIO17 (TX) | DI | — | — |
-| GPIO16 (RX) | RO | — | — |
-| 3.3 V | VCC (3.3 V) | — | — |
-| GND | GND | GND/reference | GND (Modbus) |
-| — | — | A+ | A+ (Modbus) |
-| — | — | B− | B− (Modbus) |
+| GPIO17 (`TX`) | converter receive/input: `RXD` or `DI` | — | — |
+| GPIO16 (`RX`) | converter transmit/output: `TXD` or `RO` | — | — |
+| 3.3 V | `VCC`, **only if the module is rated for 3.3 V** | — | — |
+| `GND` | `GND` | `GND`/reference | `GND`/reference |
+| — | — | `A`, `A+` or `D+` | `A+` or `D+` |
+| — | — | `B`, `B−` or `D−` | `B−` or `D−` |
 
-> [!CAUTION]
-> Disconnect all power before wiring. Never connect the inverter's RS485 lines
-> directly to the ESP32 and never feed 5 V logic into an ESP32 GPIO. Confirm
-> the `A/B` or `D+/D−` naming in the converter manual, because some vendors use
-> reversed labels.
+No `flow_control_pin` entry is required for this option.
 
-If the converter exposes `DE` and `/RE` and does not switch direction
-automatically, tie these pins together and connect them to a free ESP32 GPIO.
-Then add this override to the top-level ESPHome file, using the selected pin:
+### Option B — MAX3485/MAX485-style module with `DE` and `/RE`
+
+Use the same power, `DI`, `RO`, `A`, `B` and `GND` connections as above, plus:
+
+```text
+MAX3485 DE ----+
+               +------------ GPIO4 (example)
+MAX3485 /RE ---+
+```
+
+After the existing `packages:` section in `hoymiles-inverter.yaml`, extend the
+UART created by the package:
 
 ```yaml
-modbus:
-  - id: modbus_1
-    flow_control_pin: GPIO4
+uart:
+  - id: !extend modbus_uart
+    flow_control_pin:
+      number: GPIO4
+      inverted: false
 ```
+
+Use a different safe GPIO if GPIO4 is not available on the selected ESP32
+board. Do not create a second `modbus_1` block.
+
+Technical reference: ESPHome documents RS485 direction control under
+[`uart.flow_control_pin`](https://esphome.io/components/uart/#configuration-variables)
+and changes to included package components with
+[`!extend`](https://esphome.io/components/packages/#extend).
+
+### Before switching the power on
+
+1. Switch off the inverter and ESP32 while changing wires.
+2. Make sure the converter uses 3.3 V UART logic. Never feed a 5 V signal into
+   an ESP32 GPIO.
+3. Connect `TX` to the converter **input** and `RX` to its **output**. The
+   labels `TXD`/`RXD` are written from the converter's point of view on some
+   modules and from the host's point of view on others, so verify the arrows or
+   datasheet.
+4. Connect `A/D+` to `A+/D+`, `B/D−` to `B−/D−`, and connect the Modbus
+   reference/GND when the inverter manual provides it.
+5. Never connect ESP32 `3.3 V` or converter `VCC` to an inverter communication
+   terminal.
+6. Use the inverter port explicitly described as external RS485/Modbus for the
+   exact model. Do not choose a `Parallel` socket only because it has the same
+   connector.
+
+> [!CAUTION]
+> RS485 terminal labels are not fully consistent between manufacturers. If
+> communication is missing after every other check passes, switch all power
+> off and verify whether the converter documents `A/B` with the opposite
+> polarity. Never swap wires while the inverter is powered.
 
 ## 1. Install through HACS
 
-Install the Home Assistant integration before configuring the ESP32 so it is
-ready after the device is discovered.
+HACS installs the Home Assistant integration and dashboard. ESPHome firmware
+packages are downloaded directly from this GitHub repository, so the HACS and
+ESPHome parts do not depend on files copied into one another.
 
-1. Open **HACS → Integrations → Custom repositories**.
-2. Add:
-   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus`
-3. Select the **Integration** category.
-4. Download **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
+1. Use the **Open this repository in HACS** button at the top of this README;
+   or open **HACS → three-dot menu → Custom repositories**.
+2. For manual setup, add
+   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus` and select the
+   **Integration** category.
+3. Download **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
 
 The integration automatically uses the Home Assistant language. English and
 Polish translations are bundled in `translations/en.json` and
@@ -115,17 +188,26 @@ Polish translations are bundled in `translations/en.json` and
 
 ## 2. Flash the ESP32
 
-Copy the self-contained [`hoymiles-inverter.yaml`](hoymiles-inverter.yaml) to
-your ESPHome configuration directory. Copy the required keys from
-[`secrets.yaml.example`](secrets.yaml.example) to your local `secrets.yaml`,
-then adjust the UART pins and board.
+1. In ESPHome, create a new device or upload the self-contained
+   [`hoymiles-inverter.yaml`](hoymiles-inverter.yaml) to the ESPHome
+   configuration directory.
+2. Copy the required keys from
+   [`secrets.yaml.example`](secrets.yaml.example) to the local `secrets.yaml`
+   and replace every example value.
+3. Confirm the board, `uart_tx_pin` and `uart_rx_pin` substitutions.
+4. Choose wiring option A or B above. Add the `!extend modbus_uart` block only
+   for a converter that requires manual `DE`/`/RE` direction control.
+5. Validate, compile and flash the configuration.
 
 Do **not** copy the repository's `packages` directory. The public ESPHome entry
 file downloads all versioned register packages directly from GitHub. It does
 not depend on files installed by HACS.
 
-Compile and flash the configuration from ESPHome. Default serial settings are
-Modbus RTU `115200 8N1`, slave address `1`.
+Default serial settings are Modbus RTU `115200 8N1`, slave address `1`.
+
+If compilation succeeds but every Modbus entity is unavailable, first verify
+the converter type and `DE`/`/RE`, then common GND/reference, `A/B` polarity,
+the selected inverter port and unit address.
 
 ## 3. Add the integrations
 
@@ -243,10 +325,13 @@ The standard ESPHome configuration reads the manufacturer topology registers
 `6048-6095` and automatically distinguishes a single inverter, a Master and a
 Slave. No manual inverter-count selector is required. Connect the ESP32 Modbus
 converter to the **Master**. For a detected Master, the integration writes the
-complete EMS block `4300-4306` once to that device; the Master is responsible
-for dispatching the settings to all detected Slave inverters. A write is
-blocked if the connected inverter explicitly reports the Slave role or if a
-Master reports an invalid device count.
+complete EMS block `4300-4306` as one Modbus FC16 broadcast to address `0`.
+The same command is therefore received by the Master and every Slave on the
+shared `RS485_2` bus. Broadcast writes are sent directly through the Modbus
+hub because address `0` never returns a response; this prevents the normal
+controller response queue from stalling. A write is blocked if the connected
+inverter explicitly reports the Slave role or if a Master reports an invalid
+device count.
 
 When a Master is detected, the overview entities used by the Home Assistant
 dashboard and its animated energy-flow card automatically switch to the
@@ -307,66 +392,132 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.2.1** udostępnia
-275 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
-automatykę cenową RCE PSE, dynamiczną rezerwę SOC na podstawie Solcast i LOAD,
-ochronę nocnego zapotrzebowania domu, blokadę sprzedaży oraz gotowy dashboard.
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.3.0** udostępnia
+276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
+dwudniowy optymalizator zysku RCE PSE, dynamiczną rezerwę SOC na podstawie
+Solcast i historii LOAD, ochronę nocnego zapotrzebowania domu, statystyki
+przychodu, blokadę sprzedaży oraz gotowy dashboard.
 
 ### Podłączenie ESP32 i konwertera RS485
 
-Domyślna konfiguracja jest przygotowana dla konwertera
-**3,3 V TTL ↔ RS485 z automatycznym przełączaniem kierunku transmisji**.
+#### Najpierw rozpoznaj rodzaj konwertera
+
+Najczęstszy błąd polega na potraktowaniu modułu MAX3485 jak konwertera
+automatycznego. Są to dwa różne warianty:
+
+| Rodzaj konwertera | Typowe piny od strony ESP32 | Zmiana w ESPHome |
+|---|---|---|
+| **Automatyczna zmiana kierunku — zalecany** | `VCC`, `GND`, `TXD`, `RXD` (czasem `DI` i `RO`) | Brak |
+| **Ręczna zmiana kierunku, np. moduł MAX3485/MAX485** | `VCC`, `GND`, `DI`, `RO`, `DE`, `/RE` | Połącz `DE` z `/RE`, podłącz do GPIO ESP32 i ustaw `flow_control_pin` |
+
+Nie kieruj się wyłącznie nazwą aukcji. W dokumentacji konkretnego modułu
+sprawdź automatyczne sterowanie kierunkiem oraz zgodność z logiką 3,3 V.
+
+#### Wariant A — konwerter automatyczny (zalecany)
 
 ```text
-ESP32                         Konwerter RS485                    Falownik
-GPIO17 (TX)  ---------------> DI
-GPIO16 (RX)  <--------------- RO
-3,3 V        ---------------> VCC (3,3 V)
-GND          ---------------- GND ------------------------------ GND (Modbus)
-                                A+ ------------------------------ A+ (Modbus)
-                                B- ------------------------------ B- (Modbus)
+ESP32                        Konwerter                         Falownik
+GPIO17 (TX)  ------------->  RXD / DI  (wejście z ESP32)
+GPIO16 (RX)  <-------------  TXD / RO  (wyjście do ESP32)
+3,3 V        ------------->  VCC (tylko moduł zasilany 3,3 V)
+GND          --------------  GND  ---------------------------- GND / referencja
+                              A / D+ -------------------------- A+ / D+
+                              B / D- -------------------------- B- / D-
 ```
 
-| ESP32 | Konwerter — strona TTL | Konwerter — strona RS485 | Falownik |
+| ESP32 | Konwerter — strona TTL/UART | Konwerter — strona RS485 | Zaciski Modbus falownika |
 |---|---|---|---|
-| GPIO17 (TX) | DI | — | — |
-| GPIO16 (RX) | RO | — | — |
-| 3,3 V | VCC (3,3 V) | — | — |
-| GND | GND | GND/referencja | GND (Modbus) |
-| — | — | A+ | A+ (Modbus) |
-| — | — | B− | B− (Modbus) |
+| GPIO17 (`TX`) | wejście konwertera: `RXD` albo `DI` | — | — |
+| GPIO16 (`RX`) | wyjście konwertera: `TXD` albo `RO` | — | — |
+| 3,3 V | `VCC`, **tylko jeśli moduł jest zasilany napięciem 3,3 V** | — | — |
+| `GND` | `GND` | `GND`/referencja | `GND`/referencja |
+| — | — | `A`, `A+` albo `D+` | `A+` albo `D+` |
+| — | — | `B`, `B−` albo `D−` | `B−` albo `D−` |
 
-> [!CAUTION]
-> Podłączenia wykonuj przy wyłączonym zasilaniu. Nie podłączaj przewodów RS485
-> falownika bezpośrednio do GPIO ESP32 i nie podawaj napięcia logicznego 5 V na
-> ESP32. Sprawdź w instrukcji konwertera oznaczenia `A/B` lub `D+/D−`, ponieważ
-> niektórzy producenci stosują odwrotne nazewnictwo.
+Dla tego wariantu nie dodawaj `flow_control_pin`.
 
-Jeżeli konwerter ma osobne wejścia `DE` i `/RE` i nie przełącza kierunku
-automatycznie, połącz je razem, podłącz do wolnego GPIO ESP32 i dodaj do
-głównego pliku ESPHome:
+#### Wariant B — moduł MAX3485/MAX485 z pinami `DE` i `/RE`
+
+Podłącz zasilanie, `DI`, `RO`, `A`, `B` i `GND` jak w tabeli wyżej, a dodatkowo:
+
+```text
+MAX3485 DE ----+
+               +------------ GPIO4 (przykład)
+MAX3485 /RE ---+
+```
+
+Za istniejącą sekcją `packages:` w pliku `hoymiles-inverter.yaml` rozszerz
+UART utworzony przez pakiet:
 
 ```yaml
-modbus:
-  - id: modbus_1
-    flow_control_pin: GPIO4
+uart:
+  - id: !extend modbus_uart
+    flow_control_pin:
+      number: GPIO4
+      inverted: false
 ```
+
+Jeżeli GPIO4 nie jest dostępny na wybranej płytce, użyj innego bezpiecznego
+GPIO. Nie twórz drugiej sekcji `modbus_1`.
+
+Podstawa konfiguracji:
+[`uart.flow_control_pin` w ESPHome](https://esphome.io/components/uart/#configuration-variables)
+oraz rozszerzanie elementów pakietu przez
+[`!extend`](https://esphome.io/components/packages/#extend).
+
+#### Kontrola przed włączeniem zasilania
+
+1. Podczas zmiany przewodów wyłącz falownik i ESP32.
+2. Sprawdź, czy strona UART konwertera pracuje z logiką 3,3 V. Nie podawaj
+   sygnału 5 V na GPIO ESP32.
+3. `TX` ESP32 połącz z **wejściem** konwertera, a `RX` z jego **wyjściem**.
+   Niektóre moduły opisują `TXD`/`RXD` z perspektywy konwertera, inne z
+   perspektywy urządzenia nadrzędnego — sprawdź strzałki albo dokumentację.
+4. Połącz `A/D+` z `A+/D+`, `B/D−` z `B−/D−` oraz przewód
+   odniesienia/GND, jeżeli przewiduje go instrukcja falownika.
+5. Nie podłączaj `3,3 V` ESP32 ani `VCC` konwertera do żadnego zacisku
+   komunikacyjnego falownika.
+6. Użyj portu opisanego dla konkretnego modelu jako zewnętrzny RS485/Modbus.
+   Nie wybieraj gniazda `Parallel` tylko dlatego, że ma taki sam wtyk.
+
+> [!CAUTION]
+> Oznaczenia pary RS485 nie są całkowicie jednolite. Jeżeli po wykonaniu
+> wszystkich pozostałych kontroli nadal nie ma komunikacji, wyłącz zasilanie i
+> sprawdź w dokumentacji, czy producent konwertera nie stosuje odwrotnej
+> polaryzacji `A/B`. Nie zamieniaj przewodów przy włączonym falowniku.
 
 ### Instalacja
 
-1. W HACS dodaj to repozytorium jako niestandardowe repozytorium typu
-   **Integration**, zainstaluj je i uruchom Home Assistant ponownie.
-2. Skopiuj samowystarczalny
-   [`hoymiles-inverter.yaml`](hoymiles-inverter.yaml) do ESPHome, uzupełnij
-   sekrety oraz piny UART i wgraj firmware. Plik automatycznie pobierze
-   wersjonowane pakiety rejestrów z GitHuba — nie kopiuj katalogu `packages`.
-3. Dodaj urządzenie przez standardową integrację ESPHome.
-4. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz urządzenie ESPHome.
-5. Włącz pakiety Home Assistanta i dodaj zasób:
+HACS instaluje integrację i dashboard Home Assistanta. ESPHome pobiera swoje
+pakiety firmware bezpośrednio z GitHuba. Te dwa etapy nie wymagają kopiowania
+plików między katalogami HACS i ESPHome.
+
+1. Kliknij przycisk **Open this repository in HACS** na początku README albo w
+   **HACS → menu z trzema kropkami → Niestandardowe repozytoria** dodaj
+   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus` jako
+   **Integration**. Zainstaluj integrację i uruchom Home Assistant ponownie.
+2. W ESPHome utwórz urządzenie lub wgraj samowystarczalny
+   [`hoymiles-inverter.yaml`](hoymiles-inverter.yaml).
+3. Przepisz klucze z
+   [`secrets.yaml.example`](secrets.yaml.example) do lokalnego
+   `secrets.yaml`, uzupełnij wszystkie wartości i sprawdź model płytki oraz
+   piny `uart_tx_pin` i `uart_rx_pin`.
+4. Wybierz wariant konwertera A albo B. Blok `!extend modbus_uart` dodawaj
+   wyłącznie dla modułu wymagającego sterowania `DE`/`/RE`.
+5. W ESPHome wybierz **Validate**, następnie skompiluj i wgraj firmware.
+   Plik pobiera wersjonowane pakiety rejestrów z GitHuba — nie kopiuj katalogu
+   `packages`.
+6. Dodaj wykryte urządzenie przez standardową integrację ESPHome.
+7. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz to urządzenie.
+8. Włącz pakiety Home Assistanta i dodaj zasób:
    `/api/hoymiles_hit_modbus/static/hoymiles-rce-chart-card.js`.
-6. W **Ustawienia → Panele → Dodaj panel** wybierz społecznościowy dashboard
+9. W **Ustawienia → Panele → Dodaj panel** wybierz społecznościowy dashboard
    **Hoymiles HIT xxL G3**. Będzie on automatycznie korzystał z wersji
    dostarczonej przez aktualnie zainstalowaną integrację.
+
+Jeżeli kompilacja przebiega poprawnie, ale wszystkie encje Modbus są
+niedostępne, sprawdź kolejno: rodzaj konwertera i linie `DE`/`/RE`, wspólną
+referencję/GND, polaryzację `A/B`, wybrany port falownika oraz adres urządzenia.
 
 Nowy dashboard strategiczny nie wymaga ponownego wklejania konfiguracji po
 aktualizacji HACS. Po restarcie Home Assistanta pobiera bieżącą wersję PL albo

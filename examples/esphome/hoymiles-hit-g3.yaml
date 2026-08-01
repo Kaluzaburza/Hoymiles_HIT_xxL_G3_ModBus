@@ -1,5 +1,8 @@
 # Public ESPHome entry point for Hoymiles HIT xxL G3 Modbus.
 # Copy this file to your ESPHome directory and adjust substitutions/secrets.
+# Read the README wiring section before connecting the converter:
+# automatic-direction modules need TX/RX/GND, while MAX3485/MAX485 modules
+# with DE and /RE need an additional GPIO and a UART flow_control_pin override.
 
 substitutions:
   name: "hoymiles-hit-g3"
@@ -8,9 +11,13 @@ substitutions:
 
   modbus_controller_id: hoymiles_modbus
   modbus_fast_controller_id: hoymiles_modbus_fast
+  modbus_control_controller_id: hoymiles_modbus_control
+  modbus_settings_controller_id: hoymiles_modbus_settings
   modbus_inverter_address: "1"
   baud_rate: "115200"
   fast_update_interval: "5s"
+  control_update_interval: "5s"
+  settings_update_interval: "15s"
 
   uart_tx_pin: "GPIO17"
   uart_rx_pin: "GPIO16"
@@ -33,7 +40,7 @@ esp32:
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.2.1
+    ref: v1.3.0
     refresh: 1d
     files:
       - packages/core.yaml

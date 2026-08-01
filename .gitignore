@@ -10,6 +10,14 @@
 /.codex/
 /.codex_transfer_*/
 /.codex_deps_*/
+/.codex_deploy*/
+/.codex_*.tgz
+/.codex_wheels_user/
+/.codex_yaml_verify_user/
+/.codex_yaml_verify/
+/.codex_pyyaml_*/
+/.codex_tmp_pyyaml_*/
+/.tmp_pyyaml_*/
 
 # Python
 __pycache__/

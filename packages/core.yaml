@@ -1,6 +1,15 @@
 # Rdzeń urządzenia ESPHome
 substitutions:
-  update_interval: 60s
+  # Rozbudowana mapa diagnostyczna jest celowo odczytywana rzadziej. Dane
+  # operacyjne głównego dashboardu korzystają z osobnego kontrolera 10 s.
+  update_interval: 120s
+  # Blok sterowania EMS 4300-4306 jest mały i może być bezpiecznie
+  # odczytywany częściej niż pełna mapa rejestrów. Własny kontroler zachowuje
+  # zgodność ze starszymi plikami głównymi, które nie definiują tych wartości.
+  modbus_control_controller_id: hoymiles_modbus_control
+  control_update_interval: 5s
+  modbus_settings_controller_id: hoymiles_modbus_settings
+  settings_update_interval: 15s
 
 esphome:
   name: "${name}"
@@ -8,7 +17,7 @@ esphome:
   comment: "${device_description}"
   project:
     name: "hoymiles.energy-storage-modbus"
-    version: "1.2.1"
+    version: "1.3.0"
 
 logger:
   level: WARN
@@ -17,6 +26,13 @@ logger:
 api:
   encryption:
     key: ${api_key}
+  # ESP32 domyślnie obsługuje 8 klientów API. Niższy limit 5 był osiągany
+  # jednocześnie przez Home Assistant i diagnostykę ESPHome, co powodowało
+  # chwilowe SocketClosedAPIError mimo prawidłowej pracy urządzenia.
+  max_connections: 8
+  listen_backlog: 8
+  max_send_queue: 64
+  batch_delay: 250ms
 
 ota:
   - platform: esphome

@@ -43,5 +43,7 @@ jobs:
         run: python tools/validate_release.py
       - name: Test RCE optimizer
         run: python tools/test_rce_optimizer.py
+      - name: Test RCE Recorder history reconstruction
+        run: python tools/test_rce_history.py
       - name: Test RCE custom card
         run: node tools/validate_rce_card.js

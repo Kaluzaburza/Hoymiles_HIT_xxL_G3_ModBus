@@ -4311,18 +4311,18 @@
   {
     "domain": "select",
     "source_component": "select",
-    "translation_key": "three_phase_unbalance",
-    "source_name": "Three Phase Unbalance",
-    "source_id": "three_phase_unbalance_enable_302",
-    "source_object_id": "three_phase_unbalance",
+    "translation_key": "generation_control_function",
+    "source_name": "Generation Control Function",
+    "source_id": "gcf_enable_258",
+    "source_object_id": "generation_control_function",
     "entity_category": "config",
     "name": {
-      "en": "Three Phase Unbalance",
-      "pl": "Asymetria trójfazowa"
+      "en": "Generation Control Function",
+      "pl": "Funkcja ograniczania eksportu (GCF)"
     },
     "description": {
-      "en": "Writable Hoymiles HIT xxL G3 setting: Three Phase Unbalance.",
-      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Asymetria trójfazowa."
+      "en": "Writable Hoymiles HIT xxL G3 setting: Generation Control Function.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Funkcja ograniczania eksportu (GCF)."
     },
     "options": [
       {
@@ -4336,6 +4336,49 @@
         "raw": "Enabled",
         "en": "Enabled",
         "pl": "Włączone"
+      }
+    ]
+  },
+  {
+    "domain": "select",
+    "source_component": "select",
+    "translation_key": "gen_port_mode",
+    "source_name": "GEN Port Mode",
+    "source_id": "gen_port_mode_303",
+    "source_object_id": "gen_port_mode",
+    "entity_category": "config",
+    "name": {
+      "en": "GEN Port Mode",
+      "pl": "Tryb złącza GEN"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: GEN Port Mode.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Tryb złącza GEN."
+    },
+    "options": [
+      {
+        "key": "pv",
+        "raw": "PV",
+        "en": "Inverter / PV",
+        "pl": "Falownik / PV"
+      },
+      {
+        "key": "generator",
+        "raw": "Generator",
+        "en": "Generator",
+        "pl": "Generator"
+      },
+      {
+        "key": "smart_load_g3",
+        "raw": "Smart Load (G3)",
+        "en": "Smart Load (G3)",
+        "pl": "Smart Load (G3)"
+      },
+      {
+        "key": "disabled",
+        "raw": "Disabled",
+        "en": "Disabled",
+        "pl": "Wyłączone"
       }
     ]
   },
@@ -4706,18 +4749,18 @@
   {
     "domain": "number",
     "source_component": "number",
-    "translation_key": "grid_input_power_limitation_valley",
-    "source_name": "Grid Input Power Limitation (Valley)",
-    "source_id": "gridin_power_limitation_when_vally_301",
-    "source_object_id": "grid_input_power_limitation_valley",
+    "translation_key": "maximum_export_power_limit",
+    "source_name": "Maximum Export Power Limit",
+    "source_id": "gcf_export_soft_limit_ratio_259",
+    "source_object_id": "maximum_export_power_limit",
     "entity_category": "config",
     "name": {
-      "en": "Grid Input Power Limitation (Valley)",
-      "pl": "Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)"
+      "en": "Maximum Export Power Limit",
+      "pl": "Maksymalny limit eksportu"
     },
     "description": {
-      "en": "Writable Hoymiles HIT xxL G3 setting: Grid Input Power Limitation (Valley).",
-      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)."
+      "en": "Writable Hoymiles HIT xxL G3 setting: Maximum Export Power Limit.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Maksymalny limit eksportu."
     },
     "options": []
   },

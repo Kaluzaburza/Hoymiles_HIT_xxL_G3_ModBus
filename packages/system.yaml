@@ -19,7 +19,7 @@ button:
 
 select:
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "System Operation"
     id: start_stop_system_3001
     address: 3001

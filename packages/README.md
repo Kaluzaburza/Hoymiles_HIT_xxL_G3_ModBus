@@ -37,11 +37,25 @@ Rejestr `4302` (Backup SOC) jest odczytywany wyłącznie wewnętrznie do zachowa
 pełnego zapisu FC10; nie tworzy encji Home Assistant, ponieważ tryb Pure Off-Grid
 nie korzysta z tej nastawy.
 
+Cały blok `4300-4306` jest odczytywany jednym zapytaniem co 5 sekund przez
+dedykowany kontroler. Dzięki temu zmiany trybu i limitów wykonane w aplikacji
+producenta pojawiają się w Home Assistant zwykle w ciągu 5-6 sekund, bez
+przyspieszania dużej mapy diagnostycznej i bez dokładania siedmiu osobnych
+zapytań Modbus.
+
+Pozostałe ustawienia pokazywane na stronie **Sterowanie** (GCF i limit eksportu,
+tryb GEN/EPS/PV Island, ustawienia baterii oraz stan pracy systemu) korzystają
+z osobnego cyklu 15 s. Rzadko używana komenda budowania sieci równoległej
+pozostaje w wolnym kontrolerze diagnostycznym.
+
 `settings.yaml` korzysta z roli i liczby urządzeń wykrytych w
 `parallel_network.yaml`. W standardowej konfiguracji oba pakiety są zawsze
 włączone. Zapis EMS jest wykonywany bezpośrednio dla pojedynczego falownika albo
-przez Mastera dla całej sieci. Gdy ESP32 zostanie podłączone do urządzenia
-zgłaszającego rolę Slave, zapis jest blokowany.
+jako broadcast Modbus FC16 na adres `0` dla wykrytej sieci równoległej. Dzięki
+temu pełny blok `4300-4306` odbiera Master i wszystkie urządzenia Slave na
+wspólnej magistrali `RS485_2`. Broadcast jest wysyłany poza kolejką odpowiedzi,
+ponieważ adres `0` zgodnie z protokołem nie odpowiada. Gdy ESP32 zostanie
+podłączone do urządzenia zgłaszającego rolę Slave, zapis jest blokowany.
 
 Po wykryciu Mastera encje podglądu mocy używane przez dashboard przełączają się
 automatycznie na rejestry sumaryczne całego systemu: PV, bateria, LOAD i sieć.

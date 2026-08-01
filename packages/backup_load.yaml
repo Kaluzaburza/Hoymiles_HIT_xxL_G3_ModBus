@@ -332,7 +332,7 @@ sensor:
     value_type: U_WORD
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Load Power L1n"
     id: load_power_an_8554
     register_type: read
@@ -345,7 +345,7 @@ sensor:
     value_type: S_WORD
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Load Power L2n"
     id: load_power_bn_8555
     register_type: read
@@ -358,7 +358,7 @@ sensor:
     value_type: S_WORD
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Load Power L3n"
     id: load_power_cn_8556
     register_type: read

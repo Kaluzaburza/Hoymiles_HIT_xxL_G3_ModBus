@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta
+from functools import partial
 import logging
 import re
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from homeassistant.components.recorder import get_instance as get_recorder_instance
+from homeassistant.components.recorder import history as recorder_history
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -18,10 +21,16 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
+from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, NAME
 from .models import RuntimeData
+from .rce_history import (
+    LOAD_PHASE_ENERGY_ENTITIES,
+    LoadHistorySummary,
+    summarize_load_history,
+)
 from .rce_optimizer import (
     OptimizerInput,
     OptimizerResult,
@@ -58,20 +67,34 @@ WATCHED_ENTITIES = {
     "sensor.hoymiles_hit_overview_battery_soc",
     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
     "sensor.hoymiles_hit_pv_total_energy_today",
-    "sensor.hoymiles_hit_load_energy_use_today",
+    "sensor.hoymiles_hit_pv_to_load_energy_today",
+    "sensor.hoymiles_hit_energy_from_battery_today",
+    "sensor.hoymiles_hit_energy_from_grid_today",
+    "sensor.hoymiles_hit_load_from_pv_power",
+    "sensor.hoymiles_hit_overview_pv_total_power",
+    "sensor.hoymiles_actual_load_power",
+    "sensor.hoymiles_actual_load_energy_today",
+    *LOAD_PHASE_ENERGY_ENTITIES,
+    "sensor.hoymiles_hit_load_power_l1n",
+    "sensor.hoymiles_hit_load_power_l2n",
+    "sensor.hoymiles_hit_load_power_l3n",
+    "sensor.hoymiles_hit_overview_load_active_power",
     "sensor.hoymiles_load_average_4_days",
     "sensor.hoymiles_night_load_average_4_days",
+    "sensor.hoymiles_hit_battery_voltage_bms",
+    "sensor.hoymiles_hit_maximum_discharge_current",
     "number.hoymiles_hit_self_use_soc",
     "number.hoymiles_hit_force_discharge_soc",
     "number.hoymiles_hit_maximum_discharge_power",
+    "input_boolean.hoymiles_rce_discharge_enabled",
     "input_boolean.hoymiles_rce_dynamic_soc_enabled",
     "input_boolean.hoymiles_sale_block_enabled",
     "input_datetime.hoymiles_sale_block_start",
     "input_datetime.hoymiles_sale_block_end",
-    "input_number.hoymiles_rce_price_threshold",
     "input_number.hoymiles_rce_soc_safety_margin",
     "input_number.hoymiles_rce_export_efficiency",
     "input_number.hoymiles_rce_fallback_daily_load",
+    "input_number.hoymiles_rce_requested_discharge_power",
     "input_select.hoymiles_rce_inverter_rated_power",
     "input_text.hoymiles_solcast_forecast_today_entity",
     "input_text.hoymiles_solcast_forecast_tomorrow_entity",
@@ -84,7 +107,7 @@ WATCHED_ENTITIES = {
 STATUS_TEXT = {
     "pl": {
         "ready": "Gotowa — plan zoptymalizowany",
-        "waiting_for_price": "Oczekiwanie — brak opłacalnego okna",
+        "waiting_for_market": "Oczekiwanie — brak dostępnego okna rynkowego",
         "home_protected": "Zasilanie domu zabezpieczone — brak energii na sprzedaż",
         "home_energy_shortage": "Za mało energii na potrzeby domu — sprzedaż zablokowana",
         "missing_data": "Brak wymaganych danych — sprzedaż zablokowana",
@@ -92,7 +115,7 @@ STATUS_TEXT = {
     },
     "en": {
         "ready": "Ready — optimized plan",
-        "waiting_for_price": "Waiting — no profitable window",
+        "waiting_for_market": "Waiting — no available market window",
         "home_protected": "Home supply protected — no energy available for export",
         "home_energy_shortage": "Insufficient home energy — export blocked",
         "missing_data": "Required data missing — export blocked",
@@ -113,6 +136,20 @@ def _state_number(hass: HomeAssistant, entity_id: str) -> float | None:
     try:
         return float(state.state)
     except (TypeError, ValueError):
+        return None
+
+
+def _state_attribute_number(
+    hass: HomeAssistant,
+    entity_id: str,
+    attribute: str,
+) -> float | None:
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    try:
+        return float(state.attributes[attribute])
+    except (KeyError, TypeError, ValueError):
         return None
 
 
@@ -262,6 +299,15 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._runtime = runtime
         self._attr_unique_id = f"{entry.entry_id}_rce_optimized_plan"
         self._result: OptimizerResult | None = None
+        self._load_history = LoadHistorySummary(
+            average_daily_kwh=None,
+            daily_history_days=0,
+            daily_energy_kwh={},
+            average_night_kwh=None,
+            night_history_days=0,
+            night_energy_kwh={},
+        )
+        self._history_refresh_running = False
         self._attributes: dict[str, Any] = {
             "status_code": "missing_data",
             "missing_entities": [],
@@ -296,7 +342,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         )
         if (
             self._attributes.get("planning_scope") == "today_only"
-            and code in {"ready", "waiting_for_price", "home_protected"}
+            and code in {"ready", "waiting_for_market", "home_protected"}
         ):
             return f"{text} — {TODAY_ONLY_SUFFIX[language]}"
         return text
@@ -323,8 +369,98 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 timedelta(minutes=1),
             )
         )
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                self._async_history_timer,
+                timedelta(hours=1),
+            )
+        )
+        await self._async_refresh_load_history()
         self._recalculate()
         self.async_write_ha_state()
+
+    async def _async_history_timer(self, now: datetime) -> None:
+        """Refresh recorder-backed LOAD history once per hour."""
+        await self._async_refresh_load_history()
+        self._recalculate()
+        self.async_write_ha_state()
+
+    async def _async_refresh_load_history(self) -> None:
+        """Restore four complete days from the raw phase energy counters."""
+        if self._history_refresh_running:
+            return
+        self._history_refresh_running = True
+        try:
+            timezone = ZoneInfo(self.hass.config.time_zone)
+            now = datetime.now(timezone)
+            local_start = datetime.combine(
+                now.date() - timedelta(days=6),
+                time.min,
+                tzinfo=timezone,
+            )
+            query = partial(
+                recorder_history.get_significant_states,
+                self.hass,
+                dt_util.as_utc(local_start),
+                dt_util.as_utc(now),
+                list(LOAD_PHASE_ENERGY_ENTITIES),
+                None,
+                True,
+                False,
+                False,
+                True,
+            )
+            raw_history = await get_recorder_instance(
+                self.hass
+            ).async_add_executor_job(query)
+
+            samples: dict[str, list[tuple[datetime, float]]] = {
+                entity_id: [] for entity_id in LOAD_PHASE_ENERGY_ENTITIES
+            }
+            for entity_id in LOAD_PHASE_ENERGY_ENTITIES:
+                for item in raw_history.get(entity_id, []):
+                    state_value = getattr(item, "state", None)
+                    updated = getattr(item, "last_updated", None)
+                    if state_value is None or updated is None:
+                        continue
+                    try:
+                        numeric = float(state_value)
+                    except (TypeError, ValueError):
+                        continue
+                    samples[entity_id].append(
+                        (updated.astimezone(timezone), max(numeric, 0.0))
+                    )
+
+            night_windows: dict[date, tuple[datetime, datetime]] = {}
+            for offset in range(5, 0, -1):
+                night_date = now.date() - timedelta(days=offset)
+                sunset = get_astral_event_date(
+                    self.hass,
+                    "sunset",
+                    night_date,
+                )
+                sunrise = get_astral_event_date(
+                    self.hass,
+                    "sunrise",
+                    night_date + timedelta(days=1),
+                )
+                if sunset is None or sunrise is None:
+                    continue
+                night_windows[night_date] = (
+                    sunset.astimezone(timezone) - timedelta(minutes=90),
+                    sunrise.astimezone(timezone) + timedelta(minutes=90),
+                )
+
+            self._load_history = summarize_load_history(
+                samples,
+                now=now,
+                night_windows=night_windows,
+            )
+        except Exception:  # noqa: BLE001 - recorder outages need a safe fallback
+            _LOGGER.exception("Cannot rebuild four-day LOAD history from recorder")
+        finally:
+            self._history_refresh_running = False
 
     @callback
     def _async_input_changed(
@@ -371,6 +507,18 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 "status_code": result.status_code,
                 "missing_entities": [],
                 "minimum_soc": result.minimum_soc_percent,
+                "base_reserve_energy_kwh": round(
+                    result.base_reserve_energy_kwh,
+                    2,
+                ),
+                "protected_night_energy_kwh": round(
+                    result.protected_night_energy_kwh,
+                    2,
+                ),
+                "additional_forecast_reserve_kwh": round(
+                    result.additional_forecast_reserve_kwh,
+                    2,
+                ),
                 "protected_home_energy_kwh": round(
                     result.protected_home_energy_kwh,
                     2,
@@ -379,15 +527,91 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     result.available_energy_now_kwh,
                     2,
                 ),
+                "current_battery_energy_kwh": round(
+                    settings.battery_capacity_kwh
+                    * settings.battery_soc_percent
+                    / 100.0,
+                    2,
+                ),
                 "planned_export_kwh": round(result.planned_export_kwh, 2),
+                "planned_revenue_pln": round(result.planned_revenue_pln, 2),
+                "automatic_price_floor_pln_kwh": (
+                    round(result.automatic_price_floor_pln_kwh, 4)
+                    if result.automatic_price_floor_pln_kwh is not None
+                    else None
+                ),
+                "highest_planned_price_pln_kwh": (
+                    round(
+                        max(
+                            item.price_pln_kwh
+                            for item in result.planned_exports
+                        ),
+                        4,
+                    )
+                    if result.planned_exports
+                    else None
+                ),
                 "natural_pv_export_kwh": round(result.natural_export_kwh, 2),
+                "natural_pv_revenue_pln": round(
+                    result.natural_revenue_pln,
+                    2,
+                ),
                 "expected_total_export_kwh": round(result.total_export_kwh, 2),
                 "estimated_revenue_pln": round(result.total_revenue_pln, 2),
+                "uncontrolled_export_kwh": round(
+                    result.uncontrolled_export_kwh,
+                    2,
+                ),
+                "uncontrolled_revenue_pln": round(
+                    result.uncontrolled_revenue_pln,
+                    2,
+                ),
+                "optimization_gain_pln": round(
+                    result.optimization_gain_pln,
+                    2,
+                ),
                 "ending_battery_kwh": round(result.ending_battery_kwh, 2),
+                "ending_battery_soc": round(
+                    result.ending_battery_kwh
+                    / max(settings.battery_capacity_kwh, 0.001)
+                    * 100.0,
+                    1,
+                ),
                 "system_power_kw": round(result.system_power_kw, 2),
+                "requested_export_power_kw": round(
+                    result.requested_export_power_kw,
+                    2,
+                ),
+                "bms_discharge_power_limit_kw": (
+                    round(result.bms_discharge_power_limit_kw, 2)
+                    if result.bms_discharge_power_limit_kw is not None
+                    else None
+                ),
+                "bms_discharge_limit_percent": (
+                    round(result.bms_discharge_limit_percent, 1)
+                    if result.bms_discharge_limit_percent is not None
+                    else None
+                ),
+                "bms_limit_active": result.bms_limit_active,
                 "maximum_export_power_kw": round(
                     result.maximum_export_power_kw,
                     2,
+                ),
+                "historical_day_load_kwh": round(
+                    result.historical_day_load_kwh,
+                    2,
+                ),
+                "live_projected_day_load_kwh": round(
+                    result.live_projected_day_load_kwh,
+                    2,
+                ),
+                "modeled_day_load_kwh": round(
+                    result.modeled_day_load_kwh,
+                    2,
+                ),
+                "daylight_progress_percent": round(
+                    result.daylight_progress_percent,
+                    1,
                 ),
                 "current_slot_planned": any(
                     item.start == current_slot for item in result.planned_exports
@@ -428,13 +652,9 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 self.hass,
                 "number.hoymiles_hit_force_discharge_soc",
             ),
-            "number.hoymiles_hit_maximum_discharge_power": _state_number(
+            "input_number.hoymiles_rce_requested_discharge_power": _state_number(
                 self.hass,
-                "number.hoymiles_hit_maximum_discharge_power",
-            ),
-            "input_number.hoymiles_rce_price_threshold": _state_number(
-                self.hass,
-                "input_number.hoymiles_rce_price_threshold",
+                "input_number.hoymiles_rce_requested_discharge_power",
             ),
             "input_number.hoymiles_rce_soc_safety_margin": _state_number(
                 self.hass,
@@ -528,15 +748,67 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         if tomorrow_forecast_state is None:
             required["Solcast Forecast Tomorrow"] = None
 
-        history_load = _state_number(
-            self.hass,
-            "sensor.hoymiles_load_average_4_days",
-        )
+        if self._load_history.average_daily_kwh is not None:
+            history_load = self._load_history.average_daily_kwh
+            load_history_days = float(self._load_history.daily_history_days)
+            load_history_source = "recorder_phase_energy_counters"
+        else:
+            history_load = _state_number(
+                self.hass,
+                "sensor.hoymiles_load_average_4_days",
+            )
+            load_history_days = _state_attribute_number(
+                self.hass,
+                "sensor.hoymiles_load_average_4_days",
+                "history_days",
+            )
+            load_history_source = "statistics_fallback"
+        if self._load_history.average_night_kwh is not None:
+            night_history_days = float(self._load_history.night_history_days)
+        else:
+            night_history_days = _state_attribute_number(
+                self.hass,
+                "sensor.hoymiles_night_load_average_4_days",
+                "history_days",
+            )
         fallback_load = _state_number(
             self.hass,
             "input_number.hoymiles_rce_fallback_daily_load",
         )
-        average_load = history_load if history_load is not None else fallback_load
+        actual_load_today = _state_number(
+            self.hass,
+            "sensor.hoymiles_actual_load_energy_today",
+        )
+        # A newly installed/migrated actual-load meter needs four complete days
+        # before the long-term statistic is representative.  During that
+        # transition, never reserve less than either the user fallback or a
+        # conservative projection of today's measured house energy.  The
+        # quarter-day denominator prevents one early counter step from creating
+        # an unrealistically large projection just after midnight.
+        elapsed_day_fraction = max(
+            (now.hour * 60 + now.minute) / (24 * 60),
+            0.25,
+        )
+        live_daily_projection = (
+            max(actual_load_today, 0.0) / elapsed_day_fraction
+            if actual_load_today is not None
+            else None
+        )
+        history_complete = (load_history_days or 0.0) >= 3.95
+        if history_load is not None and history_complete:
+            average_load = history_load
+            load_model_source = "history_4_days"
+        else:
+            provisional_candidates = (
+                history_load,
+                fallback_load,
+                live_daily_projection,
+            )
+            numeric_candidates = [
+                value for value in provisional_candidates if value is not None
+            ]
+            average_load = max(numeric_candidates) if numeric_candidates else None
+            load_model_source = "provisional_safe_max"
         if average_load is None:
             required["sensor.hoymiles_load_average_4_days"] = None
 
@@ -559,8 +831,63 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             ),
             "tomorrow_data_pending": not tomorrow_rows_complete,
             "automatic_replan": True,
-            "load_model_source": (
-                "history_4_days" if history_load is not None else "user_fallback"
+            "automatic_discharge_enabled": self.hass.states.is_state(
+                "input_boolean.hoymiles_rce_discharge_enabled",
+                "on",
+            ),
+            "plan_is_preview": not self.hass.states.is_state(
+                "input_boolean.hoymiles_rce_discharge_enabled",
+                "on",
+            ),
+            "load_model_source": load_model_source,
+            "load_history_source": load_history_source,
+            "recorder_load_average_4d_kwh": (
+                round(self._load_history.average_daily_kwh, 2)
+                if self._load_history.average_daily_kwh is not None
+                else None
+            ),
+            "recorder_load_history_days": self._load_history.daily_history_days,
+            "recorder_load_history_energy_kwh": round(
+                self._load_history.daily_energy_total_kwh,
+                2,
+            ),
+            "recorder_load_daily_kwh": self._load_history.daily_energy_kwh,
+            "recorder_night_load_average_4d_kwh": (
+                round(self._load_history.average_night_kwh, 2)
+                if self._load_history.average_night_kwh is not None
+                else None
+            ),
+            "recorder_night_history_days": self._load_history.night_history_days,
+            "recorder_night_history_energy_kwh": round(
+                self._load_history.night_energy_total_kwh,
+                2,
+            ),
+            "recorder_night_daily_kwh": self._load_history.night_energy_kwh,
+            "actual_load_energy_today_kwh": (
+                round(actual_load_today, 2)
+                if actual_load_today is not None
+                else None
+            ),
+            "provisional_daily_load_projection_kwh": (
+                round(live_daily_projection, 2)
+                if live_daily_projection is not None
+                else None
+            ),
+            "selected_average_daily_load_kwh": (
+                round(average_load, 2) if average_load is not None else None
+            ),
+            "load_history_days": (
+                round(load_history_days, 2)
+                if load_history_days is not None
+                else 0.0
+            ),
+            "night_history_days": (
+                round(night_history_days, 2)
+                if night_history_days is not None
+                else 0.0
+            ),
+            "history_complete": (
+                history_complete and (night_history_days or 0.0) >= 3.95
             ),
         }
         if missing:
@@ -644,9 +971,60 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             max(round(inverter_count_raw or 1.0), 1),
             10,
         )
-        night_load = _state_number(
+        night_load = self._load_history.average_night_kwh
+        if night_load is None:
+            night_load = _state_number(
+                self.hass,
+                "sensor.hoymiles_night_load_average_4_days",
+            )
+        pv_to_load_today = _state_number(
             self.hass,
-            "sensor.hoymiles_night_load_average_4_days",
+            "sensor.hoymiles_hit_pv_to_load_energy_today",
+        ) or 0.0
+        battery_to_load_today = _state_number(
+            self.hass,
+            "sensor.hoymiles_hit_energy_from_battery_today",
+        ) or 0.0
+        grid_to_load_today = _state_number(
+            self.hass,
+            "sensor.hoymiles_hit_energy_from_grid_today",
+        ) or 0.0
+        pv_to_load_power_w = _state_number(
+            self.hass,
+            "sensor.hoymiles_hit_load_from_pv_power",
+        ) or 0.0
+        pv_total_power_w = _state_number(
+            self.hass,
+            "sensor.hoymiles_hit_overview_pv_total_power",
+        ) or 0.0
+        load_power_w = _state_number(
+            self.hass,
+            "sensor.hoymiles_actual_load_power",
+        )
+        if load_power_w is None:
+            phase_loads = tuple(
+                _state_number(self.hass, entity_id)
+                for entity_id in (
+                    "sensor.hoymiles_hit_load_power_l1n",
+                    "sensor.hoymiles_hit_load_power_l2n",
+                    "sensor.hoymiles_hit_load_power_l3n",
+                )
+            )
+            if all(value is not None for value in phase_loads):
+                load_power_w = sum(
+                    max(value or 0.0, 0.0) for value in phase_loads
+                )
+            else:
+                load_power_w = _state_number(
+                    self.hass,
+                    "sensor.hoymiles_hit_overview_load_active_power",
+                )
+        load_power_w = max(load_power_w or 0.0, 0.0)
+        # Rejestr 2180 potrafi zawierać straty przetwarzania. Dla udziału
+        # autokonsumpcji ograniczamy go do rzeczywistego obciążenia domu.
+        pv_to_load_power_w = min(
+            max(pv_to_load_power_w, 0.0),
+            load_power_w,
         )
         metadata.update(
             {
@@ -656,6 +1034,34 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 "average_load_4d_kwh": round(average_load, 2),
                 "average_night_load_4d_kwh": (
                     round(night_load, 2) if night_load is not None else None
+                ),
+                "pv_to_load_today_kwh": round(pv_to_load_today, 2),
+                "battery_to_load_today_kwh": round(
+                    battery_to_load_today,
+                    2,
+                ),
+                "grid_to_load_today_kwh": round(grid_to_load_today, 2),
+                "pv_to_load_power_kw": round(
+                    max(pv_to_load_power_w, 0.0) / 1000.0,
+                    3,
+                ),
+                "pv_self_consumption_share_percent": round(
+                    min(
+                        max(pv_to_load_power_w, 0.0)
+                        / max(pv_total_power_w, 0.001)
+                        * 100.0,
+                        100.0,
+                    ),
+                    1,
+                ),
+                "home_pv_coverage_percent": round(
+                    min(
+                        max(pv_to_load_power_w, 0.0)
+                        / max(load_power_w, 0.001)
+                        * 100.0,
+                        100.0,
+                    ),
+                    1,
                 ),
                 "inverter_count": inverter_count,
                 "inverter_power_each_kw": rated_power,
@@ -694,17 +1100,24 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 average_night_load_kwh=night_load,
                 night_start_minute=night_start,
                 night_end_minute=night_end,
-                minimum_price_pln_kwh=required[
-                    "input_number.hoymiles_rce_price_threshold"
-                ],
                 inverter_power_kw=rated_power,
                 inverter_count=inverter_count,
                 discharge_power_percent=required[
-                    "number.hoymiles_hit_maximum_discharge_power"
+                    "input_number.hoymiles_rce_requested_discharge_power"
                 ],
                 export_efficiency_percent=required[
                     "input_number.hoymiles_rce_export_efficiency"
                 ],
+                bms_max_discharge_current_a=_state_number(
+                    self.hass,
+                    "sensor.hoymiles_hit_maximum_discharge_current",
+                ),
+                battery_voltage_v=_state_number(
+                    self.hass,
+                    "sensor.hoymiles_hit_battery_voltage_bms",
+                ),
+                pv_to_load_today_kwh=pv_to_load_today,
+                pv_to_load_power_kw=max(pv_to_load_power_w, 0.0) / 1000.0,
             ),
             metadata,
         )

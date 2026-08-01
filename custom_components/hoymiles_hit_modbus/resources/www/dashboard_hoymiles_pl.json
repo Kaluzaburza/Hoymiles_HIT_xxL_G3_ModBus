@@ -25,7 +25,7 @@
               "name": "PV"
             },
             {
-              "entity": "sensor.hoymiles_hit_overview_load_active_power",
+              "entity": "sensor.hoymiles_actual_load_power",
               "name": "Dom"
             },
             {
@@ -79,25 +79,25 @@
             },
             {
               "type": "entities",
-              "title": "Sieć — moc",
+              "title": "Odbiór — moc",
               "show_header_toggle": false,
               "state_color": true,
               "entities": [
                 {
-                  "entity": "sensor.hoymiles_hit_meter_grid_active_power_l1",
-                  "name": "Moc L1"
+                  "entity": "sensor.hoymiles_hit_load_power_l1n",
+                  "name": "Odbiór — moc L1"
                 },
                 {
-                  "entity": "sensor.hoymiles_hit_meter_grid_active_power_l2",
-                  "name": "Moc L2"
+                  "entity": "sensor.hoymiles_hit_load_power_l2n",
+                  "name": "Odbiór — moc L2"
                 },
                 {
-                  "entity": "sensor.hoymiles_hit_meter_grid_active_power_l3",
-                  "name": "Moc L3"
+                  "entity": "sensor.hoymiles_hit_load_power_l3n",
+                  "name": "Odbiór — moc L3"
                 },
                 {
-                  "entity": "sensor.hoymiles_hit_meter_grid_total_active_power",
-                  "name": "Moc łączna"
+                  "entity": "sensor.hoymiles_actual_load_power",
+                  "name": "Odbiorniki — moc łącznie"
                 }
               ]
             }
@@ -167,7 +167,6 @@
         },
         {
           "type": "custom:hoymiles-power-flow-card",
-          "title": "Bieżący przepływ energii",
           "cardstyle": "lite",
           "wide": true,
           "show_solar": true,
@@ -184,7 +183,7 @@
           },
           "inverter_image": "/api/hoymiles_hit_modbus/static/hoymiles-inverter.png",
           "battery": {
-            "energy": 21000,
+            "energy": "sensor.hoymiles_hit_total_capacity",
             "shutdown_soc": 10,
             "colour": "#00BCD4",
             "charge_colour": "#00BCD4",
@@ -227,7 +226,7 @@
             "battery_power_190": "sensor.hoymiles_hit_overview_battery_power",
             "battery_current_191": "sensor.hoymiles_hit_battery_current_inverter",
             "battery_voltage_183": "sensor.hoymiles_hit_battery_1_voltage",
-            "essential_power": "sensor.hoymiles_hit_overview_load_active_power",
+            "essential_power": "sensor.hoymiles_actual_load_power",
             "pv1_power_186": "sensor.hoymiles_hit_overview_pv_total_power"
           }
         },
@@ -281,7 +280,7 @@
               "name": "PV"
             },
             {
-              "entity": "sensor.hoymiles_hit_overview_load_active_power",
+              "entity": "sensor.hoymiles_actual_load_power",
               "name": "Dom"
             },
             {
@@ -420,6 +419,14 @@
               }
             }
           ]
+        },
+        {
+          "type": "markdown",
+          "title": "☕ Wesprzyj rozwój projektu",
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "content": "Projekt jest rozwijany niezależnie i testowany na rzeczywistych\ninstalacjach. Twoje wsparcie pomaga rozwijać bezpieczną automatykę\nEMS/RCE, sprawdzać kolejne konfiguracje falowników i tworzyć lepszą\ndokumentację.\n\nJeśli integracja oszczędziła Ci czas lub pomaga lepiej wykorzystać\nenergię, możesz wesprzeć jej dalszy rozwój:\n\n[**☕ Postaw kawę autorowi**](https://buycoffee.to/kaluzaaa)"
         }
       ]
     },
@@ -432,7 +439,7 @@
       "cards": [
         {
           "type": "entities",
-          "title": "Automatyka RCE — konfiguracja wymagana",
+          "title": "Automatyka RCE — ustawienia",
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
@@ -441,15 +448,11 @@
               "name": "Włącz automatyczne rozładowanie według RCE"
             },
             {
-              "entity": "input_number.hoymiles_rce_price_threshold",
-              "name": "Minimalna cena sprzedaży"
-            },
-            {
               "entity": "input_select.hoymiles_rce_inverter_rated_power",
               "name": "Moc znamionowa jednego falownika"
             },
             {
-              "entity": "number.hoymiles_hit_maximum_discharge_power",
+              "entity": "input_number.hoymiles_rce_requested_discharge_power",
               "name": "Moc rozładowania do sieci"
             },
             {
@@ -505,6 +508,22 @@
               "name": "Bieżąca cena RCE"
             },
             {
+              "entity": "sensor.hoymiles_rce_automatic_price_floor",
+              "name": "Automatyczna cena graniczna planu"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_optimization_gain",
+              "name": "Korzyść względem niekontrolowanego eksportu"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_bms_safe_discharge_power",
+              "name": "Bezpieczna moc rozładowania według BMS"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_effective_discharge_power_percent",
+              "name": "Efektywny limit rozładowania"
+            },
+            {
               "entity": "binary_sensor.hoymiles_sale_block_active",
               "name": "Blokada aktywna teraz"
             },
@@ -522,27 +541,111 @@
             },
             {
               "entity": "sensor.hoymiles_load_average_4_days",
-              "name": "Średnie dobowe zużycie LOAD — 4 dni"
+              "name": "Średnie dobowe zużycie LOAD"
+            },
+            {
+              "entity": "sensor.hoymiles_load_history_coverage",
+              "name": "Zebrana historia zużycia dobowego"
             },
             {
               "entity": "sensor.hoymiles_night_load_average_4_days",
-              "name": "Średnie zużycie w oknie nocnym — 4 dni"
+              "name": "Średnie zużycie w oknie nocnym"
+            },
+            {
+              "entity": "sensor.hoymiles_night_load_history_coverage",
+              "name": "Zebrana historia zużycia nocnego"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_pv_self_consumption_today",
+              "name": "PV → odbiorniki dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_battery_to_load_today",
+              "name": "Bateria → odbiorniki dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_grid_to_load_today",
+              "name": "Sieć → odbiorniki dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_pv_self_consumption_power",
+              "name": "PV → odbiorniki teraz"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_modeled_day_load",
+              "name": "Modelowane dzienne zużycie odbiorników"
             },
             {
               "entity": "sensor.hoymiles_rce_protected_home_energy",
-              "name": "Energia domu chroniona przed sprzedażą"
+              "name": "Łączna energia chroniona dla domu"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_base_reserve_energy",
+              "name": "Rezerwa bazowa Self-Use i korekta"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_protected_night_energy",
+              "name": "Chronione zużycie domu do końca najbliższej nocy"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_additional_forecast_reserve",
+              "name": "Dodatkowa rezerwa ponad próg awaryjny"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_available_energy_now",
+              "name": "Energia dostępna teraz ponad rezerwę"
             },
             {
               "entity": "sensor.hoymiles_rce_dynamic_minimum_soc",
               "name": "Wyliczony minimalny SOC dla RCE"
             },
             {
-              "entity": "sensor.hoymiles_rce_grid_export_energy_daily",
-              "name": "Energia wysłana do sieci dzisiaj"
+              "entity": "sensor.hoymiles_rce_planned_battery_export",
+              "name": "Zaplanowany eksport sterowany RCE — od teraz"
             },
             {
-              "entity": "sensor.hoymiles_rce_revenue_daily",
-              "name": "Szacunkowy przychód RCE dzisiaj"
+              "entity": "sensor.hoymiles_rce_self_use_baseline_export",
+              "name": "Prognozowana nadwyżka w Self-Use — od teraz"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_natural_pv_export",
+              "name": "Nieunikniona nadwyżka PV pozostała po optymalizacji"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_expected_total_export",
+              "name": "Łączny prognozowany eksport — od teraz"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_ending_battery_soc",
+              "name": "Przewidywany SOC na końcu horyzontu"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_grid_energy_sell_today",
+              "name": "Cała energia wysłana do sieci dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_controlled_export_today",
+              "name": "Zrealizowany eksport sterowany RCE dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_natural_export_today",
+              "name": "Zrealizowana naturalna nadwyżka PV dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_unclassified_export_today",
+              "name": "Eksport nierozpoznany po restarcie lub aktualizacji"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_controlled_revenue_today",
+              "name": "Przychód ze sterowanego eksportu dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_natural_revenue_today",
+              "name": "Przychód z naturalnej nadwyżki dzisiaj"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_revenue_today",
+              "name": "Łączny zrealizowany przychód dzisiaj"
             }
           ]
         },
@@ -555,7 +658,6 @@
               "entity": "sensor.hoymiles_rce_day",
               "plan_entity": "sensor.hoymiles_hit_rce_optimized_plan",
               "current_price_entity": "sensor.hoymiles_rce_current_price",
-              "threshold_entity": "input_number.hoymiles_rce_price_threshold",
               "active_entity": "input_boolean.hoymiles_rce_discharge_active",
               "block_enabled_entity": "input_boolean.hoymiles_sale_block_enabled",
               "block_start_entity": "input_datetime.hoymiles_sale_block_start",
@@ -568,7 +670,6 @@
               "future_data": true,
               "plan_entity": "sensor.hoymiles_hit_rce_optimized_plan",
               "current_price_entity": "sensor.hoymiles_rce_current_price",
-              "threshold_entity": "input_number.hoymiles_rce_price_threshold",
               "active_entity": "input_boolean.hoymiles_rce_discharge_active",
               "block_enabled_entity": "input_boolean.hoymiles_sale_block_enabled",
               "block_start_entity": "input_datetime.hoymiles_sale_block_start",
@@ -587,19 +688,20 @@
             "sensor.hoymiles_rce_reserve_status",
             "sensor.hoymiles_rce_dynamic_minimum_soc"
           ],
-          "content": "Automatyka wymaga zewnętrznej integracji\n**Solcast PV Forecast** producenta **BJReplay**:\n[instalacja i konfiguracja](https://github.com/BJReplay/ha-solcast-solar).\n\nWymagane są prognozy **Forecast Today** i **Forecast Tomorrow**.\nEncje są wykrywane automatycznie w polskiej i angielskiej wersji HA;\nw razie niestandardowych nazw można wpisać je u góry.\n\nAlgorytm symuluje bilans co 30 minut od teraz przez dzisiejszą noc,\ncały kolejny dzień i następną noc do **90 minut po wschodzie**.\nNajpierw zabezpiecza zasilanie domu, rezerwę awaryjną Self-Use oraz\nkorektę bezpieczeństwa. Dopiero pozostałą energię przydziela do\nnajdroższych dostępnych bloków RCE dzisiaj lub jutro.\n\nMoc systemu jest liczona jako **moc jednego falownika × automatycznie\nwykryta liczba falowników × ustawiony procent rozładowania**.\nPrzez pierwsze 24 godziny używane jest awaryjne zużycie dobowe z pola\nu góry; później zastępuje je średnia z ostatnich czterech dni.\n\nPole rezerwy Self-Use nie jest zmieniane. Pozostaje energią dostępną\nponiżej normalnego progu wyłącznie podczas zaniku sieci."
+          "content": "Automatyka wymaga zewnętrznej integracji\n**Solcast PV Forecast** producenta **BJReplay**:\n[instalacja i konfiguracja](https://github.com/BJReplay/ha-solcast-solar).\n\nWymagane są prognozy **Forecast Today** i **Forecast Tomorrow**.\nEncje są wykrywane automatycznie w polskiej i angielskiej wersji HA;\nw razie niestandardowych nazw można wpisać je u góry.\n\nAlgorytm symuluje bilans co 30 minut od teraz przez dzisiejszą noc,\ncały kolejny dzień i następną noc do **90 minut po wschodzie**.\nNajpierw odkłada poza sprzedażą rezerwę awaryjną Self-Use, korektę\nbezpieczeństwa oraz pełne przewidywane zużycie domu do końca\nnajbliższej chronionej nocy. Prognozowane PV przed zachodem nie\npomniejsza tej nocnej rezerwy. Dopiero pozostałą energię przydziela\ndo najdroższych dostępnych bloków RCE dzisiaj lub jutro.\n\nCena sprzedaży nie jest ustawiana ręcznie. Optymalizator porównuje\npełny wynik finansowy wszystkich dostępnych bloków w horyzoncie,\nwybiera najwyższe ceny i uwzględnia naturalny eksport PV. Wcześniejsze\nrozładowanie wykona tylko wtedy, gdy zwiększy przychód lub utworzy\nmiejsce w baterii przed późniejszą nadwyżką sprzedawaną taniej.\n\nMoc systemu jest liczona jako **moc jednego falownika × automatycznie\nwykryta liczba falowników × ustawiony procent rozładowania**.\nDo zebrania co najmniej 24 godzin historii używane jest awaryjne\nzużycie dobowe z pola u góry. Następnie algorytm korzysta z dostępnej\nhistorii i stopniowo dochodzi do pełnej średniej z czterech dni;\nfaktyczne pokrycie historii jest pokazane w karcie stanu.\n\nPole rezerwy Self-Use nie jest zmieniane. Pozostaje energią dostępną\nponiżej normalnego progu wyłącznie podczas zaniku sieci."
         },
         {
           "type": "markdown",
           "title": "Plan rozładowań RCE",
           "entity_id": [
             "sensor.hoymiles_rce_discharge_plan",
-            "input_number.hoymiles_rce_price_threshold",
+            "sensor.hoymiles_rce_automatic_price_floor",
+            "sensor.hoymiles_rce_optimization_gain",
             "input_boolean.hoymiles_sale_block_enabled",
             "input_datetime.hoymiles_sale_block_start",
             "input_datetime.hoymiles_sale_block_end"
           ],
-          "content": "{% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}\n{% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'planned_duration_minutes') | int(0) %}\n{% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}\n{% set export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'expected_export_kwh') | float(0) %}\n{% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'estimated_revenue_pln') | float(0) %}\n**Horyzont:** {{ dates }}<br>\n**Najbardziej opłacalne okresy wybrane przez algorytm:**<br>\n{{ periods or 'Brak danych do przygotowania planu.' }}\n\n**Łączny plan:** {{ minutes // 60 }} h\n{{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}\nbloków po 30 min)<br>\n**Prognozowany eksport:** {{ export | round(2) }} kWh<br>\n**Szacunkowy przychód:** {{ revenue | round(2) }} PLN\n\nAutomatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu\nwybranego bloku, po osiągnięciu minimalnego SOC albo po wyłączeniu\nprzełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu."
+          "content": "{% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}\n{% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'planned_duration_minutes') | int(0) %}\n{% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}\n{% set export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'expected_export_kwh') | float(0) %}\n{% set battery_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                                   'planned_battery_export_kwh')\n                                   | float(0) %}\n{% set pv_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                              'natural_pv_export_kwh') | float(0) %}\n{% set baseline_export = states(\n     'sensor.hoymiles_rce_self_use_baseline_export') | float(0) %}\n{% set battery_revenue = state_attr(\n     'sensor.hoymiles_rce_discharge_plan',\n     'planned_battery_revenue_pln') | float(0) %}\n{% set pv_revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                               'natural_pv_revenue_pln') | float(0) %}\n{% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'estimated_revenue_pln') | float(0) %}\n{% set price_floor = states(\n     'sensor.hoymiles_rce_automatic_price_floor') %}\n{% set gain = states('sensor.hoymiles_rce_optimization_gain') %}\n{% set preview = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'plan_is_preview') %}\n{% set scope = state_attr('sensor.hoymiles_rce_discharge_plan',\n                          'planning_scope') %}\n**Horyzont:** {{ dates }}<br>\n**Zakres cen:** {{ 'dzisiaj i jutro'\n   if scope == 'today_and_tomorrow'\n   else 'tylko dzisiaj — jutro zostanie dopisane automatycznie' }}<br>\n**Tryb planu:** {{ 'podgląd — automatyczne rozładowanie jest wyłączone'\n   if preview else 'aktywny' }}<br>\n**Automatyczna cena graniczna planu:** {{ price_floor\n   if price_floor not in ['unknown', 'unavailable'] else 'brak sprzedaży' }}\n{{ 'PLN/kWh' if price_floor not in ['unknown', 'unavailable'] else '' }}<br>\n**Korzyść optymalizacji:** {{ gain\n   if gain not in ['unknown', 'unavailable'] else '0' }} PLN<br>\n**Najbardziej opłacalne okresy wybrane przez algorytm:**<br>\n{{ periods or 'Brak danych do przygotowania planu.' }}\n\n**Łączny plan:** {{ minutes // 60 }} h\n{{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}\nbloków po 30 min)<br>\n**Zaplanowany eksport sterowany od teraz:** {{ battery_export | round(2) }}\nkWh → {{ battery_revenue | round(2) }} PLN<br>\n**Nadwyżka prognozowana przy pozostawieniu Self-Use:**\n{{ baseline_export | round(2) }} kWh<br>\n**Nieunikniona nadwyżka PV pozostała po optymalizacji:**\n{{ pv_export | round(2) }}\nkWh → {{ pv_revenue | round(2) }} PLN<br>\n**Łączny przyszły eksport od teraz:** {{ export | round(2) }} kWh<br>\n**Łączny przyszły szacunkowy przychód:** {{ revenue | round(2) }} PLN\n\nDane przyszłego planu nie zawierają energii sprzedanej wcześniej\ndzisiaj. Eksport zrealizowany jest rozdzielany wyżej na sprzedaż\nsterowaną RCE i naturalną nadwyżkę w trybie Self-Use.\n\nAutomatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu\nwybranego bloku, po osiągnięciu minimalnego SOC albo po wyłączeniu\nprzełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu."
         },
         {
           "type": "markdown",
@@ -706,6 +808,395 @@
       ]
     },
     {
+      "title": "Zyski",
+      "path": "zyski",
+      "icon": "mdi:cash-multiple",
+      "type": "sidebar",
+      "badges": [],
+      "cards": [
+        {
+          "type": "markdown",
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "content": "# ⚡ Instalacja pracuje na Twój wynik\n{% set revenue = states('sensor.hoymiles_rce_revenue_daily')\n   | float(0) %}\n{% set energy = states(\n   'sensor.hoymiles_rce_grid_export_energy_daily') | float(0) %}\n{% set average = revenue / energy if energy > 0 else 0 %}\n**Dzisiaj sieć przyjęła {{ energy | round(2) }} kWh**, a wyliczony przychód według cen RCE wynosi **{{ revenue | round(2) }} PLN**. Średnia uzyskana cena to **{{ average | round(3) }} PLN/kWh**.\nKażda sprzedana kilowatogodzina jest rozliczana z ceną obowiązującą w chwili eksportu. Liczniki okresowe zachowują dane po restartach Home Assistanta."
+        },
+        {
+          "type": "glance",
+          "title": "💰 Przychód ze sprzedaży energii",
+          "columns": 2,
+          "show_name": true,
+          "show_state": true,
+          "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_revenue_daily",
+              "name": "Dzisiaj",
+              "icon": "mdi:calendar-today"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_revenue_weekly",
+              "name": "Ten tydzień",
+              "icon": "mdi:calendar-week"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_revenue_monthly",
+              "name": "Ten miesiąc",
+              "icon": "mdi:calendar-month"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_revenue_yearly",
+              "name": "Ten rok",
+              "icon": "mdi:calendar-star"
+            }
+          ]
+        },
+        {
+          "type": "glance",
+          "title": "⚡ Energia oddana do sieci",
+          "columns": 2,
+          "show_name": true,
+          "show_state": true,
+          "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_energy_daily",
+              "name": "Dzisiaj",
+              "icon": "mdi:transmission-tower-export"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_energy_weekly",
+              "name": "Ten tydzień",
+              "icon": "mdi:calendar-week"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_energy_monthly",
+              "name": "Ten miesiąc",
+              "icon": "mdi:calendar-month"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_energy_yearly",
+              "name": "Ten rok",
+              "icon": "mdi:calendar-star"
+            }
+          ]
+        },
+        {
+          "type": "markdown",
+          "title": "Średnia cena sprzedaży",
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "content": "{% set periods = [\n  ('Dzisiaj', 'daily'),\n  ('Tydzień', 'weekly'),\n  ('Miesiąc', 'monthly'),\n  ('Rok', 'yearly')\n] %}\n{% for label, period in periods %}\n{% set revenue = states(\n  'sensor.hoymiles_rce_revenue_' ~ period) | float(0) %}\n{% set energy = states(\n  'sensor.hoymiles_rce_grid_export_energy_' ~ period) | float(0) %}\n{% set average = revenue / energy if energy > 0 else 0 %}\n- **{{ label }}:** **{{ average | round(3) }} PLN/kWh** ·\n  {{ revenue | round(2) }} PLN · {{ energy | round(2) }} kWh\n{% endfor %}"
+        },
+        {
+          "type": "entities",
+          "title": "Dzisiejszy wynik — szczegóły",
+          "show_header_toggle": false,
+          "state_color": true,
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_current_price",
+              "name": "Bieżąca cena RCE"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_power",
+              "name": "Aktualna moc oddawana do sieci"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_controlled_export_today",
+              "name": "Eksport sterowany przez RCE"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_natural_export_today",
+              "name": "Naturalna nadwyżka PV"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_unclassified_export_today",
+              "name": "Eksport nierozpoznany"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_controlled_revenue_today",
+              "name": "Przychód ze sterowania RCE"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_natural_revenue_today",
+              "name": "Przychód z naturalnej nadwyżki"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_optimization_gain",
+              "name": "Prognozowana korzyść optymalizacji"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_status",
+              "name": "Stan automatyki RCE"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Wynik od uruchomienia liczników",
+          "show_header_toggle": false,
+          "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_revenue_total",
+              "name": "Przychód łącznie",
+              "icon": "mdi:cash-multiple"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_energy_total",
+              "name": "Eksport łącznie",
+              "icon": "mdi:transmission-tower-export"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_grid_energy_sell_total",
+              "name": "Licznik falownika",
+              "icon": "mdi:counter"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Przychód — ostatnie 30 dni",
+          "chart_type": "bar",
+          "period": "day",
+          "days_to_show": 30,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_revenue_total",
+              "name": "Przychód"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Eksport — ostatnie 30 dni",
+          "chart_type": "bar",
+          "period": "day",
+          "days_to_show": 30,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_grid_export_energy_total",
+              "name": "Energia do sieci"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Produkcja PV",
+      "path": "produkcja-pv",
+      "icon": "mdi:chart-bar",
+      "type": "sidebar",
+      "badges": [],
+      "cards": [
+        {
+          "type": "markdown",
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "content": "# ☀️ Produkcja PV\n\nNajważniejsze podsumowania i historia produkcji z instalacji.\nWykresy korzystają z długoterminowych statystyk Home Assistanta,\ndlatego dane pozostają dostępne także po restartach."
+        },
+        {
+          "type": "grid",
+          "title": "Bieżące okresy",
+          "columns": 2,
+          "square": false,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "cards": [
+            {
+              "type": "statistic",
+              "name": "Dzisiaj",
+              "icon": "mdi:weather-sunny",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "day",
+                  "offset": 0
+                }
+              }
+            },
+            {
+              "type": "statistic",
+              "name": "Ten tydzień",
+              "icon": "mdi:calendar-week",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "week",
+                  "offset": 0
+                }
+              }
+            },
+            {
+              "type": "statistic",
+              "name": "Ten miesiąc",
+              "icon": "mdi:calendar-month",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "month",
+                  "offset": 0
+                }
+              }
+            },
+            {
+              "type": "statistic",
+              "name": "Ten rok",
+              "icon": "mdi:calendar-star",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "year",
+                  "offset": 0
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "title": "Porównanie rok do roku",
+          "columns": 1,
+          "square": false,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "cards": [
+            {
+              "type": "statistic",
+              "name": "Bieżący rok",
+              "icon": "mdi:solar-power",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "year",
+                  "offset": 0
+                }
+              }
+            },
+            {
+              "type": "statistic",
+              "name": "Poprzedni rok",
+              "icon": "mdi:history",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "year",
+                  "offset": -1
+                }
+              }
+            },
+            {
+              "type": "statistic",
+              "name": "Dwa lata temu",
+              "icon": "mdi:history",
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "stat_type": "change",
+              "period": {
+                "calendar": {
+                  "period": "year",
+                  "offset": -2
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Produkcja dzienna — ostatnie 90 dni",
+          "chart_type": "bar",
+          "period": "day",
+          "days_to_show": 90,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "name": "Produkcja PV",
+              "color": "#4CAF50"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Produkcja tygodniowa — ostatnie 52 tygodnie",
+          "chart_type": "bar",
+          "period": "week",
+          "days_to_show": 365,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "name": "Produkcja PV",
+              "color": "#66BB6A"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Produkcja miesięczna — ostatnie 3 lata",
+          "chart_type": "bar",
+          "period": "month",
+          "days_to_show": 1095,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "name": "Produkcja PV",
+              "color": "#8BC34A"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Produkcja roczna — archiwum",
+          "chart_type": "bar",
+          "period": "year",
+          "days_to_show": 3650,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_pv_total_energy",
+              "name": "Produkcja PV",
+              "color": "#CDDC39"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "title": "PV",
       "path": "pv",
       "icon": "mdi:solar-power",
@@ -732,6 +1223,10 @@
             {
               "entity": "sensor.hoymiles_hit_pv4_power_direct",
               "name": "PV4"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_overview_generator_active_power",
+              "name": "Złącze GEN"
             }
           ]
         },
@@ -818,6 +1313,42 @@
                 {
                   "entity": "sensor.hoymiles_hit_pv4_power_direct",
                   "name": "Moc"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "GEN",
+              "show_header_toggle": false,
+              "state_color": true,
+              "entities": [
+                {
+                  "entity": "sensor.hoymiles_hit_generator_voltage_l1",
+                  "name": "Napięcie L1"
+                },
+                {
+                  "entity": "sensor.hoymiles_hit_generator_voltage_l2",
+                  "name": "Napięcie L2"
+                },
+                {
+                  "entity": "sensor.hoymiles_hit_generator_voltage_l3",
+                  "name": "Napięcie L3"
+                },
+                {
+                  "entity": "sensor.hoymiles_hit_generator_current_l1",
+                  "name": "Prąd L1"
+                },
+                {
+                  "entity": "sensor.hoymiles_hit_generator_current_l2",
+                  "name": "Prąd L2"
+                },
+                {
+                  "entity": "sensor.hoymiles_hit_generator_current_l3",
+                  "name": "Prąd L3"
+                },
+                {
+                  "entity": "sensor.hoymiles_hit_generator_total_power",
+                  "name": "Moc łącznie"
                 }
               ]
             }
@@ -1507,116 +2038,116 @@
       ]
     },
     {
-      "title": "Generator",
+      "title": "GEN",
       "path": "generator",
       "icon": "mdi:engine",
       "badges": [],
       "cards": [
         {
           "type": "entities",
-          "title": "Generator — wartości bieżące",
+          "title": "GEN — wartości bieżące",
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_generator_voltage_l1",
-              "name": "Generator napięcie L1"
+              "name": "GEN napięcie L1"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_voltage_l2",
-              "name": "Generator napięcie L2"
+              "name": "GEN napięcie L2"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_voltage_l3",
-              "name": "Generator napięcie L3"
+              "name": "GEN napięcie L3"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_current_l1",
-              "name": "Generator prąd L1"
+              "name": "GEN prąd L1"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_current_l2",
-              "name": "Generator prąd L2"
+              "name": "GEN prąd L2"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_current_l3",
-              "name": "Generator prąd L3"
+              "name": "GEN prąd L3"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_active_power_l1",
-              "name": "Generator czynna moc L1"
+              "name": "GEN czynna moc L1"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_active_power_l2",
-              "name": "Generator czynna moc L2"
+              "name": "GEN czynna moc L2"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_active_power_l3",
-              "name": "Generator czynna moc L3"
+              "name": "GEN czynna moc L3"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_total_power",
-              "name": "Generator łącznie moc"
+              "name": "GEN łącznie moc"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_power_l1n",
-              "name": "Generator moc L1n"
+              "name": "GEN moc L1n"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_power_l2n",
-              "name": "Generator moc L2n"
+              "name": "GEN moc L2n"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_power_l3n",
-              "name": "Generator moc L3n"
+              "name": "GEN moc L3n"
             }
           ]
         },
         {
           "type": "entities",
-          "title": "Generator — energia dzisiaj",
+          "title": "GEN — energia dzisiaj",
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_generator_energy_total_today",
-              "name": "Generator energia łącznie dzisiaj"
+              "name": "GEN energia łącznie dzisiaj"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_energy_l1n_today",
-              "name": "Generator energia L1n dzisiaj"
+              "name": "GEN energia L1n dzisiaj"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_energy_l2n_today",
-              "name": "Generator energia L2n dzisiaj"
+              "name": "GEN energia L2n dzisiaj"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_energy_l3n_today",
-              "name": "Generator energia L3n dzisiaj"
+              "name": "GEN energia L3n dzisiaj"
             }
           ]
         },
         {
           "type": "entities",
-          "title": "Generator — energia całkowita",
+          "title": "GEN — energia całkowita",
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_generator_energy_total",
-              "name": "Generator energia łącznie"
+              "name": "GEN energia łącznie"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_energy_l1n_total",
-              "name": "Generator energia L1n łącznie"
+              "name": "GEN energia L1n łącznie"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_energy_l2n_total",
-              "name": "Generator energia L2n łącznie"
+              "name": "GEN energia L2n łącznie"
             },
             {
               "entity": "sensor.hoymiles_hit_generator_energy_l3n_total",
-              "name": "Generator energia L3n łącznie"
+              "name": "GEN energia L3n łącznie"
             }
           ]
         }
@@ -1810,7 +2341,7 @@
           "cards": [
             {
               "type": "entities",
-              "title": "EMS — bezpieczny zapis całego bloku 4300–4306",
+              "title": "EMS",
               "show_header_toggle": false,
               "state_color": true,
               "entities": [
@@ -1847,10 +2378,6 @@
               "state_color": true,
               "entities": [
                 {
-                  "entity": "select.hoymiles_hit_three_phase_unbalance",
-                  "name": "Asymetria trójfazowa"
-                },
-                {
                   "entity": "select.hoymiles_hit_eps_mode",
                   "name": "EPS tryb"
                 },
@@ -1865,10 +2392,6 @@
                 {
                   "entity": "select.hoymiles_hit_bms_type_setting",
                   "name": "Typ BMS"
-                },
-                {
-                  "entity": "number.hoymiles_hit_grid_input_power_limitation_valley",
-                  "name": "Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)"
                 },
                 {
                   "entity": "number.hoymiles_hit_battery_max_charge_power",
@@ -1895,6 +2418,26 @@
                   "name": "SOC rozpoczęcia ładowania z sieci"
                 }
               ]
+            },
+            {
+              "type": "entities",
+              "title": "Ograniczanie eksportu i złącze GEN",
+              "show_header_toggle": false,
+              "state_color": true,
+              "entities": [
+                {
+                  "entity": "select.hoymiles_hit_generation_control_function",
+                  "name": "Limitowanie eksportu (GCF)"
+                },
+                {
+                  "entity": "number.hoymiles_hit_maximum_export_power_limit",
+                  "name": "Maksymalny limit eksportu"
+                },
+                {
+                  "entity": "select.hoymiles_hit_gen_port_mode",
+                  "name": "Tryb złącza GEN"
+                }
+              ]
             }
           ]
         },
@@ -1910,6 +2453,29 @@
             {
               "entity": "select.hoymiles_hit_system_operation",
               "name": "Praca systemu"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Powiadomienia push",
+          "show_header_toggle": false,
+          "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entities": [
+            {
+              "entity": "input_boolean.hoymiles_ems_push_notifications_enabled",
+              "name": "Powiadomienia o zmianach EMS"
+            },
+            {
+              "entity": "input_text.hoymiles_ems_push_notify_target",
+              "name": "Telefon (encja notify)"
+            },
+            {
+              "entity": "sensor.hoymiles_ems_push_notification_status",
+              "name": "Stan powiadomień"
             }
           ]
         },

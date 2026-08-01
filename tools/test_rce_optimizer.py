@@ -53,7 +53,6 @@ def base_input(**changes):
         average_night_load_kwh=0.0,
         night_start_minute=20 * 60,
         night_end_minute=8 * 60,
-        minimum_price_pln_kwh=0.6,
         inverter_power_kw=10.0,
         inverter_count=1,
         discharge_power_percent=100.0,
@@ -75,6 +74,7 @@ def test_higher_tomorrow_price_wins() -> None:
         item.start.date() for item in result.planned_exports
     } == {tomorrow[0].start.date()}
     assert result.ending_battery_kwh >= 4.0 - 1e-6
+    assert abs(result.automatic_price_floor_pln_kwh - 0.9) < 1e-6
 
 
 def test_home_energy_is_never_sold() -> None:
@@ -94,9 +94,90 @@ def test_home_energy_is_never_sold() -> None:
     )
     assert result.ready
     assert result.minimum_soc_percent > 20
-    assert result.protected_home_energy_kwh > 0
+    assert abs(result.base_reserve_energy_kwh - 4.0) < 1e-6
+    assert result.additional_forecast_reserve_kwh > 0
+    assert abs(
+        result.protected_home_energy_kwh
+        - (
+            result.base_reserve_energy_kwh
+            + result.additional_forecast_reserve_kwh
+        )
+    ) < 1e-6
     assert result.ending_battery_kwh >= 4.0 - 1e-6
     assert result.planned_export_kwh < 4.0
+
+
+def test_upcoming_night_is_reserved_even_before_sunset() -> None:
+    """A sunny daytime forecast must not hide the next night's house load."""
+    result = RCE.optimize_rce(
+        base_input(
+            now=NOW.replace(hour=12),
+            price_slots=slots(0, 18, 4, 1.0),
+            battery_capacity_kwh=100.0,
+            outage_reserve_soc_percent=30.0,
+            safety_margin_soc_percent=2.0,
+            average_daily_load_kwh=30.0,
+            average_night_load_kwh=20.0,
+            pv_by_slot_kwh={
+                NOW.replace(hour=16): 60.0,
+            },
+        )
+    )
+    assert result.ready
+    assert abs(result.base_reserve_energy_kwh - 32.0) < 1e-6
+    assert abs(result.protected_night_energy_kwh - 20.0) < 1e-6
+    assert abs(result.protected_home_energy_kwh - 52.0) < 1e-6
+    assert result.minimum_soc_percent == 52
+    assert result.ending_battery_kwh >= 32.0 - 1e-6
+
+
+def test_low_market_prices_still_use_the_best_48h_slots() -> None:
+    """No manual threshold may prevent controlled export at the best price."""
+    today = slots(0, 18, 4, 0.05)
+    tomorrow = slots(1, 6, 4, 0.12)
+    result = RCE.optimize_rce(
+        base_input(price_slots=[*today, *tomorrow])
+    )
+    assert result.ready
+    assert result.planned_exports
+    assert {
+        item.start.date() for item in result.planned_exports
+    } == {tomorrow[0].start.date()}
+    assert abs(result.automatic_price_floor_pln_kwh - 0.12) < 1e-6
+
+
+def test_negative_prices_do_not_dump_stored_energy() -> None:
+    """Stored surplus must be retained when every available sale loses money."""
+    result = RCE.optimize_rce(
+        base_input(price_slots=slots(0, 18, 4, -0.2))
+    )
+    assert result.ready
+    assert not result.planned_exports
+    assert result.status_code == "home_protected"
+    assert result.automatic_price_floor_pln_kwh is None
+    assert abs(result.optimization_gain_pln) < 1e-6
+
+
+def test_discharge_creates_headroom_before_worse_pv_overflow() -> None:
+    """An earlier sale is valid when it avoids a lower-priced PV spill."""
+    earlier = RCE.PriceSlot(
+        start=NOW.replace(hour=10),
+        price_pln_kwh=0.30,
+    )
+    overflow = RCE.PriceSlot(
+        start=NOW.replace(hour=12),
+        price_pln_kwh=-0.20,
+    )
+    result = RCE.optimize_rce(
+        base_input(
+            price_slots=[earlier, overflow],
+            pv_by_slot_kwh={overflow.start: 10.0},
+        )
+    )
+    assert result.ready
+    assert [item.start for item in result.planned_exports] == [earlier.start]
+    assert result.total_revenue_pln > result.uncontrolled_revenue_pln
+    assert result.optimization_gain_pln > 2.4
 
 
 def test_shortage_blocks_export() -> None:
@@ -191,16 +272,101 @@ def test_today_only_prices_produce_a_safe_plan() -> None:
     assert result.ending_battery_kwh >= 4.0 - 1e-6
 
 
+def test_export_and_revenue_totals_expose_their_sources() -> None:
+    """The UI totals must equal battery export plus natural PV surplus."""
+    planned = RCE.PriceSlot(
+        start=NOW.replace(hour=10),
+        price_pln_kwh=1.0,
+    )
+    overflow = RCE.PriceSlot(
+        start=NOW.replace(hour=12),
+        price_pln_kwh=0.5,
+    )
+    result = RCE.optimize_rce(
+        base_input(
+            price_slots=[planned, overflow],
+            pv_by_slot_kwh={overflow.start: 10.0},
+        )
+    )
+    assert result.ready
+    assert result.planned_export_kwh > 4.9
+    assert result.natural_export_kwh > 4.9
+    assert abs(
+        result.total_export_kwh
+        - (result.planned_export_kwh + result.natural_export_kwh)
+    ) < 1e-6
+    assert abs(
+        result.total_revenue_pln
+        - (result.planned_revenue_pln + result.natural_revenue_pln)
+    ) < 1e-6
+
+
+def test_bms_current_limit_caps_export_power() -> None:
+    """A small battery must cap a larger inverter before planning export."""
+    candidate = slots(0, 18, 1, 1.0)
+    result = RCE.optimize_rce(
+        base_input(
+            price_slots=candidate,
+            battery_capacity_kwh=21.0,
+            outage_reserve_soc_percent=0.0,
+            inverter_power_kw=20.0,
+            discharge_power_percent=100.0,
+            export_efficiency_percent=95.0,
+            bms_max_discharge_current_a=170.0,
+            battery_voltage_v=53.0,
+            bms_power_safety_percent=95.0,
+        )
+    )
+    expected_limit = 170.0 * 53.0 / 1000.0 * 0.95 * 0.95
+    assert result.ready
+    assert result.bms_limit_active
+    assert abs(result.requested_export_power_kw - 20.0) < 1e-6
+    assert abs(result.bms_discharge_power_limit_kw - expected_limit) < 1e-6
+    assert abs(result.maximum_export_power_kw - expected_limit) < 1e-6
+    assert abs(
+        result.bms_discharge_limit_percent
+        - expected_limit / 20.0 * 100.0
+    ) < 1e-6
+    assert abs(result.planned_export_kwh - expected_limit * 0.5) < 0.02
+
+
+def test_live_pv_self_consumption_corrects_day_load_projection() -> None:
+    """Actual PV-to-load energy must correct an understated daytime profile."""
+    result = RCE.optimize_rce(
+        base_input(
+            now=NOW.replace(hour=14),
+            price_slots=slots(0, 14, 12, 1.0),
+            battery_capacity_kwh=100.0,
+            average_daily_load_kwh=10.0,
+            average_night_load_kwh=8.0,
+            pv_to_load_today_kwh=4.0,
+            pv_to_load_power_kw=2.0,
+        )
+    )
+    assert result.ready
+    assert abs(result.daylight_progress_percent - 50.0) < 1e-6
+    assert abs(result.historical_day_load_kwh - 2.0) < 1e-6
+    assert abs(result.live_projected_day_load_kwh - 8.0) < 1e-6
+    assert abs(result.modeled_day_load_kwh - 8.0) < 1e-6
+
+
 def main() -> None:
     """Run without pytest so the release validator has no extra dependency."""
     tests = [
         test_higher_tomorrow_price_wins,
+        test_low_market_prices_still_use_the_best_48h_slots,
+        test_negative_prices_do_not_dump_stored_energy,
+        test_discharge_creates_headroom_before_worse_pv_overflow,
         test_home_energy_is_never_sold,
+        test_upcoming_night_is_reserved_even_before_sunset,
         test_shortage_blocks_export,
         test_parallel_power_scales_slot_energy,
         test_export_lockout_excludes_slots,
         test_feasible_plan_is_not_broken_by_display_rounding,
         test_today_only_prices_produce_a_safe_plan,
+        test_export_and_revenue_totals_expose_their_sources,
+        test_bms_current_limit_caps_export_power,
+        test_live_pv_self_consumption_corrects_day_load_projection,
     ]
     for test in tests:
         test()
