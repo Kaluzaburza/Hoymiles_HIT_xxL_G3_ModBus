@@ -690,12 +690,14 @@ if (!customElements.get("hoymiles-rce-chart-card")) {
 }
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "hoymiles-rce-chart-card",
-  name: "Hoymiles RCE Chart",
-  description: "Readable chart of 96 RCE prices with a 48-block EMS plan.",
-  preview: true,
-});
+if (!window.customCards.some((card) => card.type === "hoymiles-rce-chart-card")) {
+  window.customCards.push({
+    type: "hoymiles-rce-chart-card",
+    name: "Hoymiles RCE Chart",
+    description: "Readable chart of 96 RCE prices with a 48-block EMS plan.",
+    preview: true,
+  });
+}
 
 class HoymilesPowerFlowCard extends HTMLElement {
   constructor() {
@@ -889,13 +891,15 @@ if (!customElements.get("hoymiles-power-flow-card")) {
   customElements.define("hoymiles-power-flow-card", HoymilesPowerFlowCard);
 }
 
-window.customCards.push({
-  type: "hoymiles-power-flow-card",
-  name: "Hoymiles Power Flow",
-  description:
-    "Sunsynk power-flow card wrapper with a Hoymiles inverter illustration.",
-  preview: false,
-});
+if (!window.customCards.some((card) => card.type === "hoymiles-power-flow-card")) {
+  window.customCards.push({
+    type: "hoymiles-power-flow-card",
+    name: "Hoymiles Power Flow",
+    description:
+      "Sunsynk power-flow card wrapper with a Hoymiles inverter illustration.",
+    preview: false,
+  });
+}
 
 class HoymilesHitDashboardStrategy extends HTMLElement {
   static noEditor = true;

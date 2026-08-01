@@ -65,7 +65,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.3.0"
+    const_module.VERSION = "1.3.1"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -260,7 +260,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.3.0", "Release version must be 1.3.0")
+    require(manifest["version"] == "1.3.1", "Release version must be 1.3.1")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -287,6 +287,16 @@ def main() -> int:
         "StaticPathConfig" in init_source
         and 'STATIC_URL = f"/api/{DOMAIN}/static"' in init_source,
         "Integration assets are not exposed through the stable no-cache URL",
+    )
+    require(
+        "add_extra_js_url" in init_source
+        and "FRONTEND_MODULE_URL" in init_source
+        and "?v={VERSION}" in init_source,
+        "Dashboard strategy module is not registered with versioned cache busting",
+    )
+    require(
+        "frontend" in manifest.get("dependencies", []),
+        "Frontend dependency is required for automatic strategy registration",
     )
 
     catalog = load_json(COMPONENT / "entity_catalog.json")

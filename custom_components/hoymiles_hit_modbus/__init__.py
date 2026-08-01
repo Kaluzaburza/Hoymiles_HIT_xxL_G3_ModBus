@@ -6,6 +6,7 @@ import logging
 
 import voluptuous as vol
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -21,12 +22,16 @@ from .const import (
     DOMAIN,
     PLATFORMS,
     SERVICE_INSTALL_ASSETS,
+    VERSION,
 )
 from .models import RuntimeData
 
 
 _LOGGER = logging.getLogger(__name__)
 STATIC_URL = f"/api/{DOMAIN}/static"
+FRONTEND_MODULE_URL = (
+    f"{STATIC_URL}/hoymiles-rce-chart-card.js?v={VERSION}"
+)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 INSTALL_ASSETS_SCHEMA = vol.Schema(
@@ -129,6 +134,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             )
         ]
     )
+    # The same module provides the custom RCE/power-flow cards and the
+    # dashboard strategy. Register it globally so a fresh installation and an
+    # upgrade from a legacy /local resource work without manual Lovelace
+    # resource maintenance. The integration version is a deliberate cache
+    # buster for frontend modules retained by the browser between releases.
+    add_extra_js_url(hass, FRONTEND_MODULE_URL)
 
     async def async_handle_install_assets(call: ServiceCall) -> None:
         paths = await async_install_assets(
