@@ -4,6 +4,39 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-01
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.3.1**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.3.1**.
+2. **Home Assistant:** restart Home Assistant. The dashboard strategy module is
+   now registered automatically; no manual Lovelace resource is required.
+   **PL:** uruchom Home Assistant ponownie. Moduł strategii dashboardu jest od
+   tej wersji rejestrowany automatycznie i nie wymaga ręcznego zasobu Lovelace.
+3. **ESP32 / ESPHome:** refresh `hoymiles-inverter.yaml`, keep your substitutions
+   and secrets, then compile and upload the firmware. This restores the complete
+   276-entity set on installations upgraded from older firmware.
+   **PL:** odśwież `hoymiles-inverter.yaml`, zachowaj własne podstawienia i
+   sekrety, następnie skompiluj oraz wgraj firmware do ESP32. Przywraca to pełny
+   zestaw 276 encji po aktualizacji ze starszego firmware.
+4. **Verification / Weryfikacja:** wait for ESPHome to reconnect, reload the
+   dashboard once and confirm that no strategy timeout or unavailable GCF/GEN
+   entities remain.
+   **PL:** poczekaj na połączenie ESPHome, przeładuj dashboard jeden raz i
+   sprawdź, czy nie ma błędu strategii ani niedostępnych encji GCF/GEN.
+
+### Fixed
+
+- Automatically register the dashboard strategy and custom-card JavaScript
+  through Home Assistant's frontend API with a release-version cache buster.
+  This fixes dashboard timeouts after HACS upgrades that retained the legacy
+  `/local/hoymiles-rce-chart-card.js?v=1.2.0` resource.
+- Avoid duplicate custom-card metadata when the frontend module is loaded more
+  than once during migration from a legacy manual Lovelace resource.
+- Align integration, ESPHome package and release metadata at version 1.3.1.
+
 ## [1.3.0] - 2026-08-01
 
 ### User update steps / Kroki po aktualizacji

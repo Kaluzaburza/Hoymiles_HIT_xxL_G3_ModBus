@@ -68,6 +68,20 @@ vm.runInNewContext(source, context, {
   filename: "hoymiles-rce-chart-card.js",
 });
 
+const customCardCount = context.window.customCards?.length ?? 0;
+vm.runInNewContext(
+  source,
+  {
+    ...context,
+    window: context.window,
+    customElements: context.customElements,
+  },
+  { filename: "hoymiles-rce-chart-card-second-load.js" },
+);
+if ((context.window.customCards?.length ?? 0) !== customCardCount) {
+  throw new Error("Loading the frontend module twice duplicated card metadata");
+}
+
 const Card = registry.get("hoymiles-rce-chart-card");
 if (!Card) {
   throw new Error("The RCE custom element was not registered");
