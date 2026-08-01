@@ -1,5 +1,14 @@
 # Codzienny harmonogram EMS w Home Assistant
 
+## Wesprzyj rozwój projektu
+
+Projekt jest rozwijany niezależnie i testowany na rzeczywistych instalacjach.
+Każde wsparcie pomaga rozwijać bezpieczną automatykę EMS/RCE, sprawdzać kolejne
+konfiguracje falowników oraz utrzymywać aktualną dokumentację. Jeśli rozwiązanie
+oszczędziło Ci czas lub pomaga lepiej wykorzystać energię:
+
+[☕ Postaw kawę autorowi i wesprzyj dalszy rozwój](https://buycoffee.to/kaluzaaa)
+
 Plik `hoymiles_ems_scheduler.yaml` jest pakietem Home Assistant, a nie pakietem
 ESPHome. Zapewnia dwa niezależne harmonogramy wykonywane codziennie:
 

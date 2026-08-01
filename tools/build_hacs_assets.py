@@ -50,7 +50,9 @@ PHRASE_TRANSLATIONS = {
     "Overview Battery SOC": "Podgląd stanu naładowania baterii",
     "Overview Inverter Active Power": "Podgląd mocy czynnej falownika",
     "Overview PV Total Power": "Podgląd łącznej mocy PV",
-    "Grid Input Power Limitation (Valley)": "Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)",
+    "Generation Control Function": "Funkcja ograniczania eksportu (GCF)",
+    "Maximum Export Power Limit": "Maksymalny limit eksportu",
+    "GEN Port Mode": "Tryb złącza GEN",
     "SOC Start Charge From Grid": "SOC rozpoczęcia ładowania z sieci",
     "Low SOC Grid Charge Power": "Moc ładowania z sieci przy niskim SOC",
     "Battery Max Charge Power": "Maksymalna moc ładowania baterii",
@@ -65,7 +67,6 @@ PHRASE_TRANSLATIONS = {
     "Force Charge SOC": "Docelowy SOC ładowania z sieci",
     "Force Discharge SOC": "Minimalny SOC rozładowania do sieci",
     "Self-Use SOC": "Rezerwa SOC dla autokonsumpcji",
-    "Three Phase Unbalance": "Asymetria trójfazowa",
     "Battery Type Setting": "Typ baterii",
     "BMS Type Setting": "Typ BMS",
     "Parallel Networking Command": "Polecenie sieci równoległej",
@@ -170,6 +171,9 @@ OPTION_TRANSLATIONS = {
     ),
     "Disabled": ("disabled", "Disabled", "Wyłączone"),
     "Enabled": ("enabled", "Enabled", "Włączone"),
+    "PV": ("pv", "Inverter / PV", "Falownik / PV"),
+    "Generator": ("generator", "Generator", "Generator"),
+    "Smart Load (G3)": ("smart_load_g3", "Smart Load (G3)", "Smart Load (G3)"),
     "Inactive": ("inactive", "Inactive", "Nieaktywne"),
     "Start": ("start", "Start", "Uruchom"),
     "Stop": ("stop", "Stop", "Zatrzymaj"),
@@ -257,6 +261,53 @@ TEXT_STATE_TRANSLATIONS = {
 }
 
 ENGLISH_REPLACEMENTS = {
+    "EMS — powiadomienia push o zmianach statusu": (
+        "EMS — push notifications for status changes"
+    ),
+    "EMS — telefon dla powiadomień (encja notify)": (
+        "EMS — notification phone (notify entity)"
+    ),
+    "EMS — powiadomienie push o zmianie statusu": (
+        "EMS — push notification for status change"
+    ),
+    "Wysyła do wybranego telefonu aktualny tryb EMS oraz stan pracy falownika": (
+        "Sends the current EMS mode and inverter operating status to the selected phone"
+    ),
+    "po zmianie któregokolwiek z tych statusów.": (
+        "when either status changes."
+    ),
+    "Powiadomienia push": "Push notifications",
+    "Powiadomienia o zmianach EMS": "EMS change notifications",
+    "Telefon (encja notify)": "Phone (notify entity)",
+    "Stan powiadomień": "Notification status",
+    "Brak poprawnej encji notify": "No valid notify entity",
+    "Hoymiles — zmiana statusu": "Hoymiles — status change",
+    "Tryb EMS:": "EMS mode:",
+    "Stan falownika:": "Inverter status:",
+    "Zmieniono:": "Changed:",
+    "stan pracy falownika": "inverter operating status",
+    "tryb EMS": "EMS mode",
+    "Autokonsumpcja (Self-Use)": "Self-Use",
+    "Praca wyspowa (Off-Grid)": "Off-grid operation",
+    "Gotowe": "Ready",
+    "☕ Wesprzyj rozwój projektu": "☕ Support project development",
+    "Projekt jest rozwijany niezależnie i testowany na rzeczywistych": (
+        "This independent project is tested on real installations."
+    ),
+    "instalacjach. Twoje wsparcie pomaga rozwijać bezpieczną automatykę": (
+        "Your support helps improve safe automation"
+    ),
+    "EMS/RCE, sprawdzać kolejne konfiguracje falowników i tworzyć lepszą": (
+        "for EMS/RCE, test more inverter configurations, and create better"
+    ),
+    "dokumentację.": "documentation.",
+    "Jeśli integracja oszczędziła Ci czas lub pomaga lepiej wykorzystać": (
+        "If the integration has saved you time or helps you use"
+    ),
+    "energię, możesz wesprzeć jej dalszy rozwój:": (
+        "your energy more effectively, you can support its continued development:"
+    ),
+    "☕ Postaw kawę autorowi": "☕ Support the author",
     "Najważniejsze dane do codziennej obsługi falownika. Szczegółowe": (
         "The most important values for everyday inverter operation. Detailed"
     ),
@@ -278,6 +329,18 @@ ENGLISH_REPLACEMENTS = {
     ),
     "cały kolejny dzień i następną noc do **90 minut po wschodzie**.": (
         "the whole next day and the following night until **90 minutes after sunrise**."
+    ),
+    "Najpierw odkłada poza sprzedażą rezerwę awaryjną Self-Use, korektę": (
+        "It first excludes the Self-Use outage reserve, the safety"
+    ),
+    "bezpieczeństwa oraz pełne przewidywane zużycie domu do końca": (
+        "correction, and the full forecast home consumption through"
+    ),
+    "najbliższej chronionej nocy. Prognozowane PV przed zachodem nie": (
+        "the end of the nearest protected night from export. Forecast PV before sunset does not"
+    ),
+    "pomniejsza tej nocnej rezerwy. Dopiero pozostałą energię przydziela": (
+        "reduce this night reserve. Only the remaining energy is assigned"
     ),
     "Najpierw zabezpiecza zasilanie domu, rezerwę awaryjną Self-Use oraz": (
         "It first protects the home supply, the Self-Use outage reserve, and"
@@ -303,6 +366,21 @@ ENGLISH_REPLACEMENTS = {
     "poniżej normalnego progu wyłącznie podczas zaniku sieci.": (
         "below the normal threshold only during a grid outage."
     ),
+    "Cena sprzedaży nie jest ustawiana ręcznie. Optymalizator porównuje": (
+        "The export price is not configured manually. The optimizer compares"
+    ),
+    "pełny wynik finansowy wszystkich dostępnych bloków w horyzoncie,": (
+        "the full financial result of every available slot in the horizon,"
+    ),
+    "wybiera najwyższe ceny i uwzględnia naturalny eksport PV. Wcześniejsze": (
+        "selects the highest prices and includes natural PV export. An earlier"
+    ),
+    "rozładowanie wykona tylko wtedy, gdy zwiększy przychód lub utworzy": (
+        "discharge is used only when it increases revenue or creates"
+    ),
+    "miejsce w baterii przed późniejszą nadwyżką sprzedawaną taniej.": (
+        "battery headroom before a later surplus would be sold more cheaply."
+    ),
     "Automatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu": (
         "The automation returns to **Self-Use** after the selected"
     ),
@@ -312,14 +390,127 @@ ENGLISH_REPLACEMENTS = {
     "przełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu.": (
         "switch is disabled. The export lockout excludes the configured hours."
     ),
+    "autokonsumpcji.": "Self-Use.",
+    "5% zapasu chroni przed zmianą napięcia i limitu BMS.": (
+        "A 5% buffer protects against changes in voltage and the BMS limit."
+    ),
     "Automatyka RCE — ustawienia": "RCE automation — settings",
+    "Automatyka EMS": "EMS automation",
     "Automatyka RCE — konfiguracja wymagana": (
         "RCE automation — required configuration"
     ),
     "Włącz automatyczne rozładowanie według RCE": "Enable automatic discharge using RCE prices",
-    "Minimalna cena sprzedaży": "Minimum export price",
+    "Automatyczna cena graniczna planu": "Automatic plan price floor",
+    "Korzyść względem niekontrolowanego eksportu": (
+        "Gain versus uncontrolled export"
+    ),
+    "Korzyść optymalizacji:": "Optimization gain:",
+    "brak sprzedaży": "no export planned",
+    "Zaplanowany eksport sterowany RCE — od teraz": (
+        "Planned RCE-controlled export — from now"
+    ),
+    "Prognozowana nadwyżka w Self-Use — od teraz": (
+        "Forecast Self-Use surplus — from now"
+    ),
+    "Nieunikniona nadwyżka PV pozostała po optymalizacji": (
+        "Unavoidable PV surplus remaining after optimization"
+    ),
+    "Łączny prognozowany eksport — od teraz": (
+        "Total forecast export — from now"
+    ),
+    "Cała energia wysłana do sieci dzisiaj": (
+        "Total energy exported to grid today"
+    ),
+    "Zrealizowany eksport sterowany RCE dzisiaj": (
+        "Realized RCE-controlled export today"
+    ),
+    "Zrealizowana naturalna nadwyżka PV dzisiaj": (
+        "Realized natural PV surplus today"
+    ),
+    "Eksport nierozpoznany po restarcie lub aktualizacji": (
+        "Export unclassified after restart or upgrade"
+    ),
+    "Przychód ze sterowanego eksportu dzisiaj": (
+        "Controlled-export revenue today"
+    ),
+    "Przychód z naturalnej nadwyżki dzisiaj": (
+        "Natural-surplus revenue today"
+    ),
+    "Łączny zrealizowany przychód dzisiaj": (
+        "Total realized revenue today"
+    ),
+    "Zaplanowany eksport sterowany od teraz:": (
+        "Planned controlled export from now:"
+    ),
+    "Nadwyżka prognozowana przy pozostawieniu Self-Use:": (
+        "Forecast surplus if Self-Use remains active:"
+    ),
+    "Nieunikniona nadwyżka PV pozostała po optymalizacji:": (
+        "Unavoidable PV surplus remaining after optimization:"
+    ),
+    "Łączny przyszły eksport od teraz:": (
+        "Total future export from now:"
+    ),
+    "Łączny przyszły szacunkowy przychód:": (
+        "Total future estimated revenue:"
+    ),
+    "Dane przyszłego planu nie zawierają energii sprzedanej wcześniej": (
+        "Future-plan values do not include energy sold earlier"
+    ),
+    "dzisiaj. Eksport zrealizowany jest rozdzielany wyżej na sprzedaż": (
+        "today. Realized export is split above into"
+    ),
+    "sterowaną RCE i naturalną nadwyżkę w trybie Self-Use.": (
+        "RCE-controlled sales and natural surplus exported in Self-Use."
+    ),
+    "EMS RCE — data rozliczenia eksportu": (
+        "EMS RCE — export accounting date"
+    ),
+    "EMS RCE — zrealizowany eksport sterowany (magazyn)": (
+        "EMS RCE — realized controlled export (store)"
+    ),
+    "EMS RCE — zrealizowana naturalna nadwyżka (magazyn)": (
+        "EMS RCE — realized natural surplus (store)"
+    ),
+    "EMS RCE — przychód ze sterowanego eksportu (magazyn)": (
+        "EMS RCE — controlled export revenue (store)"
+    ),
+    "EMS RCE — przychód z naturalnej nadwyżki (magazyn)": (
+        "EMS RCE — natural surplus revenue (store)"
+    ),
+    "EMS RCE — eksport nierozpoznany (magazyn)": (
+        "EMS RCE — unclassified export (store)"
+    ),
+    "EMS RCE — punkt kontrolny licznika sprzedaży": (
+        "EMS RCE — grid sell meter checkpoint"
+    ),
+    "EMS RCE — rozdzielenie zrealizowanego eksportu": (
+        "EMS RCE — realized export accounting"
+    ),
+    "Dodatni znak rejestru oznacza energię oddawaną do sieci.": (
+        "A positive register value means power exported to the grid."
+    ),
+    "Rozlicza dodatnie przyrosty sprzętowego licznika energii oddanej do": (
+        "Accounts for positive increments of the inverter grid-sell energy"
+    ),
+    "sieci. Eksport podczas aktywnego cyklu RCE jest zapisywany osobno od": (
+        "counter. Export during an active RCE cycle is stored separately from"
+    ),
+    "naturalnej nadwyżki w trybie Self-Use. Znacznik RCE pozostaje aktywny": (
+        "the natural Self-Use surplus. The RCE marker remains active"
+    ),
+    "również podczas przerwy komunikacji z ESP.": (
+        "during an ESP communication outage."
+    ),
     "Moc znamionowa jednego falownika": "Rated power of one inverter",
     "Moc rozładowania do sieci": "Grid discharge power",
+    "EMS RCE — żądana moc rozładowania do sieci": (
+        "EMS RCE — requested grid discharge power"
+    ),
+    "Bezpieczna moc rozładowania według BMS": (
+        "Safe discharge power reported by BMS"
+    ),
+    "Efektywny limit rozładowania": "Effective discharge limit",
     "Encja Solcast — prognoza na dzisiaj": "Solcast entity — today forecast",
     "Minimalny SOC akumulatora": "Minimum battery SOC",
     "Zużycie dobowe przed zebraniem historii": (
@@ -339,7 +530,9 @@ ENGLISH_REPLACEMENTS = {
         "Remaining forecast PV production today"
     ),
     "Prognozowana produkcja PV jutro": "Forecast PV production tomorrow",
+    "Średnie dobowe zużycie LOAD": "Average daily LOAD",
     "Średnie dobowe zużycie LOAD — 4 dni": "Average daily LOAD — 4 days",
+    "Zebrana historia zużycia dobowego": "Collected daily-load history",
     "Pomiar zużycia okna nocnego aktywny": (
         "Night-window consumption sampling active"
     ),
@@ -352,6 +545,15 @@ ENGLISH_REPLACEMENTS = {
     "Średnie zużycie w oknie nocnym — 4 dni": (
         "Average protected-window consumption — 4 days"
     ),
+    "Średnie zużycie w oknie nocnym": (
+        "Average protected-window consumption"
+    ),
+    "Zebrana historia zużycia nocnego": "Collected night-load history",
+    "PV → odbiorniki dzisiaj": "PV → loads today",
+    "Bateria → odbiorniki dzisiaj": "Battery → loads today",
+    "Sieć → odbiorniki dzisiaj": "Grid → loads today",
+    "PV → odbiorniki teraz": "PV → loads now",
+    "Modelowane dzienne zużycie odbiorników": "Modeled daytime load",
     "Energia potrzebna do rozpoczęcia produkcji PV": (
         "Energy required until PV production starts"
     ),
@@ -359,6 +561,30 @@ ENGLISH_REPLACEMENTS = {
     "Deficyt dobowy według prognozy PV": "Daily deficit from PV forecast",
     "Energia domu chroniona przed sprzedażą": (
         "Home energy protected from export"
+    ),
+    "Łączna energia chroniona dla domu": "Total energy protected for the home",
+    "Rezerwa bazowa Self-Use i korekta": (
+        "Base Self-Use reserve and safety correction"
+    ),
+    "Chronione zużycie domu do końca najbliższej nocy": (
+        "Protected home consumption until the end of the nearest night"
+    ),
+    "Dodatkowa rezerwa ponad próg awaryjny": (
+        "Additional reserve above the outage threshold"
+    ),
+    "Dodatkowa rezerwa wynikająca z prognozy": (
+        "Additional forecast-derived reserve"
+    ),
+    "Energia dostępna teraz ponad rezerwę": (
+        "Energy currently available above the reserve"
+    ),
+    "Planowane rozładowanie baterii do sieci": (
+        "Planned battery discharge to grid"
+    ),
+    "Naturalna nadwyżka PV do sieci": "Natural PV surplus to grid",
+    "Łączny prognozowany eksport": "Total forecast export",
+    "Przewidywany SOC na końcu horyzontu": (
+        "Forecast SOC at the end of the horizon"
     ),
     "Energia wysłana do sieci dzisiaj": "Energy exported to grid today",
     "Szacunkowy przychód RCE dzisiaj": "Estimated RCE revenue today",
@@ -450,6 +676,85 @@ ENGLISH_REPLACEMENTS = {
     "Blokada aktywna teraz": "Lockout active now",
     "Bieżąca cena RCE": "Current RCE price",
     "Stan automatyki": "Automation status",
+    "Odbiór — moc": "Loads — power",
+    "Odbiór — moc L1": "Load power L1",
+    "Odbiór — moc L2": "Load power L2",
+    "Odbiór — moc L3": "Load power L3",
+    "Odbiorniki — moc łącznie": "Loads — total power",
+    "title: Zyski": "title: Profits",
+    "title: Produkcja PV": "title: PV Production",
+    "Instalacja pracuje na Twój wynik": "Your installation is working for you",
+    "Dzisiaj sieć przyjęła": "Today the grid received",
+    "a wyliczony": "and the calculated",
+    "przychód według cen RCE wynosi": "revenue at RCE prices is",
+    "a wyliczony przychód według cen RCE wynosi": (
+        "and the calculated revenue at RCE prices is"
+    ),
+    "Średnia uzyskana cena to": "The average achieved price is",
+    "Każda sprzedana kilowatogodzina jest rozliczana z ceną obowiązującą": (
+        "Every exported kilowatt-hour is settled at the price applicable"
+    ),
+    "w chwili eksportu. Liczniki okresowe zachowują dane po restartach": (
+        "at the time of export. Period meters retain data after Home Assistant"
+    ),
+    "Home Assistanta.": "restarts.",
+    "Przychód ze sprzedaży energii": "Energy export revenue",
+    "Energia oddana do sieci": "Energy exported to the grid",
+    "Produkcja PV — bieżące okresy": "PV production — current periods",
+    "Najważniejsze podsumowania i historia produkcji z instalacji.": (
+        "Key production summaries and installation history."
+    ),
+    "Wykresy korzystają z długoterminowych statystyk Home Assistanta,": (
+        "The charts use Home Assistant long-term statistics,"
+    ),
+    "dlatego dane pozostają dostępne także po restartach.": (
+        "so the data remains available after restarts."
+    ),
+    "title: Bieżące okresy": "title: Current periods",
+    "title: Porównanie rok do roku": "title: Year-over-year comparison",
+    "Bieżący rok": "Current year",
+    "Poprzedni rok": "Previous year",
+    "Dwa lata temu": "Two years ago",
+    "Produkcja dzienna — ostatnie 90 dni": (
+        "Daily production — last 90 days"
+    ),
+    "Produkcja tygodniowa — ostatnie 52 tygodnie": (
+        "Weekly production — last 52 weeks"
+    ),
+    "Produkcja miesięczna — ostatnie 3 lata": (
+        "Monthly production — last 3 years"
+    ),
+    "Produkcja roczna — archiwum": "Yearly production — archive",
+    "name: Produkcja PV": "name: PV production",
+    "Ten tydzień": "This week",
+    "Ten miesiąc": "This month",
+    "Ten rok": "This year",
+    "name: Dzisiaj": "name: Today",
+    "Średnia cena sprzedaży": "Average export price",
+    "| Okres | Średnia cena | Przychód | Energia |": (
+        "| Period | Average price | Revenue | Energy |"
+    ),
+    "('Dzisiaj', 'daily')": "('Today', 'daily')",
+    "('Tydzień', 'weekly')": "('Week', 'weekly')",
+    "('Miesiąc', 'monthly')": "('Month', 'monthly')",
+    "('Rok', 'yearly')": "('Year', 'yearly')",
+    "Przychód — ostatnie 30 dni": "Revenue — last 30 days",
+    "Eksport — ostatnie 30 dni": "Export — last 30 days",
+    "name: Przychód": "name: Revenue",
+    "name: Energia do sieci": "name: Energy to grid",
+    "Dzisiejszy wynik — szczegóły": "Today's result — details",
+    "Aktualna moc oddawana do sieci": "Current grid export power",
+    "Eksport sterowany przez RCE": "RCE-controlled export",
+    "Naturalna nadwyżka PV": "Natural PV surplus",
+    "Eksport nierozpoznany": "Unclassified export",
+    "Przychód ze sterowania RCE": "RCE-controlled revenue",
+    "Przychód z naturalnej nadwyżki": "Natural surplus revenue",
+    "Prognozowana korzyść optymalizacji": "Forecast optimization benefit",
+    "Stan automatyki RCE": "RCE automation status",
+    "Wynik od uruchomienia liczników": "Result since meter activation",
+    "Przychód łącznie": "Total revenue",
+    "Eksport łącznie": "Total export",
+    "Licznik falownika": "Inverter meter",
     "RCE — ceny i plan rozładowania": "RCE — prices and discharge plan",
     "RCE — dzisiaj": "RCE — today",
     "RCE — jutro": "RCE — tomorrow",
@@ -463,6 +768,38 @@ ENGLISH_REPLACEMENTS = {
     "bloków po 30 min": "30-minute slots",
     "**Prognozowany eksport:**": "**Forecast export:**",
     "**Szacunkowy przychód:**": "**Estimated revenue:**",
+    "**Zakres cen:**": "**Price-data scope:**",
+    "**Tryb planu:**": "**Plan mode:**",
+    "dzisiaj i jutro": "today and tomorrow",
+    "tylko dzisiaj — jutro zostanie dopisane automatycznie": (
+        "today only — tomorrow will be added automatically"
+    ),
+    "podgląd — automatyczne rozładowanie jest wyłączone": (
+        "preview — automatic discharge is disabled"
+    ),
+    "else 'aktywny'": "else 'active'",
+    "**Planowane rozładowanie baterii:**": "**Planned battery discharge:**",
+    "**Naturalna nadwyżka PV:**": "**Natural PV surplus:**",
+    "**Łączny prognozowany eksport:**": "**Total forecast export:**",
+    "**Łączny szacunkowy przychód:**": "**Total estimated revenue:**",
+    "Do zebrania co najmniej 24 godzin historii używane jest awaryjne": (
+        "Until at least 24 hours of history is collected, the configured fallback"
+    ),
+    "zużycie dobowe z pola u góry. Następnie algorytm korzysta z dostępnej": (
+        "daily consumption above is used. The optimizer then uses the available"
+    ),
+    "historii i stopniowo dochodzi do pełnej średniej z czterech dni;": (
+        "history and gradually builds a complete four-day average;"
+    ),
+    "faktyczne pokrycie historii jest pokazane w karcie stanu.": (
+        "the actual history coverage is shown in the status card."
+    ),
+    "Moc systemu jest liczona jako **moc jednego falownika × automatycznie": (
+        "System power is calculated as **one inverter's rated power × the automatically"
+    ),
+    "wykryta liczba falowników × ustawiony procent rozładowania**.": (
+        "detected inverter count × the configured discharge percentage**."
+    ),
     "Rozładowanie do sieci": "Grid discharge",
     "Ładowanie z sieci": "Grid charge",
     "Włącz harmonogram codzienny": "Enable daily schedule",
@@ -617,11 +954,39 @@ ENGLISH_REPLACEMENTS = {
     "Sieć — napięcia i częstotliwość": "Grid — voltages and frequency",
     "Sieć — prądy": "Grid — currents",
     "Sieć — moc": "Grid — power",
+    "EPS — obciążenie": "EPS — load",
     "Sieć — energia dzisiaj": "Grid — energy today",
     "Sieć — energia całkowita": "Grid — total energy",
-    "Generator — wartości bieżące": "Generator — current values",
-    "Generator — energia dzisiaj": "Generator — energy today",
-    "Generator — energia całkowita": "Generator — total energy",
+    "GEN — wartości bieżące": "GEN — current values",
+    "GEN — energia dzisiaj": "GEN — energy today",
+    "GEN — energia całkowita": "GEN — total energy",
+    "GEN napięcie L1": "GEN voltage L1",
+    "GEN napięcie L2": "GEN voltage L2",
+    "GEN napięcie L3": "GEN voltage L3",
+    "GEN prąd L1": "GEN current L1",
+    "GEN prąd L2": "GEN current L2",
+    "GEN prąd L3": "GEN current L3",
+    "GEN czynna moc L1": "GEN active power L1",
+    "GEN czynna moc L2": "GEN active power L2",
+    "GEN czynna moc L3": "GEN active power L3",
+    "GEN łącznie moc": "GEN total power",
+    "GEN moc L1n": "GEN power L1n",
+    "GEN moc L2n": "GEN power L2n",
+    "GEN moc L3n": "GEN power L3n",
+    "GEN energia łącznie dzisiaj": "GEN total energy today",
+    "GEN energia L1n dzisiaj": "GEN energy L1n today",
+    "GEN energia L2n dzisiaj": "GEN energy L2n today",
+    "GEN energia L3n dzisiaj": "GEN energy L3n today",
+    "GEN energia łącznie": "GEN total energy",
+    "GEN energia L1n łącznie": "GEN total energy L1n",
+    "GEN energia L2n łącznie": "GEN total energy L2n",
+    "GEN energia L3n łącznie": "GEN total energy L3n",
+    "Moc łącznie": "Total power",
+    "Złącze GEN": "GEN port",
+    "Ograniczanie eksportu i złącze GEN": "Export limiting and GEN port",
+    "Limitowanie eksportu (GCF)": "Export limiting (GCF)",
+    "Maksymalny limit eksportu": "Maximum export power limit",
+    "Tryb złącza GEN": "GEN port mode",
     "Falownik — fazy, moc i magistrala DC": "Inverter — phases, power and DC bus",
     "Rezerwa SOC — Self-Use": "SOC reserve — Self-Use",
     "Docelowy SOC — ładowanie z sieci": "Target SOC — grid charge",
@@ -683,7 +1048,6 @@ ENGLISH_REPLACEMENTS = {
     "EMS — koniec blokady sprzedaży": "EMS — export lockout end",
     "EMS — czas rozładowania": "EMS — discharge duration",
     "EMS — czas ładowania": "EMS — charge duration",
-    "EMS RCE — minimalna cena sprzedaży": "EMS RCE — minimum export price",
     "EMS RCE — dynamiczna rezerwa SOC": "EMS RCE — dynamic SOC reserve",
     "EMS RCE — encja prognozy Solcast na dzisiaj": (
         "EMS RCE — Solcast today forecast entity"
@@ -709,15 +1073,31 @@ ENGLISH_REPLACEMENTS = {
     "EMS RCE — zapisz dynamiczną rezerwę SOC": (
         "EMS RCE — write dynamic SOC reserve"
     ),
-    "EMS RCE — sterowanie rozładowaniem według ceny": (
-        "EMS RCE — price-based discharge control"
+    "EMS RCE — sterowanie według zoptymalizowanego planu": (
+        "EMS RCE — optimized-plan discharge control"
+    ),
+    "wybranych najbardziej opłacalnych blokach i ponad SOC potrzebnym do": (
+        "the selected most profitable slots and only above the SOC required to"
+    ),
+    "zasilenia domu. Ręczne timery mają pierwszeństwo.": (
+        "supply the home. Manual timers take priority."
+    ),
+    "# Start RCE: bieżący blok należy do planu, jest zapas SOC i nie trwa": (
+        "# Start RCE: the current slot is planned, SOC reserve is available, and"
+    ),
+    "# żaden ręczny cykl.": "# no manual cycle is active.",
+    "# Stop RCE: blok wypadł z planu, osiągnięto minimalny SOC, wyłączono": (
+        "# Stop RCE: the slot left the plan, minimum SOC was reached, automation"
+    ),
+    "# automatykę albo dane PSE stały się niedostępne.": (
+        "# was disabled, or PSE data became unavailable."
     ),
     "Tryb ręczny — używany jest próg rozładowania falownika": (
         "Manual mode — using the inverter discharge threshold"
     ),
     "Gotowa — plan zoptymalizowany": "Ready — optimized plan",
-    "Oczekiwanie — brak opłacalnego okna": (
-        "Waiting — no profitable window"
+    "Oczekiwanie — brak dostępnego okna rynkowego": (
+        "Waiting — no available market window"
     ),
     "Zasilanie domu zabezpieczone — brak energii na sprzedaż": (
         "Home supply protected — no energy available for export"

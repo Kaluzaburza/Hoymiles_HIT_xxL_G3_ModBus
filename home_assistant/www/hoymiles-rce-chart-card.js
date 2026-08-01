@@ -8,8 +8,8 @@ class HoymilesRceChartCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity || !config.threshold_entity) {
-      throw new Error("entity and threshold_entity are required");
+    if (!config.entity) {
+      throw new Error("entity is required");
     }
     this._config = config;
     this._renderKey = "";
@@ -52,7 +52,6 @@ class HoymilesRceChartCard extends HTMLElement {
     const ids = [
       this._config.entity,
       this._config.plan_entity,
-      this._config.threshold_entity,
       this._config.current_price_entity,
       this._config.active_entity,
       this._config.block_enabled_entity,
@@ -89,7 +88,6 @@ class HoymilesRceChartCard extends HTMLElement {
     return {
       entity: "sensor.hoymiles_rce_day",
       plan_entity: "sensor.hoymiles_hit_rce_optimized_plan",
-      threshold_entity: "input_number.hoymiles_rce_price_threshold",
       current_price_entity: "sensor.hoymiles_rce_current_price",
       active_entity: "input_boolean.hoymiles_rce_discharge_active",
       block_enabled_entity: "input_boolean.hoymiles_sale_block_enabled",
@@ -127,7 +125,7 @@ class HoymilesRceChartCard extends HTMLElement {
           futureNoDataHint:
             "Automatyka realizuje plan dzisiejszy i przeliczy go automatycznie po publikacji danych.",
           current: "Bieżąca",
-          threshold: "Próg",
+          threshold: "Cena graniczna planu",
           exportLockout: "Blokada sprzedaży",
           disabled: "wyłączona",
           periods15: "okresów po 15 min",
@@ -136,13 +134,13 @@ class HoymilesRceChartCard extends HTMLElement {
           lockoutHint: "Blokada sprzedaży",
           planned: "Zaplanowane rozładowanie",
           selfUse: "Autokonsumpcja",
-          thresholdShort: "próg",
-          thresholdOutside: "Próg jest poza zakresem dzisiejszych cen",
+          thresholdShort: "plan od",
+          thresholdOutside: "Cena graniczna planu jest poza zakresem dzisiejszych cen",
           chartLabel: "Wykres cen RCE dla",
-          belowThreshold: "Cena poniżej progu",
+          belowThreshold: "Poza planem sprzedaży",
           plannedDischarge: "Planowane rozładowanie",
           currentQuarter: "Aktualny kwadrans",
-          userThreshold: "Próg użytkownika",
+          userThreshold: "Automatyczna cena graniczna",
           minimum: "Min.",
           maximum: "Maks.",
           plan: "Plan:",
@@ -159,7 +157,7 @@ class HoymilesRceChartCard extends HTMLElement {
           futureNoDataHint:
             "The automation is following today's plan and will recalculate automatically after publication.",
           current: "Current",
-          threshold: "Threshold",
+          threshold: "Automatic plan floor",
           exportLockout: "Export lockout",
           disabled: "disabled",
           periods15: "15-minute periods",
@@ -168,13 +166,13 @@ class HoymilesRceChartCard extends HTMLElement {
           lockoutHint: "Export lockout",
           planned: "Planned discharge",
           selfUse: "Self-Use",
-          thresholdShort: "threshold",
-          thresholdOutside: "The threshold is outside today's price range",
+          thresholdShort: "plan from",
+          thresholdOutside: "The automatic plan floor is outside today's price range",
           chartLabel: "RCE price chart for",
-          belowThreshold: "Price below threshold",
+          belowThreshold: "Outside export plan",
           plannedDischarge: "Planned discharge",
           currentQuarter: "Current quarter-hour",
-          userThreshold: "User threshold",
+          userThreshold: "Automatic plan floor",
           minimum: "Min.",
           maximum: "Max.",
           plan: "Plan:",
@@ -203,7 +201,6 @@ class HoymilesRceChartCard extends HTMLElement {
     const planState = this._config.plan_entity
       ? this._states[this._config.plan_entity]
       : undefined;
-    const thresholdState = this._states[this._config.threshold_entity];
     const currentState = this._config.current_price_entity
       ? this._states[this._config.current_price_entity]
       : undefined;
@@ -258,7 +255,6 @@ class HoymilesRceChartCard extends HTMLElement {
       return;
     }
 
-    const threshold = Number(thresholdState?.state);
     const currentPrice = Number(currentState?.state);
     const automationActive = activeState?.state === "on";
     const blockEnabled = blockEnabledState?.state === "on";
@@ -290,6 +286,12 @@ class HoymilesRceChartCard extends HTMLElement {
     const optimizedForDay = optimizedSlots.filter(
       (slot) => String(slot?.date ?? "") === date,
     );
+    const optimizedPrices = optimizedForDay
+      .map((slot) => Number(slot?.price))
+      .filter(Number.isFinite);
+    const threshold = optimizedPrices.length
+      ? Math.min(...optimizedPrices)
+      : Number.NaN;
     const optimizedStarts = new Set(
       optimizedForDay.map((slot) => String(slot?.start ?? "").slice(0, 5)),
     );
@@ -701,6 +703,7 @@ class HoymilesPowerFlowCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._renderVersion = 0;
     this._inverterObserver = null;
+    this._batteryEnergySignature = null;
   }
 
   setConfig(config) {
@@ -713,8 +716,15 @@ class HoymilesPowerFlowCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this._card) {
+    const batteryEnergySignature =
+      this._resolveBatteryEnergy(hass).signature;
+    if (
+      this._card &&
+      batteryEnergySignature === this._batteryEnergySignature
+    ) {
       this._card.hass = hass;
+    } else if (this._config) {
+      this._mount();
     }
   }
 
@@ -725,6 +735,37 @@ class HoymilesPowerFlowCard extends HTMLElement {
   disconnectedCallback() {
     this._inverterObserver?.disconnect();
     this._inverterObserver = null;
+  }
+
+  _resolveBatteryEnergy(hass = this._hass) {
+    const configuredEnergy = this._config?.battery?.energy;
+    if (typeof configuredEnergy !== "string") {
+      return {
+        value: configuredEnergy,
+        signature: `fixed:${configuredEnergy ?? ""}`,
+      };
+    }
+
+    const state = hass?.states?.[configuredEnergy];
+    const numericValue = Number(state?.state);
+    const unit = String(
+      state?.attributes?.unit_of_measurement ?? ""
+    ).trim();
+    const unitMultipliers = {
+      Wh: 1,
+      kWh: 1000,
+      MWh: 1000000,
+    };
+    const multiplier = unitMultipliers[unit] ?? 1;
+    const value =
+      Number.isFinite(numericValue) && numericValue > 0
+        ? numericValue * multiplier
+        : 0;
+
+    return {
+      value,
+      signature: `${configuredEnergy}:${state?.state ?? "unavailable"}:${unit}`,
+    };
   }
 
   _installInverterImage(card, inverterImage) {
@@ -775,6 +816,17 @@ class HoymilesPowerFlowCard extends HTMLElement {
     if (renderVersion !== this._renderVersion) return;
 
     const powerFlowConfig = { ...this._config };
+    const batteryEnergy = this._resolveBatteryEnergy();
+    this._batteryEnergySignature = batteryEnergy.signature;
+    if (
+      powerFlowConfig.battery &&
+      typeof powerFlowConfig.battery.energy === "string"
+    ) {
+      powerFlowConfig.battery = {
+        ...powerFlowConfig.battery,
+        energy: batteryEnergy.value,
+      };
+    }
     const inverterImage =
       powerFlowConfig.inverter_image ??
       "/api/hoymiles_hit_modbus/static/hoymiles-inverter.png";

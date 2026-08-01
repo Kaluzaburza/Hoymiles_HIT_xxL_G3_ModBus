@@ -60,11 +60,15 @@ class OptimizerInput:
     average_night_load_kwh: float | None
     night_start_minute: int
     night_end_minute: int
-    minimum_price_pln_kwh: float
     inverter_power_kw: float
     inverter_count: int
     discharge_power_percent: float
     export_efficiency_percent: float
+    bms_max_discharge_current_a: float | None = None
+    battery_voltage_v: float | None = None
+    bms_power_safety_percent: float = 95.0
+    pv_to_load_today_kwh: float = 0.0
+    pv_to_load_power_kw: float = 0.0
 
 
 @dataclass(slots=True)
@@ -74,14 +78,27 @@ class OptimizerResult:
     ready: bool
     status_code: str
     minimum_soc_percent: int
+    base_reserve_energy_kwh: float
+    protected_night_energy_kwh: float
+    additional_forecast_reserve_kwh: float
     protected_home_energy_kwh: float
     available_energy_now_kwh: float
     planned_exports: list[PlannedExport] = field(default_factory=list)
     natural_export_kwh: float = 0.0
     natural_revenue_pln: float = 0.0
+    uncontrolled_export_kwh: float = 0.0
+    uncontrolled_revenue_pln: float = 0.0
     ending_battery_kwh: float = 0.0
     system_power_kw: float = 0.0
+    requested_export_power_kw: float = 0.0
+    bms_discharge_power_limit_kw: float | None = None
+    bms_discharge_limit_percent: float | None = None
+    bms_limit_active: bool = False
     maximum_export_power_kw: float = 0.0
+    historical_day_load_kwh: float = 0.0
+    live_projected_day_load_kwh: float = 0.0
+    modeled_day_load_kwh: float = 0.0
+    daylight_progress_percent: float = 0.0
 
     @property
     def planned_export_kwh(self) -> float:
@@ -102,6 +119,18 @@ class OptimizerResult:
     def total_revenue_pln(self) -> float:
         """Return scheduled plus unavoidable PV-export revenue."""
         return self.planned_revenue_pln + self.natural_revenue_pln
+
+    @property
+    def automatic_price_floor_pln_kwh(self) -> float | None:
+        """Return the lowest price selected by the optimized plan."""
+        if not self.planned_exports:
+            return None
+        return min(item.price_pln_kwh for item in self.planned_exports)
+
+    @property
+    def optimization_gain_pln(self) -> float:
+        """Return revenue gained over leaving all export uncontrolled."""
+        return self.total_revenue_pln - self.uncontrolled_revenue_pln
 
 
 def floor_half_hour(value: datetime) -> datetime:
@@ -208,35 +237,116 @@ def _horizon_end(settings: OptimizerInput) -> datetime:
     )
 
 
-def _load_by_slot(
+def _day_load_projection(
     settings: OptimizerInput,
-    starts: list[datetime],
-) -> dict[datetime, float]:
+) -> tuple[float, float, float, float]:
+    """Return historical, live and selected daytime-load estimates.
+
+    ``PV to Load Energy Today`` is a direct inverter counter.  It is used only
+    for the elapsed part of the current daylight window, so energy already
+    consumed by the house is never subtracted from the future PV forecast a
+    second time.  The live projection may increase the historical estimate but
+    never reduce it; a cloudy morning must not weaken the home reserve.
+    """
+
     night_minutes = (
         settings.night_end_minute - settings.night_start_minute
     ) % (24 * 60)
     night_hours = max(night_minutes / 60.0, 0.5)
-    day_hours = max(24.0 - night_hours, 0.5)
     daily = max(settings.average_daily_load_kwh, 0.0)
     if settings.average_night_load_kwh is None:
         night_energy = daily * night_hours / 24.0
     else:
         night_energy = min(max(settings.average_night_load_kwh, 0.0), daily)
-    day_energy = max(daily - night_energy, 0.0)
-    night_slot = night_energy / night_hours * 0.5
-    day_slot = day_energy / day_hours * 0.5
-    return {
-        start: (
-            night_slot
-            if _is_night(
-                start,
-                settings.night_start_minute,
-                settings.night_end_minute,
-            )
-            else day_slot
+    historical_day_energy = max(daily - night_energy, 0.0)
+
+    day_minutes = max((24 * 60) - night_minutes, 30)
+    current_minute = settings.now.hour * 60 + settings.now.minute
+    day_start = settings.night_end_minute % (24 * 60)
+    day_end = settings.night_start_minute % (24 * 60)
+    elapsed = (current_minute - day_start) % (24 * 60)
+    in_daylight_window = elapsed < day_minutes
+    if in_daylight_window:
+        progress = min(max(elapsed / day_minutes, 0.0), 1.0)
+    elif day_start <= day_end:
+        # With the normal European solar window, the hours before day_start
+        # belong to the new day and those after day_end to the completed day.
+        progress = 1.0 if current_minute >= day_end else 0.0
+    else:
+        progress = 0.0
+
+    actual_self_consumption = max(settings.pv_to_load_today_kwh, 0.0)
+    live_projection = 0.0
+    if progress >= 0.05 and actual_self_consumption > 0:
+        # Cap a transiently high early projection.  The cap is deliberately
+        # generous: it protects the house while preventing one 0.1 kWh counter
+        # step just after sunrise from reserving the entire battery.
+        projection_cap = max(
+            daily * 2.0,
+            historical_day_energy,
+            actual_self_consumption,
         )
-        for start in starts
-    }
+        live_projection = min(
+            actual_self_consumption / progress,
+            projection_cap,
+        )
+    modeled_day_energy = max(historical_day_energy, live_projection)
+    return (
+        historical_day_energy,
+        live_projection,
+        modeled_day_energy,
+        progress,
+    )
+
+
+def _load_by_slot(
+    settings: OptimizerInput,
+    starts: list[datetime],
+    *,
+    historical_day_energy: float,
+    live_projected_day_energy: float,
+    modeled_day_energy: float,
+    daylight_progress: float,
+) -> dict[datetime, float]:
+    night_minutes = (
+        settings.night_end_minute - settings.night_start_minute
+    ) % (24 * 60)
+    night_hours = max(night_minutes / 60.0, 0.5)
+    daily = max(settings.average_daily_load_kwh, 0.0)
+    if settings.average_night_load_kwh is None:
+        night_energy = daily * night_hours / 24.0
+    else:
+        night_energy = min(max(settings.average_night_load_kwh, 0.0), daily)
+    night_slot = night_energy / night_hours * 0.5
+    loads: dict[datetime, float] = {}
+    day_slots_by_date: dict[date, list[datetime]] = {}
+    for start in starts:
+        if _is_night(
+            start,
+            settings.night_start_minute,
+            settings.night_end_minute,
+        ):
+            loads[start] = night_slot
+        else:
+            day_slots_by_date.setdefault(start.date(), []).append(start)
+
+    for slot_date, day_starts in day_slots_by_date.items():
+        day_energy = modeled_day_energy
+        if slot_date == settings.now.date():
+            historical_remaining = historical_day_energy * max(
+                1.0 - daylight_progress,
+                0.0,
+            )
+            live_remaining = max(
+                live_projected_day_energy
+                - max(settings.pv_to_load_today_kwh, 0.0),
+                0.0,
+            )
+            day_energy = max(historical_remaining, live_remaining)
+        per_slot = day_energy / max(len(day_starts), 1)
+        for start in day_starts:
+            loads[start] = per_slot
+    return loads
 
 
 def _simulate(
@@ -245,6 +355,7 @@ def _simulate(
     load_by_slot: Mapping[datetime, float],
     exports: Mapping[datetime, float],
     floor_kwh: float,
+    export_reserve_by_slot: Mapping[datetime, float] | None = None,
 ) -> tuple[bool, float, dict[datetime, float]]:
     capacity = settings.battery_capacity_kwh
     battery = capacity * settings.battery_soc_percent / 100.0
@@ -259,10 +370,33 @@ def _simulate(
         battery -= max(float(exports.get(start, 0.0)), 0.0) / efficiency
         if battery < floor_kwh - 1e-6:
             return False, battery, {}
+        if (
+            exports.get(start, 0.0) > 0
+            and export_reserve_by_slot is not None
+            and battery
+            < max(float(export_reserve_by_slot.get(start, floor_kwh)), floor_kwh)
+            - 1e-6
+        ):
+            return False, battery, {}
         if battery > capacity:
             natural_exports[start] = battery - capacity
             battery = capacity
     return True, battery, natural_exports
+
+
+def _market_revenue(
+    exports: Mapping[datetime, float],
+    natural_exports: Mapping[datetime, float],
+    price_by_start: Mapping[datetime, float],
+) -> float:
+    """Return revenue from scheduled and natural exports."""
+    return sum(
+        energy * price_by_start.get(start, 0.0)
+        for start, energy in exports.items()
+    ) + sum(
+        energy * price_by_start.get(start, 0.0)
+        for start, energy in natural_exports.items()
+    )
 
 
 def _required_energy_now(
@@ -280,6 +414,52 @@ def _required_energy_now(
     return required
 
 
+def _protected_night_reserve_by_slot(
+    starts: list[datetime],
+    settings: OptimizerInput,
+    load_by_slot: Mapping[datetime, float],
+    floor_kwh: float,
+) -> tuple[float, dict[datetime, float]]:
+    """Return current and per-export reserves for the next protected night.
+
+    PV expected before sunset must not erase the explicit night reserve.  For
+    every possible export slot we therefore retain the base outage reserve plus
+    all forecast house load still remaining in the current or next protected
+    night window.  The reserve decreases only while that night is actually
+    consumed and is rebuilt for the following night after sunrise.
+    """
+
+    capacity = settings.battery_capacity_kwh
+
+    def remaining_night_energy(after_index: int) -> float:
+        entered_night = False
+        energy = 0.0
+        for later in starts[after_index:]:
+            is_night = _is_night(
+                later,
+                settings.night_start_minute,
+                settings.night_end_minute,
+            )
+            if not entered_night:
+                if not is_night:
+                    continue
+                entered_night = True
+            elif not is_night:
+                break
+            energy += max(float(load_by_slot.get(later, 0.0)), 0.0)
+        return energy
+
+    current_night_energy = remaining_night_energy(0)
+    reserve_by_slot = {
+        start: min(
+            floor_kwh + remaining_night_energy(index + 1),
+            capacity,
+        )
+        for index, start in enumerate(starts)
+    }
+    return current_night_energy, reserve_by_slot
+
+
 def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
     """Return the most valuable feasible RCE export plan."""
     capacity = settings.battery_capacity_kwh
@@ -293,6 +473,9 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
             ready=False,
             status_code="missing_data",
             minimum_soc_percent=100,
+            base_reserve_energy_kwh=0.0,
+            protected_night_energy_kwh=0.0,
+            additional_forecast_reserve_kwh=0.0,
             protected_home_energy_kwh=0.0,
             available_energy_now_kwh=0.0,
         )
@@ -305,7 +488,20 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         starts.append(cursor)
         cursor += SLOT
 
-    load_by_slot = _load_by_slot(settings, starts)
+    (
+        historical_day_load,
+        live_projected_day_load,
+        modeled_day_load,
+        daylight_progress,
+    ) = _day_load_projection(settings)
+    load_by_slot = _load_by_slot(
+        settings,
+        starts,
+        historical_day_energy=historical_day_load,
+        live_projected_day_energy=live_projected_day_load,
+        modeled_day_energy=modeled_day_load,
+        daylight_progress=daylight_progress,
+    )
     if settings.dynamic_reserve_enabled:
         base_soc = min(
             max(
@@ -318,11 +514,28 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
     else:
         base_soc = min(max(settings.manual_minimum_soc_percent, 0.0), 100.0)
     floor_kwh = capacity * base_soc / 100.0
+    protected_night_energy, export_reserve_by_slot = (
+        _protected_night_reserve_by_slot(
+            starts,
+            settings,
+            load_by_slot,
+            floor_kwh,
+        )
+        if settings.dynamic_reserve_enabled
+        else (0.0, {})
+    )
     required_now = (
         _required_energy_now(starts, settings, load_by_slot, floor_kwh)
         if settings.dynamic_reserve_enabled
         else floor_kwh
     )
+    if settings.dynamic_reserve_enabled:
+        # Keep the upcoming night explicit even when a sunny forecast before
+        # sunset would otherwise reduce the backward energy requirement.
+        required_now = max(
+            required_now,
+            min(floor_kwh + protected_night_energy, capacity),
+        )
     minimum_soc = math.ceil(required_now / capacity * 100.0 - 1e-9)
     minimum_soc = min(max(minimum_soc, math.ceil(base_soc)), 100)
     current_energy = capacity * settings.battery_soc_percent / 100.0
@@ -336,19 +549,71 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         floor_kwh,
     )
     system_power = settings.inverter_power_kw * settings.inverter_count
-    maximum_power = system_power * min(
+    requested_power = system_power * min(
         max(settings.discharge_power_percent, 0.0),
         100.0,
     ) / 100.0
+    bms_power_limit: float | None = None
+    if (
+        settings.bms_max_discharge_current_a is not None
+        and settings.bms_max_discharge_current_a > 0
+        and settings.battery_voltage_v is not None
+        and settings.battery_voltage_v > 0
+    ):
+        # Register 1917 is the dynamic DC-current limit reported by the BMS.
+        # Convert it to safe AC export power and keep a separate guard below
+        # that limit so voltage/temperature changes do not trip the battery.
+        bms_power_limit = (
+            settings.bms_max_discharge_current_a
+            * settings.battery_voltage_v
+            / 1000.0
+            * min(max(settings.export_efficiency_percent, 0.0), 100.0)
+            / 100.0
+            * min(max(settings.bms_power_safety_percent, 0.0), 100.0)
+            / 100.0
+        )
+    maximum_power = (
+        min(requested_power, bms_power_limit)
+        if bms_power_limit is not None
+        else requested_power
+    )
+    bms_limit_percent = (
+        min(max(bms_power_limit / system_power * 100.0, 0.0), 100.0)
+        if bms_power_limit is not None and system_power > 0
+        else None
+    )
     result = OptimizerResult(
         ready=baseline_ok,
         status_code="ready",
         minimum_soc_percent=minimum_soc,
-        protected_home_energy_kwh=max(required_now - floor_kwh, 0.0),
+        base_reserve_energy_kwh=floor_kwh,
+        protected_night_energy_kwh=protected_night_energy,
+        additional_forecast_reserve_kwh=max(required_now - floor_kwh, 0.0),
+        protected_home_energy_kwh=required_now,
         available_energy_now_kwh=available_now,
         ending_battery_kwh=max(baseline_end, 0.0),
         system_power_kw=system_power,
+        requested_export_power_kw=requested_power,
+        bms_discharge_power_limit_kw=bms_power_limit,
+        bms_discharge_limit_percent=bms_limit_percent,
+        bms_limit_active=(
+            bms_power_limit is not None
+            and bms_power_limit < requested_power - 0.001
+        ),
         maximum_export_power_kw=maximum_power,
+        historical_day_load_kwh=historical_day_load,
+        live_projected_day_load_kwh=live_projected_day_load,
+        modeled_day_load_kwh=modeled_day_load,
+        daylight_progress_percent=daylight_progress * 100.0,
+        uncontrolled_export_kwh=sum(baseline_natural.values()),
+        uncontrolled_revenue_pln=_market_revenue(
+            {},
+            baseline_natural,
+            {
+                slot.start: slot.price_pln_kwh
+                for slot in settings.price_slots
+            },
+        ),
     )
     if not baseline_ok:
         result.status_code = "home_energy_shortage"
@@ -361,19 +626,16 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         if slot.start >= now_slot
         and slot.start < horizon_end
         and not slot.blocked
-        and slot.price_pln_kwh > settings.minimum_price_pln_kwh
     ]
     candidates.sort(key=lambda slot: (-slot.price_pln_kwh, slot.start))
     if not candidates or maximum_power <= 0:
-        result.status_code = "waiting_for_price"
+        result.status_code = "waiting_for_market"
         result.natural_export_kwh = sum(baseline_natural.values())
-        result.natural_revenue_pln = sum(
-            energy * price_by_start.get(start, 0.0)
-            for start, energy in baseline_natural.items()
-        )
+        result.natural_revenue_pln = result.uncontrolled_revenue_pln
         return result
 
     exports: dict[datetime, float] = {}
+    current_revenue = result.uncontrolled_revenue_pln
     maximum_slot_energy = maximum_power * 0.5
     for candidate in candidates:
         low = 0.0
@@ -388,17 +650,40 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
                 load_by_slot,
                 trial,
                 floor_kwh,
+                export_reserve_by_slot,
             )
             if feasible:
                 low = middle
             else:
                 high = middle
-        if low >= 0.01:
+        if low < 0.01:
+            continue
+
+        # Compare the complete market result, including PV that would otherwise
+        # overflow naturally.  This prevents a low-price forced export from
+        # displacing a more valuable natural export, while still allowing an
+        # earlier discharge when it creates battery headroom before an even
+        # cheaper (or negative-price) PV surplus.
+        trial = dict(exports)
+        trial[candidate.start] = low
+        feasible, _, trial_natural = _simulate(
+            starts,
+            settings,
+            load_by_slot,
+            trial,
+            floor_kwh,
+            export_reserve_by_slot,
+        )
+        trial_revenue = _market_revenue(
+            trial,
+            trial_natural,
+            price_by_start,
+        )
+        if feasible and trial_revenue > current_revenue + 0.0001:
             # Keep the feasible value found by the binary search. Rounding it
-            # to two decimals here can round upward and make the sum of many
-            # slots exceed the protected battery reserve. Values are rounded
-            # only when exposed as Home Assistant attributes.
-            exports[candidate.start] = low
+            # here can round upward and violate the protected reserve.
+            exports = trial
+            current_revenue = trial_revenue
 
     feasible, ending_battery, natural_exports = _simulate(
         starts,
@@ -406,6 +691,7 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         load_by_slot,
         exports,
         floor_kwh,
+        export_reserve_by_slot,
     )
     if not feasible:
         result.ready = False

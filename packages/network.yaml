@@ -2,6 +2,10 @@
 wifi:
   ssid: ${wifi_ssid}
   password: ${wifi_password}
+  # ESP32 pracuje stale jako most Modbus, dlatego nie usypiamy radia.
+  # fast_connect skraca ponowne łączenie ze znaną siecią po restarcie.
+  power_save_mode: none
+  fast_connect: true
   ap:
     ssid: "${name} AP"
     password: ${fallback_password}

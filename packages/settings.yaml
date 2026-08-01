@@ -5,31 +5,53 @@ sensor:
   # Surowy stan EMS jest tylko odczytywany. Zapis wykonuje poniższy select jako
   # jeden atomowy blok FC10 (4300-4306), tak jak przycisk Save w aplikacji S-Miles.
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     id: ems_mode_raw_4300
     internal: true
     register_type: holding
     address: 4300
     value_type: U_WORD
+    on_value:
+      then:
+        - lambda: |-
+            const uint16_t mode = static_cast<uint16_t>(x);
+            switch (mode) {
+              case 0:
+                id(ems_mode_4300).publish_state("Autokonsumpcja (Self-Use)");
+                break;
+              case 3:
+                id(ems_mode_4300).publish_state("Off-Grid");
+                break;
+              case 4:
+                id(ems_mode_4300).publish_state("Ładowanie z sieci");
+                break;
+              case 5:
+                id(ems_mode_4300).publish_state("Rozładowanie do sieci");
+                break;
+              default:
+                ESP_LOGW("ems", "Nieznany tryb EMS odczytany z rejestru 4300: %u", mode);
+                break;
+            }
 
   # Rejestr 4302 należy do trybu Backup, a nie do Pure Off-Grid. Nie jest
   # wystawiany jako encja użytkowa, ale jego bieżąca wartość musi pozostać
   # częścią atomowego zapisu całego bloku EMS 4300-4306.
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     id: backup_soc_raw_4302
     internal: true
     register_type: holding
     address: 4302
     value_type: U_WORD
-    skip_updates: 4
 
 select:
   - platform: template
     name: "Tryb EMS"
     id: ems_mode_4300
     entity_category: config
-    update_interval: 5s
+    # Odczyt 4300 publikuje stan natychmiast. Ten lokalny cykl jest tylko
+    # zabezpieczeniem startowym i nie generuje dodatkowego ruchu Modbus.
+    update_interval: 1s
     options:
       - "Autokonsumpcja (Self-Use)"
       - "Off-Grid"
@@ -48,9 +70,10 @@ select:
     set_action:
       - lambda: |-
           // Rejestr 6048: 0 = pojedynczy, 1 = Master, 2 = Slave.
-          // W sieci równoległej zapis trafia wyłącznie do Mastera. Zgodnie z
-          // instrukcją Hoymiles Master rozsyła EMS i dispatch do wszystkich
-          // urządzeń Slave przez wewnętrzne łącze równoległe.
+          // Dla pojedynczego falownika używany jest standardowy adres Modbus.
+          // W wykrytej sieci równoległej pełny blok EMS jest wysyłany na adres
+          // rozgłoszeniowy 0, dzięki czemu tę samą komendę odbiera Master i
+          // każdy Slave podłączony do wspólnej magistrali RS485_2.
           if (!id(machines_type_6048).has_state()) {
             ESP_LOGE("ems", "Zapis EMS zablokowany: nie wykryto jeszcze topologii 6048");
             return;
@@ -111,81 +134,108 @@ select:
             encode(id(maximum_discharge_power_4306).state, 10.0f, 500, 0, 1000),
           };
 
-          auto *controller = id(${modbus_controller_id});
-          auto command =
-              esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
-                  controller, 4300, values.size(), values);
-          controller->queue_command(command);
+          if (machine_type == 1) {
+            std::vector<uint8_t> payload = {
+              0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E,
+            };
+            for (const uint16_t value : values) {
+              payload.push_back(static_cast<uint8_t>(value >> 8));
+              payload.push_back(static_cast<uint8_t>(value & 0xFF));
+            }
+
+            // Adres broadcast 0 nie odpowiada. Wysyłamy bezpośrednio przez
+            // hub, poza kolejką ModbusController oczekującą na odpowiedź.
+            id(modbus_1).send_raw(payload);
+          } else {
+            auto *controller = id(${modbus_control_controller_id});
+            auto command =
+                esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
+                    controller, 4300, values.size(), values);
+            controller->queue_command(command);
+          }
           id(ems_mode_raw_4300).publish_state(mode);
           id(ems_mode_4300).publish_state(x);
           if (machine_type == 1) {
             ESP_LOGI(
                 "ems",
-                "Zapisano EMS 4300-4306 do Mastera; Master steruje siecią, tryb=%u, falowniki=%u",
+                "Wysłano broadcast EMS 4300-4306 do Mastera i Slave; tryb=%u, falowniki=%u",
                 mode, machine_count);
           } else {
             ESP_LOGI("ems", "Zapisano atomowo EMS 4300-4306, tryb=%u, falownik pojedynczy",
                      mode);
           }
 
+  # Generation Control Function (GCF), sekcja Safety Parameters.
+  # Rejestr 257 (GCF_FuncCode) pozostaje ustawieniem serwisowym producenta.
+  # Użytkownik steruje aktywacją funkcji przez 258 i limitem eksportu przez 259.
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "Three Phase Unbalance"
-    id: three_phase_unbalance_enable_302
-    address: 302
+    modbus_controller_id: ${modbus_settings_controller_id}
+    name: "Generation Control Function"
+    id: gcf_enable_258
+    address: 258
     value_type: U_WORD
     entity_category: config
-    skip_updates: 4
     optionsmap:
       "Disabled": 0
       "Enabled": 1
 
+  # Nowe mapy firmware HIT G3 umieszczają tryb złącza GEN w wolnym wcześniej
+  # rejestrze 303 (między parametrami systemowymi 302 i baterii 306).
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
+    name: "GEN Port Mode"
+    id: gen_port_mode_303
+    address: 303
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "PV": 0
+      "Generator": 1
+      "Smart Load (G3)": 2
+      "Disabled": 3
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "EPS Mode"
     id: eps_mode_323
     address: 323
     value_type: U_WORD
     entity_category: config
-    skip_updates: 4
     optionsmap:
       "Disabled": 0
       "EPS": 1
       "UPS": 2
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "PV Island Mode"
     id: pv_island_mode_en_324
     address: 324
     value_type: U_WORD
     entity_category: config
-    skip_updates: 4
     optionsmap:
       "Disabled": 0
       "Enabled": 1
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Battery Type Setting"
     id: battery_type_4100
     address: 4100
     value_type: U_WORD
     entity_category: config
-    skip_updates: 9
     optionsmap:
       "No Battery": 0
       "Lithium": 1
       "Lead-Acid": 2
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "BMS Type Setting"
     id: bms_type_4101
     address: 4101
     value_type: U_WORD
     entity_category: config
-    skip_updates: 9
     optionsmap:
       "Not Configured": 0
       "Pylon LV": 1
@@ -230,22 +280,25 @@ select:
 
 number:
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "Grid Input Power Limitation (Valley)"
-    id: gridin_power_limitation_when_vally_301
-    address: 301
-    value_type: U_WORD
+    modbus_controller_id: ${modbus_settings_controller_id}
+    name: "Maximum Export Power Limit"
+    id: gcf_export_soft_limit_ratio_259
+    address: 259
+    # Aktualny firmware i aplikacja producenta dopuszczają -10…200%.
+    # Typ ze znakiem jest konieczny dla ujemnego limitu.
+    value_type: S_WORD
     unit_of_measurement: "%"
-    min_value: 0
-    max_value: 50
+    min_value: -10
+    max_value: 200
     step: 0.1
     lambda: return x * 0.1f;
-    write_lambda: return x * 10.0f;
+    write_lambda: |-
+      const float safe = x > 200.0f ? 200.0f : (x < -10.0f ? -10.0f : x);
+      return safe * 10.0f;
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Battery Max Charge Power"
     id: battery_max_charge_power_306
     address: 306
@@ -254,15 +307,16 @@ number:
     min_value: 10
     max_value: 100
     step: 1
-    # Starsza wersja integracji mogła zapisać 100% jako surowe 1000.
-    # Odczyt koryguje tę wartość, ale nowe zapisy są już zgodne z mapą (0-100).
-    lambda: |-
-      return x > 100.0f ? x * 0.1f : x;
+    # Rejestry 306/307 używają rozdzielczości 0,1%:
+    # wartość użytkownika 75% musi zostać zapisana jako surowe 750.
+    lambda: return x * 0.1f;
+    write_lambda: |-
+      const float safe = x > 100.0f ? 100.0f : (x < 10.0f ? 10.0f : x);
+      return safe * 10.0f;
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Battery Max Discharge Power"
     id: battery_max_discharge_power_307
     address: 307
@@ -271,13 +325,14 @@ number:
     min_value: 10
     max_value: 100
     step: 1
-    lambda: |-
-      return x > 100.0f ? x * 0.1f : x;
+    lambda: return x * 0.1f;
+    write_lambda: |-
+      const float safe = x > 100.0f ? 100.0f : (x < 10.0f ? 10.0f : x);
+      return safe * 10.0f;
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Maximum SOC"
     id: max_soc_308
     address: 308
@@ -287,10 +342,9 @@ number:
     max_value: 100
     step: 1
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Minimum SOC"
     id: min_soc_309
     address: 309
@@ -300,23 +354,25 @@ number:
     max_value: 90
     step: 1
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Low SOC Grid Charge Power"
     id: replenish_power_310
     address: 310
     value_type: U_WORD
     unit_of_measurement: "W"
     min_value: 0
-    max_value: 2000
+    # Rejestr 310 przyjmuje najwyżej 1000 W. Wyższa wartość powoduje błędy
+    # wewnętrznego oprogramowania falownika, dlatego limitujemy także sam zapis.
+    max_value: 1000
     step: 50
+    write_lambda: |-
+      return x > 1000.0f ? 1000.0f : (x < 0.0f ? 0.0f : x);
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "SOC Start Charge From Grid"
     id: rsvd_replenish_power_311
     address: 311
@@ -326,12 +382,13 @@ number:
     max_value: 100
     step: 0.1
     lambda: return x * 0.1f;
-    write_lambda: return x * 10.0f;
+    write_lambda: |-
+      const float safe = x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
+      return safe * 10.0f;
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     name: "Self-Use SOC"
     id: self_used_soc_4301
     address: 4301
@@ -341,10 +398,9 @@ number:
     max_value: 100
     step: 1
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     name: "Force Charge SOC"
     id: force_charge_soc_4303
     address: 4303
@@ -354,10 +410,9 @@ number:
     max_value: 100
     step: 1
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     name: "Maximum Charge Power"
     id: maximum_charge_power_4304
     address: 4304
@@ -367,12 +422,13 @@ number:
     max_value: 100
     step: 0.1
     lambda: return x * 0.1f;
-    write_lambda: return x * 10.0f;
+    write_lambda: |-
+      const float safe = x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
+      return safe * 10.0f;
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     name: "Force Discharge SOC"
     id: force_discharge_soc_4305
     address: 4305
@@ -382,10 +438,9 @@ number:
     max_value: 100
     step: 1
     entity_category: config
-    skip_updates: 4
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_control_controller_id}
     name: "Maximum Discharge Power"
     id: maximum_discharge_power_4306
     address: 4306
@@ -395,6 +450,7 @@ number:
     max_value: 100
     step: 0.1
     lambda: return x * 0.1f;
-    write_lambda: return x * 10.0f;
+    write_lambda: |-
+      const float safe = x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
+      return safe * 10.0f;
     entity_category: config
-    skip_updates: 4

@@ -3,7 +3,9 @@
 # the versioned GitHub release. Only this file and the required secrets need
 # to be copied to the user's ESPHome configuration directory.
 #
-# Wiring: ESP32 + RS485 (MAX3485 / Waveshare RS485) to the inverter's RS485/Modbus port.
+# Wiring: use a 3.3 V logic-compatible UART/TTL <-> RS485 converter.
+# Automatic-direction converters need TX, RX and GND. MAX3485/MAX485 modules
+# with DE and /RE need an additional GPIO and the UART override from README.
 # Protocol: Modbus RTU, 115200 8N1. FC03 read holding, FC04 read input, FC06/FC10 write.
 
 substitutions:
@@ -13,15 +15,22 @@ substitutions:
 
   modbus_controller_id: hoymiles_modbus
   modbus_fast_controller_id: hoymiles_modbus_fast
+  modbus_control_controller_id: hoymiles_modbus_control
+  modbus_settings_controller_id: hoymiles_modbus_settings
   modbus_inverter_address: "1"      # Modbus slave/unit address of the inverter
   baud_rate: "115200"
-  fast_update_interval: "5s"
+  # Stabilny cykl operacyjny. Przy 5 s pełna mapa rejestrów nie opróżniała
+  # kolejki przed następnym wywołaniem i ESPHome odrzucał duplikaty poleceń.
+  fast_update_interval: "10s"
+  control_update_interval: "5s"
+  settings_update_interval: "15s"
+  update_interval: "120s"
 
   # RS485 UART pins (adjust to your board)
   uart_tx_pin: "GPIO17"
   uart_rx_pin: "GPIO16"
-  # For converters without automatic direction control, add the DE/RE
-  # flow_control_pin override described in the README wiring section.
+  # Read the README before wiring: TX goes to the converter input (DI/RXD),
+  # RX goes to its output (RO/TXD). Manual-direction modules also need DE+/RE.
 
   board: "esp32dev"
 
@@ -43,7 +52,7 @@ esp32:
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.2.1
+    ref: v1.3.0
     refresh: 1d
     files:
       - packages/core.yaml

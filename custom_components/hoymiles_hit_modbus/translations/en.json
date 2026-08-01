@@ -1620,8 +1620,8 @@
       }
     },
     "number": {
-      "grid_input_power_limitation_valley": {
-        "name": "Grid Input Power Limitation (Valley)"
+      "maximum_export_power_limit": {
+        "name": "Maximum Export Power Limit"
       },
       "battery_max_charge_power": {
         "name": "Battery Max Charge Power"
@@ -1667,11 +1667,20 @@
           "grid_discharge": "Grid discharge"
         }
       },
-      "three_phase_unbalance": {
-        "name": "Three Phase Unbalance",
+      "generation_control_function": {
+        "name": "Generation Control Function",
         "state": {
           "disabled": "Disabled",
           "enabled": "Enabled"
+        }
+      },
+      "gen_port_mode": {
+        "name": "GEN Port Mode",
+        "state": {
+          "pv": "Inverter / PV",
+          "generator": "Generator",
+          "smart_load_g3": "Smart Load (G3)",
+          "disabled": "Disabled"
         }
       },
       "eps_mode": {

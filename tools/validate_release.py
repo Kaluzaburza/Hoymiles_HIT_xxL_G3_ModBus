@@ -65,7 +65,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.2.1"
+    const_module.VERSION = "1.3.0"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -260,7 +260,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.2.1", "Release version must be 1.2.1")
+    require(manifest["version"] == "1.3.0", "Release version must be 1.3.0")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -269,8 +269,14 @@ def main() -> int:
         "Proxy entities need an explicit stable suggested_object_id property",
     )
     require(
-        "_async_migrate_entity_registry(hass, entry)" in init_source,
-        "Existing localized entity ids are not migrated",
+        "_async_reconcile_entity_registry(" in init_source
+        and "entity_registry.async_remove" in init_source,
+        "Localized entity ids and stale catalog proxies are not reconciled",
+    )
+    require(
+        init_source.index("async_forward_entry_setups")
+        < init_source.index("_async_reconcile_entity_registry", init_source.index("async_forward_entry_setups")),
+        "Entity registry must be reconciled after platform setup",
     )
     require(
         "firmware_update_required" in entity_source
@@ -370,12 +376,29 @@ def main() -> int:
         and "will recalculate automatically after publication" in card_source,
         "RCE chart does not explain automatic replanning after tomorrow's data",
     )
+    require(
+        "unitMultipliers" in card_source
+        and "kWh: 1000" in card_source
+        and "_resolveBatteryEnergy" in card_source,
+        "Power-flow card does not convert the capacity entity from kWh to Wh",
+    )
     for dashboard_path in required_assets[:2]:
         dashboard_text = dashboard_path.read_text(encoding="utf-8")
         require(
             "entity: sensor.hoymiles_rce_day_tomorrow\n"
             "            future_data: true" in dashboard_text,
             f"{dashboard_path.name} does not mark the tomorrow chart as future data",
+        )
+        require(
+            "energy: sensor.hoymiles_hit_total_capacity" in dashboard_text,
+            f"{dashboard_path.name} does not use the effective battery capacity",
+        )
+        require(
+            "invert_power:" not in dashboard_text,
+            (
+                f"{dashboard_path.name} incorrectly inverts the normalized "
+                "Hoymiles battery power sign"
+            ),
         )
 
     rce_sensor_source = (
@@ -392,9 +415,17 @@ def main() -> int:
         COMPONENT / "rce_optimizer.py"
     ).read_text(encoding="utf-8")
     require(
-        "exports[candidate.start] = low" in rce_optimizer_source
+        (
+            "exports[candidate.start] = low" in rce_optimizer_source
+            or "trial[candidate.start] = low" in rce_optimizer_source
+        )
         and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source,
         "RCE optimizer can still invalidate feasible plans by rounding upward",
+    )
+    require(
+        "minimum_price_pln_kwh" not in rce_optimizer_source
+        and "hoymiles_rce_price_threshold" not in rce_sensor_source,
+        "RCE optimizer still depends on a manually configured price threshold",
     )
 
     stable_entity_assets = [
@@ -435,6 +466,11 @@ def main() -> int:
     for package_path in required_assets[2:4]:
         package_text = package_path.read_text(encoding="utf-8")
         dynamic_reserve_markers = (
+            "hoymiles_ems_push_notifications_enabled:",
+            "hoymiles_ems_push_notify_target:",
+            "unique_id: hoymiles_ems_push_notification_status",
+            "id: hoymiles_ems_push_status_notification",
+            "action: notify.send_message",
             "input_boolean.hoymiles_rce_dynamic_soc_enabled",
             "input_number.hoymiles_rce_soc_safety_margin",
             "input_text.hoymiles_solcast_forecast_today_entity",
@@ -449,8 +485,11 @@ def main() -> int:
             "unique_id: hoymiles_rce_day_tomorrow",
             "state_characteristic: sum_differences_nonnegative",
             "max_age:\n      days: 4",
-            "sensor.hoymiles_hit_load_energy_use_today",
-            "sensor.hoymiles_hit_overview_load_active_power",
+            "sensor.hoymiles_actual_load_energy_today",
+            "sensor.hoymiles_actual_load_power",
+            "sensor.hoymiles_hit_load_power_l1n",
+            "sensor.hoymiles_hit_load_power_l2n",
+            "sensor.hoymiles_hit_load_power_l3n",
             "sensor.hoymiles_night_protected_load_power",
             "sensor.hoymiles_night_protection_window_remaining",
             "sensor.hoymiles_protected_window_expected_load",
@@ -465,8 +504,22 @@ def main() -> int:
             "sensor.hoymiles_hit_rce_optimized_plan",
             "sensor.hoymiles_rce_dynamic_minimum_soc",
             "sensor.hoymiles_rce_effective_minimum_soc",
-            "hoymiles_rce_grid_export_energy_daily:",
-            "hoymiles_rce_revenue_daily:",
+            "hoymiles_rce_accounting_date:",
+            "hoymiles_rce_grid_sell_checkpoint:",
+            "hoymiles_rce_realized_controlled_export_store:",
+            "hoymiles_rce_realized_natural_export_store:",
+            "hoymiles_rce_realized_controlled_revenue_store:",
+            "hoymiles_rce_realized_natural_revenue_store:",
+            "hoymiles_rce_unclassified_export_store:",
+            "id: hoymiles_rce_export_accounting",
+            "unique_id: hoymiles_rce_self_use_baseline_export",
+            "unique_id: hoymiles_rce_realized_controlled_export_today",
+            "unique_id: hoymiles_rce_realized_natural_export_today",
+            "unique_id: hoymiles_rce_realized_controlled_revenue_today",
+            "unique_id: hoymiles_rce_realized_natural_revenue_today",
+            "unique_id: hoymiles_rce_realized_revenue_today",
+            "unique_id: hoymiles_rce_unclassified_export_today",
+            "([grid / 1000, 0] | max)",
             "binary_sensor.hoymiles_rce_reserve_ready",
             "or is_state('binary_sensor.hoymiles_rce_reserve_ready', 'off')",
         )
@@ -475,8 +528,43 @@ def main() -> int:
                 marker in package_text,
                 f"Dynamic RCE reserve marker missing in {package_path.name}: {marker}",
             )
+        require(
+            "[-grid / 1000, 0]" not in package_text,
+            f"Grid export power still uses the reversed sign in {package_path.name}",
+        )
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    release_match = re.search(
+        rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+        changelog,
+        re.M | re.S,
+    )
+    require(
+        release_match is not None,
+        f"CHANGELOG lacks the {manifest['version']} release section",
+    )
+    release_notes = release_match.group(1)
+    require(
+        "### User update steps / Kroki po aktualizacji" in release_notes,
+        "Release changelog lacks the HACS-visible user update steps",
+    )
+    for update_step in (
+        "1. **HACS:**",
+        "2. **Home Assistant:**",
+        "3. **ESP32 / ESPHome:**",
+        "4. **Verification / Weryfikacja:**",
+    ):
+        require(
+            update_step in release_notes,
+            f"Release changelog lacks required user step: {update_step}",
+        )
+    release_procedure = (ROOT / "RELEASING.md").read_text(encoding="utf-8")
+    require(
+        "GitHub Release body visible in HACS" in release_procedure
+        and "does not flash the ESP32" in release_procedure,
+        "Release procedure does not require complete HACS/ESP32 instructions",
+    )
     readme_images = [
         ROOT / "docs" / "images" / "dashboard-energy-flow.png",
         ROOT / "docs" / "images" / "dashboard-rce-automation.png",
@@ -547,8 +635,9 @@ def main() -> int:
     for marker in (
         "machine_type == 2",
         "machine_count < 2 || machine_count > 10",
-        "Master rozsyła EMS i dispatch",
-        "Master steruje siecią",
+        "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E",
+        "id(modbus_1).send_raw(payload);",
+        "poza kolejką ModbusController oczekującą na odpowiedź",
     ):
         require(
             marker in settings_source,
@@ -663,6 +752,9 @@ def main() -> int:
             f"{language} control view is not using the sidebar layout",
         )
         for entity_id in (
+            "input_boolean.hoymiles_ems_push_notifications_enabled",
+            "input_text.hoymiles_ems_push_notify_target",
+            "sensor.hoymiles_ems_push_notification_status",
             "input_boolean.hoymiles_rce_dynamic_soc_enabled",
             "input_number.hoymiles_rce_soc_safety_margin",
             "input_text.hoymiles_solcast_forecast_today_entity",
@@ -677,8 +769,14 @@ def main() -> int:
             "sensor.hoymiles_night_load_average_4_days",
             "sensor.hoymiles_rce_protected_home_energy",
             "sensor.hoymiles_rce_dynamic_minimum_soc",
-            "sensor.hoymiles_rce_grid_export_energy_daily",
-            "sensor.hoymiles_rce_revenue_daily",
+            "sensor.hoymiles_rce_self_use_baseline_export",
+            "sensor.hoymiles_hit_grid_energy_sell_today",
+            "sensor.hoymiles_rce_realized_controlled_export_today",
+            "sensor.hoymiles_rce_realized_natural_export_today",
+            "sensor.hoymiles_rce_unclassified_export_today",
+            "sensor.hoymiles_rce_realized_controlled_revenue_today",
+            "sensor.hoymiles_rce_realized_natural_revenue_today",
+            "sensor.hoymiles_rce_realized_revenue_today",
             "sensor.hoymiles_rce_day",
             "sensor.hoymiles_rce_day_tomorrow",
         ):
@@ -708,13 +806,13 @@ def main() -> int:
     )
     require(
         "title: Sieć — napięcia i częstotliwość" in polish_dashboard
-        and "title: Sieć — moc" in polish_dashboard,
-        "Polish dashboard does not split live grid voltage and power into two cards",
+        and "title: Odbiór — moc" in polish_dashboard,
+        "Polish dashboard does not split live grid voltage and load power into two cards",
     )
     require(
         "title: Grid — voltages and frequency" in english_dashboard
-        and "title: Grid — power" in english_dashboard,
-        "English dashboard does not split live grid voltage and power into two cards",
+        and "title: Loads — power" in english_dashboard,
+        "English dashboard does not split live grid voltage and load power into two cards",
     )
     require(
         "potrzebna domowi" not in english_dashboard,
@@ -725,15 +823,60 @@ def main() -> int:
         (english_dashboard, "English"),
     ):
         for entity_id in (
-            "sensor.hoymiles_hit_meter_grid_active_power_l1",
-            "sensor.hoymiles_hit_meter_grid_active_power_l2",
-            "sensor.hoymiles_hit_meter_grid_active_power_l3",
-            "sensor.hoymiles_hit_meter_grid_total_active_power",
+            "sensor.hoymiles_hit_load_power_l1n",
+            "sensor.hoymiles_hit_load_power_l2n",
+            "sensor.hoymiles_hit_load_power_l3n",
+            "sensor.hoymiles_hit_load_power_total",
         ):
             require(
                 entity_id in dashboard_text,
-                f"{language} dashboard lacks live grid power entity {entity_id}",
+                f"{language} dashboard lacks live load-power entity {entity_id}",
             )
+        for entity_id in (
+            "sensor.hoymiles_rce_revenue_daily",
+            "sensor.hoymiles_rce_revenue_weekly",
+            "sensor.hoymiles_rce_revenue_monthly",
+            "sensor.hoymiles_rce_revenue_yearly",
+            "sensor.hoymiles_rce_grid_export_energy_daily",
+            "sensor.hoymiles_rce_grid_export_energy_weekly",
+            "sensor.hoymiles_rce_grid_export_energy_monthly",
+            "sensor.hoymiles_rce_grid_export_energy_yearly",
+        ):
+            require(
+                entity_id in dashboard_text,
+                f"{language} dashboard lacks profit-period entity {entity_id}",
+            )
+        for entity_id in (
+            "select.hoymiles_hit_generation_control_function",
+            "number.hoymiles_hit_maximum_export_power_limit",
+            "select.hoymiles_hit_gen_port_mode",
+            "sensor.hoymiles_hit_overview_generator_active_power",
+        ):
+            require(
+                entity_id in dashboard_text,
+                f"{language} dashboard lacks GCF/GEN entity {entity_id}",
+            )
+        require(
+            "grid_input_power_limitation_valley" not in dashboard_text,
+            f"{language} dashboard still contains the removed Valley setting",
+        )
+    require(
+        'id: replenish_power_310' in settings_source
+        and 'max_value: 1000' in settings_source
+        and 'return x > 1000.0f ? 1000.0f' in settings_source,
+        "Low-SOC grid-charge register 310 is not protected by the 1000 W limit",
+    )
+    for register_id in (
+        "battery_max_charge_power_306",
+        "battery_max_discharge_power_307",
+    ):
+        register_offset = settings_source.index(f"id: {register_id}")
+        register_block = settings_source[register_offset : register_offset + 650]
+        require(
+            "lambda: return x * 0.1f;" in register_block
+            and "return safe * 10.0f;" in register_block,
+            f"Register {register_id} does not use the required 0.1% scale",
+        )
     for dashboard_text, language, topology_name, status_name in (
         (
             polish_dashboard,
@@ -815,6 +958,7 @@ def main() -> int:
     print(f"Manifest: OK (version {manifest['version']})")
     print(f"Localized entities: {len(catalog)} (English and Polish)")
     print("Bundled dashboards/EMS assets: OK")
+    print("HACS-visible user update instructions: OK")
     print("README screenshots: OK")
     print("Public ESPHome remote packages: OK")
     print("Python syntax: OK")

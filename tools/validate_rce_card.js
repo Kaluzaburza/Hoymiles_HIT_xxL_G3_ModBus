@@ -78,7 +78,6 @@ card.setConfig({
   type: "custom:hoymiles-rce-chart-card",
   entity: "sensor.hoymiles_rce_day",
   plan_entity: "sensor.hoymiles_hit_rce_optimized_plan",
-  threshold_entity: "input_number.hoymiles_rce_price_threshold",
   current_price_entity: "sensor.hoymiles_rce_current_price",
   active_entity: "input_boolean.hoymiles_rce_discharge_active",
   block_enabled_entity: "input_boolean.hoymiles_sale_block_enabled",
@@ -105,6 +104,7 @@ card.hass = {
   states: {
     "sensor.hoymiles_rce_day": state("2026-07-26", { value: rows }),
     "sensor.hoymiles_hit_rce_optimized_plan": state("Gotowa", {
+      automatic_price_floor_pln_kwh: 0.9,
       planned_slots: [
         {
           date: "2026-07-26",
@@ -124,7 +124,6 @@ card.hass = {
         },
       ],
     }),
-    "input_number.hoymiles_rce_price_threshold": state("0.65"),
     "sensor.hoymiles_rce_current_price": state("0.669"),
     "input_boolean.hoymiles_rce_discharge_active": state("off"),
     "input_boolean.hoymiles_sale_block_enabled": state("on"),
@@ -139,6 +138,7 @@ for (const expected of [
   "PLN/kWh",
   "96 okresów po 15 min",
   "48 bloków sterowania po 30 min",
+  "Cena graniczna planu",
   "22:00–06:00",
   "1 × 30 min",
   "2,50 kWh",
@@ -150,6 +150,34 @@ for (const expected of [
 }
 
 console.log("RCE custom card: registered and rendered successfully");
+
+const PowerFlowCard = registry.get("hoymiles-power-flow-card");
+if (!PowerFlowCard) {
+  throw new Error("The Hoymiles power-flow custom element was not registered");
+}
+const powerFlowCard = new PowerFlowCard();
+powerFlowCard._config = {
+  battery: {
+    energy: "sensor.hoymiles_hit_total_capacity",
+  },
+};
+const resolvedCapacity = powerFlowCard._resolveBatteryEnergy({
+  states: {
+    "sensor.hoymiles_hit_total_capacity": state("230", {
+      unit_of_measurement: "kWh",
+    }),
+  },
+});
+if (resolvedCapacity.value !== 230000) {
+  throw new Error(
+    `Battery capacity was not converted from kWh to Wh: ${resolvedCapacity.value}`,
+  );
+}
+const unavailableCapacity = powerFlowCard._resolveBatteryEnergy({ states: {} });
+if (unavailableCapacity.value !== 0) {
+  throw new Error("Unavailable battery capacity must disable runtime estimates");
+}
+console.log("Power-flow battery capacity: entity converted to Wh successfully");
 
 const Strategy = registry.get(
   "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
@@ -178,10 +206,13 @@ Promise.all([
     ) {
       throw new Error("Dashboard strategy returned an incomplete dashboard");
     }
-    if (
-      polishDashboard.views[5]?.title !== "Sieć" ||
-      englishDashboard.views[5]?.title !== "Grid"
-    ) {
+    const polishGrid = polishDashboard.views?.find(
+      (view) => view.path === "siec",
+    );
+    const englishGrid = englishDashboard.views?.find(
+      (view) => view.path === "siec",
+    );
+    if (polishGrid?.title !== "Sieć" || englishGrid?.title !== "Grid") {
       throw new Error("Dashboard strategy did not select the HA language");
     }
     console.log("Dashboard strategy: PL/EN payloads loaded successfully");

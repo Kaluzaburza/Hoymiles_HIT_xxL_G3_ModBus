@@ -1620,8 +1620,8 @@
       }
     },
     "number": {
-      "grid_input_power_limitation_valley": {
-        "name": "Ograniczenie mocy pobieranej z sieci (taryfa dolinowa)"
+      "maximum_export_power_limit": {
+        "name": "Maksymalny limit eksportu"
       },
       "battery_max_charge_power": {
         "name": "Maksymalna moc ładowania baterii"
@@ -1667,11 +1667,20 @@
           "grid_discharge": "Rozładowanie do sieci"
         }
       },
-      "three_phase_unbalance": {
-        "name": "Asymetria trójfazowa",
+      "generation_control_function": {
+        "name": "Funkcja ograniczania eksportu (GCF)",
         "state": {
           "disabled": "Wyłączone",
           "enabled": "Włączone"
+        }
+      },
+      "gen_port_mode": {
+        "name": "Tryb złącza GEN",
+        "state": {
+          "pv": "Falownik / PV",
+          "generator": "Generator",
+          "smart_load_g3": "Smart Load (G3)",
+          "disabled": "Wyłączone"
         }
       },
       "eps_mode": {
