@@ -21,7 +21,7 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.3.2** is the current release. It contains:
+Version **1.3.3** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -209,6 +209,26 @@ If compilation succeeds but every Modbus entity is unavailable, first verify
 the converter type and `DE`/`/RE`, then common GND/reference, `A/B` polarity,
 the selected inverter port and unit address.
 
+### ESPHome log window shows `SocketClosedAPIError`
+
+If the dashboard and ESPHome entities continue to update but the Device
+Builder log window repeatedly reconnects with `EOF received
+(SocketClosedAPIError)`, the ESP32 and Modbus link are usually still healthy.
+The ESPHome Device Builder can leave several stale native-API log sessions
+open until all eight ESP32 API client slots are occupied.
+
+1. Close every ESPHome log dialog and duplicate browser tab for this device.
+2. Wait about 15 seconds.
+3. Restart **only** the ESPHome Device Builder add-on; do not restart the
+   inverter or reflash the ESP32.
+4. Open one log stream and confirm
+   `Successful handshake with hoymiles-inverter`.
+
+Do not increase `api.max_connections` above 8 as a workaround. It only delays
+the same saturation and consumes more ESP32 memory. The v1.3.3 firmware also
+uses staggered polling intervals and limits verbose Modbus logging so normal
+operation leaves more time for the native API.
+
 ## 3. Add the integrations
 
 1. Add the discovered device through the standard **ESPHome** integration.
@@ -392,7 +412,7 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.3.2** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.3.3** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 dwudniowy optymalizator zysku RCE PSE, dynamiczną rezerwę SOC na podstawie
 Solcast i historii LOAD, ochronę nocnego zapotrzebowania domu, statystyki
@@ -518,6 +538,26 @@ plików między katalogami HACS i ESPHome.
 Jeżeli kompilacja przebiega poprawnie, ale wszystkie encje Modbus są
 niedostępne, sprawdź kolejno: rodzaj konwertera i linie `DE`/`/RE`, wspólną
 referencję/GND, polaryzację `A/B`, wybrany port falownika oraz adres urządzenia.
+
+#### Okno logów ESPHome pokazuje `SocketClosedAPIError`
+
+Jeżeli dashboard i encje nadal się odświeżają, lecz okno logów Device Buildera
+zapętla ponowne połączenia z komunikatem `EOF received
+(SocketClosedAPIError)`, ESP32 i Modbus najczęściej działają prawidłowo. Dodatek
+ESPHome Device Builder może pozostawić stare sesje logów i zająć wszystkie
+osiem miejsc klientów API w ESP32.
+
+1. Zamknij wszystkie okna logów ESPHome i powielone karty przeglądarki dla tego
+   urządzenia.
+2. Odczekaj około 15 sekund.
+3. Uruchom ponownie **wyłącznie** dodatek ESPHome Device Builder. Nie restartuj
+   falownika i nie wgrywaj ponownie firmware.
+4. Otwórz jeden strumień logów i sprawdź, czy pojawia się
+   `Successful handshake with hoymiles-inverter`.
+
+Nie zwiększaj `api.max_connections` powyżej 8. Taki zabieg jedynie odsuwa
+problem i zużywa dodatkową pamięć ESP32. Firmware v1.3.3 rozkłada odczyty w
+czasie i ogranicza szczegółowe logi Modbus, aby pozostawić więcej czasu dla API.
 
 Nowy dashboard strategiczny nie wymaga ponownego wklejania konfiguracji po
 aktualizacji HACS. Po restarcie Home Assistanta pobiera bieżącą wersję PL albo
