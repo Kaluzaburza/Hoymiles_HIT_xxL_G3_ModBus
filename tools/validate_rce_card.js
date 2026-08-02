@@ -87,6 +87,19 @@ if (!Card) {
   throw new Error("The RCE custom element was not registered");
 }
 
+const ZebraEntitiesCard = registry.get("hoymiles-zebra-entities-card");
+if (!ZebraEntitiesCard) {
+  throw new Error("The zebra entities custom element was not registered");
+}
+if (
+  !context.window.customCards?.some(
+    (card) => card.type === "hoymiles-zebra-entities-card",
+  )
+) {
+  throw new Error("The zebra entities card is absent from custom-card metadata");
+}
+console.log("Zebra entities card: registered without duplicate metadata");
+
 const card = new Card();
 card.setConfig({
   type: "custom:hoymiles-rce-chart-card",

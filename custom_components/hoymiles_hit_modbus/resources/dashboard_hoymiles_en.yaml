@@ -46,7 +46,7 @@ views:
             name: SOC
       - type: horizontal-stack
         cards:
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Grid — voltages and frequency
             show_header_toggle: false
             state_color: true
@@ -59,7 +59,7 @@ views:
                 name: L3 voltage
               - entity: sensor.hoymiles_hit_inverter_grid_frequency
                 name: Frequency
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Loads — power
             show_header_toggle: false
             state_color: true
@@ -72,7 +72,7 @@ views:
                 name: Load power L3
               - entity: sensor.hoymiles_actual_load_power
                 name: Loads — total power
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Control EMS
         show_header_toggle: false
         state_color: true
@@ -87,7 +87,7 @@ views:
             name: "Detected inverter count"
           - entity: button.hoymiles_hit_clear_fault
             name: "Clear Fault"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Protection parameters and temperatures
         show_header_toggle: false
         state_color: true
@@ -200,7 +200,7 @@ views:
             name: Grid
           - entity: sensor.hoymiles_hit_overview_battery_power
             name: Battery
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: System and connectivity
         show_header_toggle: false
         state_color: true
@@ -231,7 +231,7 @@ views:
             name: "Battery Work Status (BMS)"
             tap_action:
               action: more-info
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Alarms — quick view
         show_header_toggle: false
         state_color: true
@@ -294,7 +294,7 @@ views:
     type: sidebar
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: RCE automation — settings
         show_header_toggle: false
         state_color: true
@@ -321,7 +321,7 @@ views:
             name: Lockout start
           - entity: input_datetime.hoymiles_sale_block_end
             name: Lockout end
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: RCE — status, forecast and result
         show_header_toggle: false
         state_color: true
@@ -546,7 +546,7 @@ views:
 
           Do not schedule charging and discharging at the same time.
           Turning a schedule off prevents subsequent starts.
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Grid discharge
         show_header_toggle: false
         state_color: true
@@ -565,7 +565,7 @@ views:
             name: Current cycle remaining time
           - entity: script.hoymiles_start_grid_discharge
             name: Start grid discharge now
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Grid charge
         show_header_toggle: false
         state_color: true
@@ -584,7 +584,7 @@ views:
             name: Current cycle remaining time
           - entity: script.hoymiles_start_grid_charge
             name: Start grid charge now
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: EMS control and stop
         show_header_toggle: false
         state_color: true
@@ -684,7 +684,7 @@ views:
           - **{{ label }}:** **{{ average | round(3) }} PLN/kWh** ·
             {{ revenue | round(2) }} PLN · {{ energy | round(2) }} kWh
           {% endfor %}
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Today's result — details
         show_header_toggle: false
         state_color: true
@@ -707,7 +707,7 @@ views:
             name: Forecast optimization benefit
           - entity: sensor.hoymiles_rce_status
             name: RCE automation status
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Result since meter activation
         show_header_toggle: false
         state_color: true
@@ -904,7 +904,7 @@ views:
         columns: 2
         square: false
         cards:
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV1
             show_header_toggle: false
             state_color: true
@@ -915,7 +915,7 @@ views:
                 name: Current
               - entity: sensor.hoymiles_hit_pv1_power_direct
                 name: Power
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV2
             show_header_toggle: false
             state_color: true
@@ -926,7 +926,7 @@ views:
                 name: Current
               - entity: sensor.hoymiles_hit_pv2_power_direct
                 name: Power
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV3
             show_header_toggle: false
             state_color: true
@@ -937,7 +937,7 @@ views:
                 name: Current
               - entity: sensor.hoymiles_hit_pv3_power_direct
                 name: Power
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV4
             show_header_toggle: false
             state_color: true
@@ -948,7 +948,7 @@ views:
                 name: Current
               - entity: sensor.hoymiles_hit_pv4_power_direct
                 name: Power
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: GEN
             show_header_toggle: false
             state_color: true
@@ -967,7 +967,7 @@ views:
                 name: L3 current
               - entity: sensor.hoymiles_hit_generator_total_power
                 name: Total power
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: PV — energy today
         show_header_toggle: false
         state_color: true
@@ -992,7 +992,7 @@ views:
             name: "External PV Today Energy L3n"
           - entity: sensor.hoymiles_hit_pv_total_energy_today
             name: "PV Total Energy Today"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: PV — total energy
         show_header_toggle: false
         state_color: true
@@ -1023,7 +1023,7 @@ views:
             name: "PV to Load Energy Total"
           - entity: sensor.hoymiles_hit_pv_to_grid_energy_total
             name: "PV to Grid Energy Total"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: PV — energy-block and external-source power
         show_header_toggle: false
         state_color: true
@@ -1055,7 +1055,7 @@ views:
     icon: mdi:home-lightning-bolt
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: EPS / Backup
         show_header_toggle: false
         state_color: true
@@ -1088,7 +1088,7 @@ views:
             name: "Backup Active Power L2"
           - entity: sensor.hoymiles_hit_backup_active_power_l3
             name: "Backup Active Power L3"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Loads — power
         show_header_toggle: false
         state_color: true
@@ -1103,7 +1103,7 @@ views:
             name: "Load Power L2n"
           - entity: sensor.hoymiles_hit_load_power_l3n
             name: "Load Power L3n"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Loads — energy
         show_header_toggle: false
         state_color: true
@@ -1129,7 +1129,7 @@ views:
     icon: mdi:battery-high
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Battery — state, power and BMS limits
         show_header_toggle: false
         state_color: true
@@ -1160,7 +1160,7 @@ views:
             name: Maximum cell temperature
           - entity: sensor.hoymiles_hit_cell_min_temperature
             name: Minimum cell temperature
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Battery — energy
         show_header_toggle: false
         state_color: true
@@ -1176,7 +1176,7 @@ views:
     icon: mdi:transmission-tower
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Grid — current values
         show_header_toggle: false
         state_color: true
@@ -1197,7 +1197,7 @@ views:
             name: "Grid Active Power L2"
           - entity: sensor.hoymiles_hit_grid_active_power_l3
             name: "Grid Active Power L3"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Grid — energy today
         show_header_toggle: false
         state_color: true
@@ -1218,7 +1218,7 @@ views:
             name: "Grid Energy Sell L2n Today"
           - entity: sensor.hoymiles_hit_grid_energy_sell_l3n_today
             name: "Grid Energy Sell L3n Today"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Grid — total energy
         show_header_toggle: false
         state_color: true
@@ -1244,7 +1244,7 @@ views:
     icon: mdi:transit-connection-variant
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Flows — power
         show_header_toggle: false
         state_color: true
@@ -1257,7 +1257,7 @@ views:
             name: "PV to Grid Power"
           - entity: sensor.hoymiles_hit_load_from_pv_power
             name: "Load From PV Power"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Flows — energy today
         show_header_toggle: false
         state_color: true
@@ -1274,7 +1274,7 @@ views:
             name: "Energy From Battery Today"
           - entity: sensor.hoymiles_hit_energy_from_grid_today
             name: "Energy From Grid Today"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Flows — total energy
         show_header_toggle: false
         state_color: true
@@ -1290,7 +1290,7 @@ views:
     icon: mdi:current-ac
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Inverter — phases, power and DC bus
         show_header_toggle: false
         state_color: true
@@ -1334,7 +1334,7 @@ views:
     icon: mdi:engine
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: GEN — current values
         show_header_toggle: false
         state_color: true
@@ -1365,7 +1365,7 @@ views:
             name: "GEN power L2n"
           - entity: sensor.hoymiles_hit_generator_power_l3n
             name: "GEN power L3n"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: GEN — energy today
         show_header_toggle: false
         state_color: true
@@ -1378,7 +1378,7 @@ views:
             name: "GEN energy L2n today"
           - entity: sensor.hoymiles_hit_generator_energy_l3n_today
             name: "GEN energy L3n today"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: GEN — total energy
         show_header_toggle: false
         state_color: true
@@ -1396,7 +1396,7 @@ views:
     icon: mdi:meter-electric
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Grid meter
         show_header_toggle: false
         state_color: true
@@ -1439,7 +1439,7 @@ views:
             name: "Grid Power Factor L2n"
           - entity: sensor.hoymiles_hit_grid_power_factor_l3n
             name: "Grid Power Factor L3n"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: External PV meter
         show_header_toggle: false
         state_color: true
@@ -1490,7 +1490,7 @@ views:
     cards:
       - type: vertical-stack
         cards:
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: EMS
             show_header_toggle: false
             state_color: true
@@ -1507,7 +1507,7 @@ views:
                 name: "Force Discharge SOC"
               - entity: number.hoymiles_hit_maximum_discharge_power
                 name: "Maximum Discharge Power"
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Inverter and battery settings
             show_header_toggle: false
             state_color: true
@@ -1532,7 +1532,7 @@ views:
                 name: "Low SOC Grid Charge Power"
               - entity: number.hoymiles_hit_soc_start_charge_from_grid
                 name: "SOC Start Charge From Grid"
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Export limiting and GEN port
             show_header_toggle: false
             state_color: true
@@ -1543,7 +1543,7 @@ views:
                 name: "Maximum Export Power Limit"
               - entity: select.hoymiles_hit_gen_port_mode
                 name: "GEN Port Mode"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Control systemem
         show_header_toggle: false
         state_color: true
@@ -1552,7 +1552,7 @@ views:
         entities:
           - entity: select.hoymiles_hit_system_operation
             name: "System Operation"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Push notifications
         show_header_toggle: false
         state_color: true
@@ -1578,7 +1578,7 @@ views:
     icon: mdi:alert-circle-outline
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Communication and operating states
         show_header_toggle: false
         state_color: true
@@ -1615,7 +1615,7 @@ views:
             name: Battery operating state
             tap_action:
               action: more-info
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Inverter and battery alarms
         show_header_toggle: false
         state_color: true
@@ -1661,7 +1661,7 @@ views:
     icon: mdi:tools
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Overview — essential power registers
         show_header_toggle: false
         state_color: true
@@ -1686,7 +1686,7 @@ views:
             name: "Overview Smart Load Active Power"
           - entity: sensor.hoymiles_hit_overview_battery_soc
             name: "Overview Battery SOC"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Protection parameters and temperatures
         show_header_toggle: false
         state_color: true
@@ -1703,14 +1703,14 @@ views:
             name: Insulation resistance
           - entity: sensor.hoymiles_hit_residual_current
             name: Residual current
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: ESP32
         show_header_toggle: false
         state_color: true
         entities:
           - entity: sensor.hoymiles_hit_esp_uptime
             name: "ESP Uptime"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Wi-Fi
         show_header_toggle: false
         state_color: true
@@ -1723,7 +1723,7 @@ views:
             name: "ESP WiFi SSID"
           - entity: sensor.hoymiles_hit_esp_mac_address
             name: "ESP Mac Address"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Parallel inverter network
         show_header_toggle: false
         state_color: true

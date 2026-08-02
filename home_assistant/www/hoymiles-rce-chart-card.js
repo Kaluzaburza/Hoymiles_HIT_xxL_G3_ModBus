@@ -699,6 +699,105 @@ if (!window.customCards.some((card) => card.type === "hoymiles-rce-chart-card"))
   });
 }
 
+class HoymilesZebraEntitiesCard extends HTMLElement {
+  constructor() {
+    super();
+    this._renderVersion = 0;
+  }
+
+  setConfig(config) {
+    if (!config?.entities) {
+      throw new Error("Zebra entities card requires an entities list");
+    }
+    this._config = { ...config };
+    this._mount();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._card) {
+      this._card.hass = hass;
+    }
+  }
+
+  connectedCallback() {
+    this._mount();
+  }
+
+  async _mount() {
+    if (!this.isConnected || !this._config) return;
+
+    const renderVersion = ++this._renderVersion;
+    await customElements.whenDefined("hui-entities-card");
+    if (renderVersion !== this._renderVersion) return;
+
+    const card = document.createElement("hui-entities-card");
+    card.setConfig({
+      ...this._config,
+      type: "entities",
+    });
+    if (this._hass) {
+      card.hass = this._hass;
+    }
+
+    this.replaceChildren(card);
+    this._card = card;
+    await card.updateComplete;
+    if (renderVersion !== this._renderVersion || this._card !== card) return;
+
+    const style = document.createElement("style");
+    style.dataset.hoymilesZebraRows = "";
+    style.textContent = `
+      #states > div {
+        border-radius: 8px;
+        box-sizing: border-box;
+        margin-left: -8px;
+        margin-right: -8px;
+        padding: 4px 8px;
+      }
+      #states > div:nth-child(odd) {
+        background: transparent;
+      }
+      #states > div:nth-child(even) {
+        background: color-mix(
+          in srgb,
+          var(--card-background-color, var(--ha-card-background)) 93%,
+          var(--primary-text-color) 7%
+        );
+      }
+    `;
+    card.shadowRoot?.append(style);
+  }
+
+  getCardSize() {
+    return this._card?.getCardSize?.() ?? this._config?.entities?.length ?? 1;
+  }
+
+  getGridOptions() {
+    return this._card?.getGridOptions?.();
+  }
+}
+
+if (!customElements.get("hoymiles-zebra-entities-card")) {
+  customElements.define(
+    "hoymiles-zebra-entities-card",
+    HoymilesZebraEntitiesCard
+  );
+}
+
+if (
+  !window.customCards.some(
+    (card) => card.type === "hoymiles-zebra-entities-card"
+  )
+) {
+  window.customCards.push({
+    type: "hoymiles-zebra-entities-card",
+    name: "Hoymiles Zebra Entities",
+    description: "Entities card with alternating row backgrounds.",
+    preview: false,
+  });
+}
+
 class HoymilesPowerFlowCard extends HTMLElement {
   constructor() {
     super();
