@@ -65,7 +65,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.3.3"
+    const_module.VERSION = "1.3.4"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -212,6 +212,130 @@ script:
             "A user-modified dashboard was overwritten",
         )
 
+    with tempfile.TemporaryDirectory(prefix="hoymiles_storage_upgrade_") as tmp:
+        config_path = Path(tmp)
+        storage_path = config_path / ".storage"
+        storage_path.mkdir()
+        resources_path = storage_path / "lovelace_resources"
+        resources_payload = {
+            "version": 1,
+            "minor_version": 1,
+            "key": "lovelace_resources",
+            "data": {
+                "items": [
+                    {
+                        "id": "legacy-hoymiles-resource",
+                        "url": "/local/hoymiles-rce-chart-card.js?v=old",
+                        "type": "module",
+                    },
+                    {
+                        "id": "unrelated-resource",
+                        "url": "/local/user-card.js",
+                        "type": "module",
+                    },
+                ]
+            },
+        }
+        resources_path.write_text(
+            json.dumps(resources_payload), encoding="utf-8"
+        )
+
+        dashboard_path = storage_path / "lovelace.hoymiles_test"
+        dashboard_payload = {
+            "version": 1,
+            "minor_version": 1,
+            "key": "lovelace.hoymiles_test",
+            "data": {
+                "config": {
+                    "title": "Custom user layout",
+                    "views": [
+                        {
+                            "cards": [
+                                {
+                                    "type": "entities",
+                                    "title": "User card",
+                                    "entities": [
+                                        "sensor.hoymiles_hit_overview_pv_total_power",
+                                        "sensor.hoymiles_hit_overview_battery_power",
+                                        "sensor.unrelated_user_entity",
+                                    ],
+                                },
+                                {
+                                    "type": "markdown",
+                                    "content": "User content",
+                                },
+                            ]
+                        }
+                    ],
+                }
+            },
+        }
+        dashboard_path.write_text(
+            json.dumps(dashboard_payload), encoding="utf-8"
+        )
+
+        unrelated_path = storage_path / "lovelace.unrelated"
+        unrelated_payload = {
+            "version": 1,
+            "minor_version": 1,
+            "key": "lovelace.unrelated",
+            "data": {
+                "config": {
+                    "views": [
+                        {"cards": [{"type": "entities", "entities": []}]}
+                    ]
+                }
+            },
+        }
+        unrelated_text = json.dumps(unrelated_payload)
+        unrelated_path.write_text(unrelated_text, encoding="utf-8")
+
+        migrated = assets._sync_lovelace_storage(config_path)
+        require(
+            migrated == [resources_path, dashboard_path],
+            "Storage-mode dashboard migration changed unexpected files",
+        )
+        migrated_dashboard = json.loads(
+            dashboard_path.read_text(encoding="utf-8")
+        )
+        cards = migrated_dashboard["data"]["config"]["views"][0]["cards"]
+        require(
+            cards[0]["type"] == assets.ZEBRA_CARD_TYPE,
+            "Storage-mode entities cards were not upgraded to zebra cards",
+        )
+        require(
+            cards[0]["title"] == "User card"
+            and "sensor.unrelated_user_entity" in cards[0]["entities"]
+            and cards[1]["content"] == "User content",
+            "Storage-mode migration did not preserve user customizations",
+        )
+        migrated_resources = json.loads(
+            resources_path.read_text(encoding="utf-8")
+        )["data"]["items"]
+        require(
+            migrated_resources[0]["url"] == assets.FRONTEND_RESOURCE_URL
+            and migrated_resources[0]["type"] == "module"
+            and migrated_resources[1]["url"] == "/local/user-card.js",
+            "Managed Lovelace resource was not cache-busted safely",
+        )
+        require(
+            dashboard_path.with_name(
+                f"{dashboard_path.name}.pre-1.3.4.bak"
+            ).is_file()
+            and resources_path.with_name(
+                f"{resources_path.name}.pre-1.3.4.bak"
+            ).is_file(),
+            "Storage migration did not create rollback backups",
+        )
+        require(
+            unrelated_path.read_text(encoding="utf-8") == unrelated_text,
+            "Storage migration touched an unrelated dashboard",
+        )
+        require(
+            assets._sync_lovelace_storage(config_path) == [],
+            "Storage-mode migration is not idempotent",
+        )
+
 
 def png_dimensions(path: Path) -> tuple[int, int]:
     """Return PNG dimensions using only the Python standard library."""
@@ -260,10 +384,11 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.3.3", "Release version must be 1.3.3")
+    require(manifest["version"] == "1.3.4", "Release version must be 1.3.4")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+    assets_source = (COMPONENT / "assets.py").read_text(encoding="utf-8")
     require(
         "def suggested_object_id(self)" in entity_source,
         "Proxy entities need an explicit stable suggested_object_id property",
@@ -291,7 +416,8 @@ def main() -> int:
     require(
         "add_extra_js_url" in init_source
         and "FRONTEND_MODULE_URL" in init_source
-        and "?v={VERSION}" in init_source,
+        and "FRONTEND_RESOURCE_URL" in init_source
+        and "?v={VERSION}" in assets_source,
         "Dashboard strategy module is not registered with versioned cache busting",
     )
     require(
