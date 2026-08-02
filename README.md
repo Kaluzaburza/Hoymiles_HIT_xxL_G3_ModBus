@@ -21,7 +21,7 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.3.3** is the current release. It contains:
+Version **1.3.4** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -36,6 +36,8 @@ Version **1.3.3** is the current release. It contains:
   values for parallel installations;
 - 5-second grid voltage, phase-power and live energy-flow polling;
 - a ready-to-import Home Assistant dashboard and RCE chart card;
+- automatic in-place migration of existing storage-mode dashboards to the
+  alternating-row cards, with a rollback backup and frontend cache busting;
 - English and Polish entity names, select options, config flow and services.
 
 > [!WARNING]
@@ -254,15 +256,10 @@ homeassistant:
 Do not create a second `homeassistant:` key. Check the configuration and restart
 Home Assistant.
 
-Add the integration-served dashboard resource once:
-
-```text
-/api/hoymiles_hit_modbus/static/hoymiles-rce-chart-card.js
-```
-
-with resource type **JavaScript module**. This URL is served without browser
-cache by the integration, so it does not need a version query after future
-HACS updates.
+The integration registers its versioned frontend module automatically. Do not
+add a manual `/local/hoymiles-rce-chart-card.js` resource. Starting with
+version 1.3.4, an old resource left by an earlier installation is migrated to
+the integration-served URL automatically.
 
 On Home Assistant 2026.5 or newer, open **Settings → Dashboards → Add
 dashboard**, select **Hoymiles HIT xxL G3** under Community dashboards and
@@ -277,6 +274,12 @@ The strategy loads the current Polish or English dashboard bundled with the
 installed integration. After a HACS update and Home Assistant restart, the
 dashboard therefore uses the new version automatically instead of retaining a
 stale storage-mode copy.
+
+Existing storage-mode Hoymiles dashboards are upgraded in place during the
+first Home Assistant start after installing version 1.3.4. Only native
+`entities` card types are changed to the compatible zebra card; view order,
+layout, custom entities and other user cards are preserved. Before writing,
+the integration creates an exact `.pre-1.3.4.bak` copy in `/config/.storage`.
 
 The copied `/config/dashboard_hoymiles.yaml` remains available for legacy and
 manual installations. The managed-asset installer updates an unchanged
@@ -412,7 +415,7 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.3.3** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.3.4** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 dwudniowy optymalizator zysku RCE PSE, dynamiczną rezerwę SOC na podstawie
 Solcast i historii LOAD, ochronę nocnego zapotrzebowania domu, statystyki
@@ -566,6 +569,12 @@ EN bezpośrednio z integracji. Stary sposób z plikiem
 niezmodyfikowane pliki automatycznie, a pliki zmienione przez użytkownika
 pozostawia bez nadpisania. Migracja starych identyfikatorów nadal tworzy kopię
 `.pre-stable-entity-ids.bak`.
+
+Od wersji 1.3.4 integracja naprawia również aktywny dashboard zapisany przez
+Home Assistanta w trybie `storage`: podmienia wyłącznie typy standardowych kart
+encji na kartę z naprzemiennym tłem, zachowując układ i własne encje
+użytkownika. Przed zmianą tworzy dokładną kopię `.pre-1.3.4.bak` w
+`/config/.storage` i automatycznie aktualizuje stary zasób `/local`.
 
 Jeżeli firmware ESP32 jest starszy od integracji HACS, nowe encje pojawią się
 jako **niedostępne**, a nie jako brakujące. Atrybut

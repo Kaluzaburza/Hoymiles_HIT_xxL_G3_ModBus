@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 from pathlib import Path
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -23,6 +24,20 @@ ENTITY_ID_PATTERN = re.compile(
 )
 ASSET_STORAGE_VERSION = 1
 ASSET_STORAGE_KEY = f"{DOMAIN}.assets"
+LOVELACE_RESOURCES_KEY = "lovelace_resources"
+LOVELACE_STORAGE_PREFIX = "lovelace."
+ZEBRA_CARD_TYPE = "custom:hoymiles-zebra-entities-card"
+FRONTEND_RESOURCE_URL = (
+    f"/api/{DOMAIN}/static/hoymiles-rce-chart-card.js?v={VERSION}"
+)
+MANAGED_FRONTEND_RESOURCE_PATHS = {
+    "/local/hoymiles-rce-chart-card.js",
+    f"/api/{DOMAIN}/static/hoymiles-rce-chart-card.js",
+}
+HOYMILES_DASHBOARD_MARKERS = (
+    "hoymiles_hit_overview_pv_total_power",
+    "hoymiles_hit_overview_battery_power",
+)
 
 # v1.2.0 was the last release without managed-asset metadata. These checksums
 # let the first newer release upgrade untouched files while preserving user
@@ -99,6 +114,131 @@ def _atomic_copy(source: Path, destination: Path) -> None:
     temporary = destination.with_name(f".{destination.name}.{DOMAIN}.tmp")
     shutil.copy2(source, temporary)
     os.replace(temporary, destination)
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write a Home Assistant storage document atomically."""
+    temporary = path.with_name(f".{path.name}.{DOMAIN}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if path.exists():
+        shutil.copystat(path, temporary)
+    os.replace(temporary, path)
+
+
+def _backup_storage_once(path: Path) -> None:
+    """Keep one exact rollback copy for this integration release."""
+    backup = path.with_name(f"{path.name}.pre-{VERSION}.bak")
+    if not backup.exists():
+        shutil.copy2(path, backup)
+
+
+def _replace_entities_cards(value: Any) -> int:
+    """Convert native entities cards to the drop-in zebra card in place."""
+    changed = 0
+    if isinstance(value, dict):
+        if value.get("type") == "entities":
+            value["type"] = ZEBRA_CARD_TYPE
+            changed += 1
+        for child in value.values():
+            changed += _replace_entities_cards(child)
+    elif isinstance(value, list):
+        for child in value:
+            changed += _replace_entities_cards(child)
+    return changed
+
+
+def _is_hoymiles_dashboard(config: Any) -> bool:
+    """Return whether a Lovelace config is the managed Hoymiles dashboard."""
+    if not isinstance(config, dict):
+        return False
+    serialized = json.dumps(config, ensure_ascii=False, separators=(",", ":"))
+    return all(marker in serialized for marker in HOYMILES_DASHBOARD_MARKERS)
+
+
+def _sync_lovelace_resource(storage_path: Path) -> bool:
+    """Install or cache-bust the managed Hoymiles frontend module."""
+    path = storage_path / LOVELACE_RESOURCES_KEY
+    if not path.is_file():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    items = payload.get("data", {}).get("items")
+    if not isinstance(items, list):
+        return False
+
+    matched = False
+    changed = False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url")
+        if not isinstance(url, str):
+            continue
+        base_url = url.partition("?")[0]
+        if base_url not in MANAGED_FRONTEND_RESOURCE_PATHS:
+            continue
+        matched = True
+        if url != FRONTEND_RESOURCE_URL or item.get("type") != "module":
+            item["url"] = FRONTEND_RESOURCE_URL
+            item["type"] = "module"
+            changed = True
+
+    if not matched:
+        resource_id = hashlib.sha256(
+            f"{DOMAIN}:frontend".encode()
+        ).hexdigest()[:32]
+        items.append(
+            {
+                "id": resource_id,
+                "url": FRONTEND_RESOURCE_URL,
+                "type": "module",
+            }
+        )
+        changed = True
+
+    if not changed:
+        return False
+    _backup_storage_once(path)
+    _atomic_write_json(path, payload)
+    return True
+
+
+def _sync_lovelace_storage(config_path: Path) -> list[Path]:
+    """Migrate active storage dashboards without replacing user layouts."""
+    storage_path = config_path / ".storage"
+    if not storage_path.is_dir():
+        return []
+
+    written: list[Path] = []
+    if _sync_lovelace_resource(storage_path):
+        written.append(storage_path / LOVELACE_RESOURCES_KEY)
+
+    for path in sorted(storage_path.glob(f"{LOVELACE_STORAGE_PREFIX}*")):
+        if not path.is_file() or path.name == LOVELACE_RESOURCES_KEY:
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        # Backups share the same embedded key as the active file. Requiring
+        # an exact key/path match prevents recursively migrating them.
+        if payload.get("key") != path.name:
+            continue
+        config = payload.get("data", {}).get("config")
+        if not _is_hoymiles_dashboard(config):
+            continue
+        if _replace_entities_cards(config) == 0:
+            continue
+        _backup_storage_once(path)
+        _atomic_write_json(path, payload)
+        written.append(path)
+    return written
 
 
 def _sync_assets(
@@ -189,6 +329,12 @@ async def async_install_assets(
         hass.config.language,
         overwrite,
         managed_hashes,
+    )
+    written.extend(
+        await hass.async_add_executor_job(
+            _sync_lovelace_storage,
+            config_path,
+        )
     )
     await store.async_save(
         {

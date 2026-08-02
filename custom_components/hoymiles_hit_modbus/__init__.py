@@ -9,11 +9,12 @@ import voluptuous as vol
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 
-from .assets import RESOURCE_ROOT, async_install_assets
+from .assets import FRONTEND_RESOURCE_URL, RESOURCE_ROOT, async_install_assets
 from .catalog import async_match_entities, matched_source_count
 from .const import (
     ATTR_OVERWRITE,
@@ -29,9 +30,7 @@ from .models import RuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 STATIC_URL = f"/api/{DOMAIN}/static"
-FRONTEND_MODULE_URL = (
-    f"{STATIC_URL}/hoymiles-rce-chart-card.js?v={VERSION}"
-)
+FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 INSTALL_ASSETS_SCHEMA = vol.Schema(
@@ -39,6 +38,28 @@ INSTALL_ASSETS_SCHEMA = vol.Schema(
         vol.Optional(ATTR_OVERWRITE, default=False): cv.boolean,
     }
 )
+
+
+async def _async_reload_lovelace_resources(
+    hass: HomeAssistant,
+    paths: list,
+) -> None:
+    """Reload a migrated Lovelace resource now or after startup."""
+    if not any(path.name == "lovelace_resources" for path in paths):
+        return
+
+    async def async_reload(_event=None) -> None:
+        if hass.services.has_service("lovelace", "reload_resources"):
+            await hass.services.async_call(
+                "lovelace",
+                "reload_resources",
+                blocking=True,
+            )
+
+    if hass.is_running:
+        await async_reload()
+    else:
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, async_reload)
 
 
 def _async_reconcile_entity_registry(
@@ -146,6 +167,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             hass,
             overwrite=call.data[ATTR_OVERWRITE],
         )
+        await _async_reload_lovelace_resources(hass, paths)
         _LOGGER.info(
             "Installed %s Hoymiles dashboard/automation assets: %s",
             len(paths),
@@ -194,6 +216,7 @@ async def async_setup_entry(
 
     if entry.data.get(CONF_COPY_ASSETS, True):
         paths = await async_install_assets(hass, overwrite=False)
+        await _async_reload_lovelace_resources(hass, paths)
         if paths:
             _LOGGER.info(
                 "Installed initial Hoymiles assets: %s",

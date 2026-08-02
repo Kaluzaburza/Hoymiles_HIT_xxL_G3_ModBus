@@ -4,6 +4,69 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-08-02
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.3.4**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.3.4**.
+2. **Home Assistant:** restart Home Assistant once after HACS finishes. The
+   active storage-mode dashboard and an old `/local` frontend resource are
+   migrated automatically. Then refresh the browser, or fully close and reopen
+   the Companion App if it still shows the cached dashboard.
+   **PL:** po zakończeniu aktualizacji uruchom Home Assistant ponownie. Aktywny
+   dashboard zapisany w trybie `storage` oraz stary zasób `/local` zostaną
+   naprawione automatycznie. Następnie odśwież przeglądarkę albo całkowicie
+   zamknij i ponownie uruchom aplikację Companion, jeżeli nadal pokazuje starą
+   wersję.
+3. **ESP32 / ESPHome:** no firmware rebuild or upload is required. The
+   compatible firmware remains **1.3.3**.
+   **PL:** ta poprawka nie wymaga kompilacji ani ponownego wgrywania ESP32.
+   Zgodna wersja firmware pozostaje **1.3.3**.
+4. **Verification / Weryfikacja:** open several dashboard tabs and confirm that
+   entity-list rows have alternating backgrounds and there are no
+   custom-card/configuration errors. Existing custom entities and layout must
+   remain unchanged.
+   **PL:** otwórz kilka zakładek dashboardu i sprawdź naprzemienne tło wierszy
+   oraz brak błędów karty niestandardowej lub konfiguracji. Własne encje i układ
+   dashboardu powinny pozostać bez zmian.
+
+### Fixed
+
+- Migrate the **active** Home Assistant storage-mode Hoymiles dashboard on the
+  first restart after the HACS update. Earlier releases updated the bundled
+  YAML/JSON assets but could leave the already imported dashboard unchanged.
+- Replace only native `entities` card types with the compatible
+  `custom:hoymiles-zebra-entities-card`, preserving view order, card layout,
+  custom entities and all non-entities cards.
+- Create exact `.pre-1.3.4.bak` rollback copies before touching Lovelace
+  storage and skip unrelated dashboards and backup documents.
+- Migrate and version-bust the legacy `/local/hoymiles-rce-chart-card.js`
+  resource to the module served directly by the integration, then reload
+  Lovelace resources when Home Assistant is already running.
+
+### Validation
+
+- Reproduced the HACS upgrade issue on the live miernik.com.pl installation:
+  the bundled dashboard contained 50 zebra cards while the active storage
+  dashboard contained none.
+- Applied the equivalent migration to the live installation and confirmed six
+  zebra cards in the visible main view with zero missing-entity,
+  custom-element or configuration errors.
+- Added fresh-upgrade tests covering layout preservation, unrelated dashboard
+  isolation, exact backups, resource cache busting and migration idempotency.
+
+### Polski
+
+- Naprawiono aktualizację aktywnego dashboardu zapisanego w pamięci Home
+  Assistanta, której wcześniejszy HACS nie zastępował mimo aktualizacji plików
+  integracji.
+- Migracja zachowuje kolejność widoków, układ, własne encje i pozostałe karty;
+  zmienia jedynie standardowe karty encji na wersję z naprzemiennym tłem.
+- Przed zmianą powstają dokładne kopie `.pre-1.3.4.bak`, a stary zasób
+  JavaScript `/local` otrzymuje aktualny adres i wersję bez pamięci podręcznej.
+
 ## [1.3.3] - 2026-08-02
 
 ### User update steps / Kroki po aktualizacji
