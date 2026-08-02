@@ -46,7 +46,7 @@ views:
             name: SOC
       - type: horizontal-stack
         cards:
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Sieć — napięcia i częstotliwość
             show_header_toggle: false
             state_color: true
@@ -59,7 +59,7 @@ views:
                 name: Napięcie L3
               - entity: sensor.hoymiles_hit_inverter_grid_frequency
                 name: Częstotliwość
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Odbiór — moc
             show_header_toggle: false
             state_color: true
@@ -72,7 +72,7 @@ views:
                 name: Odbiór — moc L3
               - entity: sensor.hoymiles_actual_load_power
                 name: Odbiorniki — moc łącznie
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sterowanie EMS
         show_header_toggle: false
         state_color: true
@@ -87,7 +87,7 @@ views:
             name: "Wykryta liczba falowników"
           - entity: button.hoymiles_hit_clear_fault
             name: "Wyczyść alarmy falownika"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Parametry ochrony i temperatury
         show_header_toggle: false
         state_color: true
@@ -200,7 +200,7 @@ views:
             name: Sieć
           - entity: sensor.hoymiles_hit_overview_battery_power
             name: Bateria
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Stan systemu i łączność
         show_header_toggle: false
         state_color: true
@@ -231,7 +231,7 @@ views:
             name: "Stan pracy baterii (BMS)"
             tap_action:
               action: more-info
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Alarmy — szybki podgląd
         show_header_toggle: false
         state_color: true
@@ -294,7 +294,7 @@ views:
     type: sidebar
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Automatyka RCE — ustawienia
         show_header_toggle: false
         state_color: true
@@ -321,7 +321,7 @@ views:
             name: Początek blokady
           - entity: input_datetime.hoymiles_sale_block_end
             name: Koniec blokady
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: RCE — stan, prognoza i wynik
         show_header_toggle: false
         state_color: true
@@ -546,7 +546,7 @@ views:
 
           Nie ustawiaj ładowania i rozładowania na tę samą godzinę.
           Wyłączenie przełącznika blokuje kolejne uruchomienia.
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Rozładowanie do sieci
         show_header_toggle: false
         state_color: true
@@ -565,7 +565,7 @@ views:
             name: Pozostały czas bieżącego cyklu
           - entity: script.hoymiles_start_grid_discharge
             name: Uruchom rozładowanie teraz
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Ładowanie z sieci
         show_header_toggle: false
         state_color: true
@@ -584,7 +584,7 @@ views:
             name: Pozostały czas bieżącego cyklu
           - entity: script.hoymiles_start_grid_charge
             name: Uruchom ładowanie teraz
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sterowanie i zakończenie EMS
         show_header_toggle: false
         state_color: true
@@ -684,7 +684,7 @@ views:
           - **{{ label }}:** **{{ average | round(3) }} PLN/kWh** ·
             {{ revenue | round(2) }} PLN · {{ energy | round(2) }} kWh
           {% endfor %}
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Dzisiejszy wynik — szczegóły
         show_header_toggle: false
         state_color: true
@@ -707,7 +707,7 @@ views:
             name: Prognozowana korzyść optymalizacji
           - entity: sensor.hoymiles_rce_status
             name: Stan automatyki RCE
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Wynik od uruchomienia liczników
         show_header_toggle: false
         state_color: true
@@ -904,7 +904,7 @@ views:
         columns: 2
         square: false
         cards:
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV1
             show_header_toggle: false
             state_color: true
@@ -915,7 +915,7 @@ views:
                 name: Prąd
               - entity: sensor.hoymiles_hit_pv1_power_direct
                 name: Moc
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV2
             show_header_toggle: false
             state_color: true
@@ -926,7 +926,7 @@ views:
                 name: Prąd
               - entity: sensor.hoymiles_hit_pv2_power_direct
                 name: Moc
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV3
             show_header_toggle: false
             state_color: true
@@ -937,7 +937,7 @@ views:
                 name: Prąd
               - entity: sensor.hoymiles_hit_pv3_power_direct
                 name: Moc
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: PV4
             show_header_toggle: false
             state_color: true
@@ -948,7 +948,7 @@ views:
                 name: Prąd
               - entity: sensor.hoymiles_hit_pv4_power_direct
                 name: Moc
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: GEN
             show_header_toggle: false
             state_color: true
@@ -967,7 +967,7 @@ views:
                 name: Prąd L3
               - entity: sensor.hoymiles_hit_generator_total_power
                 name: Moc łącznie
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: PV — energia dzisiaj
         show_header_toggle: false
         state_color: true
@@ -992,7 +992,7 @@ views:
             name: "Zewnętrzne PV dzisiaj energia L3n"
           - entity: sensor.hoymiles_hit_pv_total_energy_today
             name: "PV łącznie energia dzisiaj"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: PV — energia całkowita
         show_header_toggle: false
         state_color: true
@@ -1023,7 +1023,7 @@ views:
             name: "PV to odbiorniki energia łącznie"
           - entity: sensor.hoymiles_hit_pv_to_grid_energy_total
             name: "PV to sieć energia łącznie"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: PV — moc z bloku energii i źródła zewnętrzne
         show_header_toggle: false
         state_color: true
@@ -1055,7 +1055,7 @@ views:
     icon: mdi:home-lightning-bolt
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: EPS / Backup
         show_header_toggle: false
         state_color: true
@@ -1088,7 +1088,7 @@ views:
             name: "Backup czynna moc L2"
           - entity: sensor.hoymiles_hit_backup_active_power_l3
             name: "Backup czynna moc L3"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Odbiory — moc
         show_header_toggle: false
         state_color: true
@@ -1103,7 +1103,7 @@ views:
             name: "Odbiorniki moc L2n"
           - entity: sensor.hoymiles_hit_load_power_l3n
             name: "Odbiorniki moc L3n"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Odbiory — energia
         show_header_toggle: false
         state_color: true
@@ -1129,7 +1129,7 @@ views:
     icon: mdi:battery-high
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Bateria — stan, moc i limity BMS
         show_header_toggle: false
         state_color: true
@@ -1160,7 +1160,7 @@ views:
             name: Maksymalna temperatura celi
           - entity: sensor.hoymiles_hit_cell_min_temperature
             name: Minimalna temperatura celi
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Bateria — energia
         show_header_toggle: false
         state_color: true
@@ -1176,7 +1176,7 @@ views:
     icon: mdi:transmission-tower
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sieć — wartości bieżące
         show_header_toggle: false
         state_color: true
@@ -1197,7 +1197,7 @@ views:
             name: "Sieć czynna moc L2"
           - entity: sensor.hoymiles_hit_grid_active_power_l3
             name: "Sieć czynna moc L3"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sieć — energia dzisiaj
         show_header_toggle: false
         state_color: true
@@ -1218,7 +1218,7 @@ views:
             name: "Sieć energia oddawanie L2n dzisiaj"
           - entity: sensor.hoymiles_hit_grid_energy_sell_l3n_today
             name: "Sieć energia oddawanie L3n dzisiaj"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sieć — energia całkowita
         show_header_toggle: false
         state_color: true
@@ -1244,7 +1244,7 @@ views:
     icon: mdi:transit-connection-variant
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Przepływy — moc
         show_header_toggle: false
         state_color: true
@@ -1257,7 +1257,7 @@ views:
             name: "PV to sieć moc"
           - entity: sensor.hoymiles_hit_load_from_pv_power
             name: "Odbiorniki From PV moc"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Przepływy — energia dzisiaj
         show_header_toggle: false
         state_color: true
@@ -1274,7 +1274,7 @@ views:
             name: "Energia From bateria dzisiaj"
           - entity: sensor.hoymiles_hit_energy_from_grid_today
             name: "Energia From sieć dzisiaj"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Przepływy — energia całkowita
         show_header_toggle: false
         state_color: true
@@ -1290,7 +1290,7 @@ views:
     icon: mdi:current-ac
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Falownik — fazy, moc i magistrala DC
         show_header_toggle: false
         state_color: true
@@ -1334,7 +1334,7 @@ views:
     icon: mdi:engine
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: GEN — wartości bieżące
         show_header_toggle: false
         state_color: true
@@ -1365,7 +1365,7 @@ views:
             name: "GEN moc L2n"
           - entity: sensor.hoymiles_hit_generator_power_l3n
             name: "GEN moc L3n"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: GEN — energia dzisiaj
         show_header_toggle: false
         state_color: true
@@ -1378,7 +1378,7 @@ views:
             name: "GEN energia L2n dzisiaj"
           - entity: sensor.hoymiles_hit_generator_energy_l3n_today
             name: "GEN energia L3n dzisiaj"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: GEN — energia całkowita
         show_header_toggle: false
         state_color: true
@@ -1396,7 +1396,7 @@ views:
     icon: mdi:meter-electric
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Licznik sieci
         show_header_toggle: false
         state_color: true
@@ -1439,7 +1439,7 @@ views:
             name: "Sieć moc Factor L2n"
           - entity: sensor.hoymiles_hit_grid_power_factor_l3n
             name: "Sieć moc Factor L3n"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Licznik zewnętrznego PV
         show_header_toggle: false
         state_color: true
@@ -1490,7 +1490,7 @@ views:
     cards:
       - type: vertical-stack
         cards:
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: EMS
             show_header_toggle: false
             state_color: true
@@ -1507,7 +1507,7 @@ views:
                 name: "Minimalny SOC rozładowania do sieci"
               - entity: number.hoymiles_hit_maximum_discharge_power
                 name: "Maksymalna moc rozładowania do sieci"
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Ustawienia falownika i baterii
             show_header_toggle: false
             state_color: true
@@ -1532,7 +1532,7 @@ views:
                 name: "Moc ładowania z sieci przy niskim SOC"
               - entity: number.hoymiles_hit_soc_start_charge_from_grid
                 name: "SOC rozpoczęcia ładowania z sieci"
-          - type: entities
+          - type: custom:hoymiles-zebra-entities-card
             title: Ograniczanie eksportu i złącze GEN
             show_header_toggle: false
             state_color: true
@@ -1543,7 +1543,7 @@ views:
                 name: "Maksymalny limit eksportu"
               - entity: select.hoymiles_hit_gen_port_mode
                 name: "Tryb złącza GEN"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sterowanie systemem
         show_header_toggle: false
         state_color: true
@@ -1552,7 +1552,7 @@ views:
         entities:
           - entity: select.hoymiles_hit_system_operation
             name: "Praca systemu"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Powiadomienia push
         show_header_toggle: false
         state_color: true
@@ -1578,7 +1578,7 @@ views:
     icon: mdi:alert-circle-outline
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Stany komunikacji i pracy
         show_header_toggle: false
         state_color: true
@@ -1615,7 +1615,7 @@ views:
             name: Stan pracy baterii
             tap_action:
               action: more-info
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Alarmy falownika i baterii
         show_header_toggle: false
         state_color: true
@@ -1661,7 +1661,7 @@ views:
     icon: mdi:tools
     badges: []
     cards:
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Overview — skrócone rejestry mocy
         show_header_toggle: false
         state_color: true
@@ -1686,7 +1686,7 @@ views:
             name: "Podgląd mocy czynnej Smart Load"
           - entity: sensor.hoymiles_hit_overview_battery_soc
             name: "Podgląd stanu naładowania baterii"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Parametry ochronne i temperatury
         show_header_toggle: false
         state_color: true
@@ -1703,14 +1703,14 @@ views:
             name: Rezystancja izolacji
           - entity: sensor.hoymiles_hit_residual_current
             name: Prąd różnicowy
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: ESP32
         show_header_toggle: false
         state_color: true
         entities:
           - entity: sensor.hoymiles_hit_esp_uptime
             name: "ESP Uptime"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Wi-Fi
         show_header_toggle: false
         state_color: true
@@ -1723,7 +1723,7 @@ views:
             name: "ESP WiFi SSID"
           - entity: sensor.hoymiles_hit_esp_mac_address
             name: "ESP Mac adres"
-      - type: entities
+      - type: custom:hoymiles-zebra-entities-card
         title: Sieć równoległa falowników
         show_header_toggle: false
         state_color: true

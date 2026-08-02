@@ -54,7 +54,7 @@
           "type": "horizontal-stack",
           "cards": [
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Grid — voltages and frequency",
               "show_header_toggle": false,
               "state_color": true,
@@ -78,7 +78,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Loads — power",
               "show_header_toggle": false,
               "state_color": true,
@@ -104,7 +104,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Control EMS",
           "show_header_toggle": false,
           "state_color": true,
@@ -131,7 +131,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Protection parameters and temperatures",
           "show_header_toggle": false,
           "state_color": true,
@@ -294,7 +294,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "System and connectivity",
           "show_header_toggle": false,
           "state_color": true,
@@ -347,7 +347,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Alarms — quick view",
           "show_header_toggle": false,
           "state_color": true,
@@ -438,7 +438,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "RCE automation — settings",
           "show_header_toggle": false,
           "state_color": true,
@@ -490,7 +490,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "RCE — status, forecast and result",
           "show_header_toggle": false,
           "state_color": true,
@@ -711,7 +711,7 @@
           "content": "## Daily EMS schedules\nEach schedule runs every day while its switch is enabled. When the configured duration ends, the inverter returns to Self-Use.\nDo not schedule charging and discharging at the same time. Turning a schedule off prevents subsequent starts."
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Grid discharge",
           "show_header_toggle": false,
           "state_color": true,
@@ -747,7 +747,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Grid charge",
           "show_header_toggle": false,
           "state_color": true,
@@ -783,7 +783,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "EMS control and stop",
           "show_header_toggle": false,
           "state_color": true,
@@ -896,7 +896,7 @@
           "content": "{% set periods = [\n  ('Today', 'daily'),\n  ('Week', 'weekly'),\n  ('Month', 'monthly'),\n  ('Year', 'yearly')\n] %}\n{% for label, period in periods %}\n{% set revenue = states(\n  'sensor.hoymiles_rce_revenue_' ~ period) | float(0) %}\n{% set energy = states(\n  'sensor.hoymiles_rce_grid_export_energy_' ~ period) | float(0) %}\n{% set average = revenue / energy if energy > 0 else 0 %}\n- **{{ label }}:** **{{ average | round(3) }} PLN/kWh** ·\n  {{ revenue | round(2) }} PLN · {{ energy | round(2) }} kWh\n{% endfor %}"
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Today's result — details",
           "show_header_toggle": false,
           "state_color": true,
@@ -940,7 +940,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Result since meter activation",
           "show_header_toggle": false,
           "state_color": true,
@@ -1237,7 +1237,7 @@
           "square": false,
           "cards": [
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV1",
               "show_header_toggle": false,
               "state_color": true,
@@ -1257,7 +1257,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV2",
               "show_header_toggle": false,
               "state_color": true,
@@ -1277,7 +1277,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV3",
               "show_header_toggle": false,
               "state_color": true,
@@ -1297,7 +1297,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV4",
               "show_header_toggle": false,
               "state_color": true,
@@ -1317,7 +1317,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "GEN",
               "show_header_toggle": false,
               "state_color": true,
@@ -1355,7 +1355,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "PV — energy today",
           "show_header_toggle": false,
           "state_color": true,
@@ -1402,7 +1402,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "PV — total energy",
           "show_header_toggle": false,
           "state_color": true,
@@ -1461,7 +1461,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "PV — energy-block and external-source power",
           "show_header_toggle": false,
           "state_color": true,
@@ -1520,7 +1520,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "EPS / Backup",
           "show_header_toggle": false,
           "state_color": true,
@@ -1584,7 +1584,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Loads — power",
           "show_header_toggle": false,
           "state_color": true,
@@ -1612,7 +1612,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Loads — energy",
           "show_header_toggle": false,
           "state_color": true,
@@ -1660,7 +1660,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Battery — state, power and BMS limits",
           "show_header_toggle": false,
           "state_color": true,
@@ -1720,7 +1720,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Battery — energy",
           "show_header_toggle": false,
           "state_color": true,
@@ -1748,7 +1748,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Grid — current values",
           "show_header_toggle": false,
           "state_color": true,
@@ -1788,7 +1788,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Grid — energy today",
           "show_header_toggle": false,
           "state_color": true,
@@ -1828,7 +1828,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Grid — total energy",
           "show_header_toggle": false,
           "state_color": true,
@@ -1876,7 +1876,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Flows — power",
           "show_header_toggle": false,
           "state_color": true,
@@ -1900,7 +1900,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Flows — energy today",
           "show_header_toggle": false,
           "state_color": true,
@@ -1932,7 +1932,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Flows — total energy",
           "show_header_toggle": false,
           "state_color": true,
@@ -1960,7 +1960,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Inverter — phases, power and DC bus",
           "show_header_toggle": false,
           "state_color": true,
@@ -2044,7 +2044,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "GEN — current values",
           "show_header_toggle": false,
           "state_color": true,
@@ -2104,7 +2104,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "GEN — energy today",
           "show_header_toggle": false,
           "state_color": true,
@@ -2128,7 +2128,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "GEN — total energy",
           "show_header_toggle": false,
           "state_color": true,
@@ -2160,7 +2160,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Grid meter",
           "show_header_toggle": false,
           "state_color": true,
@@ -2244,7 +2244,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "External PV meter",
           "show_header_toggle": false,
           "state_color": true,
@@ -2340,7 +2340,7 @@
           "type": "vertical-stack",
           "cards": [
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "EMS",
               "show_header_toggle": false,
               "state_color": true,
@@ -2372,7 +2372,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Inverter and battery settings",
               "show_header_toggle": false,
               "state_color": true,
@@ -2420,7 +2420,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Export limiting and GEN port",
               "show_header_toggle": false,
               "state_color": true,
@@ -2442,7 +2442,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Control systemem",
           "show_header_toggle": false,
           "state_color": true,
@@ -2457,7 +2457,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Push notifications",
           "show_header_toggle": false,
           "state_color": true,
@@ -2495,7 +2495,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Communication and operating states",
           "show_header_toggle": false,
           "state_color": true,
@@ -2559,7 +2559,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Inverter and battery alarms",
           "show_header_toggle": false,
           "state_color": true,
@@ -2638,7 +2638,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Overview — essential power registers",
           "show_header_toggle": false,
           "state_color": true,
@@ -2686,7 +2686,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Protection parameters and temperatures",
           "show_header_toggle": false,
           "state_color": true,
@@ -2718,7 +2718,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "ESP32",
           "show_header_toggle": false,
           "state_color": true,
@@ -2730,7 +2730,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Wi-Fi",
           "show_header_toggle": false,
           "state_color": true,
@@ -2754,7 +2754,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Parallel inverter network",
           "show_header_toggle": false,
           "state_color": true,

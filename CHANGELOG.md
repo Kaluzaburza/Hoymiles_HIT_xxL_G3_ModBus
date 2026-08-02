@@ -4,6 +4,57 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-02
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.3.2**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.3.2**.
+2. **Home Assistant:** restart Home Assistant after HACS finishes installing
+   the update. If the previous dashboard appearance remains cached, perform a
+   hard browser refresh or fully close and reopen the Companion App.
+   **PL:** po zakończeniu instalacji przez HACS uruchom Home Assistant ponownie.
+   Jeśli nadal widać poprzedni wygląd dashboardu, wykonaj pełne odświeżenie
+   przeglądarki albo całkowicie zamknij i ponownie uruchom aplikację Companion.
+3. **ESP32 / ESPHome:** no firmware rebuild or upload is required for this
+   release. The compatible ESPHome firmware version remains **1.3.1**.
+   **PL:** ta wersja nie wymaga ponownej kompilacji ani wgrywania firmware
+   ESP32. Zgodna wersja firmware ESPHome pozostaje **1.3.1**.
+4. **Verification / Weryfikacja:** open several dashboard tabs and confirm that
+   entity-list rows have alternating, theme-aware backgrounds and that the
+   dashboard loads without a custom-card error.
+   **PL:** otwórz kilka zakładek dashboardu i sprawdź, czy wiersze list encji
+   mają naprzemienne tło dopasowane do motywu oraz czy dashboard ładuje się bez
+   błędu karty niestandardowej.
+
+### Changed
+
+- Added alternating, theme-aware row backgrounds to every entities card in all
+  15 Polish and English dashboard views. The subtle contrast follows light and
+  dark Home Assistant themes and improves scanning of long register lists.
+- Kept the native Home Assistant entities-card behavior, including row clicks,
+  more-info dialogs, history access, state colors and writable controls.
+- Included the dashboard-strategy registration and frontend cache-busting fix
+  prepared in version 1.3.1, which had not received a public release tag.
+
+### Validation
+
+- Verified all 15 dashboard views on a live Home Assistant installation: all
+  50 zebra cards loaded without custom-element, configuration or resource
+  errors.
+- Verified Polish/English dashboard parity, generated YAML/JSON assets, the
+  JavaScript module and the complete HACS release test suite.
+
+### Polski
+
+- Dodano delikatne, naprzemienne tło wierszy do wszystkich kart encji w 15
+  zakładkach polskiego i angielskiego dashboardu.
+- Zachowano standardowe działanie kart Home Assistant: podgląd historii,
+  okna „więcej informacji”, kolory stanów oraz sterowanie encjami.
+- Wydanie zawiera również poprawkę automatycznej rejestracji dashboardu i
+  odświeżania zasobu JavaScript przygotowaną wcześniej jako 1.3.1.
+
 ## [1.3.1] - 2026-08-01
 
 ### User update steps / Kroki po aktualizacji

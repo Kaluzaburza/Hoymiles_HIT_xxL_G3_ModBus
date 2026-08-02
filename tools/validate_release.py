@@ -65,7 +65,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.3.1"
+    const_module.VERSION = "1.3.2"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -260,7 +260,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.3.1", "Release version must be 1.3.1")
+    require(manifest["version"] == "1.3.2", "Release version must be 1.3.2")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -373,6 +373,15 @@ def main() -> int:
             and len(dashboard_data["views"]) >= 10,
             f"Invalid dashboard strategy payload: {dashboard_json.name}",
         )
+        dashboard_json_text = json.dumps(dashboard_data)
+        require(
+            dashboard_json_text.count(
+                '"type": "custom:hoymiles-zebra-entities-card"'
+            )
+            == 50
+            and '"type": "entities"' not in dashboard_json_text,
+            f"{dashboard_json.name} does not use all 50 zebra entity cards",
+        )
 
     card_source = required_assets[4].read_text(encoding="utf-8")
     require(
@@ -392,6 +401,13 @@ def main() -> int:
         and "_resolveBatteryEnergy" in card_source,
         "Power-flow card does not convert the capacity entity from kWh to Wh",
     )
+    require(
+        "class HoymilesZebraEntitiesCard" in card_source
+        and 'customElements.define(\n    "hoymiles-zebra-entities-card"' in card_source
+        and "color-mix(" in card_source
+        and "var(--primary-text-color) 7%" in card_source,
+        "Theme-aware zebra entities card is not registered",
+    )
     for dashboard_path in required_assets[:2]:
         dashboard_text = dashboard_path.read_text(encoding="utf-8")
         require(
@@ -409,6 +425,14 @@ def main() -> int:
                 f"{dashboard_path.name} incorrectly inverts the normalized "
                 "Hoymiles battery power sign"
             ),
+        )
+        require(
+            dashboard_text.count(
+                "type: custom:hoymiles-zebra-entities-card"
+            )
+            == 50
+            and not re.search(r"^\s*-?\s*type:\s+entities\s*$", dashboard_text, re.M),
+            f"{dashboard_path.name} does not use all 50 zebra entity cards",
         )
 
     rce_sensor_source = (
@@ -748,8 +772,10 @@ def main() -> int:
             else "Alarms — quick view"
         )
         require(
-            f"- type: entities\n        title: {state_title}" in dashboard_text
-            and f"- type: entities\n        title: {alarm_title}" in dashboard_text,
+            f"- type: custom:hoymiles-zebra-entities-card\n        title: {state_title}"
+            in dashboard_text
+            and f"- type: custom:hoymiles-zebra-entities-card\n        title: {alarm_title}"
+            in dashboard_text,
             f"{language} dashboard status/alarm cards are not clickable entity cards",
         )
         require(

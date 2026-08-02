@@ -54,7 +54,7 @@
           "type": "horizontal-stack",
           "cards": [
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Sieć — napięcia i częstotliwość",
               "show_header_toggle": false,
               "state_color": true,
@@ -78,7 +78,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Odbiór — moc",
               "show_header_toggle": false,
               "state_color": true,
@@ -104,7 +104,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sterowanie EMS",
           "show_header_toggle": false,
           "state_color": true,
@@ -131,7 +131,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Parametry ochrony i temperatury",
           "show_header_toggle": false,
           "state_color": true,
@@ -294,7 +294,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Stan systemu i łączność",
           "show_header_toggle": false,
           "state_color": true,
@@ -347,7 +347,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Alarmy — szybki podgląd",
           "show_header_toggle": false,
           "state_color": true,
@@ -438,7 +438,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Automatyka RCE — ustawienia",
           "show_header_toggle": false,
           "state_color": true,
@@ -490,7 +490,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "RCE — stan, prognoza i wynik",
           "show_header_toggle": false,
           "state_color": true,
@@ -711,7 +711,7 @@
           "content": "## Codzienne harmonogramy EMS\nKażdy harmonogram działa codziennie, dopóki jego przełącznik jest włączony. Po upływie ustawionego czasu falownik wraca do autokonsumpcji.\nNie ustawiaj ładowania i rozładowania na tę samą godzinę. Wyłączenie przełącznika blokuje kolejne uruchomienia."
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Rozładowanie do sieci",
           "show_header_toggle": false,
           "state_color": true,
@@ -747,7 +747,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Ładowanie z sieci",
           "show_header_toggle": false,
           "state_color": true,
@@ -783,7 +783,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sterowanie i zakończenie EMS",
           "show_header_toggle": false,
           "state_color": true,
@@ -896,7 +896,7 @@
           "content": "{% set periods = [\n  ('Dzisiaj', 'daily'),\n  ('Tydzień', 'weekly'),\n  ('Miesiąc', 'monthly'),\n  ('Rok', 'yearly')\n] %}\n{% for label, period in periods %}\n{% set revenue = states(\n  'sensor.hoymiles_rce_revenue_' ~ period) | float(0) %}\n{% set energy = states(\n  'sensor.hoymiles_rce_grid_export_energy_' ~ period) | float(0) %}\n{% set average = revenue / energy if energy > 0 else 0 %}\n- **{{ label }}:** **{{ average | round(3) }} PLN/kWh** ·\n  {{ revenue | round(2) }} PLN · {{ energy | round(2) }} kWh\n{% endfor %}"
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Dzisiejszy wynik — szczegóły",
           "show_header_toggle": false,
           "state_color": true,
@@ -940,7 +940,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Wynik od uruchomienia liczników",
           "show_header_toggle": false,
           "state_color": true,
@@ -1237,7 +1237,7 @@
           "square": false,
           "cards": [
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV1",
               "show_header_toggle": false,
               "state_color": true,
@@ -1257,7 +1257,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV2",
               "show_header_toggle": false,
               "state_color": true,
@@ -1277,7 +1277,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV3",
               "show_header_toggle": false,
               "state_color": true,
@@ -1297,7 +1297,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "PV4",
               "show_header_toggle": false,
               "state_color": true,
@@ -1317,7 +1317,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "GEN",
               "show_header_toggle": false,
               "state_color": true,
@@ -1355,7 +1355,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "PV — energia dzisiaj",
           "show_header_toggle": false,
           "state_color": true,
@@ -1402,7 +1402,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "PV — energia całkowita",
           "show_header_toggle": false,
           "state_color": true,
@@ -1461,7 +1461,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "PV — moc z bloku energii i źródła zewnętrzne",
           "show_header_toggle": false,
           "state_color": true,
@@ -1520,7 +1520,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "EPS / Backup",
           "show_header_toggle": false,
           "state_color": true,
@@ -1584,7 +1584,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Odbiory — moc",
           "show_header_toggle": false,
           "state_color": true,
@@ -1612,7 +1612,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Odbiory — energia",
           "show_header_toggle": false,
           "state_color": true,
@@ -1660,7 +1660,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Bateria — stan, moc i limity BMS",
           "show_header_toggle": false,
           "state_color": true,
@@ -1720,7 +1720,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Bateria — energia",
           "show_header_toggle": false,
           "state_color": true,
@@ -1748,7 +1748,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sieć — wartości bieżące",
           "show_header_toggle": false,
           "state_color": true,
@@ -1788,7 +1788,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sieć — energia dzisiaj",
           "show_header_toggle": false,
           "state_color": true,
@@ -1828,7 +1828,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sieć — energia całkowita",
           "show_header_toggle": false,
           "state_color": true,
@@ -1876,7 +1876,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Przepływy — moc",
           "show_header_toggle": false,
           "state_color": true,
@@ -1900,7 +1900,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Przepływy — energia dzisiaj",
           "show_header_toggle": false,
           "state_color": true,
@@ -1932,7 +1932,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Przepływy — energia całkowita",
           "show_header_toggle": false,
           "state_color": true,
@@ -1960,7 +1960,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Falownik — fazy, moc i magistrala DC",
           "show_header_toggle": false,
           "state_color": true,
@@ -2044,7 +2044,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "GEN — wartości bieżące",
           "show_header_toggle": false,
           "state_color": true,
@@ -2104,7 +2104,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "GEN — energia dzisiaj",
           "show_header_toggle": false,
           "state_color": true,
@@ -2128,7 +2128,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "GEN — energia całkowita",
           "show_header_toggle": false,
           "state_color": true,
@@ -2160,7 +2160,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Licznik sieci",
           "show_header_toggle": false,
           "state_color": true,
@@ -2244,7 +2244,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Licznik zewnętrznego PV",
           "show_header_toggle": false,
           "state_color": true,
@@ -2340,7 +2340,7 @@
           "type": "vertical-stack",
           "cards": [
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "EMS",
               "show_header_toggle": false,
               "state_color": true,
@@ -2372,7 +2372,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Ustawienia falownika i baterii",
               "show_header_toggle": false,
               "state_color": true,
@@ -2420,7 +2420,7 @@
               ]
             },
             {
-              "type": "entities",
+              "type": "custom:hoymiles-zebra-entities-card",
               "title": "Ograniczanie eksportu i złącze GEN",
               "show_header_toggle": false,
               "state_color": true,
@@ -2442,7 +2442,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sterowanie systemem",
           "show_header_toggle": false,
           "state_color": true,
@@ -2457,7 +2457,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Powiadomienia push",
           "show_header_toggle": false,
           "state_color": true,
@@ -2495,7 +2495,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Stany komunikacji i pracy",
           "show_header_toggle": false,
           "state_color": true,
@@ -2559,7 +2559,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Alarmy falownika i baterii",
           "show_header_toggle": false,
           "state_color": true,
@@ -2638,7 +2638,7 @@
       "badges": [],
       "cards": [
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Overview — skrócone rejestry mocy",
           "show_header_toggle": false,
           "state_color": true,
@@ -2686,7 +2686,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Parametry ochronne i temperatury",
           "show_header_toggle": false,
           "state_color": true,
@@ -2718,7 +2718,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "ESP32",
           "show_header_toggle": false,
           "state_color": true,
@@ -2730,7 +2730,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Wi-Fi",
           "show_header_toggle": false,
           "state_color": true,
@@ -2754,7 +2754,7 @@
           ]
         },
         {
-          "type": "entities",
+          "type": "custom:hoymiles-zebra-entities-card",
           "title": "Sieć równoległa falowników",
           "show_header_toggle": false,
           "state_color": true,
