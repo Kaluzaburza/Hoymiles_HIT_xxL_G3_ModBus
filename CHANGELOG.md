@@ -4,6 +4,73 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-08-02
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.3.3**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.3.3**.
+2. **Home Assistant:** restart Home Assistant after HACS finishes installing
+   the update. Refresh the dashboard once after the restart.
+   **PL:** po zakończeniu instalacji przez HACS uruchom Home Assistant ponownie,
+   a następnie jeden raz odśwież dashboard.
+3. **ESP32 / ESPHome:** rebuild and upload are **required**. Download or refresh
+   `hoymiles-inverter.yaml` from release **v1.3.3**, preserve your local secrets
+   and pin substitutions, select **Clean Build Files**, then compile and upload
+   the firmware to the ESP32. A HACS update alone does not update ESP32
+   firmware.
+   **PL:** pobierz lub odśwież `hoymiles-inverter.yaml` z wydania **v1.3.3**,
+   zachowaj lokalne sekrety i ustawienia pinów, wybierz **Clean Build Files**,
+   a następnie skompiluj i wgraj firmware do ESP32. Sama aktualizacja HACS nie
+   aktualizuje firmware ESP32.
+4. **Verification / Weryfikacja:** confirm that dashboard values keep updating.
+   Open only one ESPHome log window and verify
+   `Successful handshake with hoymiles-inverter`. If it loops on
+   `SocketClosedAPIError` while entities
+   still update, close all log windows and restart only the ESPHome Device
+   Builder add-on.
+   **PL:** sprawdź odświeżanie danych dashboardu. Otwórz tylko jedno okno logów
+   ESPHome i potwierdź `Successful handshake with hoymiles-inverter`.
+   Jeżeli pojawia się pętla `SocketClosedAPIError`, ale encje działają, zamknij
+   wszystkie okna logów i uruchom ponownie tylko dodatek ESPHome Device Builder.
+
+### Changed
+
+- Stagger ESPHome polling intervals to 13 s for live Modbus blocks, 5 s for EMS
+  controls, 20 s for settings and 150 s for the full diagnostic map. This
+  prevents overlapping full-map requests while preserving responsive controls.
+- Keep API encryption and the eight-client safety limit, disable API-only
+  rebooting, and restrict verbose Modbus component logs while retaining useful
+  INFO diagnostics.
+- Align the Home Assistant integration, ESPHome package, public entry files and
+  release validator at version 1.3.3.
+- Replace the README dashboard screenshots with the current live energy-flow
+  and RCE automation views.
+- Document recovery from stale ESPHome Device Builder log sessions without
+  rebooting the inverter, reflashing the ESP32 or increasing API client limits.
+
+### Validation
+
+- Compiled and uploaded the v1.3.3 ESPHome configuration on the live parallel
+  inverter installation at miernik.com.pl.
+- Confirmed uninterrupted dashboard updates and continuously increasing ESP32
+  uptime while reproducing and diagnosing the log-viewer failure.
+- Confirmed exactly eight stale Device Builder API sessions at failure time;
+  restarting only that add-on cleared the sessions and restored the log stream.
+- Verified the API encryption key match and excluded inverter, Modbus, Wi-Fi,
+  Home Assistant Core and ESP32 restart faults as the cause.
+
+### Polski
+
+- Rozłożono odczyty ESPHome: 13 s dla szybkich bloków Modbus, 5 s dla EMS,
+  20 s dla ustawień i 150 s dla pełnej mapy diagnostycznej.
+- Zachowano szyfrowanie i limit ośmiu klientów API, wyłączono restart wywołany
+  wyłącznie brakiem klienta API oraz ograniczono szczegółowe logi Modbus.
+- Ujednolicono wersję integracji, pakietów ESPHome i plików wejściowych do 1.3.3.
+- Zaktualizowano zrzuty dashboardu i opisano bezpieczne odzyskanie logów przez
+  restart wyłącznie dodatku ESPHome Device Builder.
+
 ## [1.3.2] - 2026-08-02
 
 ### User update steps / Kroki po aktualizacji

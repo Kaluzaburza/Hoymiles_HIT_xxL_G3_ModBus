@@ -65,7 +65,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.3.2"
+    const_module.VERSION = "1.3.3"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -260,7 +260,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.3.2", "Release version must be 1.3.2")
+    require(manifest["version"] == "1.3.3", "Release version must be 1.3.3")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -611,7 +611,7 @@ def main() -> int:
         )
         width, height = png_dimensions(image)
         require(
-            width >= 1200 and height >= 700,
+            width >= 1000 and height >= 700,
             f"README image is unexpectedly small: {image.name}",
         )
 

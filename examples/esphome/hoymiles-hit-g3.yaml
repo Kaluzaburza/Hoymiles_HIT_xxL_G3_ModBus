@@ -15,9 +15,10 @@ substitutions:
   modbus_settings_controller_id: hoymiles_modbus_settings
   modbus_inverter_address: "1"
   baud_rate: "115200"
-  fast_update_interval: "5s"
+  fast_update_interval: "13s"
   control_update_interval: "5s"
-  settings_update_interval: "15s"
+  settings_update_interval: "20s"
+  update_interval: "150s"
 
   uart_tx_pin: "GPIO17"
   uart_rx_pin: "GPIO16"
@@ -37,10 +38,16 @@ esp32:
       minimum_chip_revision: "3.1"
       sram1_as_iram: true
 
+logger:
+  level: INFO
+  logs:
+    modbus: WARN
+    modbus_controller: WARN
+
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.3.1
+    ref: v1.3.3
     refresh: 1d
     files:
       - packages/core.yaml

@@ -1,15 +1,15 @@
 # Rdzeń urządzenia ESPHome
 substitutions:
   # Rozbudowana mapa diagnostyczna jest celowo odczytywana rzadziej. Dane
-  # operacyjne głównego dashboardu korzystają z osobnego kontrolera 10 s.
-  update_interval: 120s
+  # operacyjne głównego dashboardu korzystają z osobnego kontrolera 13 s.
+  update_interval: 150s
   # Blok sterowania EMS 4300-4306 jest mały i może być bezpiecznie
   # odczytywany częściej niż pełna mapa rejestrów. Własny kontroler zachowuje
   # zgodność ze starszymi plikami głównymi, które nie definiują tych wartości.
   modbus_control_controller_id: hoymiles_modbus_control
   control_update_interval: 5s
   modbus_settings_controller_id: hoymiles_modbus_settings
-  settings_update_interval: 15s
+  settings_update_interval: 20s
 
 esphome:
   name: "${name}"
@@ -17,13 +17,17 @@ esphome:
   comment: "${device_description}"
   project:
     name: "hoymiles.energy-storage-modbus"
-    version: "1.3.1"
+    version: "1.3.3"
 
 logger:
   level: WARN
   baud_rate: 0
 
 api:
+  # Nie restartuj falownika/mostka tylko dlatego, ze chwilowo nie ma klienta
+  # API. Zamkniete sesje podgladu logow nalezy usunac restartem dodatku
+  # ESPHome Device Builder, zgodnie z procedura w README.
+  reboot_timeout: 0s
   encryption:
     key: ${api_key}
   # ESP32 domyślnie obsługuje 8 klientów API. Niższy limit 5 był osiągany

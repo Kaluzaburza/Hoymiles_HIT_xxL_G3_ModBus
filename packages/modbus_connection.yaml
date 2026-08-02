@@ -59,7 +59,7 @@ modbus_controller:
     offline_skip_updates: 3
 
   # Pozostałe ustawienia widoczne na stronie Sterowanie są grupowane w kilka
-  # krótkich zakresów i odczytywane co 15 s. To wystarcza do śledzenia zmian
+  # krótkich zakresów i odczytywane co 20 s. To wystarcza do śledzenia zmian
   # z aplikacji producenta, a nie obciąża magistrali jak pełna mapa co 5 s.
   - id: ${modbus_settings_controller_id}
     address: ${modbus_inverter_address}
