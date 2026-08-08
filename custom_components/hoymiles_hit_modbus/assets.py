@@ -27,17 +27,60 @@ ASSET_STORAGE_KEY = f"{DOMAIN}.assets"
 LOVELACE_RESOURCES_KEY = "lovelace_resources"
 LOVELACE_STORAGE_PREFIX = "lovelace."
 ZEBRA_CARD_TYPE = "custom:hoymiles-zebra-entities-card"
+FRONTEND_ASSET_REVISION = 7
+FRONTEND_STATIC_ROUTE = "static-r2"
 FRONTEND_RESOURCE_URL = (
-    f"/api/{DOMAIN}/static/hoymiles-rce-chart-card.js?v={VERSION}"
+    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-rce-chart-card.js"
+    f"?v={VERSION}.{FRONTEND_ASSET_REVISION}"
+)
+FRONTEND_BOOTSTRAP_URL = (
+    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-dashboard-strategy.js"
+    f"?v={VERSION}.{FRONTEND_ASSET_REVISION}"
 )
 MANAGED_FRONTEND_RESOURCE_PATHS = {
     "/local/hoymiles-rce-chart-card.js",
     f"/api/{DOMAIN}/static/hoymiles-rce-chart-card.js",
+    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-rce-chart-card.js",
 }
 HOYMILES_DASHBOARD_MARKERS = (
     "hoymiles_hit_overview_pv_total_power",
     "hoymiles_hit_overview_battery_power",
 )
+LEGACY_INVERTER_IMAGE_PATHS = {
+    f"/api/{DOMAIN}/static/hoymiles-inverter.png",
+    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-inverter.png",
+}
+INVERTER_IMAGE_PATH = "/local/hoymiles-inverter.png"
+RCE_LOAD_ROW_LABELS = {
+    "pl": {
+        "sensor.hoymiles_actual_load_energy_today": (
+            "Rzeczywiste zużycie odbiorników dzisiaj"
+        ),
+        "sensor.hoymiles_rce_pv_self_consumption_today": (
+            "PV → odbiorniki — rejestr diagnostyczny"
+        ),
+        "sensor.hoymiles_rce_battery_to_load_today": (
+            "Energia oddana przez baterię — diagnostycznie"
+        ),
+        "sensor.hoymiles_rce_grid_to_load_today": (
+            "Energia pobrana z sieci — diagnostycznie"
+        ),
+    },
+    "en": {
+        "sensor.hoymiles_actual_load_energy_today": (
+            "Actual load consumption today"
+        ),
+        "sensor.hoymiles_rce_pv_self_consumption_today": (
+            "PV to load — diagnostic register"
+        ),
+        "sensor.hoymiles_rce_battery_to_load_today": (
+            "Battery energy output — diagnostic"
+        ),
+        "sensor.hoymiles_rce_grid_to_load_today": (
+            "Grid energy input — diagnostic"
+        ),
+    },
+}
 
 # v1.2.0 was the last release without managed-asset metadata. These checksums
 # let the first newer release upgrade untouched files while preserving user
@@ -150,6 +193,48 @@ def _replace_entities_cards(value: Any) -> int:
     return changed
 
 
+def _migrate_rce_load_rows(value: Any, language: str) -> int:
+    """Expose the physical LOAD counter and clarify legacy flow estimates."""
+    changed = 0
+    localized = "pl" if language.startswith("pl") else "en"
+    labels = RCE_LOAD_ROW_LABELS[localized]
+    pv_entity = "sensor.hoymiles_rce_pv_self_consumption_today"
+    actual_entity = "sensor.hoymiles_actual_load_energy_today"
+
+    if isinstance(value, dict):
+        entity = value.get("entity")
+        if entity in labels and value.get("name") != labels[entity]:
+            value["name"] = labels[entity]
+            changed += 1
+
+        entities = value.get("entities")
+        if isinstance(entities, list):
+            entity_ids = {
+                row.get("entity")
+                for row in entities
+                if isinstance(row, dict)
+            }
+            if pv_entity in entity_ids and actual_entity not in entity_ids:
+                for index, row in enumerate(entities):
+                    if isinstance(row, dict) and row.get("entity") == pv_entity:
+                        entities.insert(
+                            index,
+                            {
+                                "entity": actual_entity,
+                                "name": labels[actual_entity],
+                            },
+                        )
+                        changed += 1
+                        break
+
+        for child in value.values():
+            changed += _migrate_rce_load_rows(child, language)
+    elif isinstance(value, list):
+        for child in value:
+            changed += _migrate_rce_load_rows(child, language)
+    return changed
+
+
 def _is_hoymiles_dashboard(config: Any) -> bool:
     """Return whether a Lovelace config is the managed Hoymiles dashboard."""
     if not isinstance(config, dict):
@@ -161,12 +246,23 @@ def _is_hoymiles_dashboard(config: Any) -> bool:
 def _sync_lovelace_resource(storage_path: Path) -> bool:
     """Install or cache-bust the managed Hoymiles frontend module."""
     path = storage_path / LOVELACE_RESOURCES_KEY
-    if not path.is_file():
-        return False
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
+    if path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+    else:
+        # A fresh HA installation may not have a Lovelace resource store yet.
+        # Relying only on add_extra_js_url creates a startup race: Lovelace can
+        # request the dashboard strategy before the integration module has
+        # registered its custom element.  Creating the standard resource store
+        # makes HA load the module before generating the managed dashboard.
+        payload = {
+            "version": 1,
+            "minor_version": 1,
+            "key": LOVELACE_RESOURCES_KEY,
+            "data": {"items": []},
+        }
 
     items = payload.get("data", {}).get("items")
     if not isinstance(items, list):
@@ -209,7 +305,10 @@ def _sync_lovelace_resource(storage_path: Path) -> bool:
     return True
 
 
-def _sync_lovelace_storage(config_path: Path) -> list[Path]:
+def _sync_lovelace_storage(
+    config_path: Path,
+    language: str = "pl",
+) -> list[Path]:
     """Migrate active storage dashboards without replacing user layouts."""
     storage_path = config_path / ".storage"
     if not storage_path.is_dir():
@@ -233,12 +332,31 @@ def _sync_lovelace_storage(config_path: Path) -> list[Path]:
         config = payload.get("data", {}).get("config")
         if not _is_hoymiles_dashboard(config):
             continue
-        if _replace_entities_cards(config) == 0:
+        changes = _replace_entities_cards(config)
+        changes += _migrate_rce_load_rows(config, language)
+        changes += _migrate_inverter_image_paths(config)
+        if changes == 0:
             continue
         _backup_storage_once(path)
         _atomic_write_json(path, payload)
         written.append(path)
     return written
+
+
+def _migrate_inverter_image_paths(value: Any) -> int:
+    """Move dashboards away from removed integration-static image routes."""
+    changes = 0
+    if isinstance(value, dict):
+        image = value.get("inverter_image")
+        if image in LEGACY_INVERTER_IMAGE_PATHS:
+            value["inverter_image"] = INVERTER_IMAGE_PATH
+            changes += 1
+        for child in value.values():
+            changes += _migrate_inverter_image_paths(child)
+    elif isinstance(value, list):
+        for child in value:
+            changes += _migrate_inverter_image_paths(child)
+    return changes
 
 
 def _sync_assets(
@@ -334,6 +452,7 @@ async def async_install_assets(
         await hass.async_add_executor_job(
             _sync_lovelace_storage,
             config_path,
+            hass.config.language,
         )
     )
     await store.async_save(

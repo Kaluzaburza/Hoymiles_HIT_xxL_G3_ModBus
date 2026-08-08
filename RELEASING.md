@@ -33,13 +33,18 @@ explicitly, for example:
 
 ## When ESP32 recompilation is mandatory
 
-Tell users to rebuild and upload firmware whenever a release changes any of:
+Tell users to rebuild and upload firmware whenever a release changes runtime
+firmware behavior in any of:
 
 - `packages/*.yaml`;
-- `hoymiles-inverter.yaml`;
-- `examples/esphome/*.yaml`;
+- runtime sections of `hoymiles-inverter.yaml` or `examples/esphome/*.yaml`;
 - source entities expected by `entity_catalog.json`;
 - UART, Modbus or ESPHome API configuration.
+
+A documentation comment or `dashboard_import`-only change does not require an
+existing user to rebuild firmware. State that explicitly and describe the
+adoption metadata as optional. Do not claim that HACS or `dashboard_import`
+flashes firmware automatically.
 
 The instructions must say that HACS updates the Home Assistant integration but
 does not flash the ESP32. Users must use the top-level ESPHome file and remote
@@ -50,9 +55,31 @@ package tag from the same release.
 1. Move the completed `Unreleased` notes to the new version heading.
 2. Review the user steps and remove instructions that are not required for
    that particular version.
-3. Update all version numbers and remote ESPHome package tags.
-4. Run the release validators and tests.
+3. Update the integration version numbers. Update remote ESPHome package tags
+   only when runtime firmware changes; otherwise keep the last compatible tag
+   and explain explicitly that no ESP32 rebuild is required.
+4. Run the release validators and tests:
+
+   ```text
+   python tools/build_hacs_assets.py
+   python tools/validate_release.py
+   python tools/test_rce_optimizer.py
+   python tools/test_rce_history.py
+   python tools/test_tariff_profiles.py
+   python tools/test_tariff_optimizer.py
+   python tools/test_rcm_history.py
+   python tools/test_rcm_optimizer.py
+   python tools/test_automation_matrix.py --exhaustive
+   node tools/validate_rce_card.js
+   ```
+
+   The exhaustive matrix must report 2064 passed scenarios unless its reviewed
+   scenario set was intentionally changed. Record the new count in
+   `docs/AUTOMATION_TEST_REPORT.md`.
 5. Create the GitHub tag and release.
 6. Copy the complete version notes, including the numbered bilingual user
    steps, into the GitHub Release body visible in HACS.
 7. Confirm that HACS detects the new version and displays the instructions.
+8. Confirm that `LICENSE`, `NOTICE`, `LICENSE_POLICY.md`, `CONTRIBUTING.md` and
+   `.github/CODEOWNERS` are present. Do not describe the project as OSI open
+   source; use **source-available for noncommercial use**.

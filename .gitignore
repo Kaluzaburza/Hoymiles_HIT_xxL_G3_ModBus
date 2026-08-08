@@ -1,6 +1,8 @@
 # ESPHome secrets and build files
 /.esphome/
+**/.esphome/
 /secrets.yaml
+**/secrets.yaml
 
 # Local diagnostics and generated scratch files
 /tmp/

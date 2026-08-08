@@ -1,0 +1,9 @@
+# The project owner reviews changes to all source, automation and license files.
+* @Kaluzaburza
+
+/LICENSE @Kaluzaburza
+/LICENSE_POLICY.md @Kaluzaburza
+/NOTICE @Kaluzaburza
+/custom_components/ @Kaluzaburza
+/home_assistant/ @Kaluzaburza
+/packages/ @Kaluzaburza

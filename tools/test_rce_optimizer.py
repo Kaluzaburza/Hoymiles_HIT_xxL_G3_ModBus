@@ -330,8 +330,8 @@ def test_bms_current_limit_caps_export_power() -> None:
     assert abs(result.planned_export_kwh - expected_limit * 0.5) < 0.02
 
 
-def test_live_pv_self_consumption_corrects_day_load_projection() -> None:
-    """Actual PV-to-load energy must correct an understated daytime profile."""
+def test_actual_day_load_corrects_day_load_projection() -> None:
+    """Actual phase LOAD energy must correct an understated daytime profile."""
     result = RCE.optimize_rce(
         base_input(
             now=NOW.replace(hour=14),
@@ -339,7 +339,7 @@ def test_live_pv_self_consumption_corrects_day_load_projection() -> None:
             battery_capacity_kwh=100.0,
             average_daily_load_kwh=10.0,
             average_night_load_kwh=8.0,
-            pv_to_load_today_kwh=4.0,
+            actual_day_load_today_kwh=4.0,
             pv_to_load_power_kw=2.0,
         )
     )
@@ -366,7 +366,7 @@ def main() -> None:
         test_today_only_prices_produce_a_safe_plan,
         test_export_and_revenue_totals_expose_their_sources,
         test_bms_current_limit_caps_export_power,
-        test_live_pv_self_consumption_corrects_day_load_projection,
+        test_actual_day_load_corrects_day_load_projection,
     ]
     for test in tests:
         test()

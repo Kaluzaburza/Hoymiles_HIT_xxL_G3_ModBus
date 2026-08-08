@@ -96,8 +96,40 @@ def test_daily_and_night_history_uses_phase_counters() -> None:
     assert abs(result.average_daily_kwh - 28.5) < 1e-6
     assert result.night_history_days == 4
     assert abs(result.average_night_kwh - 9.0) < 1e-6
+    assert len(result.average_profile_kwh) == 48
+    assert abs(sum(result.average_profile_kwh) - 28.5) < 0.01
+    assert result.weekday_profile_days == 4
+    assert result.weekend_profile_days == 0
+    assert len(result.weekday_profile_kwh) == 48
+
+
+def test_current_day_window_uses_actual_phase_load() -> None:
+    """Live daytime LOAD must be reconstructed from the phase counters."""
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=WARSAW)
+    start = datetime(2026, 8, 1, 7, 30, tzinfo=WARSAW)
+    samples = {entity_id: [] for entity_id in HISTORY.LOAD_PHASE_ENERGY_ENTITIES}
+    for entity_id, before, current in zip(
+        HISTORY.LOAD_PHASE_ENERGY_ENTITIES,
+        (2.0, 3.0, 1.0),
+        (5.0, 7.0, 2.5),
+        strict=True,
+    ):
+        samples[entity_id] = [
+            (start - timedelta(minutes=5), before),
+            (now - timedelta(minutes=5), current),
+        ]
+
+    result = HISTORY.summarize_load_history(
+        samples,
+        now=now,
+        night_windows={},
+        current_day_window=(start, now),
+    )
+
+    assert abs(result.current_day_energy_kwh - 8.5) < 1e-6
 
 
 if __name__ == "__main__":
     test_daily_and_night_history_uses_phase_counters()
+    test_current_day_window_uses_actual_phase_load()
     print("RCE history: recorder reconstruction scenario passed")

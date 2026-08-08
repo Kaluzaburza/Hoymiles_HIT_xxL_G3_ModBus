@@ -67,7 +67,7 @@ class OptimizerInput:
     bms_max_discharge_current_a: float | None = None
     battery_voltage_v: float | None = None
     bms_power_safety_percent: float = 95.0
-    pv_to_load_today_kwh: float = 0.0
+    actual_day_load_today_kwh: float | None = None
     pv_to_load_power_kw: float = 0.0
 
 
@@ -275,19 +275,19 @@ def _day_load_projection(
     else:
         progress = 0.0
 
-    actual_self_consumption = max(settings.pv_to_load_today_kwh, 0.0)
+    actual_day_load = max(settings.actual_day_load_today_kwh or 0.0, 0.0)
     live_projection = 0.0
-    if progress >= 0.05 and actual_self_consumption > 0:
+    if progress >= 0.05 and actual_day_load > 0:
         # Cap a transiently high early projection.  The cap is deliberately
         # generous: it protects the house while preventing one 0.1 kWh counter
         # step just after sunrise from reserving the entire battery.
         projection_cap = max(
             daily * 2.0,
             historical_day_energy,
-            actual_self_consumption,
+            actual_day_load,
         )
         live_projection = min(
-            actual_self_consumption / progress,
+            actual_day_load / progress,
             projection_cap,
         )
     modeled_day_energy = max(historical_day_energy, live_projection)
@@ -339,7 +339,7 @@ def _load_by_slot(
             )
             live_remaining = max(
                 live_projected_day_energy
-                - max(settings.pv_to_load_today_kwh, 0.0),
+                - max(settings.actual_day_load_today_kwh or 0.0, 0.0),
                 0.0,
             )
             day_energy = max(historical_remaining, live_remaining)

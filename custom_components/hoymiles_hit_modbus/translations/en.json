@@ -6,12 +6,10 @@
         "title": "Connect an ESPHome device",
         "description": "Select the ESPHome device connected to the Hoymiles inverter. The integration creates localized entities without additional Modbus polling.",
         "data": {
-          "source_device_id": "Source ESPHome device",
-          "copy_assets": "Copy the dashboard and EMS automation"
+          "source_device_id": "Source ESPHome device"
         },
         "data_description": {
-          "source_device_id": "The device must run firmware provided by this project.",
-          "copy_assets": "Copies the dashboard, EMS package and RCE card to their corresponding /config directories."
+          "source_device_id": "The device must run firmware provided by this project."
         }
       }
     },
@@ -21,6 +19,12 @@
     },
     "abort": {
       "already_configured": "This device is already configured."
+    }
+  },
+  "issues": {
+    "ems_package_not_loaded": {
+      "title": "EMS automation requires Home Assistant packages",
+      "description": "The integration copied the automation file, but Home Assistant did not load it. Add `packages: !include_dir_named packages` under the existing `homeassistant:` section in `configuration.yaml`, validate the configuration and restart Home Assistant. Do not create a second `homeassistant:` section."
     }
   },
   "services": {
@@ -1617,6 +1621,18 @@
           "parallel_slave_ems_mismatch": "Error - Slave EMS mode mismatch",
           "parallel_invalid_count": "Invalid inverter count"
         }
+      },
+      "rce_optimized_plan": {
+        "name": "Optimized RCE plan"
+      },
+      "tariff_charge_plan": {
+        "name": "Automatic tariff charging plan"
+      },
+      "rcm_voltage_plan": {
+        "name": "RCEm 253 V+ plan"
+      },
+      "setup_status": {
+        "name": "Installation status"
       }
     },
     "number": {

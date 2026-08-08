@@ -38,6 +38,10 @@ esp32:
       minimum_chip_revision: "3.1"
       sram1_as_iram: true
 
+dashboard_import:
+  package_import_url: github://Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/examples/esphome/hoymiles-hit-g3.yaml@main
+  import_full_config: true
+
 logger:
   level: INFO
   logs:

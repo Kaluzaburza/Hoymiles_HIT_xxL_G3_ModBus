@@ -17,12 +17,18 @@ views:
     type: sidebar
     badges: []
     cards:
-      - type: markdown
-        content: >-
-          ## Hoymiles — panel operacyjny
-
-          Najważniejsze dane do codziennej obsługi falownika. Szczegółowe
-          rejestry są w osobnych zakładkach.
+      - type: glance
+        columns: 3
+        show_name: true
+        show_state: true
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_solcast_forecast_today
+            name: Prognoza PV (Solcast)
+          - entity: sensor.hoymiles_solcast_forecast_remaining_today
+            name: Pozostało PV (Solcast)
+          - entity: sensor.hoymiles_load_average_4_days
+            name: Śr. dobowe zużycie domu
       - type: glance
         title: Bieżący przepływ mocy
         columns: 7
@@ -120,7 +126,7 @@ views:
           modern: true
           autarky: "no"
           auto_scale: true
-        inverter_image: /api/hoymiles_hit_modbus/static/hoymiles-inverter.png
+        inverter_image: /local/hoymiles-inverter.png
         battery:
           energy: sensor.hoymiles_hit_total_capacity
           shutdown_soc: 10
@@ -188,6 +194,19 @@ views:
                 name: Do baterii
               - entity: sensor.hoymiles_hit_pv_to_grid_energy_today
                 name: Do sieci
+      - type: glance
+        title: Pobór z sieci — dzisiaj
+        columns: 3
+        show_name: true
+        show_state: true
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_hit_grid_energy_buy_today
+            name: Łącznie
+          - entity: sensor.hoymiles_rce_grid_to_load_today
+            name: Do odbiorników
+          - entity: sensor.hoymiles_grid_to_battery_today
+            name: Do magazynu
       - type: history-graph
         title: Moc — ostatnie 24 godziny [W]
         hours_to_show: 24
@@ -356,12 +375,14 @@ views:
             name: Średnie zużycie w oknie nocnym
           - entity: sensor.hoymiles_night_load_history_coverage
             name: Zebrana historia zużycia nocnego
+          - entity: sensor.hoymiles_actual_load_energy_today
+            name: Rzeczywiste zużycie odbiorników dzisiaj
           - entity: sensor.hoymiles_rce_pv_self_consumption_today
-            name: PV → odbiorniki dzisiaj
+            name: PV → odbiorniki — rejestr diagnostyczny
           - entity: sensor.hoymiles_rce_battery_to_load_today
-            name: Bateria → odbiorniki dzisiaj
+            name: Energia oddana przez baterię — diagnostycznie
           - entity: sensor.hoymiles_rce_grid_to_load_today
-            name: Sieć → odbiorniki dzisiaj
+            name: Energia pobrana z sieci — diagnostycznie
           - entity: sensor.hoymiles_rce_pv_self_consumption_power
             name: PV → odbiorniki teraz
           - entity: sensor.hoymiles_rce_modeled_day_load
@@ -597,6 +618,542 @@ views:
             name: Rezerwa SOC — Self-Use
           - entity: script.hoymiles_stop_scheduled_cycle
             name: Zatrzymaj i wróć do Self-Use
+  - title: Tanie ładowanie
+    path: ladowanie-taryfowe
+    icon: mdi:battery-clock-outline
+    type: sidebar
+    badges: []
+    cards:
+      - type: custom:hoymiles-zebra-entities-card
+        title: Automatyczne ładowanie taryfowe — ustawienia
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_boolean.hoymiles_tariff_charge_enabled
+            name: Włącz automatyczne doładowanie z sieci
+          - entity: input_select.hoymiles_tariff_operator
+            name: Operator i profil cenowy
+          - entity: input_select.hoymiles_tariff_type
+            name: Grupa taryfowa
+          - entity: input_select.hoymiles_rce_inverter_rated_power
+            name: Moc znamionowa jednego falownika
+          - entity: input_number.hoymiles_tariff_requested_charge_power
+            name: Limit mocy Grid Charge (dom i bateria)
+          - entity: input_number.hoymiles_tariff_maximum_soc
+            name: Maksymalny SOC po doładowaniu
+          - entity: input_number.hoymiles_tariff_soc_safety_margin
+            name: Dodatkowy zapas SOC
+          - entity: input_text.hoymiles_solcast_forecast_today_entity
+            name: Encja Solcast — prognoza na dzisiaj
+          - entity: input_text.hoymiles_solcast_forecast_tomorrow_entity
+            name: Encja Solcast — prognoza na jutro
+          - entity: input_number.hoymiles_rce_fallback_daily_load
+            name: Zużycie dobowe przed zebraniem historii
+      - type: markdown
+        title: Wybrany profil — podgląd
+        entity_id: sensor.hoymiles_hit_tariff_charge_plan
+        content: |-
+          {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
+          {% set operator = states('input_select.hoymiles_tariff_operator') %}
+          {% set group = states('input_select.hoymiles_tariff_type') %}
+          {% if operator == 'Manual' %}
+          **Tryb ręczny · {{ group }}**
+
+          Godziny i łączne ceny krańcowe są pobierane z pól ręcznych poniżej.
+          {% elif plan.attributes.tariff_profile_supported | default(false) %}
+          **{{ plan.attributes.tariff_operator_name }} · {{ group }}**<br>
+          Założony sprzedawca: **{{ plan.attributes.tariff_supplier_assumption }}**<br>
+          Cennik: **{{ plan.attributes.tariff_profile_year }}** · sezon:
+          **{{ 'letni' if plan.attributes.tariff_profile_season == 'summer'
+             else 'zimowy' }}**<br>
+          Bieżąca strefa: **{{ plan.attributes.tariff_profile_current_zone }}** ·
+          **{{ plan.attributes.tariff_profile_current_price }} PLN/kWh**<br>
+          Tanie godziny: **{{ plan.attributes.tariff_profile_low_windows }}**<br>
+          {% if group == 'G13' %}
+          Średnia strefa: **{{ plan.attributes.tariff_profile_medium_windows }}**<br>
+          {% endif %}
+          Weekend w taniej strefie:
+          **{{ 'tak' if plan.attributes.tariff_profile_weekend_low else 'nie' }}** ·
+          święta: **{{ 'tak' if plan.attributes.tariff_profile_holiday_low else 'nie' }}**
+
+          | Strefa | Cena poglądowa |
+          |---|---:|
+          | G11 (porównanie) | {{ plan.attributes.tariff_profile_g11_price }} PLN/kWh |
+          | Tania | {{ plan.attributes.tariff_profile_low_price }} PLN/kWh |
+          {% if group == 'G13' %}| Średnia | {{ plan.attributes.tariff_profile_medium_price }} PLN/kWh |
+          {% endif %}| Droga | {{ plan.attributes.tariff_profile_peak_price }} PLN/kWh |
+
+          [Oficjalne taryfy operatora]({{ plan.attributes.tariff_profile_source_url }})
+          {% else %}
+          ⚠️ Profil **{{ operator }} · {{ group }}** nie jest obsługiwany.
+          Automatyczne ładowanie pozostanie zablokowane. Wybierz inną grupę
+          albo profil **Manual**.
+          {% endif %}
+
+          Ceny obejmują energię regionalnego sprzedawcy z urzędu i zmienne
+          składniki dystrybucyjne brutto. Nie obejmują opłat stałych. Przy innym
+          sprzedawcy wybierz **Manual** i przepisz ceny z własnej faktury.
+      - type: conditional
+        conditions:
+          - entity: input_select.hoymiles_tariff_operator
+            state: Manual
+        card:
+          type: custom:hoymiles-zebra-entities-card
+          title: Tryb ręczny — strefy i ceny energii
+          show_header_toggle: false
+          state_color: true
+          entities:
+            - entity: input_number.hoymiles_tariff_g11_price
+              name: Cena referencyjna G11
+            - entity: input_number.hoymiles_tariff_low_price
+              name: Łączna cena w strefie taniej
+            - entity: input_number.hoymiles_tariff_medium_price
+              name: Łączna cena w strefie średniej G13
+            - entity: input_number.hoymiles_tariff_peak_price
+              name: Łączna cena w strefie drogiej
+            - entity: input_datetime.hoymiles_tariff_cheap_1_start
+              name: Początek taniego okna 1
+            - entity: input_datetime.hoymiles_tariff_cheap_1_end
+              name: Koniec taniego okna 1
+            - entity: input_datetime.hoymiles_tariff_cheap_2_start
+              name: Początek taniego okna 2
+            - entity: input_datetime.hoymiles_tariff_cheap_2_end
+              name: Koniec taniego okna 2
+            - entity: input_datetime.hoymiles_tariff_medium_start
+              name: Początek strefy średniej G13
+            - entity: input_datetime.hoymiles_tariff_medium_end
+              name: Koniec strefy średniej G13
+            - entity: input_boolean.hoymiles_tariff_weekend_low_price
+              name: Cały weekend w taniej strefie
+            - entity: input_boolean.hoymiles_tariff_polish_holidays_low_price
+              name: Dni ustawowo wolne w taniej strefie
+      - type: custom:hoymiles-zebra-entities-card
+        title: Plan i bezpieczeństwo magazynu
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_tariff_charge_status
+            name: Stan automatyki
+          - entity: sensor.hoymiles_hit_tariff_charge_plan
+            name: Stan optymalizatora
+          - entity: sensor.hoymiles_tariff_current_zone
+            name: Bieżąca strefa
+          - entity: sensor.hoymiles_tariff_current_price
+            name: Bieżąca cena zakupu
+          - entity: binary_sensor.hoymiles_tariff_planned_charge_slot
+            name: Bieżący blok wybrany do ładowania
+          - entity: sensor.hoymiles_tariff_target_soc
+            name: Wyliczony docelowy SOC
+          - entity: sensor.hoymiles_tariff_planned_grid_import
+            name: Zaplanowany pobór z sieci
+          - entity: sensor.hoymiles_tariff_estimated_savings
+            name: Prognozowana oszczędność względem G11
+          - entity: sensor.hoymiles_load_average_4_days
+            name: Średnie dobowe zużycie odbiorników
+          - entity: sensor.hoymiles_night_load_average_4_days
+            name: Średnie zużycie nocne
+          - entity: sensor.hoymiles_solcast_forecast_remaining_today
+            name: Pozostała prognoza PV dzisiaj
+          - entity: sensor.hoymiles_solcast_forecast_tomorrow
+            name: Prognoza PV jutro
+          - entity: sensor.hoymiles_hit_battery_capacity
+            name: Pojemność magazynu użyta w obliczeniach
+          - entity: sensor.hoymiles_hit_overview_battery_soc
+            name: Aktualny SOC magazynu
+      - type: markdown
+        title: Plan taniego doładowania
+        entity_id: sensor.hoymiles_hit_tariff_charge_plan
+        content: |-
+          {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
+          {% set slots = plan.attributes.planned_slots | default([], true) %}
+          {% set status = plan.attributes.status_code | default('missing_data', true) %}
+          {% set missing = plan.attributes.missing_entities | default([], true) %}
+          **Tryb planu:** {{ 'aktywny' if is_state(
+             'input_boolean.hoymiles_tariff_charge_enabled', 'on')
+             else 'podgląd — automatyczne ładowanie jest wyłączone' }}<br>
+          **Wynik:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>
+          **Deficyt bez doładowania:**
+          {{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>
+          **Pozostały deficyt po planie:**
+          {{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>
+          **Pobór z sieci łącznie:** {{ plan.attributes.planned_grid_import_kwh
+             | default(0) }} kWh<br>
+          **Bezpośrednio sieć → dom:**
+          {{ plan.attributes.planned_direct_load_kwh | default(0) }} kWh<br>
+          **Zapisane w magazynie po stratach:**
+          {{ plan.attributes.planned_stored_energy_kwh | default(0) }} kWh<br>
+          **Koszt planu:** {{ plan.attributes.planned_cost_pln | default(0) }} PLN<br>
+          **Koszt bez optymalizacji w tej taryfie:**
+          {{ plan.attributes.baseline_grid_cost_pln | default(0) }} PLN<br>
+          **Koszt po optymalizacji w tej taryfie:**
+          {{ plan.attributes.optimized_grid_cost_pln | default(0) }} PLN<br>
+          **Oszczędność dzięki przesunięciu poboru:**
+          {{ plan.attributes.automation_savings_pln | default(0) }} PLN<br>
+          **Ten sam pobór w G11:**
+          {{ plan.attributes.g11_reference_cost_pln | default(0) }} PLN<br>
+          **Szacowana oszczędność względem G11:**
+          {{ plan.attributes.estimated_savings_pln | default(0) }} PLN<br>
+          **Model obciążenia:**
+          {{ plan.attributes.load_profile_mode | default('flat_day_night_fallback') }}<br>
+          **Rezerwa planowania:**
+          {{ plan.attributes.self_use_reserve_soc_percent | default(0) }}% Self-Use +
+          {{ plan.attributes.safety_margin_soc_percentage_points | default(0) }} p.p. =
+          **{{ plan.attributes.reserve_soc_percent | default(0) }}%**<br>
+          **Historyczna korekta prognozy PV:**
+          {{ (plan.attributes.forecast_accuracy_factor | default(0.9) * 100) | round(1) }}%
+          ({{ plan.attributes.forecast_accuracy_history_days | default(0) }} dni historii)<br>
+          **Efektywna korekta prognozy na dzisiaj:**
+          {{ (plan.attributes.forecast_today_effective_factor
+              | default(plan.attributes.forecast_accuracy_factor | default(0.9))
+              * 100) | round(1) }}%<br>
+          {% set expected = plan.attributes.forecast_live_expected_elapsed_kwh %}
+          {% if expected is number %}
+          **Kontrola produkcji w locie:** prognoza do teraz {{ expected }} kWh ·
+          rzeczywista {{ plan.attributes.forecast_live_actual_elapsed_kwh | default(0) }} kWh ·
+          pewność korekty {{ (plan.attributes.forecast_live_confidence
+             | default(0) * 100) | round(0) }}%<br>
+          {% endif %}
+          **Przewidywany SOC na końcu horyzontu:**
+          {{ plan.attributes.ending_battery_soc_percent | default(0) }}%
+
+          {% if missing %}
+          ⚠️ **Brak wymaganych danych:** {{ missing | join(', ') }}
+          {% endif %}
+
+          **Wybrane bloki:**
+          {% if slots %}
+          {% for slot in slots %}
+          {% set action_name = {
+             'grid_support': 'sieć → dom; zachowanie baterii',
+             'battery_charge': 'ładowanie magazynu',
+             'grid_support_and_charge': 'dom + ładowanie magazynu'
+             }.get(slot.action, 'ładowanie') %}
+          - {{ slot.date }} {{ slot.start }}–{{ slot.end }} ·
+            {{ slot.grid_import_kwh }} kWh · {{ slot.price }} PLN/kWh ·
+            **{{ action_name }}** · cel {{ slot.target_soc_percent }}% SOC
+          {% endfor %}
+          {% else %}
+          - Brak zaplanowanego doładowania.
+          {% endif %}
+      - type: custom:hoymiles-zebra-entities-card
+        title: Wynik rzeczywisty
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_tariff_grid_charge_energy_daily
+            name: Energia doładowania dzisiaj
+          - entity: sensor.hoymiles_tariff_savings_daily
+            name: Oszczędność dzisiaj względem G11
+          - entity: sensor.hoymiles_tariff_grid_charge_energy_monthly
+            name: Energia doładowania w tym miesiącu
+          - entity: sensor.hoymiles_tariff_savings_monthly
+            name: Oszczędność w tym miesiącu względem G11
+          - entity: sensor.hoymiles_tariff_grid_charge_energy_yearly
+            name: Energia doładowania w tym roku
+          - entity: sensor.hoymiles_tariff_savings_yearly
+            name: Oszczędność w tym roku względem G11
+      - type: statistics-graph
+        title: Tanie ładowanie — ostatnie 30 dni
+        chart_type: bar
+        period: day
+        days_to_show: 30
+        stat_types:
+          - change
+        entities:
+          - entity: sensor.hoymiles_tariff_grid_charge_energy_total
+            name: Energia z sieci [kWh]
+          - entity: sensor.hoymiles_tariff_savings_total
+            name: Oszczędność względem G11 [PLN]
+      - type: custom:hoymiles-zebra-entities-card
+        title: Ustawienia zaawansowane
+        show_header_toggle: false
+        view_layout:
+          position: sidebar
+        entities:
+          - entity: input_number.hoymiles_tariff_minimum_saving
+            name: Minimalna różnica ceny względem G11
+          - entity: input_number.hoymiles_tariff_charge_efficiency
+            name: Sprawność ładowania
+          - entity: input_number.hoymiles_tariff_discharge_efficiency
+            name: Sprawność późniejszego rozładowania
+          - entity: number.hoymiles_hit_force_charge_soc
+            name: Cel SOC zapisany w falowniku
+          - entity: number.hoymiles_hit_maximum_charge_power
+            name: Limit mocy zapisany w falowniku
+      - type: markdown
+        title: Jak działa automatyka taryfowa
+        view_layout:
+          position: sidebar
+        content: |-
+          Automatyka korzysta z tej samej prognozy **Solcast PV Forecast** i
+          historii rzeczywistego obciążenia domu co RCE. Co 30 minut symuluje
+          bilans do końca jutra. W trybie **Grid Charge** ustawiona moc jest
+          wspólnym limitem wejścia AC: falownik najpierw zasila bieżące
+          odbiorniki, a dopiero niewykorzystaną częścią tej mocy ładuje
+          magazyn do wyznaczonego SOC. Jeżeli celem jest tylko zachowanie
+          energii baterii na późniejsze drogie godziny, automat zamraża
+          bieżący SOC i używa sieci do obsługi domu — nie próbuje ładować
+          baterii ponad ten poziom.
+
+          Rezerwa planowania jest zawsze liczona z aktualnego progu awaryjnego
+          **Self-Use + dodatkowego zapasu SOC**. Nie ma stałej wartości 27%.
+          Jeżeli magazyn pozostaje poniżej tego progu, automat uzupełnia tylko
+          brakującą energię w taniej strefie, o ile PV nie odbuduje jej wcześniej.
+
+          Po zebraniu wiarygodnej porcji produkcji dziennej automat porównuje
+          energię rzeczywistą z krzywą Solcast. Trwały niedobór, np. wyłączony
+          string PV, obniża prognozę tylko na dzisiaj i pozwala skorygować plan
+          przed kolejnym tanim oknem. Małe próbki tuż po wschodzie słońca są
+          ignorowane.
+
+          Zimą, przy niskiej produkcji i dużym zużyciu, może zachować baterię
+          podczas taniej strefy oraz dodatkowo ją naładować na kolejne drogie
+          godziny. Moc całego systemu, maksymalny SOC, osobne limity ładowania
+          i rozładowania BMS oraz straty obu konwersji są uwzględniane w
+          obliczeniach.
+
+          RCE i ładowanie taryfowe są teraz rozdzielone. Włączenie jednego
+          automatu wyłącza drugi. Ręczne harmonogramy EMS mają pierwszeństwo.
+
+          Profile **PGE, TAURON, ENEA, ENERGA i STOEN** automatycznie dobierają
+          godziny stref, weekendy, polskie święta i — tam, gdzie taryfa tego
+          wymaga — sezon letni lub zimowy. Ceny poglądowe pochodzą z taryf 2026
+          regionalnego sprzedawcy z urzędu i wybranego operatora.
+
+          Użytkownik z innym sprzedawcą wybiera **Manual** i wpisuje łączną
+          zmienną cenę 1 kWh ze swojej faktury: energię, dystrybucję zmienną,
+          opłatę jakościową, OZE i kogeneracyjną. Opłat stałych nie uwzględnia
+          się, bo nie zależą od godziny ładowania.
+
+          [Porównywarka ofert URE](https://maszwybor.ure.gov.pl/or/cenki/122,Cenowy-Energetyczny-Kalkulator-Internetowy-CENKI.html)
+          · [Taryfy i godziny operatorów](https://www.ure.gov.pl/pl/energia-elektryczna/ceny-wskazniki/7852,Taryfy-opublikowane-w-2026-r.html)
+  - title: RCEm 253 V+
+    path: rcem-253v
+    icon: mdi:transmission-tower-export
+    type: sidebar
+    badges: []
+    cards:
+      - type: custom:hoymiles-zebra-entities-card
+        title: Automatyka RCEm 253 V+ — ustawienia
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_boolean.hoymiles_rcm_enabled
+            name: Włącz automatykę ochrony eksportu
+          - entity: input_boolean.hoymiles_rcm_shadow_mode
+            name: Tylko obserwacja — bez zapisu do falownika
+          - entity: input_boolean.hoymiles_rcm_export_control_enabled
+            name: Płynna regulacja maksymalnego eksportu
+          - entity: input_boolean.hoymiles_rcm_pre_discharge_enabled
+            name: Poranne rozładowanie — przygotowanie miejsca na PV
+          - entity: sensor.hoymiles_rcem_status
+            name: Stan automatyki
+          - entity: sensor.hoymiles_hit_rcm_voltage_plan
+            name: Stan planera napięcia
+          - entity: input_select.hoymiles_rce_inverter_rated_power
+            name: Moc znamionowa jednego falownika
+          - entity: input_number.hoymiles_rcm_export_cap_percent
+            name: Maksymalny eksport zgodny ze zgłoszeniem
+          - entity: input_number.hoymiles_rcm_soc_safety_margin
+            name: Dodatkowy zapas SOC
+
+      - type: glance
+        title: Napięcie sieci — sterowanie według najwyższej fazy
+        columns: 5
+        show_name: true
+        show_state: true
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_hit_grid_voltage_l1
+            name: L1
+          - entity: sensor.hoymiles_hit_grid_voltage_l2
+            name: L2
+          - entity: sensor.hoymiles_hit_grid_voltage_l3
+            name: L3
+          - entity: sensor.hoymiles_rcem_maximum_grid_voltage
+            name: Maksimum
+          - entity: sensor.hoymiles_rcem_rolling_10m_voltage
+            name: Średnia 10 min
+
+      - type: history-graph
+        title: Napięcie L1/L2/L3 i średnia 10-minutowa
+        hours_to_show: 24
+        entities:
+          - entity: sensor.hoymiles_hit_grid_voltage_l1
+            name: L1
+          - entity: sensor.hoymiles_hit_grid_voltage_l2
+            name: L2
+          - entity: sensor.hoymiles_hit_grid_voltage_l3
+            name: L3
+          - entity: sensor.hoymiles_rcem_rolling_10m_voltage
+            name: Średnia 10 min
+
+      - type: markdown
+        title: Plan ochrony eksportu
+        entity_id: sensor.hoymiles_hit_rcm_voltage_plan
+        content: |-
+          {% set plan = states.sensor.hoymiles_hit_rcm_voltage_plan %}
+          {% set windows = plan.attributes.risk_windows | default([], true) %}
+          {% set planned = plan.attributes.planned_grid_discharge_kwh
+             | default(0) | float(0) %}
+          {% set horizon = plan.attributes.risk_surplus_horizon
+             | default('missing') %}
+          {% set horizon_labels = {
+            'today': 'dzisiaj', 'tomorrow': 'jutro', 'none': 'brak',
+            'missing': 'brak danych' } %}
+          **Tryb:** {{ 'obserwacja — brak zapisów do falownika'
+             if is_state('input_boolean.hoymiles_rcm_shadow_mode', 'on')
+             else 'aktywna regulacja globalnej mocy ładowania baterii' }}<br>
+          **Wynik:** {{ states('sensor.hoymiles_hit_rcm_voltage_plan') }}<br>
+          **Bieżące działanie:** {{ plan.attributes.action | default('brak') }}<br>
+          **Najwyższe napięcie:**
+          {{ plan.attributes.maximum_voltage_v | default(0) }} V<br>
+          **Średnia 10 min:**
+          {{ plan.attributes.rolling_10m_voltage_v | default(0) }} V<br>
+          **Ryzyko napięciowe:**
+          {{ plan.attributes.voltage_risk_score_percent | default(0) }}%<br>
+          **Historia:** {{ plan.attributes.history_days | default(0) }} dni ·
+          {{ plan.attributes.history_samples | default(0) }} próbek<br>
+          **Prognoza użyta do następnego okna:**
+          {{ plan.attributes.selected_forecast_kwh | default(0) }} kWh ·
+          {{ horizon_labels.get(horizon, horizon) }}<br>
+          **Zapotrzebowanie domu w oknie ryzyka:**
+          {{ plan.attributes.expected_risk_load_kwh | default(0) }} kWh<br>
+          **Przewidywana nadwyżka PV w oknie ryzyka:**
+          {{ plan.attributes.expected_risk_surplus_kwh | default(0) }} kWh<br>
+          **Chroniony minimalny SOC domu i rezerwy:**
+          {{ plan.attributes.protected_minimum_soc_percent | default(0) }}%<br>
+          **Wolne miejsce potrzebne na szczyt:**
+          {{ plan.attributes.required_headroom_kwh | default(0) }} kWh<br>
+          **Dostępne wolne miejsce:**
+          {{ plan.attributes.available_headroom_kwh | default(0) }} kWh<br>
+          **Brakujące wolne miejsce:**
+          {{ plan.attributes.headroom_shortfall_kwh | default(0) }} kWh<br>
+          **Przewidywane naturalne rozładowanie na dom przed szczytem:**
+          {{ plan.attributes.expected_natural_headroom_kwh | default(0) }} kWh<br>
+          {% if planned > 0.1 %}
+          **Zaplanowane poranne rozładowanie do sieci:**
+          {{ planned | round(2) }} kWh<br>
+          **Docelowy SOC po porannym rozładowaniu:**
+          {{ plan.attributes.pre_discharge_target_soc_percent | default(0) }}%<br>
+          **Automatycznie dobrana moc rozładowania:**
+          {{ plan.attributes.pre_discharge_power_kw | default(0) }} kW ·
+          {{ plan.attributes.pre_discharge_power_percent | default(0) }}%<br>
+          **Czas do dzisiejszego okna ryzyka:**
+          {% set minutes = plan.attributes.minutes_to_risk %}
+          {{ ((minutes | int(0)) // 60) ~ ' h ' ~ ((minutes | int(0)) % 60) ~ ' min'
+             if minutes is number else 'brak dzisiejszego okna' }}<br>
+          {% else %}
+          **Poranne rozładowanie:** nie jest potrzebne lub brak dzisiejszego
+          okna ryzyka.<br>
+          {% endif %}
+          **Docelowy maksymalny SOC przed szczytem:**
+          {{ plan.attributes.target_soc_before_risk_percent | default(0) }}%<br>
+          **Zalecany globalny limit ładowania:**
+          {{ plan.attributes.recommended_charge_limit_percent | default(0) }}% ·
+          {{ plan.attributes.recommended_charge_power_kw | default(0) }} kW<br>
+          **Efektywny twardy limit eksportu:**
+          {{ plan.attributes.effective_export_cap_percent | default(0) }}%<br>
+          **Zalecany bieżący limit eksportu:**
+          {{ plan.attributes.recommended_export_limit_percent | default(0) }}%<br>
+          **Szacowana bezpieczna moc eksportu:**
+          {{ plan.attributes.estimated_safe_export_power_kw | default(0) }} kW
+
+          **Powtarzalne okna ryzyka z ostatnich czterech dni:**
+          {% if windows %}
+          {% for window in windows %}
+          - {{ window }}
+          {% endfor %}
+          {% else %}
+          - Nie wykryto jeszcze powtarzalnego okna wysokiego napięcia.
+          {% endif %}
+
+      - type: custom:hoymiles-zebra-entities-card
+        title: Regulator — wartości bieżące
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: binary_sensor.hoymiles_rcem_risk_window_active
+            name: Historyczne okno ryzyka aktywne
+          - entity: sensor.hoymiles_rcem_voltage_risk
+            name: Ryzyko napięciowe
+          - entity: sensor.hoymiles_rcem_required_battery_headroom
+            name: Wymagane wolne miejsce w magazynie
+          - entity: sensor.hoymiles_rcem_headroom_shortfall
+            name: Brakujące wolne miejsce w magazynie
+          - entity: sensor.hoymiles_rcem_natural_headroom_before_risk
+            name: Naturalne miejsce zasilając dom przed szczytem
+          - entity: sensor.hoymiles_rcem_planned_grid_discharge
+            name: Zaplanowane poranne rozładowanie do sieci
+          - entity: sensor.hoymiles_rcem_pre_discharge_target_soc
+            name: Docelowy SOC porannego rozładowania
+          - entity: sensor.hoymiles_rcem_pre_discharge_power
+            name: Automatycznie dobrana moc rozładowania
+          - entity: sensor.hoymiles_rcem_recommended_battery_charge_limit
+            name: Zalecany globalny limit ładowania
+          - entity: number.hoymiles_hit_battery_max_charge_power
+            name: Rzeczywisty globalny limit ładowania baterii
+          - entity: sensor.hoymiles_rcem_recommended_export_limit
+            name: Zalecany limit eksportu
+          - entity: number.hoymiles_hit_maximum_export_power_limit
+            name: Rzeczywisty maksymalny limit eksportu
+          - entity: sensor.hoymiles_hit_maximum_charge_current
+            name: Maksymalny prąd ładowania BMS
+          - entity: sensor.hoymiles_hit_overview_battery_soc
+            name: SOC magazynu
+
+      - type: markdown
+        title: Zasady bezpieczeństwa
+        view_layout:
+          position: sidebar
+        content: |-
+          W czasie normalnej regulacji automatyka pozostaje w **Self-Use**. Łączy
+          prognozę Solcast na dziś i
+          jutro, rzeczywisty profil LOAD z czterech dni, chronione potrzeby domu,
+          SOC, pojemność magazynu i historyczne napięcia L1/L2/L3. Od prognozy
+          PV odejmuje zużycie domu, a dopiero pozostałą nadwyżkę traktuje jako
+          energię wymagającą miejsca w magazynie.
+
+          Najpierw odejmuje miejsce, które powstanie naturalnie, gdy dom będzie
+          zasilany z baterii przed szczytem. Jeżeli nadal brakuje pojemności,
+          opcja **Poranne rozładowanie** może wcześniej przełączyć EMS na Grid
+          Discharge i sprzedać wyłącznie obliczony brak. Moc dobierana jest z
+          ilości kWh oraz czasu pozostałego do okna, z 30-minutowym zapasem.
+          Cykl kończy się po osiągnięciu docelowego SOC albo wcześniej, gdy
+          najwyższa faza wzrośnie do 248,4 V lub średnia 10-minutowa do 249,2 V.
+          Nigdy nie schodzi poniżej chronionego SOC domu i rezerwy.
+
+          Funkcja porannego rozładowania wymaga aktywnego GCF, rzeczywistego
+          limitu eksportu większego od 0%, braku blokady sprzedaży i wyłączonego
+          trybu obserwacyjnego. Nie zmienia GCF ani **Maximum Export Power Limit**;
+          korzysta z wartości zastanej i limitu zgodnego ze zgłoszeniem. Po
+          zakończeniu odtwarza wcześniejszą maksymalną moc rozładowania, próg SOC
+          oraz tryb Self-Use.
+
+          Przed przewidywanym szczytem RCEm nadal ogranicza **Battery Max Charge
+          Power**, aby nie napełnić magazynu za wcześnie. Jeżeli poranne
+          rozładowanie pozostaje wyłączone lub eksport ma limit 0%, pole
+          **Zaplanowane poranne rozładowanie** działa wyłącznie poglądowo.
+
+          Opcjonalna regulacja eksportu zmienia wyłącznie **Maximum Export Power
+          Limit**. Nigdy nie przekroczy mniejszej z dwóch wartości: limitu
+          zastanego przy uruchomieniu oraz pola **Maksymalny eksport zgodny ze
+          zgłoszeniem**. Przykład: falownik 20 kW i limit 50% oznacza maksymalnie
+          10 kW eksportu. RCEm nie włącza GCF — użytkownik robi to świadomie w
+          ustawieniach falownika.
+
+          Nie zmienia asymetrii trójfazowej, Q(U), P(U), współczynnika mocy ani
+          progów zabezpieczeń. Najwyższa z faz L1/L2/L3 zawsze ma pierwszeństwo.
+
+          RCE, ładowanie taryfowe i RCEm 253 V+ wzajemnie się wykluczają.
+          Wyrównywanie magazynu oraz ręczne plany EMS mają pierwszeństwo.
+
+          Podczas pierwszych testów pozostaw przełącznik **Tylko obserwacja**
+          włączony. Wyłączenie go pozwala regulatorowi zmieniać limit ładowania
+          najwyżej o 10 punktów procentowych na minutę, a limit eksportu o 5–15
+          punktów zależnie od napięcia. Przy 253 V eksport może zostać natychmiast
+          ograniczony do 0%, a magazyn użyje pełnego bezpiecznego limitu BMS.
+
   - title: Zyski
     path: zyski
     icon: mdi:cash-multiple
@@ -1129,6 +1686,38 @@ views:
     icon: mdi:battery-high
     badges: []
     cards:
+      - type: markdown
+        content: |-
+          ## Wyrównywanie magazynu
+          Okresowy cykl serwisowy dla magazynów LiFePO4. W dniu wykonania
+          najpierw wykorzystuje produkcję PV, po zachodzie doładowuje magazyn
+          z sieci do 100%, a od 99% ogranicza rzeczywistą moc ładowania baterii
+          do około 2 kW. Zadany czas wyrównywania jest liczony dopiero od
+          osiągnięcia 100% SOC.
+
+          Podczas cyklu RCE, ładowanie taryfowe i ręczne harmonogramy EMS są
+          zawieszone. Ich ustawienia pozostają zapamiętane i wracają do pracy
+          po zakończeniu. Wyłączenie przełącznika przerywa cykl i przywraca
+          Self-Use. Funkcji używaj zgodnie z zaleceniami producenta baterii.
+      - type: custom:hoymiles-zebra-entities-card
+        title: Wyrównywanie magazynu — ustawienia i stan
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_boolean.hoymiles_battery_balancing_enabled
+            name: Włącz automatyczne wyrównywanie
+          - entity: input_number.hoymiles_battery_balancing_interval_days
+            name: Wykonuj co określoną liczbę dni
+          - entity: input_number.hoymiles_battery_balancing_hold_hours
+            name: Czas wyrównywania przy 100% SOC
+          - entity: sensor.hoymiles_battery_balancing_status
+            name: Stan automatyki
+          - entity: sensor.hoymiles_battery_balancing_next_run
+            name: Następny planowany cykl
+          - entity: timer.hoymiles_battery_balancing_hold
+            name: Pozostały czas przy 100% SOC
+          - entity: sensor.hoymiles_battery_balancing_slow_charge_power
+            name: Bieżący limit dla wolnego ładowania
       - type: custom:hoymiles-zebra-entities-card
         title: Bateria — stan, moc i limity BMS
         show_header_toggle: false
@@ -1708,6 +2297,10 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
+          - entity: sensor.hoymiles_hit_setup_status
+            name: "Stan instalacji"
+            tap_action:
+              action: more-info
           - entity: sensor.hoymiles_hit_esp_uptime
             name: "ESP Uptime"
       - type: custom:hoymiles-zebra-entities-card
