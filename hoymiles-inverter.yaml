@@ -68,7 +68,7 @@ logger:
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.3.3
+    ref: v1.4.4
     refresh: 1d
     files:
       - packages/core.yaml

@@ -16,7 +16,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
@@ -106,6 +110,7 @@ STATUS_TEXT = {
         "missing_data": "Brak wymaganych danych — ładowanie zablokowane",
         "optimizer_error": "Błąd obliczeń — ładowanie zablokowane",
         "unsupported_profile": "Ta grupa nie jest dostępna u wybranego operatora",
+        "expired_profile": "Cennik wygasł — automatyczne ładowanie zablokowane",
     },
     "en": {
         "ready": "Ready — low-cost charging planned",
@@ -119,6 +124,7 @@ STATUS_TEXT = {
         "missing_data": "Required data missing — charging blocked",
         "optimizer_error": "Calculation error — charging blocked",
         "unsupported_profile": "This tariff group is unavailable for the selected DSO",
+        "expired_profile": "Tariff prices expired — automatic charging blocked",
     },
 }
 
@@ -234,6 +240,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
         self._forecast_accuracy_days = 0
         self._forecast_accuracy_source = "automatic_conservative_fallback"
         self._forecast_refresh_running = False
+        self._recalculate_cancel = None
 
     @property
     def suggested_object_id(self) -> str:
@@ -292,19 +299,38 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
 
     @callback
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
-        self._recalculate()
-        self.async_write_ha_state()
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+        self._recalculate_cancel = async_call_later(
+            self.hass,
+            5,
+            self._async_debounced_recalculate,
+        )
+
+    @callback
+    def _async_debounced_recalculate(self, now: datetime) -> None:
+        self._recalculate_cancel = None
+        self._recalculate_and_write()
 
     @callback
     def _async_timer(self, now: datetime) -> None:
-        self._recalculate()
-        self.async_write_ha_state()
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+            self._recalculate_cancel = None
+        self._recalculate_and_write()
 
     async def _async_forecast_accuracy_timer(self, now: datetime) -> None:
         """Refresh the automatic Solcast bias correction once per hour."""
         await self._async_refresh_forecast_accuracy()
+        self._recalculate_and_write()
+
+    def _recalculate_and_write(self) -> None:
+        """Write only when the plan or its diagnostics actually changed."""
+        previous_state = self.native_value
+        previous_attributes = self._attributes
         self._recalculate()
-        self.async_write_ha_state()
+        if previous_state != self.native_value or previous_attributes != self._attributes:
+            self.async_write_ha_state()
 
     async def _async_refresh_forecast_accuracy(self) -> None:
         """Learn a conservative PV factor from complete local days."""
@@ -725,6 +751,14 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 {
                     "_status_code": "unsupported_profile",
                     "tariff_profile_supported": False,
+                    "missing_entities": [],
+                }
+            )
+            return None, metadata
+        if metadata["tariff_profile_expired"]:
+            metadata.update(
+                {
+                    "_status_code": "expired_profile",
                     "missing_entities": [],
                 }
             )

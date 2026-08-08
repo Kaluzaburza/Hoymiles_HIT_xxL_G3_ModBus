@@ -34,8 +34,12 @@ sensor:
     filters:
     - multiply: 0.1
 
-  # Efektywna pojemność: preferuje wartość BMS, a gdy BMS jej nie raportuje,
-  # korzysta z ustawienia 4102. Zachowana nazwa utrzymuje istniejącą encję HA.
+  # Efektywna pojemność używana przez dashboard i automatyki. Ustawienie 4102
+  # jest źródłem nadrzędnym, ponieważ odpowiada rzeczywistej pojemności
+  # skonfigurowanej w falowniku. Niektóre klastry BMS raportują w 1907 sumę
+  # nominalną albo wartość w innej skali; używamy jej wyłącznie jako awaryjnego
+  # źródła, gdy 4102 nie jest dostępny. Zachowana nazwa utrzymuje istniejącą
+  # encję HA.
   - platform: template
     name: "Total Capacity"
     id: total_capacity_1907
@@ -45,13 +49,13 @@ sensor:
     accuracy_decimals: 1
     update_interval: 10s
     lambda: |-
-      if (id(bms_total_capacity_raw_1907).has_state() &&
-          id(bms_total_capacity_raw_1907).state > 0.0f) {
-        return id(bms_total_capacity_raw_1907).state;
-      }
       if (id(battery_capacity_4102).has_state() &&
           id(battery_capacity_4102).state > 0.0f) {
         return id(battery_capacity_4102).state;
+      }
+      if (id(bms_total_capacity_raw_1907).has_state() &&
+          id(bms_total_capacity_raw_1907).state > 0.0f) {
+        return id(bms_total_capacity_raw_1907).state;
       }
       return {};
 

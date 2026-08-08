@@ -113,6 +113,28 @@ if (
 }
 console.log("Zebra entities card: registered without duplicate metadata");
 
+const ResponsiveGlanceCard = registry.get("hoymiles-responsive-glance-card");
+if (!ResponsiveGlanceCard) {
+  throw new Error("The responsive glance custom element was not registered");
+}
+const responsiveGlance = new ResponsiveGlanceCard();
+if (!responsiveGlance.shadowRoot) {
+  throw new Error("Responsive glance must own its layout shadow root");
+}
+for (const expected of [
+  "grid-template-columns: repeat(auto-fit",
+  "overflow-wrap: anywhere",
+  'new CustomEvent("hass-more-info"',
+]) {
+  if (!source.includes(expected)) {
+    throw new Error(`Responsive glance is missing: ${expected}`);
+  }
+}
+if (source.includes('document.createElement("hui-glance-card")')) {
+  throw new Error("Responsive glance delegated layout back to fixed-column hui-glance-card");
+}
+console.log("Responsive glance: wrapping layout registered successfully");
+
 const card = new Card();
 card.setConfig({
   type: "custom:hoymiles-rce-chart-card",
@@ -198,12 +220,12 @@ if (!PowerFlowCard) {
 const powerFlowCard = new PowerFlowCard();
 powerFlowCard._config = {
   battery: {
-    energy: "sensor.hoymiles_hit_total_capacity",
+    energy: "sensor.hoymiles_hit_battery_capacity",
   },
 };
 const resolvedCapacity = powerFlowCard._resolveBatteryEnergy({
   states: {
-    "sensor.hoymiles_hit_total_capacity": state("230", {
+    "sensor.hoymiles_hit_battery_capacity": state("230", {
       unit_of_measurement: "kWh",
     }),
   },

@@ -38,7 +38,7 @@ WATCHED_RCM_ENTITIES = {
     "sensor.hoymiles_hit_overview_pv_total_power",
     "sensor.hoymiles_actual_load_power",
     "sensor.hoymiles_rce_grid_export_power",
-    "sensor.hoymiles_hit_total_capacity",
+    "sensor.hoymiles_hit_battery_capacity",
     "sensor.hoymiles_hit_overview_battery_soc",
     "sensor.hoymiles_hit_battery_voltage_bms",
     "sensor.hoymiles_hit_maximum_charge_current",
@@ -189,19 +189,25 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
         if event.data["entity_id"] in GRID_VOLTAGE_ENTITIES:
             self._append_voltage_sample()
-        self._recalculate()
-        self.async_write_ha_state()
+            return
+        self._recalculate_and_write()
 
     @callback
     def _async_control_timer(self, now: datetime) -> None:
         self._append_voltage_sample(now)
-        self._recalculate()
-        self.async_write_ha_state()
+        self._recalculate_and_write()
 
     async def _async_history_timer(self, now: datetime) -> None:
         await self._async_refresh_voltage_history()
+        self._recalculate_and_write()
+
+    def _recalculate_and_write(self) -> None:
+        """Write only when the voltage plan materially changed."""
+        previous_state = self.native_value
+        previous_attributes = self._attributes
         self._recalculate()
-        self.async_write_ha_state()
+        if previous_state != self.native_value or previous_attributes != self._attributes:
+            self.async_write_ha_state()
 
     def _append_voltage_sample(self, now: datetime | None = None) -> None:
         values = [_state_number(self.hass, entity_id) for entity_id in GRID_VOLTAGE_ENTITIES]
@@ -406,7 +412,7 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                     *GRID_VOLTAGE_ENTITIES,
                     "sensor.hoymiles_hit_overview_pv_total_power",
                     "sensor.hoymiles_actual_load_power",
-                    "sensor.hoymiles_hit_total_capacity",
+                    "sensor.hoymiles_hit_battery_capacity",
                     "sensor.hoymiles_hit_overview_battery_soc",
                     "number.hoymiles_hit_self_use_soc",
                     "number.hoymiles_hit_battery_max_charge_power",
@@ -525,7 +531,7 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                         _state_number(self.hass, "sensor.hoymiles_rce_grid_export_power") or 0.0,
                         0.0,
                     ),
-                    battery_capacity_kwh=required["sensor.hoymiles_hit_total_capacity"],
+                    battery_capacity_kwh=required["sensor.hoymiles_hit_battery_capacity"],
                     battery_soc_percent=required["sensor.hoymiles_hit_overview_battery_soc"],
                     reserve_soc_percent=required["number.hoymiles_hit_self_use_soc"],
                     safety_margin_soc_percent=required["input_number.hoymiles_rcm_soc_safety_margin"],

@@ -9,8 +9,9 @@
       "badges": [],
       "cards": [
         {
-          "type": "glance",
+          "type": "custom:hoymiles-responsive-glance-card",
           "columns": 3,
+          "minimum_width": 120,
           "show_name": true,
           "show_state": true,
           "state_color": true,
@@ -30,9 +31,10 @@
           ]
         },
         {
-          "type": "glance",
+          "type": "custom:hoymiles-responsive-glance-card",
           "title": "Current power flow",
           "columns": 7,
+          "minimum_width": 104,
           "show_name": true,
           "show_state": true,
           "state_color": true,
@@ -68,7 +70,8 @@
           ]
         },
         {
-          "type": "horizontal-stack",
+          "type": "custom:hoymiles-responsive-stack-card",
+          "minimum_width": 280,
           "cards": [
             {
               "type": "custom:hoymiles-zebra-entities-card",
@@ -129,6 +132,14 @@
             "position": "sidebar"
           },
           "entities": [
+            {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Current controller"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Control conflict"
+            },
             {
               "entity": "select.hoymiles_hit_ems_mode",
               "name": "Operating mode"
@@ -200,7 +211,7 @@
           },
           "inverter_image": "/local/hoymiles-inverter.png",
           "battery": {
-            "energy": "sensor.hoymiles_hit_total_capacity",
+            "energy": "sensor.hoymiles_hit_battery_capacity",
             "shutdown_soc": 10,
             "colour": "#00BCD4",
             "charge_colour": "#00BCD4",
@@ -313,22 +324,28 @@
           "type": "history-graph",
           "title": "Power — last 24 hours [W]",
           "hours_to_show": 24,
+          "show_names": true,
+          "fit_y_data": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_overview_pv_total_power",
-              "name": "PV"
+              "name": "PV",
+              "color": "#00E676"
             },
             {
               "entity": "sensor.hoymiles_actual_load_power",
-              "name": "Load"
+              "name": "Load",
+              "color": "#FF1744"
             },
             {
               "entity": "sensor.hoymiles_hit_overview_grid_total_active_power",
-              "name": "Grid"
+              "name": "Grid",
+              "color": "#FFD600"
             },
             {
               "entity": "sensor.hoymiles_hit_overview_battery_power",
-              "name": "Battery"
+              "name": "Battery",
+              "color": "#00B0FF"
             }
           ]
         },
@@ -483,6 +500,14 @@
           "state_color": true,
           "entities": [
             {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Current controller"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Control conflict"
+            },
+            {
               "entity": "input_boolean.hoymiles_rce_discharge_enabled",
               "name": "Enable automatic discharge using RCE prices"
             },
@@ -493,18 +518,6 @@
             {
               "entity": "input_number.hoymiles_rce_requested_discharge_power",
               "name": "Grid discharge power"
-            },
-            {
-              "entity": "input_text.hoymiles_solcast_forecast_today_entity",
-              "name": "Solcast entity — today forecast"
-            },
-            {
-              "entity": "input_text.hoymiles_solcast_forecast_tomorrow_entity",
-              "name": "Solcast entity — tomorrow forecast"
-            },
-            {
-              "entity": "input_number.hoymiles_rce_fallback_daily_load",
-              "name": "Daily consumption before history is available"
             },
             {
               "entity": "input_boolean.hoymiles_rce_dynamic_soc_enabled",
@@ -530,9 +543,83 @@
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
-          "title": "RCE — status, forecast and result",
+          "title": "RCE — advanced configuration",
           "show_header_toggle": false,
           "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entities": [
+            {
+              "entity": "input_text.hoymiles_solcast_forecast_today_entity",
+              "name": "Custom Solcast entity — today"
+            },
+            {
+              "entity": "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+              "name": "Custom Solcast entity — tomorrow"
+            },
+            {
+              "entity": "input_number.hoymiles_rce_fallback_daily_load",
+              "name": "Daily consumption before history is available"
+            }
+          ]
+        },
+        {
+          "type": "custom:hoymiles-zebra-entities-card",
+          "title": "RCE — automation decision",
+          "show_header_toggle": false,
+          "state_color": true,
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_rce_status",
+              "name": "Automation status"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_rce_optimized_plan",
+              "name": "Optimizer decision"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_current_price",
+              "name": "Current RCE price"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_automatic_price_floor",
+              "name": "Plan price floor"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_dynamic_minimum_soc",
+              "name": "Protected minimum SOC"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_available_energy_now",
+              "name": "Energy available above reserve"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_planned_battery_export",
+              "name": "Planned battery export"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_ending_battery_soc",
+              "name": "SOC at the end of the horizon"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_optimization_gain",
+              "name": "Optimization benefit"
+            },
+            {
+              "entity": "sensor.hoymiles_rce_realized_revenue_today",
+              "name": "Revenue realized today"
+            }
+          ]
+        },
+        {
+          "type": "custom:hoymiles-zebra-entities-card",
+          "title": "RCE — details and diagnostics",
+          "show_header_toggle": false,
+          "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
           "entities": [
             {
               "entity": "sensor.hoymiles_rce_status",
@@ -864,6 +951,14 @@
           "state_color": true,
           "entities": [
             {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Current controller"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Control conflict"
+            },
+            {
               "entity": "input_boolean.hoymiles_tariff_charge_enabled",
               "name": "Enable automatic grid top-up"
             },
@@ -890,18 +985,6 @@
             {
               "entity": "input_number.hoymiles_tariff_soc_safety_margin",
               "name": "Additional SOC reserve"
-            },
-            {
-              "entity": "input_text.hoymiles_solcast_forecast_today_entity",
-              "name": "Solcast entity — today forecast"
-            },
-            {
-              "entity": "input_text.hoymiles_solcast_forecast_tomorrow_entity",
-              "name": "Solcast entity — tomorrow forecast"
-            },
-            {
-              "entity": "input_number.hoymiles_rce_fallback_daily_load",
-              "name": "Daily consumption before history is available"
             }
           ]
         },
@@ -909,7 +992,7 @@
           "type": "markdown",
           "title": "Selected profile — overview",
           "entity_id": "sensor.hoymiles_hit_tariff_charge_plan",
-          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% set operator = states('input_select.hoymiles_tariff_operator') %}\n{% set group = states('input_select.hoymiles_tariff_type') %}\n{% if operator == 'Manual' %}\n**Manual mode · {{ group }}**\n\nTime periods and total marginal prices are taken from the manual fields below.\n{% elif plan.attributes.tariff_profile_supported | default(false) %}\n**{{ plan.attributes.tariff_operator_name }} · {{ group }}**<br>\nAssumed supplier: **{{ plan.attributes.tariff_supplier_assumption }}**<br>\nPrice list: **{{ plan.attributes.tariff_profile_year }}** · season:\n**{{ 'summer' if plan.attributes.tariff_profile_season == 'summer'\n   else 'winter' }}**<br>\nCurrent period: **{{ plan.attributes.tariff_profile_current_zone }}** ·\n**{{ plan.attributes.tariff_profile_current_price }} PLN/kWh**<br>\nLow-cost hours: **{{ plan.attributes.tariff_profile_low_windows }}**<br>\n{% if group == 'G13' %}\nMedium period: **{{ plan.attributes.tariff_profile_medium_windows }}**<br>\n{% endif %}\nWeekend in low-cost period:\n**{{ 'yes' if plan.attributes.tariff_profile_weekend_low else 'no' }}** ·\npublic holidays: **{{ 'yes' if plan.attributes.tariff_profile_holiday_low else 'no' }}**\n\n| Period | Indicative price |\n|---|---:|\n| G11 (comparison) | {{ plan.attributes.tariff_profile_g11_price }} PLN/kWh |\n| Low-cost | {{ plan.attributes.tariff_profile_low_price }} PLN/kWh |\n{% if group == 'G13' %}| Medium | {{ plan.attributes.tariff_profile_medium_price }} PLN/kWh |\n{% endif %}| Peak | {{ plan.attributes.tariff_profile_peak_price }} PLN/kWh |\n\n[Official DSO tariffs]({{ plan.attributes.tariff_profile_source_url }})\n{% else %}\n⚠️ Profile **{{ operator }} · {{ group }}** is not supported.\nAutomatic charging will remain blocked. Select another group\nor the **Manual** profile.\n{% endif %}\n\nPrices include energy from the regional incumbent supplier and variable\ngross distribution charges. Fixed fees are excluded. With another\nsupplier, select **Manual** and enter prices from your own bill."
+          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% set operator = states('input_select.hoymiles_tariff_operator') %}\n{% set group = states('input_select.hoymiles_tariff_type') %}\n{% if plan.attributes.tariff_profile_expired | default(false) %}\n⚠️ **The tariff profile has expired. Automatic charging is blocked.**\nUpdate the integration or select **Manual** with current prices.\n\n{% endif %}\n{% if operator == 'Manual' %}\n**Manual mode · {{ group }}**\n\nTime periods and total marginal prices are taken from the manual fields below.\n{% elif plan.attributes.tariff_profile_supported | default(false) %}\n**{{ plan.attributes.tariff_operator_name }} · {{ group }}**<br>\nAssumed supplier: **{{ plan.attributes.tariff_supplier_assumption }}**<br>\nPrice list: **{{ plan.attributes.tariff_profile_year }}** · season:\n**{{ 'summer' if plan.attributes.tariff_profile_season == 'summer'\n   else 'winter' }}**<br>\nCurrent period: **{{ plan.attributes.tariff_profile_current_zone }}** ·\n**{{ plan.attributes.tariff_profile_current_price }} PLN/kWh**<br>\nLow-cost hours: **{{ plan.attributes.tariff_profile_low_windows }}**<br>\n{% if group == 'G13' %}\nMedium period: **{{ plan.attributes.tariff_profile_medium_windows }}**<br>\n{% endif %}\nWeekend in low-cost period:\n**{{ 'yes' if plan.attributes.tariff_profile_weekend_low else 'no' }}** ·\npublic holidays: **{{ 'yes' if plan.attributes.tariff_profile_holiday_low else 'no' }}**\n\n| Period | Indicative price |\n|---|---:|\n| G11 (comparison) | {{ plan.attributes.tariff_profile_g11_price }} PLN/kWh |\n| Low-cost | {{ plan.attributes.tariff_profile_low_price }} PLN/kWh |\n{% if group == 'G13' %}| Medium | {{ plan.attributes.tariff_profile_medium_price }} PLN/kWh |\n{% endif %}| Peak | {{ plan.attributes.tariff_profile_peak_price }} PLN/kWh |\n\n[Official DSO tariffs]({{ plan.attributes.tariff_profile_source_url }})\n{% else %}\n⚠️ Profile **{{ operator }} · {{ group }}** is not supported.\nAutomatic charging will remain blocked. Select another group\nor the **Manual** profile.\n{% endif %}\n\nPrices include energy from the regional incumbent supplier and variable\ngross distribution charges. Fixed fees are excluded. With another\nsupplier, select **Manual** and enter prices from your own bill."
         },
         {
           "type": "conditional",
@@ -1080,21 +1163,39 @@
         },
         {
           "type": "statistics-graph",
-          "title": "Low-cost charging — last 30 days",
+          "title": "Low-cost charging energy — last 30 days",
           "chart_type": "bar",
           "period": "day",
           "days_to_show": 30,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
           "entities": [
             {
               "entity": "sensor.hoymiles_tariff_grid_charge_energy_total",
-              "name": "Grid energy [kWh]"
-            },
+              "name": "Grid energy [kWh]",
+              "color": "#00B0FF"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Tariff savings — last 30 days",
+          "chart_type": "bar",
+          "period": "day",
+          "days_to_show": 30,
+          "hide_legend": true,
+          "fit_y_data": true,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
             {
               "entity": "sensor.hoymiles_tariff_savings_total",
-              "name": "Savings versus G11 [PLN]"
+              "name": "Savings versus G11 [PLN]",
+              "color": "#00C853"
             }
           ]
         },
@@ -1106,6 +1207,18 @@
             "position": "sidebar"
           },
           "entities": [
+            {
+              "entity": "input_text.hoymiles_solcast_forecast_today_entity",
+              "name": "Custom Solcast entity — today"
+            },
+            {
+              "entity": "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+              "name": "Custom Solcast entity — tomorrow"
+            },
+            {
+              "entity": "input_number.hoymiles_rce_fallback_daily_load",
+              "name": "Daily consumption before history is available"
+            },
             {
               "entity": "input_number.hoymiles_tariff_minimum_saving",
               "name": "Minimum price difference versus G11"
@@ -1152,6 +1265,14 @@
           "state_color": true,
           "entities": [
             {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Current controller"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Control conflict"
+            },
+            {
               "entity": "input_boolean.hoymiles_rcm_enabled",
               "name": "Enable voltage-aware export protection"
             },
@@ -1190,9 +1311,10 @@
           ]
         },
         {
-          "type": "glance",
+          "type": "custom:hoymiles-responsive-glance-card",
           "title": "Grid voltage — controlled by the highest phase",
           "columns": 5,
+          "minimum_width": 104,
           "show_name": true,
           "show_state": true,
           "state_color": true,
@@ -1220,25 +1342,36 @@
           ]
         },
         {
-          "type": "history-graph",
-          "title": "L1/L2/L3 voltage and 10-minute average",
-          "hours_to_show": 24,
+          "type": "statistics-graph",
+          "title": "L1/L2/L3 voltage and 10-minute average — last 24 hours",
+          "chart_type": "line",
+          "period": "5minute",
+          "days_to_show": 1,
+          "min_y_axis": 220,
+          "max_y_axis": 260,
+          "stat_types": [
+            "max"
+          ],
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_grid_voltage_l1",
-              "name": "L1"
+              "name": "L1",
+              "color": "#FF1744"
             },
             {
               "entity": "sensor.hoymiles_hit_grid_voltage_l2",
-              "name": "L2"
+              "name": "L2",
+              "color": "#FFD600"
             },
             {
               "entity": "sensor.hoymiles_hit_grid_voltage_l3",
-              "name": "L3"
+              "name": "L3",
+              "color": "#00B0FF"
             },
             {
               "entity": "sensor.hoymiles_rcem_rolling_10m_voltage",
-              "name": "10-minute average"
+              "name": "10-minute average",
+              "color": "#D500F9"
             }
           ]
         },
@@ -1486,13 +1619,16 @@
           "chart_type": "bar",
           "period": "day",
           "days_to_show": 30,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
           "entities": [
             {
               "entity": "sensor.hoymiles_rce_revenue_total",
-              "name": "Revenue"
+              "name": "Revenue",
+              "color": "#00C853"
             }
           ]
         },
@@ -1502,13 +1638,16 @@
           "chart_type": "bar",
           "period": "day",
           "days_to_show": 30,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
           "entities": [
             {
               "entity": "sensor.hoymiles_rce_grid_export_energy_total",
-              "name": "Energy to grid"
+              "name": "Energy to grid",
+              "color": "#FF6D00"
             }
           ]
         }
@@ -1647,6 +1786,8 @@
           "chart_type": "bar",
           "period": "day",
           "days_to_show": 90,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
@@ -1654,7 +1795,7 @@
             {
               "entity": "sensor.hoymiles_hit_pv_total_energy",
               "name": "PV production",
-              "color": "#4CAF50"
+              "color": "#00E676"
             }
           ]
         },
@@ -1664,6 +1805,8 @@
           "chart_type": "bar",
           "period": "week",
           "days_to_show": 365,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
@@ -1671,7 +1814,7 @@
             {
               "entity": "sensor.hoymiles_hit_pv_total_energy",
               "name": "PV production",
-              "color": "#66BB6A"
+              "color": "#00B0FF"
             }
           ]
         },
@@ -1681,6 +1824,8 @@
           "chart_type": "bar",
           "period": "month",
           "days_to_show": 1095,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
@@ -1688,7 +1833,7 @@
             {
               "entity": "sensor.hoymiles_hit_pv_total_energy",
               "name": "PV production",
-              "color": "#8BC34A"
+              "color": "#FFD600"
             }
           ]
         },
@@ -1698,6 +1843,8 @@
           "chart_type": "bar",
           "period": "year",
           "days_to_show": 3650,
+          "hide_legend": true,
+          "fit_y_data": true,
           "stat_types": [
             "change"
           ],
@@ -1705,7 +1852,7 @@
             {
               "entity": "sensor.hoymiles_hit_pv_total_energy",
               "name": "PV production",
-              "color": "#CDDC39"
+              "color": "#FF6D00"
             }
           ]
         }
@@ -1722,26 +1869,33 @@
           "type": "history-graph",
           "title": "PV string power — last 24 hours [W]",
           "hours_to_show": 24,
+          "show_names": true,
+          "fit_y_data": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_pv1_power_direct",
-              "name": "PV1"
+              "name": "PV1",
+              "color": "#FF1744"
             },
             {
               "entity": "sensor.hoymiles_hit_pv2_power_direct",
-              "name": "PV2"
+              "name": "PV2",
+              "color": "#FF6D00"
             },
             {
               "entity": "sensor.hoymiles_hit_pv3_power_direct",
-              "name": "PV3"
+              "name": "PV3",
+              "color": "#FFD600"
             },
             {
               "entity": "sensor.hoymiles_hit_pv4_power_direct",
-              "name": "PV4"
+              "name": "PV4",
+              "color": "#00E676"
             },
             {
               "entity": "sensor.hoymiles_hit_overview_generator_active_power",
-              "name": "GEN port"
+              "name": "GEN port",
+              "color": "#D500F9"
             }
           ]
         },
@@ -2035,6 +2189,54 @@
       "badges": [],
       "cards": [
         {
+          "type": "history-graph",
+          "title": "Loads — power over the last 24 hours [W]",
+          "hours_to_show": 24,
+          "show_names": true,
+          "fit_y_data": true,
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_actual_load_power",
+              "name": "Total",
+              "color": "#D500F9"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_load_power_l1n",
+              "name": "L1",
+              "color": "#FF1744"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_load_power_l2n",
+              "name": "L2",
+              "color": "#FFD600"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_load_power_l3n",
+              "name": "L3",
+              "color": "#00B0FF"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Home consumption — last 30 days [kWh]",
+          "chart_type": "bar",
+          "period": "day",
+          "days_to_show": 30,
+          "hide_legend": true,
+          "fit_y_data": true,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_actual_load_energy_today",
+              "name": "Home consumption",
+              "color": "#FF1744"
+            }
+          ]
+        },
+        {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "EPS / Backup",
           "show_header_toggle": false,
@@ -2222,11 +2424,11 @@
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_battery_capacity",
-              "name": "Battery Capacity"
+              "name": "Capacity configured in the inverter"
             },
             {
               "entity": "sensor.hoymiles_hit_total_capacity",
-              "name": "Total Capacity"
+              "name": "Effective capacity (BMS emergency fallback)"
             },
             {
               "entity": "sensor.hoymiles_hit_battery_soc_bms",
@@ -2271,6 +2473,29 @@
             {
               "entity": "sensor.hoymiles_hit_cell_min_temperature",
               "name": "Minimum cell temperature"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Cell temperature — last 7 days",
+          "chart_type": "line",
+          "period": "hour",
+          "days_to_show": 7,
+          "fit_y_data": true,
+          "stat_types": [
+            "mean"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_cell_max_temperature",
+              "name": "Maximum",
+              "color": "#FF1744"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_cell_min_temperature",
+              "name": "Minimum",
+              "color": "#00B0FF"
             }
           ]
         },
@@ -2339,6 +2564,35 @@
             {
               "entity": "sensor.hoymiles_hit_grid_active_power_l3",
               "name": "Grid Active Power L3"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Grid voltage — last 7 days",
+          "chart_type": "line",
+          "period": "hour",
+          "days_to_show": 7,
+          "min_y_axis": 210,
+          "max_y_axis": 260,
+          "stat_types": [
+            "max"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_grid_voltage_l1",
+              "name": "L1",
+              "color": "#FF1744"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_grid_voltage_l2",
+              "name": "L2",
+              "color": "#FFD600"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_grid_voltage_l3",
+              "name": "L3",
+              "color": "#00B0FF"
             }
           ]
         },
@@ -3269,6 +3523,34 @@
             {
               "entity": "sensor.hoymiles_hit_residual_current",
               "name": "Residual current"
+            }
+          ]
+        },
+        {
+          "type": "statistics-graph",
+          "title": "Inverter temperatures — last 7 days",
+          "chart_type": "line",
+          "period": "hour",
+          "days_to_show": 7,
+          "fit_y_data": true,
+          "stat_types": [
+            "mean"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_inv_ths_temp",
+              "name": "Inverter heatsink",
+              "color": "#FF6D00"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_bat_ths_temp",
+              "name": "Battery-stage heatsink",
+              "color": "#00E5FF"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_cav_temp",
+              "name": "Inverter interior (CAV)",
+              "color": "#D500F9"
             }
           ]
         },
