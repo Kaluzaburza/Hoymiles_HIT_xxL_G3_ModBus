@@ -6,6 +6,39 @@ All notable changes to this project are documented in this file.
 
 No changes yet.
 
+## [1.4.1] - 2026-08-08
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.1**.
+   **PL:** zaktualizuj integrację w HACS do wersji **1.4.1**.
+2. **Home Assistant:** restart once after HACS finishes. This is also required
+   when updating directly from 1.3.4 so the v1.4 automation, dashboard and
+   Repairs are loaded. **PL:** po aktualizacji wykonaj jeden restart; dotyczy to
+   również przejścia bezpośrednio z 1.3.4.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. Firmware **v1.3.3**
+   remains runtime-compatible and HACS never flashes ESP32. **PL:** ponowne
+   wgrywanie ESP32 nie jest wymagane; firmware **v1.3.3** pozostaje zgodne.
+4. **Verification / Weryfikacja:** check **Installation status / Stan
+   instalacji** and follow any displayed Repair until it reports **Ready /
+   Gotowe**. All new automatic modes remain disabled and RCEm remains in
+   observation-only mode by default. **PL:** sprawdź **Stan instalacji** i
+   ewentualne Naprawy. Automatyki pozostają wyłączone, a RCEm obserwacyjny.
+
+### Fixed
+
+- Restore the official, byte-identical PolyForm Noncommercial 1.0.0 license
+  text so GitHub and the HACS validator identify its SPDX id correctly instead
+  of reporting `NOASSERTION`.
+- Preserve all v1.4.0 integration, dashboard and automation functionality; this
+  hotfix contains no runtime ESPHome changes.
+
+### Polski
+
+- Przywrócono oficjalny, niezmodyfikowany tekst PolyForm Noncommercial 1.0.0,
+  dzięki czemu GitHub i HACS rozpoznają identyfikator SPDX.
+- Hotfix zawiera cały zakres v1.4.0 i nie wymaga ponownego wgrywania ESP32.
+
 ## [1.4.0] - 2026-08-08
 
 ### User update steps / Kroki po aktualizacji

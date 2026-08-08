@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import py_compile
@@ -65,7 +66,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.0"
+    const_module.VERSION = "1.4.1"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -423,7 +424,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.0", "Release version must be 1.4.0")
+    require(manifest["version"] == "1.4.1", "Release version must be 1.4.1")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -855,8 +856,8 @@ def main() -> int:
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.0.md"
+    github_release_notes = (
+        ROOT / "docs" / "releases" / "v1.4.1.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
@@ -909,13 +910,13 @@ def main() -> int:
         "README does not expose the beginner quick-start guide",
     )
     require(
-        "## User update steps / Kroki po aktualizacji" in release_notes
-        and "ESP32 / ESPHome" in release_notes
-        and "2064/2064" in release_notes,
+        "## User update steps / Kroki po aktualizacji" in github_release_notes
+        and "ESP32 / ESPHome" in github_release_notes
+        and "2064/2064" in github_release_notes,
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.0** is the current release",
+        "Version **1.4.1** is the current release",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",
@@ -1348,6 +1349,11 @@ def main() -> int:
         and "## Personal Uses" in license_text
         and "## No Liability" in license_text,
         "PolyForm Noncommercial license text is missing or incomplete",
+    )
+    require(
+        hashlib.sha256((ROOT / "LICENSE").read_bytes()).hexdigest()
+        == "c0ea4a896d2c8c394b29f9427589996db826cd501c512279ff0ed3ef48fabbe5",
+        "LICENSE is not the official byte-identical PolyForm Noncommercial 1.0.0 text",
     )
     require(
         "v1.3.4" in license_policy
