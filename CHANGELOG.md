@@ -6,6 +6,46 @@ All notable changes to this project are documented in this file.
 
 No changes yet.
 
+## [1.4.3] - 2026-08-08
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.3**.
+   **PL:** zaktualizuj integrację w HACS do wersji **1.4.3**.
+2. **Home Assistant:** restart once after HACS finishes so the corrected setup
+   diagnostic and Repairs check are reloaded. **PL:** po zakończeniu
+   aktualizacji wykonaj jeden restart Home Assistanta, aby przeładować
+   poprawioną diagnostykę instalacji i Naprawy.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. This hotfix does not
+   change ESPHome, Modbus polling or inverter control. **PL:** ponowna
+   kompilacja ani wgrywanie firmware ESP32 nie są wymagane; hotfix nie zmienia
+   ESPHome, odpytywania Modbus ani sterowania falownikiem.
+4. **Verification / Weryfikacja:** open **Diagnostyka** and confirm that
+   **Stan instalacji** reports **Gotowe / Ready** when the managed EMS package
+   is loaded. The false package warning in Home Assistant Repairs should also
+   disappear. **PL:** otwórz **Diagnostykę** i sprawdź, czy **Stan instalacji**
+   pokazuje **Gotowe**, a fałszywe ostrzeżenie o brakującym pakiecie znika z
+   sekcji Naprawy.
+
+### Fixed
+
+- Use the existing `input_boolean.hoymiles_rce_discharge_enabled` helper as the
+  shared EMS-package readiness sentinel.
+- Fix the false **Enable packages and restart** diagnostic and matching Home
+  Assistant Repair that appeared even while EMS/RCE packages were active.
+- Add a structural regression check that verifies the diagnostic sentinel is
+  present in the distributed EMS package.
+
+### Polski
+
+- Diagnostyka instalacji i Naprawy korzystają teraz z istniejącej encji
+  `input_boolean.hoymiles_rce_discharge_enabled` jako wspólnego znacznika
+  załadowania pakietu EMS.
+- Usunięto fałszywy komunikat **Wymagane włączenie pakietów i restart**, który
+  pojawiał się mimo prawidłowego działania EMS/RCE.
+- Dodano test strukturalny chroniący nazwę encji kontrolnej przed ponownym
+  rozjechaniem w kolejnych wydaniach.
+
 ## [1.4.2] - 2026-08-08
 
 ### User update steps / Kroki po aktualizacji

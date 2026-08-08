@@ -66,7 +66,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.2"
+    const_module.VERSION = "1.4.3"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -424,13 +424,28 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.2", "Release version must be 1.4.2")
+    require(manifest["version"] == "1.4.3", "Release version must be 1.4.3")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
     assets_source = (COMPONENT / "assets.py").read_text(encoding="utf-8")
     config_flow_source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
     sensor_platform_source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+    const_source = (COMPONENT / "const.py").read_text(encoding="utf-8")
+    ems_package_source = (
+        ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
+    ).read_text(encoding="utf-8")
+    require(
+        'EMS_PACKAGE_SENTINEL = "input_boolean.hoymiles_rce_discharge_enabled"'
+        in const_source
+        and "from .const import DOMAIN, EMS_PACKAGE_SENTINEL"
+        in sensor_platform_source
+        and "EMS_PACKAGE_SENTINEL," in init_source
+        and "hoymiles_rce_discharge_enabled:" in ems_package_source
+        and "hoymiles_rce_automation_enabled" not in init_source
+        and "hoymiles_rce_automation_enabled" not in sensor_platform_source,
+        "Setup status and Repairs must use an existing shared EMS package sentinel",
+    )
     require(
         "def suggested_object_id(self)" in entity_source,
         "Proxy entities need an explicit stable suggested_object_id property",
@@ -857,7 +872,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.2.md"
+        ROOT / "docs" / "releases" / "v1.4.3.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
@@ -916,7 +931,7 @@ def main() -> int:
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.2** is the current release",
+        "Version **1.4.3** is the current release",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",
