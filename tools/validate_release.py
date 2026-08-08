@@ -66,7 +66,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.1"
+    const_module.VERSION = "1.4.2"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -424,7 +424,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.1", "Release version must be 1.4.1")
+    require(manifest["version"] == "1.4.2", "Release version must be 1.4.2")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -857,7 +857,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.1.md"
+        ROOT / "docs" / "releases" / "v1.4.2.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
@@ -916,7 +916,7 @@ def main() -> int:
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.1** is the current release",
+        "Version **1.4.2** is the current release",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",
@@ -1325,11 +1325,29 @@ def main() -> int:
     )
     validate_fresh_asset_install()
 
-    for image_name in ("icon.png", "dark_icon.png", "logo.png", "dark_logo.png"):
+    for image_name in (
+        "icon.png",
+        "dark_icon.png",
+        "icon@2x.png",
+        "dark_icon@2x.png",
+        "logo.png",
+        "dark_logo.png",
+    ):
         image_path = COMPONENT / "brand" / image_name
         require(image_path.is_file(), f"Missing brand asset {image_name}")
         width, height = png_dimensions(image_path)
         require(width >= 128 and height >= 128, f"{image_name} is too small")
+    for image_name, expected_size in (
+        ("icon.png", 256),
+        ("dark_icon.png", 256),
+        ("icon@2x.png", 512),
+        ("dark_icon@2x.png", 512),
+    ):
+        width, height = png_dimensions(COMPONENT / "brand" / image_name)
+        require(
+            (width, height) == (expected_size, expected_size),
+            f"{image_name} must be {expected_size}x{expected_size}",
+        )
 
     license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
     license_policy = (ROOT / "LICENSE_POLICY.md").read_text(encoding="utf-8")
@@ -1345,28 +1363,33 @@ def main() -> int:
         encoding="utf-8"
     )
     require(
-        license_text.startswith("# PolyForm Noncommercial License 1.0.0")
-        and "## Personal Uses" in license_text
-        and "## No Liability" in license_text,
-        "PolyForm Noncommercial license text is missing or incomplete",
+        license_text.startswith("MIT License\n\nCopyright (c) 2026 Kaluzaburza")
+        and "Permission is hereby granted, free of charge" in license_text
+        and 'THE SOFTWARE IS PROVIDED "AS IS"' in license_text,
+        "MIT license text is missing or incomplete",
     )
     require(
         hashlib.sha256((ROOT / "LICENSE").read_bytes()).hexdigest()
-        == "c0ea4a896d2c8c394b29f9427589996db826cd501c512279ff0ed3ef48fabbe5",
-        "LICENSE is not the official byte-identical PolyForm Noncommercial 1.0.0 text",
+        == "fa0bb01cef85cd8e77d7930efae10d9c93812cfa6e4878f3d7d57ad23c224290",
+        "LICENSE is not the reviewed MIT text",
     )
     require(
         "v1.3.4" in license_policy
-        and "a60ae4db16af95ab8dd0e8532c6bea1b96d1bde0" in license_policy
-        and "MIT" in license_policy,
-        "License history does not preserve the previously published MIT boundary",
+        and "v1.4.0" in license_policy
+        and "v1.4.1" in license_policy
+        and "v1.4.2" in license_policy
+        and "MIT License" in license_policy
+        and "PolyForm Noncommercial 1.0.0" in license_policy,
+        "License policy does not document the MIT/PolyForm/MIT history",
     )
     require(
-        notice_text.startswith("Required Notice: Copyright (c) 2026 Kaluzaburza"),
+        notice_text.startswith("Copyright (c) 2026 Kaluzaburza")
+        and "Licensed under the MIT License" in notice_text,
         "Required copyright notice is missing",
     )
     require(
-        "relicense the contribution" in contribution_text
+        "[MIT License](LICENSE)" in contribution_text
+        and "commercial purposes" in contribution_text
         and "Contribution Certificate 1.0" in contribution_text
         and "Signed-off-by:" in contribution_text,
         "Contribution rights and sign-off terms are incomplete",
@@ -1386,6 +1409,13 @@ def main() -> int:
         "python tools/test_automation_matrix.py --exhaustive",
     ):
         require(test_command in workflow_text, f"CI does not run {test_command}")
+    require(
+        "validate-hacs:" in workflow_text
+        and "HACS validation" in workflow_text
+        and "continue-on-error" not in workflow_text
+        and "ignore:" not in workflow_text,
+        "Official HACS validation must be mandatory and unignored",
+    )
 
     print(f"HACS layout: OK ({len(integration_dirs)} integration)")
     print(f"Manifest: OK (version {manifest['version']})")
@@ -1398,7 +1428,7 @@ def main() -> int:
     print("Text-state localization: OK")
     print("Fresh PL/EN asset installation: OK")
     print("Brand assets: OK")
-    print("Noncommercial license and MIT history boundary: OK")
+    print("MIT/OSI license and historical license boundaries: OK")
     print("Contribution rights, sign-off and CODEOWNERS: OK")
     print("RCE/tariff/RCEm CI regression matrix: OK")
     return 0
