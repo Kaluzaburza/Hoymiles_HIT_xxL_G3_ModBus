@@ -10,19 +10,16 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 parallel systems and troubleshooting remain documented below.
 
 > [!IMPORTANT]
-> **License / Licencja:** current development and future releases are available
-> for personal and other noncommercial use under the
-> [PolyForm Noncommercial License 1.0.0](LICENSE). Home users may install,
-> study and modify the project for noncommercial purposes. Selling it,
-> bundling it with commercial hardware, or using it as part of a paid service
-> requires a separate written commercial license. See the bilingual
-> [license policy](LICENSE_POLICY.md). Releases through v1.3.4 remain MIT-licensed.
+> **License / Licencja:** version 1.4.2 and later are open-source software under
+> the OSI-approved [MIT License](LICENSE). Private and commercial use,
+> modification, distribution and sale are permitted when the copyright and
+> permission notices are retained. See the bilingual
+> [license policy](LICENSE_POLICY.md).
 >
-> Bieżący rozwój i przyszłe wydania są dostępne do użytku prywatnego oraz
-> niekomercyjnego. Użytkownik domowy może projekt instalować, analizować i
-> modyfikować niekomercyjnie. Sprzedaż, dołączanie do komercyjnego sprzętu lub
-> używanie jako części płatnej usługi wymaga osobnej pisemnej licencji
-> komercyjnej. Wydania do v1.3.4 pozostają na wcześniej udzielonej licencji MIT.
+> Wersja 1.4.2 i kolejne są oprogramowaniem open source na licencji MIT
+> zatwierdzonej przez OSI. Dozwolone jest użycie prywatne i komercyjne,
+> modyfikowanie, rozpowszechnianie oraz sprzedaż z zachowaniem informacji o
+> prawach autorskich i treści zezwolenia.
 
 ## Support the project / Wesprzyj projekt
 
@@ -40,7 +37,7 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.4.1** is the current release. It contains:
+Version **1.4.2** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -512,11 +509,8 @@ Regenerate the localized entity catalog and bundled assets:
 python tools/build_hacs_assets.py
 ```
 
-GitHub Actions run an advisory HACS official-index check, mandatory Hassfest
-and mandatory project structural/logic tests. The integration is distributed
-through HACS as a **custom repository** because the official HACS catalog
-requires an OSI-approved license, while this project deliberately prohibits
-commercial reuse. The reviewed multi-system automation matrix and its
+GitHub Actions run mandatory HACS validation, Hassfest and project
+structural/logic tests. The reviewed multi-system automation matrix and its
 field-test limits are recorded in the
 [automation simulation report](docs/AUTOMATION_TEST_REPORT.md).
 
@@ -534,7 +528,7 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.1** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.2** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 optymalizator sprzedaży RCE, automatyczne ładowanie w taryfach
 G11/G12/G12w/G13, eksperymentalną ochronę eksportu RCEm 253 V+, serwisowe

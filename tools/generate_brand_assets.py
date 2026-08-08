@@ -106,8 +106,10 @@ def draw_logo(dark: bool) -> Image.Image:
     return image
 
 
-draw_mark(256, False).save(BRAND / "icon.png")
-draw_mark(256, True).save(BRAND / "dark_icon.png")
-draw_logo(False).save(BRAND / "logo.png")
-draw_logo(True).save(BRAND / "dark_logo.png")
+draw_mark(256, False).save(BRAND / "icon.png", optimize=True)
+draw_mark(256, True).save(BRAND / "dark_icon.png", optimize=True)
+draw_mark(512, False).save(BRAND / "icon@2x.png", optimize=True)
+draw_mark(512, True).save(BRAND / "dark_icon@2x.png", optimize=True)
+draw_logo(False).save(BRAND / "logo.png", optimize=True)
+draw_logo(True).save(BRAND / "dark_logo.png", optimize=True)
 print(f"Generated brand assets in {BRAND}")

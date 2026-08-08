@@ -6,6 +6,51 @@ All notable changes to this project are documented in this file.
 
 No changes yet.
 
+## [1.4.2] - 2026-08-08
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.2**.
+   **PL:** zaktualizuj integrację w HACS do wersji **1.4.2**.
+2. **Home Assistant:** restart once after HACS finishes so the version,
+   license metadata and local brand assets are reloaded. **PL:** po
+   aktualizacji uruchom Home Assistanta ponownie, aby przeładować wersję,
+   metadane licencji i lokalne ikony.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. Firmware **v1.3.3**
+   remains runtime-compatible; this release does not change Modbus polling or
+   control. **PL:** ponowne wgrywanie ESP32 nie jest wymagane; firmware
+   **v1.3.3** pozostaje zgodne.
+4. **Verification / Weryfikacja:** check **Installation status / Stan
+   instalacji** and any Home Assistant Repairs. The HACS update-card icon is
+   supplied through Home Assistant Brands and may remain cached temporarily
+   after the upstream asset is deployed. **PL:** sprawdź **Stan instalacji** i
+   ewentualne Naprawy. Ikona karty aktualizacji HACS pochodzi z Home Assistant
+   Brands i po wdrożeniu może być jeszcze chwilowo przechowywana w cache.
+
+### Changed
+
+- Re-license v1.4.2 and later under the OSI-approved MIT License. Private and
+  commercial use, modification, distribution, sublicensing and sale are
+  permitted subject to retaining the MIT copyright and permission notices.
+- Restore the official HACS Action as a mandatory, non-ignored release check.
+- Add optimized 256 px and 512 px light/dark integration icons and prepare the
+  matching official Home Assistant Brands submission used by HACS update
+  entities.
+- Preserve the complete v1.4 automation and dashboard feature set without an
+  ESPHome runtime change.
+
+### Polski
+
+- Wersja v1.4.2 i kolejne przechodzą na zatwierdzoną przez OSI licencję MIT.
+  Dozwolone jest użycie prywatne i komercyjne, modyfikowanie,
+  rozpowszechnianie, sublicencjonowanie oraz sprzedaż z zachowaniem informacji
+  wymaganych przez MIT.
+- Oficjalny walidator HACS ponownie jest obowiązkowym testem wydania.
+- Dodano zoptymalizowane jasne i ciemne ikony 256 px oraz 512 px i przygotowano
+  zgłoszenie do Home Assistant Brands, z którego korzysta karta aktualizacji
+  HACS.
+- Zachowano cały zakres funkcji v1.4 bez zmian firmware ESP32.
+
 ## [1.4.1] - 2026-08-08
 
 ### User update steps / Kroki po aktualizacji
