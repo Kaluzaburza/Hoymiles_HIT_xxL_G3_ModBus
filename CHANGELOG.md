@@ -4,6 +4,126 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+No changes yet.
+
+## [1.4.0] - 2026-08-08
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.0**.
+   **PL:** zaktualizuj integrację w HACS do wersji **1.4.0**.
+2. **Home Assistant:** restart once after HACS finishes. Managed dashboard and
+   EMS files are synchronized automatically; files modified by the user are
+   preserved. If Home Assistant shows a package Repair, follow it and perform
+   one additional restart. **PL:** po aktualizacji wykonaj jeden restart.
+   Zarządzane pliki zsynchronizują się bez nadpisywania własnych zmian. Jeżeli
+   pojawi się Naprawa dotycząca pakietów, wykonaj instrukcję i uruchom HA jeszcze
+   raz.
+3. **ESP32 / ESPHome:** no firmware rebuild is required for existing users;
+   firmware **v1.3.3** remains runtime-compatible. Rebuild only if you want the
+   new optional ESPHome adoption metadata embedded in the device. HACS never
+   flashes ESP32. **PL:** dotychczasowego ESP32 nie trzeba wgrywać ponownie;
+   firmware **v1.3.3** pozostaje zgodne. Kompilacja jest opcjonalna wyłącznie
+   dla nowych metadanych adopcji ESPHome. HACS nie aktualizuje ESP32.
+4. **Verification / Weryfikacja:** open the integration device and check
+   **Installation status / Stan instalacji**. Follow a displayed Home Assistant
+   Repair, if present, until the status is **Ready / Gotowe**. Existing
+   automatic modes remain off after the update and RCEm remains in observation
+   mode by default. **PL:** sprawdź **Stan instalacji** oraz ewentualne Naprawy.
+   Automatyki pozostają wyłączone, a RCEm domyślnie działa tylko obserwacyjnie.
+
+### Added
+
+- Add a tariff-aware grid-charge planner for G11, G12, G12w and G13 with 2026
+  PGE, TAURON, ENEA, ENERGA and STOEN presets, a manual profile, seasons,
+  weekends, Polish holidays, physical charge lead time and estimated savings.
+- Add experimental **RCEm 253 V+**: four-day L1/L2/L3 voltage history,
+  ten-minute voltage control, Solcast/load-aware battery headroom, optional
+  morning pre-discharge and an explicitly enabled user-capped export regulator.
+  RCEm starts in observation-only mode and does not alter grid protections,
+  three-phase unbalance or GCF.
+- Add scheduled LiFePO4 storage balancing. The cycle prioritizes PV, finishes
+  from the grid when necessary, slows the 99â€“100% stage to approximately 2 kW,
+  holds full SOC for the configured duration and restores previous settings.
+- Add tariff energy/savings statistics, expanded RCE realized-revenue
+  accounting, PV production archives, revenue views, RCEm diagnostics and
+  mobile EMS status notifications.
+- Add deterministic optimizers and Recorder history reconstruction for RCE,
+  tariff charging and RCEm, plus a shared cross-system simulation matrix.
+
+### Changed
+
+- Rebuild RCE as an automatic up-to-48-hour optimizer. It works on today's
+  complete prices before tomorrow is published, recalculates when the second
+  day appears and chooses the most valuable allowed blocks instead of relying
+  on a fixed minimum selling price.
+- Protect outage reserve, remaining night demand and weak next-day production;
+  account for Solcast live forecast error, true LOAD history, inverter count,
+  battery capacity, BMS charge/discharge limits, conversion losses and the
+  sale-lockout window.
+- Separate true household LOAD from PV-to-LOAD and battery-to-LOAD flow totals,
+  preventing duplicated consumer energy in the four-day day/night model.
+- Make RCE, tariff charging and RCEm mutually exclusive. Battery balancing has
+  higher priority, and manual timers retain their documented interlocks.
+- Expand and reorganize the bilingual dashboard with tariff charging, RCEm,
+  balancing, revenue and PV-production views; retain responsive strategy-based
+  updates and alternating entity-row backgrounds.
+- Update the project license for v1.4.0 and later to PolyForm Noncommercial
+  1.0.0. Releases through v1.3.4 and history through the documented boundary
+  remain MIT-licensed.
+
+### Simplified installation and updates
+
+- Always install the managed dashboard and EMS assets during config flow;
+  beginners no longer need to decide whether to copy them.
+- Preselect the ESPHome bridge when exactly one compatible, unconfigured device
+  is present.
+- Add a localized **Installation status** diagnostic with entity coverage,
+  ESP32 connectivity, EMS-package readiness and a concrete next step.
+- Raise a localized Home Assistant Repair when the copied EMS package is not
+  enabled, including the exact safe `configuration.yaml` instruction.
+- Add ESPHome `dashboard_import` metadata for easier recognition and adoption;
+  firmware updates remain explicit. Add a bilingual five-step quick-start
+  guide.
+
+### Uproszczona instalacja i aktualizacja
+
+- Dashboard i automatyka EMS są instalowane automatycznie, a jedyny zgodny
+  most ESPHome zostaje podpowiedziany.
+- Nowa encja **Stan instalacji** oraz Naprawy Home Assistanta pokazują dokładnie,
+  czy wymagany jest restart, włączenie pakietów lub aktualizacja ESP32.
+- Dodano pięciostopniowy szybki start PL/EN i metadane adopcji ESPHome.
+
+### Safety and validation
+
+- Preserve user-modified managed files and create rollback copies for supported
+  dashboard/resource migrations.
+- Keep all new automatic modes disabled after installation; RCEm is additionally
+  protected by its default observation-only switch.
+- Validate 276 PL/EN entities, HACS layout, Hassfest-compatible structure,
+  fresh asset installation, frontend strategy/cards and ESPHome 2026.7.3
+  configuration.
+- Pass all deterministic optimizer/history suites, the 488-scenario CI matrix
+  and the exhaustive **2064/2064** pre-release simulation matrix covering 10,
+  15 and 20 kW single systems plus a 2 × 20 kW parallel system.
+
+### Polski â€” najważniejsze zmiany
+
+- Dodano automatyczne tanie ładowanie dla G11/G12/G12w/G13, profile pięciu
+  głównych operatorów, wariant ręczny, poprawny czas potrzebny na zgromadzenie
+  energii oraz obliczenia kosztów i oszczędności.
+- Dodano eksperymentalne RCEm 253 V+ z historią napięć, planowaniem miejsca w
+  magazynie, opcjonalnym porannym rozładowaniem i ograniczonym regulatorem
+  eksportu. Domyślnie działa wyłącznie obserwacyjnie.
+- Dodano okresowe wyrównywanie LiFePO4 z priorytetem PV, doładowaniem sieciowym,
+  wolnym etapem 99â€“100% i utrzymaniem pełnego SOC.
+- RCE wybiera teraz najbardziej opłacalne bloki z dostępnego horyzontu do 48 h,
+  chroniąc dom, noc, rezerwę awaryjną i słabą prognozę kolejnego dnia.
+- Poprawiono czterodniowy model LOAD, rozdzielono eksport sterowany i naturalny,
+  dodano widoki zysków, produkcji PV oraz pełniejsze statystyki.
+- Instalacja jest prostsza: automatyczne zasoby, podpowiedź jedynego ESP32,
+  encja **Stan instalacji**, Naprawy HA i szybka instrukcja PL/EN.
+
 ## [1.3.4] - 2026-08-02
 
 ### User update steps / Kroki po aktualizacji

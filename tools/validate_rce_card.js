@@ -5,6 +5,18 @@ const source = fs.readFileSync(
   "home_assistant/www/hoymiles-rce-chart-card.js",
   "utf8",
 );
+if (!source.includes("import.meta.url")) {
+  throw new Error("Dashboard strategy no longer resolves assets from its module URL");
+}
+// The card is loaded as an ES module by Home Assistant.  vm.runInNewContext
+// executes classic scripts, so inject the same deterministic module URL while
+// retaining an explicit assertion above that production code uses import.meta.
+const executableSource = source.replaceAll(
+  "import.meta.url",
+  JSON.stringify(
+    "https://homeassistant.example/api/hoymiles_hit_modbus/static-r2/hoymiles-rce-chart-card.js",
+  ),
+);
 const registry = new Map();
 
 class TestElement {
@@ -30,6 +42,7 @@ const context = {
   document: { documentElement: { lang: "pl" } },
   HTMLElement: TestElement,
   Intl,
+  URL,
   fetch: async (url, options) => {
     const match = String(url).match(/dashboard_hoymiles_(pl|en)\.json$/);
     if (!match) {
@@ -64,13 +77,13 @@ const context = {
   },
 };
 
-vm.runInNewContext(source, context, {
+vm.runInNewContext(executableSource, context, {
   filename: "hoymiles-rce-chart-card.js",
 });
 
 const customCardCount = context.window.customCards?.length ?? 0;
 vm.runInNewContext(
-  source,
+  executableSource,
   {
     ...context,
     window: context.window,

@@ -6,12 +6,10 @@
         "title": "Połącz z urządzeniem ESPHome",
         "description": "Wybierz urządzenie ESPHome z falownikiem Hoymiles. Integracja utworzy lokalizowane encje bez dodatkowego odpytywania magistrali Modbus.",
         "data": {
-          "source_device_id": "Urządzenie źródłowe ESPHome",
-          "copy_assets": "Skopiuj dashboard i automatykę EMS"
+          "source_device_id": "Urządzenie źródłowe ESPHome"
         },
         "data_description": {
-          "source_device_id": "Urządzenie musi używać firmware z tego projektu.",
-          "copy_assets": "Kopiuje dashboard, pakiet EMS i kartę RCE do odpowiednich katalogów /config."
+          "source_device_id": "Urządzenie musi używać firmware z tego projektu."
         }
       }
     },
@@ -21,6 +19,12 @@
     },
     "abort": {
       "already_configured": "To urządzenie jest już skonfigurowane."
+    }
+  },
+  "issues": {
+    "ems_package_not_loaded": {
+      "title": "Automatyka EMS wymaga włączenia pakietów",
+      "description": "Integracja skopiowała plik automatyki, ale Home Assistant go nie wczytał. Dodaj `packages: !include_dir_named packages` pod istniejącą sekcją `homeassistant:` w pliku `configuration.yaml`, sprawdź konfigurację i uruchom Home Assistant ponownie. Nie twórz drugiej sekcji `homeassistant:`."
     }
   },
   "services": {
@@ -1617,6 +1621,18 @@
           "parallel_slave_ems_mismatch": "Błąd - tryb EMS Slave niezgodny",
           "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
+      },
+      "rce_optimized_plan": {
+        "name": "Zoptymalizowany plan RCE"
+      },
+      "tariff_charge_plan": {
+        "name": "Plan automatycznego ładowania taryfowego"
+      },
+      "rcm_voltage_plan": {
+        "name": "Plan RCEm 253 V+"
+      },
+      "setup_status": {
+        "name": "Stan instalacji"
       }
     },
     "number": {

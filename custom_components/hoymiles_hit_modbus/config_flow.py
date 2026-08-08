@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import selector
 
 from .catalog import async_match_entities, matched_source_count
@@ -20,6 +21,33 @@ class HoymilesHitModbusConfigFlow(
     """Configure localized entities for a Hoymiles ESPHome bridge."""
 
     VERSION = 1
+
+    async def _async_default_source_device_id(self) -> str | None:
+        """Return the only unconfigured compatible ESPHome device, if unique."""
+        configured = {
+            entry.data.get(CONF_SOURCE_DEVICE_ID)
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+        }
+        device_registry = dr.async_get(self.hass)
+        candidates: list[str] = []
+        for device in device_registry.devices.values():
+            if device.id in configured:
+                continue
+            config_entries = (
+                self.hass.config_entries.async_get_entry(entry_id)
+                for entry_id in device.config_entries
+            )
+            if not any(
+                config_entry is not None and config_entry.domain == "esphome"
+                for config_entry in config_entries
+            ):
+                continue
+            _, matched = await async_match_entities(self.hass, device.id)
+            if matched_source_count(matched) > 0:
+                candidates.append(device.id)
+                if len(candidates) > 1:
+                    return None
+        return candidates[0] if candidates else None
 
     async def async_step_user(
         self,
@@ -45,14 +73,25 @@ class HoymilesHitModbusConfigFlow(
                     or source_device.name
                     or "Hoymiles HIT xxL G3"
                 )
-                return self.async_create_entry(title=title, data=user_input)
+                return self.async_create_entry(
+                    title=title,
+                    data={
+                        CONF_SOURCE_DEVICE_ID: source_device_id,
+                        CONF_COPY_ASSETS: True,
+                    },
+                )
 
+        default_device_id = await self._async_default_source_device_id()
+        source_field = (
+            vol.Required(CONF_SOURCE_DEVICE_ID, default=default_device_id)
+            if default_device_id is not None
+            else vol.Required(CONF_SOURCE_DEVICE_ID)
+        )
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_SOURCE_DEVICE_ID): selector.DeviceSelector(
+                source_field: selector.DeviceSelector(
                     selector.DeviceSelectorConfig(integration="esphome")
                 ),
-                vol.Optional(CONF_COPY_ASSETS, default=True): selector.BooleanSelector(),
             }
         )
         return self.async_show_form(

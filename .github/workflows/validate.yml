@@ -45,5 +45,18 @@ jobs:
         run: python tools/test_rce_optimizer.py
       - name: Test RCE Recorder history reconstruction
         run: python tools/test_rce_history.py
+      - name: Test tariff profiles and optimizer
+        run: |
+          python tools/test_tariff_profiles.py
+          python tools/test_tariff_optimizer.py
+      - name: Test RCEm history and optimizer
+        run: |
+          python tools/test_rcm_history.py
+          python tools/test_rcm_optimizer.py
+      - name: Test cross-system automation matrix
+        run: python tools/test_automation_matrix.py
+      - name: Run exhaustive pre-release automation matrix
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: python tools/test_automation_matrix.py --exhaustive
       - name: Test RCE custom card
         run: node tools/validate_rce_card.js

@@ -306,6 +306,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             average_night_kwh=None,
             night_history_days=0,
             night_energy_kwh={},
+            current_day_energy_kwh=None,
         )
         self._history_refresh_running = False
         self._attributes: dict[str, Any] = {
@@ -452,10 +453,38 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     sunrise.astimezone(timezone) + timedelta(minutes=90),
                 )
 
+            current_day_window: tuple[datetime, datetime] | None = None
+            today_sunrise = get_astral_event_date(
+                self.hass,
+                "sunrise",
+                now.date(),
+            )
+            today_sunset = get_astral_event_date(
+                self.hass,
+                "sunset",
+                now.date(),
+            )
+            if today_sunrise is not None and today_sunset is not None:
+                current_day_start = (
+                    today_sunrise.astimezone(timezone)
+                    + timedelta(minutes=90)
+                )
+                current_day_end = min(
+                    now,
+                    today_sunset.astimezone(timezone)
+                    - timedelta(minutes=90),
+                )
+                if current_day_end > current_day_start:
+                    current_day_window = (
+                        current_day_start,
+                        current_day_end,
+                    )
+
             self._load_history = summarize_load_history(
                 samples,
                 now=now,
                 night_windows=night_windows,
+                current_day_window=current_day_window,
             )
         except Exception:  # noqa: BLE001 - recorder outages need a safe fallback
             _LOGGER.exception("Cannot rebuild four-day LOAD history from recorder")
@@ -852,6 +881,21 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 2,
             ),
             "recorder_load_daily_kwh": self._load_history.daily_energy_kwh,
+            "recorder_load_profile_30m_kwh": list(
+                self._load_history.average_profile_kwh
+            ),
+            "recorder_load_weekday_profile_30m_kwh": list(
+                self._load_history.weekday_profile_kwh
+            ),
+            "recorder_load_weekend_profile_30m_kwh": list(
+                self._load_history.weekend_profile_kwh
+            ),
+            "recorder_load_weekday_profile_days": (
+                self._load_history.weekday_profile_days
+            ),
+            "recorder_load_weekend_profile_days": (
+                self._load_history.weekend_profile_days
+            ),
             "recorder_night_load_average_4d_kwh": (
                 round(self._load_history.average_night_kwh, 2)
                 if self._load_history.average_night_kwh is not None
@@ -867,6 +911,16 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 round(actual_load_today, 2)
                 if actual_load_today is not None
                 else None
+            ),
+            "actual_day_window_load_today_kwh": (
+                round(self._load_history.current_day_energy_kwh, 2)
+                if self._load_history.current_day_energy_kwh is not None
+                else None
+            ),
+            "day_load_live_source": (
+                "recorder_actual_phase_load"
+                if self._load_history.current_day_energy_kwh is not None
+                else "history_only"
             ),
             "provisional_daily_load_projection_kwh": (
                 round(live_daily_projection, 2)
@@ -1116,7 +1170,9 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     self.hass,
                     "sensor.hoymiles_hit_battery_voltage_bms",
                 ),
-                pv_to_load_today_kwh=pv_to_load_today,
+                actual_day_load_today_kwh=(
+                    self._load_history.current_day_energy_kwh
+                ),
                 pv_to_load_power_kw=max(pv_to_load_power_w, 0.0) / 1000.0,
             ),
             metadata,

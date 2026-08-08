@@ -13,12 +13,18 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 
-from .assets import FRONTEND_RESOURCE_URL, RESOURCE_ROOT, async_install_assets
+from .assets import (
+    FRONTEND_BOOTSTRAP_URL,
+    FRONTEND_RESOURCE_URL,
+    FRONTEND_STATIC_ROUTE,
+    RESOURCE_ROOT,
+    async_install_assets,
+)
 from .catalog import async_match_entities, matched_source_count
 from .const import (
     ATTR_OVERWRITE,
-    CONF_COPY_ASSETS,
     CONF_SOURCE_DEVICE_ID,
     DOMAIN,
     PLATFORMS,
@@ -29,8 +35,8 @@ from .models import RuntimeData
 
 
 _LOGGER = logging.getLogger(__name__)
-STATIC_URL = f"/api/{DOMAIN}/static"
-FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL
+STATIC_URL = f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}"
+FRONTEND_MODULE_URL = FRONTEND_BOOTSTRAP_URL
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 INSTALL_ASSETS_SCHEMA = vol.Schema(
@@ -38,6 +44,37 @@ INSTALL_ASSETS_SCHEMA = vol.Schema(
         vol.Optional(ATTR_OVERWRITE, default=False): cv.boolean,
     }
 )
+EMS_PACKAGE_SENTINEL = "input_boolean.hoymiles_rce_automation_enabled"
+EMS_PACKAGE_DOCS_URL = (
+    "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
+    "#4-dashboard-and-ems-automation"
+)
+
+
+def _ems_package_issue_id(entry: ConfigEntry) -> str:
+    """Return a stable repair issue id for a config entry."""
+    return f"ems_package_not_loaded_{entry.entry_id}"
+
+
+def _async_update_ems_package_issue(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Explain the one remaining YAML step when the EMS package is absent."""
+    issue_id = _ems_package_issue_id(entry)
+    if hass.states.get(EMS_PACKAGE_SENTINEL) is not None:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        issue_domain=DOMAIN,
+        learn_more_url=EMS_PACKAGE_DOCS_URL,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="ems_package_not_loaded",
+    )
 
 
 async def _async_reload_lovelace_resources(
@@ -77,6 +114,9 @@ def _async_reconcile_entity_registry(
     # The optimizer is an integration-native entity rather than an ESPHome
     # catalog proxy, so it must survive catalog reconciliation.
     active_translation_keys.add("rce_optimized_plan")
+    active_translation_keys.add("tariff_charge_plan")
+    active_translation_keys.add("rcm_voltage_plan")
+    active_translation_keys.add("setup_status")
 
     for registry_entry in er.async_entries_for_config_entry(
         entity_registry,
@@ -155,11 +195,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             )
         ]
     )
-    # The same module provides the custom RCE/power-flow cards and the
-    # dashboard strategy. Register it globally so a fresh installation and an
-    # upgrade from a legacy /local resource work without manual Lovelace
-    # resource maintenance. The integration version is a deliberate cache
-    # buster for frontend modules retained by the browser between releases.
+    # A tiny classic-script bootstrap registers the dashboard strategy before
+    # Lovelace asks it to generate the first view.  The larger ES module remains
+    # a Lovelace resource and provides the custom RCE/power-flow cards.  Keeping
+    # import.meta out of the global bootstrap avoids intermittent first-load
+    # strategy timeouts after a Home Assistant restart.
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
 
     async def async_handle_install_assets(call: ServiceCall) -> None:
@@ -214,14 +254,22 @@ async def async_setup_entry(
     # entities immediately receive the same stable IDs as existing entities.
     _async_reconcile_entity_registry(hass, entry, hass.data[DOMAIN][entry.entry_id])
 
-    if entry.data.get(CONF_COPY_ASSETS, True):
-        paths = await async_install_assets(hass, overwrite=False)
-        await _async_reload_lovelace_resources(hass, paths)
-        if paths:
-            _LOGGER.info(
-                "Installed initial Hoymiles assets: %s",
-                ", ".join(str(path) for path in paths),
-            )
+    # Managed assets are always synchronized. The installer preserves files
+    # modified by the user and overwrites only files it can identify as its own.
+    paths = await async_install_assets(hass, overwrite=False)
+    await _async_reload_lovelace_resources(hass, paths)
+    if paths:
+        _LOGGER.info(
+            "Installed initial Hoymiles assets: %s",
+            ", ".join(str(path) for path in paths),
+        )
+    if hass.is_running:
+        _async_update_ems_package_issue(hass, entry)
+    else:
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _event: _async_update_ems_package_issue(hass, entry),
+        )
     return True
 
 
@@ -233,4 +281,5 @@ async def async_unload_entry(
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        ir.async_delete_issue(hass, DOMAIN, _ems_package_issue_id(entry))
     return unloaded

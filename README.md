@@ -5,6 +5,25 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
 
+**New to Home Assistant? / Pierwsza instalacja?** Use the concise bilingual
+[five-step quick start / szybki start](docs/QUICK_START.md). Advanced wiring,
+parallel systems and troubleshooting remain documented below.
+
+> [!IMPORTANT]
+> **License / Licencja:** current development and future releases are available
+> for personal and other noncommercial use under the
+> [PolyForm Noncommercial License 1.0.0](LICENSE). Home users may install,
+> study and modify the project for noncommercial purposes. Selling it,
+> bundling it with commercial hardware, or using it as part of a paid service
+> requires a separate written commercial license. See the bilingual
+> [license policy](LICENSE_POLICY.md). Releases through v1.3.4 remain MIT-licensed.
+>
+> Bieżący rozwój i przyszłe wydania są dostępne do użytku prywatnego oraz
+> niekomercyjnego. Użytkownik domowy może projekt instalować, analizować i
+> modyfikować niekomercyjnie. Sprzedaż, dołączanie do komercyjnego sprzętu lub
+> używanie jako części płatnej usługi wymaga osobnej pisemnej licencji
+> komercyjnej. Wydania do v1.3.4 pozostają na wcześniej udzielonej licencji MIT.
+
 ## Support the project / Wesprzyj projekt
 
 This independent project was built from a real need for reliable, transparent
@@ -21,21 +40,32 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.3.4** is the current release. It contains:
+Version **1.4.0** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
 - grid, load/EPS, battery/BMS, generator and inverter registers;
 - safe atomic EMS writes for registers 4300–4306;
-- daily grid charge/discharge schedules;
-- a two-day PSE RCE profit optimizer with an export lockout window, realized
-  revenue statistics and automatic selection of the most valuable blocks;
-- a Solcast-, Recorder- and LOAD-based dynamic SOC reserve protecting the
-  next night-time home demand;
+- daily grid charge/discharge schedules and optional mobile push notifications;
+- a 48-hour PSE RCE profit optimizer that selects the most valuable permitted
+  half-hour blocks, protects home demand and outage reserve, observes BMS and
+  parallel-system power limits, and separates controlled export from natural
+  PV surplus in the revenue statistics;
+- automatic G11/G12/G12w/G13 grid charging with 2026 presets for PGE, TAURON,
+  ENEA, ENERGA and STOEN, a manual profile, physical charge lead time,
+  forecast-error correction and estimated savings;
+- experimental **RCEm 253 V+** voltage management, starting in observation
+  mode, with four-day voltage history, battery-headroom planning, optional
+  morning pre-discharge and a user-capped export controller;
+- scheduled LiFePO4 storage balancing: use PV first, finish from the grid,
+  slow the final 99â€“100% stage and hold full SOC for a configured period;
+- Solcast-, Recorder- and true LOAD-based planning for today and tomorrow,
+  including a dynamic SOC reserve that protects the home through the night;
 - automatic single/Master/Slave topology detection and system-wide live power
   values for parallel installations;
 - 5-second grid voltage, phase-power and live energy-flow polling;
-- a ready-to-import Home Assistant dashboard and RCE chart card;
+- a bilingual dynamic Home Assistant dashboard with RCE, tariff charging,
+  RCEm, revenue, PV production and installation-diagnostic views;
 - automatic in-place migration of existing storage-mode dashboards to the
   alternating-row cards, with a rollback backup and frontend cache busting;
 - English and Polish entity names, select options, config flow and services.
@@ -79,6 +109,13 @@ add another Modbus polling cycle.
 - ESPHome 2026.7 or newer;
 - Home Assistant 2026.7 or newer;
 - HACS 2.x.
+
+Forecast-based RCE, tariff and RCEm planning additionally requires a configured
+[BJReplay Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar)
+integration. RCE prices require internet access to the public PSE reports API.
+Home Assistant Recorder must retain the relevant power and energy entities;
+Recorder is enabled by default in a standard Home Assistant installation. An
+external household meter is not required.
 
 ## ESP32 and RS485 wiring
 
@@ -173,9 +210,10 @@ and changes to included package components with
 
 ## 1. Install through HACS
 
-HACS installs the Home Assistant integration and dashboard. ESPHome firmware
-packages are downloaded directly from this GitHub repository, so the HACS and
-ESPHome parts do not depend on files copied into one another.
+HACS installs the Home Assistant integration. After the integration is added,
+it installs and registers the managed dashboard and EMS assets. ESPHome
+firmware packages are downloaded directly from this GitHub repository, so the
+HACS and ESPHome parts do not depend on files copied into one another.
 
 1. Use the **Open this repository in HACS** button at the top of this README;
    or open **HACS → three-dot menu → Custom repositories**.
@@ -239,14 +277,16 @@ operation leaves more time for the native API.
 
 ## 4. Dashboard and EMS automation
 
-During setup, the integration can copy:
+During setup, the integration automatically copies:
 
 - `/config/dashboard_hoymiles.yaml`;
 - `/config/packages/hoymiles_ems_scheduler.yaml`;
 - `/config/www/hoymiles-rce-chart-card.js`.
 
-If Home Assistant packages are not enabled yet, add this under the existing
-`homeassistant:` section in `configuration.yaml`:
+There is no asset-copy checkbox and no manual Lovelace resource step. If Home
+Assistant packages are not enabled yet, **Settings → System → Repairs** shows
+the exact next action. Add this under the existing `homeassistant:` section in
+`configuration.yaml`:
 
 ```yaml
 homeassistant:
@@ -275,11 +315,12 @@ installed integration. After a HACS update and Home Assistant restart, the
 dashboard therefore uses the new version automatically instead of retaining a
 stale storage-mode copy.
 
-Existing storage-mode Hoymiles dashboards are upgraded in place during the
-first Home Assistant start after installing version 1.3.4. Only native
-`entities` card types are changed to the compatible zebra card; view order,
-layout, custom entities and other user cards are preserved. Before writing,
-the integration creates an exact `.pre-1.3.4.bak` copy in `/config/.storage`.
+Existing storage-mode Hoymiles dashboards are upgraded in place when an
+installed release contains a reviewed migration. Only the required managed
+card types, entity rows or asset paths are changed; view order, layout, custom
+entities and other user cards are preserved. Before writing, the integration
+creates an exact `.pre-<release>.bak` copy in `/config/.storage` (for example
+`.pre-1.4.0.bak` in this release).
 
 The copied `/config/dashboard_hoymiles.yaml` remains available for legacy and
 manual installations. The managed-asset installer updates an unchanged
@@ -296,7 +337,7 @@ data:
   overwrite: true
 ```
 
-## EMS safety
+## Automation modes and EMS safety
 
 Changing the EMS mode writes the complete register block `4300–4306` with one
 FC10 command. Writing register `4300` alone may leave the inverter with an
@@ -331,7 +372,79 @@ During the protected night window, the reserve decreases with the remaining
 time until 90 minutes after sunrise. After the first complete day, the estimate
 uses the measured average consumption from up to four previous protected
 windows; before that, it falls back to a proportional share of the four-day
-daily LOAD average.
+daily LOAD average. Household demand is reconstructed from the dedicated LOAD
+reading, not by adding PV-to-LOAD and battery-to-LOAD flows, which would count
+the same consumer energy more than once.
+
+### RCE market-price optimization
+
+The RCE planner uses all available price blocks for today and tomorrow. When
+PSE has not published tomorrow yet, it can operate on today's complete data and
+automatically rebuilds the plan when the second day appears. It does not use a
+fixed minimum selling price. Instead, it calculates exportable battery energy,
+natural PV surplus, inverter/BMS power, conversion losses, the protected home
+reserve and the export lockout, then assigns energy to the most valuable
+permitted blocks. Missing or stale safety-critical inputs prevent controlled
+battery export.
+
+The dashboard distinguishes forecast revenue from realized revenue and
+separates deliberate battery export, natural PV surplus and unclassified
+historical export. These values are operational estimates based on the PSE RCE
+price and measured inverter energy; they are not a settlement invoice.
+
+### Tariff-aware grid charging
+
+The tariff planner simulates the household and battery balance in 30-minute
+steps through the end of tomorrow. It considers Solcast, four-day day/night
+LOAD history, the outage reserve, BMS limits, charge/discharge efficiencies,
+the configured Grid Charge power and the fact that this shared AC limit first
+supplies the house. It therefore starts early enough to physically store the
+required energy before an expensive period and can preserve battery SOC while
+cheap grid energy directly supplies current LOAD.
+
+Bundled profiles cover G11, G12, G12w and G13 where offered by PGE, TAURON,
+ENEA, ENERGA and STOEN. They include seasonal windows, weekends and Polish
+public holidays. The included 2026 gross marginal-price presets omit fixed and
+capacity fees because those do not change when charging moves between zones.
+They are a convenience snapshot, not a substitute for the user's contract or
+bill. Choose **Manual** when the supplier, product or price differs.
+
+### RCEm 253 V+ voltage management
+
+RCEm learns recurring high-voltage windows from the previous four days and
+combines them with live L1/L2/L3 voltage, a rolling ten-minute value, PV/load
+power, Solcast and storage headroom. It can reserve battery space before the
+risk window and regulate global battery charge power so more PV is absorbed as
+voltage rises. Optional morning discharge can create missing headroom without
+crossing the protected home SOC. Optional export regulation never exceeds the
+smaller of the existing inverter value and the user cap.
+
+RCEm starts in **observation-only** mode and performs no writes until the user
+explicitly disables that mode. It never disables certified grid protection,
+never changes three-phase unbalance, never enables GCF and never changes a
+protection threshold. It is simulation-tested but still requires field
+observation on a real high-voltage export site; do not describe it as a method
+of bypassing the statutory 253 V limit.
+
+### LiFePO4 storage balancing
+
+The optional service cycle runs at a user-selected interval. It starts after
+sunrise and leaves normal Self-Use operation active so PV fills the battery
+first. After sunset it completes the charge from the grid if needed. From 99%
+to 100% it targets approximately 2 kW of battery charging, corrected for the
+house load that shares the Grid Charge limit, and only starts the hold timer at
+confirmed full SOC. Original charge settings and EMS mode are restored when
+the cycle finishes or is cancelled.
+
+### Interlocks and limitations
+
+Only one automatic owner may control EMS at a time: RCE, tariff charging or
+RCEm. Starting one disables the other automatic planners. A balancing cycle
+has higher priority and blocks automatic and manual schedules until the battery
+is released. Manual schedules retain their documented priority, and disabling
+an automation returns settings it owns to their saved values. The integration
+does not change the three-phase-unbalance setting and never automates the
+maximum export limit outside the explicitly enabled RCEm export controller.
 
 ## Firmware compatibility
 
@@ -399,7 +512,9 @@ Regenerate the localized entity catalog and bundled assets:
 python tools/build_hacs_assets.py
 ```
 
-GitHub Actions run HACS validation, Hassfest and local structural tests.
+GitHub Actions run HACS validation, Hassfest and local structural tests. The
+reviewed multi-system automation matrix and its field-test limits are recorded
+in the [automation simulation report](docs/AUTOMATION_TEST_REPORT.md).
 
 ## Support
 
@@ -415,11 +530,13 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.3.4** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.0** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
-dwudniowy optymalizator zysku RCE PSE, dynamiczną rezerwę SOC na podstawie
-Solcast i historii LOAD, ochronę nocnego zapotrzebowania domu, statystyki
-przychodu, blokadę sprzedaży oraz gotowy dashboard.
+optymalizator sprzedaży RCE, automatyczne ładowanie w taryfach
+G11/G12/G12w/G13, eksperymentalną ochronę eksportu RCEm 253 V+, serwisowe
+wyrównywanie LiFePO4, statystyki przychodu i produkcji oraz dynamiczny dashboard
+PL/EN. Planowanie korzysta z Solcast, historii Recorder, rzeczywistego LOAD,
+pojemności magazynu, limitów BMS i topologii pojedynczej lub równoległej.
 
 ### Podłączenie ESP32 i konwertera RS485
 
@@ -511,9 +628,10 @@ oraz rozszerzanie elementów pakietu przez
 
 ### Instalacja
 
-HACS instaluje integrację i dashboard Home Assistanta. ESPHome pobiera swoje
-pakiety firmware bezpośrednio z GitHuba. Te dwa etapy nie wymagają kopiowania
-plików między katalogami HACS i ESPHome.
+HACS instaluje integrację Home Assistanta. Po dodaniu integracji zostają
+automatycznie zainstalowane i zarejestrowane zarządzany dashboard oraz zasoby
+EMS. ESPHome pobiera pakiety firmware bezpośrednio z GitHuba. Te dwa etapy nie
+wymagają kopiowania plików między katalogami HACS i ESPHome.
 
 1. Kliknij przycisk **Open this repository in HACS** na początku README albo w
    **HACS → menu z trzema kropkami → Niestandardowe repozytoria** dodaj
@@ -531,9 +649,12 @@ plików między katalogami HACS i ESPHome.
    Plik pobiera wersjonowane pakiety rejestrów z GitHuba — nie kopiuj katalogu
    `packages`.
 6. Dodaj wykryte urządzenie przez standardową integrację ESPHome.
-7. Dodaj integrację **Hoymiles HIT xxL G3 Modbus** i wybierz to urządzenie.
-8. Włącz pakiety Home Assistanta i dodaj zasób:
-   `/api/hoymiles_hit_modbus/static/hoymiles-rce-chart-card.js`.
+7. Dodaj integrację **Hoymiles HIT xxL G3 Modbus**. Jedyny zgodny ESP32 zostanie
+   podpowiedziany, a dashboard i automatyka EMS skopiują się automatycznie.
+8. Sprawdź encję **Stan instalacji**. Jeżeli Home Assistant pokaże Naprawę
+   dotyczącą pakietów, wykonaj podaną instrukcję i uruchom HA ponownie. Zasób
+   karty Lovelace jest rejestrowany automatycznie — nie dodawaj adresu `/local`
+   ani `/api` ręcznie.
 9. W **Ustawienia → Panele → Dodaj panel** wybierz społecznościowy dashboard
    **Hoymiles HIT xxL G3**. Będzie on automatycznie korzystał z wersji
    dostarczonej przez aktualnie zainstalowaną integrację.
@@ -570,11 +691,12 @@ niezmodyfikowane pliki automatycznie, a pliki zmienione przez użytkownika
 pozostawia bez nadpisania. Migracja starych identyfikatorów nadal tworzy kopię
 `.pre-stable-entity-ids.bak`.
 
-Od wersji 1.3.4 integracja naprawia również aktywny dashboard zapisany przez
-Home Assistanta w trybie `storage`: podmienia wyłącznie typy standardowych kart
-encji na kartę z naprzemiennym tłem, zachowując układ i własne encje
-użytkownika. Przed zmianą tworzy dokładną kopię `.pre-1.3.4.bak` w
-`/config/.storage` i automatycznie aktualizuje stary zasób `/local`.
+Od wersji 1.3.4 integracja potrafi bezpiecznie migrować również aktywny
+dashboard zapisany przez Home Assistanta w trybie `storage`. Zmienia wyłącznie
+zarządzane typy kart, wiersze encji lub ścieżki zasobów, zachowując układ i
+własne encje użytkownika. Przed każdą zmianą tworzy kopię
+`.pre-<wersja>.bak` w `/config/.storage` — dla tego wydania jest to na przykład
+`.pre-1.4.0.bak` — i automatycznie aktualizuje stary zasób `/local`.
 
 Jeżeli firmware ESP32 jest starszy od integracji HACS, nowe encje pojawią się
 jako **niedostępne**, a nie jako brakujące. Atrybut
@@ -584,6 +706,71 @@ Nazwy encji i opcje wyboru są tłumaczone automatycznie na polski lub angielski
 zależnie od języka Home Assistanta. Pierwsze tłumaczenia są celowo opisowe i
 mogą być dalej poprawiane w plikach `translations/pl.json` oraz
 `translations/en.json`.
+
+### Automatyki EMS
+
+#### Optymalizacja RCE
+
+Automat analizuje dostępne ceny PSE dla dzisiaj i jutra. Jeżeli dane jutrzejsze
+nie zostały jeszcze opublikowane, może działać na kompletnym dniu bieżącym i
+przelicza plan ponownie po pojawieniu się drugiego dnia. Nie korzysta ze stałej
+minimalnej ceny sprzedaży. Wylicza energię możliwą do oddania, naturalną
+nadwyżkę PV, rezerwę domu i zaniku sieci, limity mocy falownika i BMS, sprawność
+oraz blokadę godzinową, a następnie wybiera najdroższe dozwolone bloki po 30
+minut. Brak aktualnych danych krytycznych blokuje sterowane rozładowanie.
+
+Zapotrzebowanie domu jest odtwarzane z dedykowanego odczytu LOAD, a nie z sumy
+PV→LOAD i bateria→LOAD, która mogłaby podwójnie zliczyć tę samą energię.
+Dashboard rozdziela prognozowany i rzeczywisty eksport sterowany, naturalną
+nadwyżkę oraz eksport nierozpoznany. Statystyka przychodu jest estymacją według
+RCE, a nie dokumentem rozliczeniowym sprzedawcy.
+
+#### Automatyczne ładowanie taryfowe
+
+Planer symuluje bilans domu i magazynu w krokach 30-minutowych do końca jutra.
+Uwzględnia Solcast, czterodniową historię dnia i nocy, rezerwę awaryjną, limity
+BMS, sprawności oraz fakt, że limit Grid Charge najpierw zasila odbiorniki, a
+dopiero pozostałą mocą ładuje magazyn. Dzięki temu rozpoczyna ładowanie na tyle
+wcześnie, aby fizycznie zgromadzić wymaganą energię przed drogą strefą.
+
+Gotowe profile obejmują dostępne warianty G11, G12, G12w i G13 dla PGE, TAURON,
+ENEA, ENERGA oraz STOEN, wraz z sezonami, weekendami i polskimi świętami.
+Wbudowane ceny zmienne brutto na 2026 rok nie obejmują opłat stałych i
+mocowych. Są wygodnym punktem startowym, ale użytkownik powinien porównać je z
+własną umową i fakturą. Dla innego produktu lub sprzedawcy służy profil
+**Manual**.
+
+#### RCEm 253 V+
+
+RCEm uczy się powtarzalnych okien wysokiego napięcia z czterech poprzednich dni
+i łączy je z bieżącym napięciem L1/L2/L3, średnią 10-minutową, mocą PV i LOAD,
+Solcast oraz wolnym miejscem w magazynie. Może wcześniej przygotować miejsce w
+baterii, regulować globalną moc ładowania oraz — po osobnym włączeniu — płynnie
+ograniczać eksport do wartości nie większej od zastanej nastawy falownika i
+limitu użytkownika.
+
+Tryb startuje jako **tylko obserwacja** i wtedy nie zapisuje rejestrów. Nie
+wyłącza zabezpieczeń sieciowych, nie zmienia asymetrii trójfazowej, nie włącza
+GCF i nie modyfikuje progów ochronnych. Funkcja przeszła symulacje, ale wymaga
+dalszych prób na rzeczywistej instalacji z problemem napięciowym. Nie służy do
+obchodzenia prawnego limitu 253 V.
+
+#### Wyrównywanie magazynu LiFePO4
+
+Opcjonalny cykl serwisowy uruchamia się w odstępie ustawionym przez użytkownika.
+Po wschodzie pozostawia Self-Use, aby możliwie dużo energii dostarczyło PV. Po
+zachodzie uzupełnia brak z sieci. Od 99% do 100% utrzymuje około 2 kW mocy
+trafiającej do baterii, z korektą o bieżący pobór domu, a czas wyrównywania
+zaczyna liczyć dopiero po potwierdzeniu pełnego SOC. Po zakończeniu lub anulowaniu
+odtwarza poprzednie ustawienia ładowania i tryb EMS.
+
+#### Priorytety i blokady
+
+W jednej chwili tylko jeden automat może być właścicielem EMS: RCE, ładowanie
+taryfowe albo RCEm. Włączenie jednego wyłącza pozostałe. Wyrównywanie magazynu
+ma wyższy priorytet i na czas cyklu blokuje automatyczne oraz ręczne plany.
+Automatyka nie steruje asymetrią trójfazową. Maksymalny limit eksportu może być
+zmieniany wyłącznie przez jawnie włączony regulator eksportu RCEm.
 
 ### Bezpieczeństwo
 

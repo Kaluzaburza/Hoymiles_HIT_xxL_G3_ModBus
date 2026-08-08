@@ -1,3 +1,57 @@
+class HoymilesHitDashboardStrategy extends HTMLElement {
+  static noEditor = true;
+
+  static getCreateSuggestions(hass) {
+    const language = (
+      hass?.locale?.language ??
+      hass?.language ??
+      "en"
+    ).toLowerCase();
+    return {
+      title: language.startsWith("pl")
+        ? "Hoymiles — falownik"
+        : "Hoymiles — inverter",
+      icon: "mdi:solar-power-variant",
+    };
+  }
+
+  static async generate(config, hass) {
+    const requestedLanguage = (
+      config?.language ??
+      hass?.locale?.language ??
+      hass?.language ??
+      "en"
+    ).toLowerCase();
+    const language = requestedLanguage.startsWith("pl") ? "pl" : "en";
+    const dashboardUrl = new URL(
+      `dashboard_hoymiles_${language}.json`,
+      import.meta.url
+    );
+    dashboardUrl.search = "";
+    const response = await fetch(dashboardUrl, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(
+        `Cannot load Hoymiles dashboard (${response.status} ${response.statusText})`
+      );
+    }
+    const dashboard = await response.json();
+    if (config?.title) {
+      dashboard.title = config.title;
+    }
+    return dashboard;
+  }
+}
+
+// Register the dashboard strategy before the larger custom-card bundle.  A
+// frontend card error must never prevent Lovelace from discovering the
+// strategy and turning the whole dashboard into a timeout page.
+if (!customElements.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3")) {
+  customElements.define(
+    "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
+    HoymilesHitDashboardStrategy
+  );
+}
+
 class HoymilesRceChartCard extends HTMLElement {
   constructor() {
     super();
@@ -998,55 +1052,6 @@ if (!window.customCards.some((card) => card.type === "hoymiles-power-flow-card")
       "Sunsynk power-flow card wrapper with a Hoymiles inverter illustration.",
     preview: false,
   });
-}
-
-class HoymilesHitDashboardStrategy extends HTMLElement {
-  static noEditor = true;
-
-  static getCreateSuggestions(hass) {
-    const language = (
-      hass?.locale?.language ??
-      hass?.language ??
-      "en"
-    ).toLowerCase();
-    return {
-      title: language.startsWith("pl")
-        ? "Hoymiles — falownik"
-        : "Hoymiles — inverter",
-      icon: "mdi:solar-power-variant",
-    };
-  }
-
-  static async generate(config, hass) {
-    const requestedLanguage = (
-      config?.language ??
-      hass?.locale?.language ??
-      hass?.language ??
-      "en"
-    ).toLowerCase();
-    const language = requestedLanguage.startsWith("pl") ? "pl" : "en";
-    const response = await fetch(
-      `/api/hoymiles_hit_modbus/static/dashboard_hoymiles_${language}.json`,
-      { cache: "no-store" }
-    );
-    if (!response.ok) {
-      throw new Error(
-        `Cannot load Hoymiles dashboard (${response.status} ${response.statusText})`
-      );
-    }
-    const dashboard = await response.json();
-    if (config?.title) {
-      dashboard.title = config.title;
-    }
-    return dashboard;
-  }
-}
-
-if (!customElements.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3")) {
-  customElements.define(
-    "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
-    HoymilesHitDashboardStrategy
-  );
 }
 
 window.customStrategies = window.customStrategies || [];

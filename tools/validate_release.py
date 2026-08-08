@@ -65,7 +65,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.3.4"
+    const_module.VERSION = "1.4.0"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -258,11 +258,30 @@ script:
                                         "sensor.hoymiles_hit_overview_pv_total_power",
                                         "sensor.hoymiles_hit_overview_battery_power",
                                         "sensor.unrelated_user_entity",
+                                        {
+                                            "entity": "sensor.hoymiles_rce_pv_self_consumption_today",
+                                            "name": "PV → odbiorniki dzisiaj",
+                                        },
+                                        {
+                                            "entity": "sensor.hoymiles_rce_battery_to_load_today",
+                                            "name": "Bateria → odbiorniki dzisiaj",
+                                        },
+                                        {
+                                            "entity": "sensor.hoymiles_rce_grid_to_load_today",
+                                            "name": "Sieć → odbiorniki dzisiaj",
+                                        },
                                     ],
                                 },
                                 {
                                     "type": "markdown",
                                     "content": "User content",
+                                },
+                                {
+                                    "type": "custom:hoymiles-power-flow-card",
+                                    "inverter_image": (
+                                        "/api/hoymiles_hit_modbus/static/"
+                                        "hoymiles-inverter.png"
+                                    ),
                                 },
                             ]
                         }
@@ -306,8 +325,28 @@ script:
         require(
             cards[0]["title"] == "User card"
             and "sensor.unrelated_user_entity" in cards[0]["entities"]
-            and cards[1]["content"] == "User content",
+            and cards[1]["content"] == "User content"
+            and cards[2]["inverter_image"] == assets.INVERTER_IMAGE_PATH,
             "Storage-mode migration did not preserve user customizations",
+        )
+        migrated_rows = [
+            row
+            for row in cards[0]["entities"]
+            if isinstance(row, dict)
+        ]
+        require(
+            migrated_rows[0]
+            == {
+                "entity": "sensor.hoymiles_actual_load_energy_today",
+                "name": "Rzeczywiste zużycie odbiorników dzisiaj",
+            }
+            and migrated_rows[1]["name"]
+            == "PV → odbiorniki — rejestr diagnostyczny"
+            and migrated_rows[2]["name"]
+            == "Energia oddana przez baterię — diagnostycznie"
+            and migrated_rows[3]["name"]
+            == "Energia pobrana z sieci — diagnostycznie",
+            "Storage-mode RCE LOAD rows were not migrated safely",
         )
         migrated_resources = json.loads(
             resources_path.read_text(encoding="utf-8")
@@ -320,10 +359,10 @@ script:
         )
         require(
             dashboard_path.with_name(
-                f"{dashboard_path.name}.pre-1.3.4.bak"
+                f"{dashboard_path.name}.pre-{assets.VERSION}.bak"
             ).is_file()
             and resources_path.with_name(
-                f"{resources_path.name}.pre-1.3.4.bak"
+                f"{resources_path.name}.pre-{assets.VERSION}.bak"
             ).is_file(),
             "Storage migration did not create rollback backups",
         )
@@ -384,11 +423,13 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.3.4", "Release version must be 1.3.4")
+    require(manifest["version"] == "1.4.0", "Release version must be 1.4.0")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
     assets_source = (COMPONENT / "assets.py").read_text(encoding="utf-8")
+    config_flow_source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+    sensor_platform_source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     require(
         "def suggested_object_id(self)" in entity_source,
         "Proxy entities need an explicit stable suggested_object_id property",
@@ -410,7 +451,9 @@ def main() -> int:
     )
     require(
         "StaticPathConfig" in init_source
-        and 'STATIC_URL = f"/api/{DOMAIN}/static"' in init_source,
+        and 'STATIC_URL = f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}"'
+        in init_source
+        and 'FRONTEND_STATIC_ROUTE = "static-r2"' in assets_source,
         "Integration assets are not exposed through the stable no-cache URL",
     )
     require(
@@ -423,6 +466,19 @@ def main() -> int:
     require(
         "frontend" in manifest.get("dependencies", []),
         "Frontend dependency is required for automatic strategy registration",
+    )
+    require(
+        "_async_default_source_device_id" in config_flow_source
+        and "CONF_COPY_ASSETS: True" in config_flow_source
+        and "BooleanSelector" not in config_flow_source,
+        "Config flow still exposes avoidable asset-copy choices",
+    )
+    require(
+        "ems_package_not_loaded" in init_source
+        and "issue_registry" in init_source
+        and "HoymilesSetupStatusSensor" in sensor_platform_source
+        and "firmware_coverage_percent" in sensor_platform_source,
+        "Beginner setup status or EMS package Repair is missing",
     )
 
     catalog = load_json(COMPONENT / "entity_catalog.json")
@@ -484,6 +540,7 @@ def main() -> int:
         RESOURCES / "home_assistant" / "en" / "hoymiles_ems_scheduler.yaml",
         RESOURCES / "home_assistant" / "pl" / "hoymiles_ems_scheduler.yaml",
         RESOURCES / "www" / "hoymiles-rce-chart-card.js",
+        RESOURCES / "www" / "hoymiles-dashboard-strategy.js",
         RESOURCES / "www" / "hoymiles-inverter.png",
         RESOURCES / "www" / "dashboard_hoymiles_en.json",
         RESOURCES / "www" / "dashboard_hoymiles_pl.json",
@@ -491,6 +548,15 @@ def main() -> int:
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
 
+    expected_zebra_cards = (
+        ROOT / "dashboard_hoymiles.yaml"
+    ).read_text(encoding="utf-8").count(
+        "type: custom:hoymiles-zebra-entities-card"
+    )
+    require(
+        expected_zebra_cards >= 56,
+        "Source dashboard unexpectedly lost zebra entity cards",
+    )
     for dashboard_json in required_assets[-2:]:
         dashboard_data = load_json(dashboard_json)
         require(
@@ -504,17 +570,27 @@ def main() -> int:
             dashboard_json_text.count(
                 '"type": "custom:hoymiles-zebra-entities-card"'
             )
-            == 50
+            == expected_zebra_cards
             and '"type": "entities"' not in dashboard_json_text,
-            f"{dashboard_json.name} does not use all 50 zebra entity cards",
+            f"{dashboard_json.name} does not use all "
+            f"{expected_zebra_cards} zebra entity cards",
         )
 
     card_source = required_assets[4].read_text(encoding="utf-8")
     require(
         "ll-strategy-dashboard-hoymiles-hit-xxl-g3" in card_source
         and "dashboard_hoymiles_${language}.json" in card_source
+        and "import.meta.url" in card_source
+        and "/api/hoymiles_hit_modbus/static/dashboard_hoymiles_" not in card_source
         and "window.customStrategies" in card_source,
-        "Dashboard card does not register the update-safe dashboard strategy",
+        "Dashboard strategy is not update-safe or hard-codes a stale asset route",
+    )
+    bootstrap_source = required_assets[5].read_text(encoding="utf-8")
+    require(
+        "ll-strategy-dashboard-hoymiles-hit-xxl-g3" in bootstrap_source
+        and "document.currentScript" in bootstrap_source
+        and "import.meta" not in bootstrap_source,
+        "Classic dashboard bootstrap is missing or uses ES-module-only syntax",
     )
     require(
         "futureNoData" in card_source
@@ -556,9 +632,10 @@ def main() -> int:
             dashboard_text.count(
                 "type: custom:hoymiles-zebra-entities-card"
             )
-            == 50
+            == expected_zebra_cards
             and not re.search(r"^\s*-?\s*type:\s+entities\s*$", dashboard_text, re.M),
-            f"{dashboard_path.name} does not use all 50 zebra entity cards",
+            f"{dashboard_path.name} does not use all "
+            f"{expected_zebra_cards} zebra entity cards",
         )
 
     rce_sensor_source = (
@@ -587,6 +664,26 @@ def main() -> int:
         and "hoymiles_rce_price_threshold" not in rce_sensor_source,
         "RCE optimizer still depends on a manually configured price threshold",
     )
+    tariff_optimizer_source = (
+        COMPONENT / "tariff_optimizer.py"
+    ).read_text(encoding="utf-8")
+    tariff_sensor_source = (
+        COMPONENT / "tariff_sensor.py"
+    ).read_text(encoding="utf-8")
+    require(
+        "first_shortage_index" in tariff_optimizer_source
+        and "accepted_support_kwh" in tariff_optimizer_source
+        and "for index in range(len(starts))" in tariff_optimizer_source
+        and "trial_simulation.shortage_kwh" in tariff_optimizer_source
+        and "minimum_saving_pln_kwh" in tariff_optimizer_source,
+        "Tariff optimizer lacks deficit-reducing direct support or charging",
+    )
+    require(
+        "bms_charge_power_limit_kw" in tariff_sensor_source
+        and "effective_charge_power_percent" in tariff_sensor_source
+        and "forecast_tomorrow_kwh" in tariff_sensor_source,
+        "Tariff sensor lacks forecast or BMS-safe charge-power diagnostics",
+    )
 
     stable_entity_assets = [
         ROOT / "dashboard_hoymiles.yaml",
@@ -605,6 +702,9 @@ def main() -> int:
     )
     native_integration_entities = {
         ("sensor", "rce_optimized_plan"),
+        ("sensor", "tariff_charge_plan"),
+        ("sensor", "rcm_voltage_plan"),
+        ("sensor", "setup_status"),
     }
     for asset_path in stable_entity_assets:
         asset_text = asset_path.read_text(encoding="utf-8")
@@ -645,6 +745,33 @@ def main() -> int:
             "unique_id: hoymiles_rce_day_tomorrow",
             "state_characteristic: sum_differences_nonnegative",
             "max_age:\n      days: 4",
+            "hoymiles_tariff_charge_enabled:",
+            "hoymiles_tariff_type:",
+            "unique_id: hoymiles_tariff_planned_charge_slot",
+            "id: hoymiles_automatic_ems_mode_interlock",
+            "id: hoymiles_tariff_grid_charge_control",
+            "hoymiles_rcm_pre_discharge_enabled:",
+            "hoymiles_rcm_pre_discharge_active:",
+            "unique_id: hoymiles_rcm_natural_headroom_before_risk",
+            "unique_id: hoymiles_rcm_planned_grid_discharge",
+            "unique_id: hoymiles_rcm_pre_discharge_power",
+            "unique_id: hoymiles_rcm_pre_discharge_target_soc",
+            "id: hoymiles_rcm_pre_discharge_control",
+            "input_boolean.hoymiles_rcm_shadow_mode",
+            "binary_sensor.hoymiles_sale_block_active",
+            "number.hoymiles_hit_maximum_discharge_power",
+            "number.hoymiles_hit_force_discharge_soc",
+            "hoymiles_battery_balancing_enabled:",
+            "hoymiles_battery_balancing_active:",
+            "hoymiles_battery_balancing_interval_days:",
+            "hoymiles_battery_balancing_hold_hours:",
+            "unique_id: hoymiles_battery_balancing_slow_charge_power",
+            "unique_id: hoymiles_battery_balancing_due",
+            "hoymiles_start_battery_balancing:",
+            "hoymiles_stop_battery_balancing:",
+            "id: hoymiles_battery_balancing_control",
+            "timer.hoymiles_battery_balancing_watchdog",
+            "input_boolean.hoymiles_battery_balancing_active",
             "sensor.hoymiles_actual_load_energy_today",
             "sensor.hoymiles_actual_load_power",
             "sensor.hoymiles_hit_load_power_l1n",
@@ -692,9 +819,45 @@ def main() -> int:
             "[-grid / 1000, 0]" not in package_text,
             f"Grid export power still uses the reversed sign in {package_path.name}",
         )
+        require(
+            not re.search(
+                r"device_class:\s*energy\s+state_class:\s*measurement",
+                package_text,
+            ),
+            f"Energy helper uses invalid measurement state class in {package_path.name}",
+        )
+
+    rcm_optimizer_source = (
+        COMPONENT / "rcm_optimizer.py"
+    ).read_text(encoding="utf-8")
+    rcm_sensor_source = (
+        COMPONENT / "rcm_sensor.py"
+    ).read_text(encoding="utf-8")
+    for marker in (
+        "expected_natural_headroom_kwh",
+        "planned_grid_discharge_kwh",
+        "pre_discharge_target_soc_percent",
+        "pre_discharge_power_percent",
+        "pre_discharge_ready",
+        "protected_minimum_soc",
+        "export_capacity_kw > 0.1",
+    ):
+        require(
+            marker in rcm_optimizer_source,
+            f"RCEm morning-discharge safety marker missing: {marker}",
+        )
+    require(
+        "sensor.hoymiles_hit_maximum_discharge_current" in rcm_sensor_source
+        and "minutes_to_risk" in rcm_sensor_source
+        and "risk_day_offset" in rcm_sensor_source,
+        "RCEm sensor lacks BMS/time inputs for safe morning discharge",
+    )
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    release_notes = (
+        ROOT / "docs" / "releases" / "v1.4.0.md"
+    ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
         changelog,
@@ -740,6 +903,28 @@ def main() -> int:
             width >= 1000 and height >= 700,
             f"README image is unexpectedly small: {image.name}",
         )
+    require(
+        "docs/QUICK_START.md" in readme
+        and (ROOT / "docs" / "QUICK_START.md").is_file(),
+        "README does not expose the beginner quick-start guide",
+    )
+    require(
+        "## User update steps / Kroki po aktualizacji" in release_notes
+        and "ESP32 / ESPHome" in release_notes
+        and "2064/2064" in release_notes,
+        "GitHub Release notes are incomplete for HACS users",
+    )
+    for documentation_marker in (
+        "Version **1.4.0** is the current release",
+        "Tariff-aware grid charging",
+        "RCEm 253 V+ voltage management",
+        "LiFePO4 storage balancing",
+        "docs/AUTOMATION_TEST_REPORT.md",
+    ):
+        require(
+            documentation_marker in readme,
+            f"README is missing release documentation: {documentation_marker}",
+        )
 
     esphome_entry_files = [
         ROOT / "hoymiles-inverter.yaml",
@@ -760,6 +945,13 @@ def main() -> int:
             "url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
             in entry_text,
             f"Public ESPHome entry point has no remote package: {entry_file.name}",
+        )
+        require(
+            "dashboard_import:" in entry_text
+            and "package_import_url: github://Kaluzaburza/"
+            "Hoymiles_HIT_xxL_G3_ModBus/" in entry_text
+            and "import_full_config: true" in entry_text,
+            f"ESPHome adoption/update metadata is missing in {entry_file.name}",
         )
         included_packages = set(
             re.findall(r"^\s*-\s+(packages/[a-z0-9_]+\.yaml)\s*$", entry_text, re.M)
@@ -941,11 +1133,33 @@ def main() -> int:
             "sensor.hoymiles_rce_realized_revenue_today",
             "sensor.hoymiles_rce_day",
             "sensor.hoymiles_rce_day_tomorrow",
+            "input_boolean.hoymiles_tariff_charge_enabled",
+            "input_select.hoymiles_tariff_type",
+            "input_number.hoymiles_tariff_g11_price",
+            "input_number.hoymiles_tariff_low_price",
+            "sensor.hoymiles_hit_tariff_charge_plan",
+            "binary_sensor.hoymiles_tariff_planned_charge_slot",
+            "sensor.hoymiles_tariff_target_soc",
+            "sensor.hoymiles_tariff_planned_grid_import",
+            "sensor.hoymiles_tariff_estimated_savings",
+            "sensor.hoymiles_tariff_grid_charge_energy_daily",
+            "sensor.hoymiles_tariff_savings_daily",
+            "input_boolean.hoymiles_battery_balancing_enabled",
+            "input_number.hoymiles_battery_balancing_interval_days",
+            "input_number.hoymiles_battery_balancing_hold_hours",
+            "sensor.hoymiles_battery_balancing_status",
+            "sensor.hoymiles_battery_balancing_next_run",
+            "timer.hoymiles_battery_balancing_hold",
+            "sensor.hoymiles_battery_balancing_slow_charge_power",
         ):
             require(
                 entity_id in dashboard_text,
                 f"{language} dashboard lacks dynamic RCE entity {entity_id}",
             )
+        require(
+            "path: ladowanie-taryfowe" in dashboard_text,
+            f"{language} dashboard lacks the tariff charging view",
+        )
         require(
             "https://github.com/BJReplay/ha-solcast-solar" in dashboard_text,
             f"{language} dashboard does not document the Solcast dependency",
@@ -1116,6 +1330,57 @@ def main() -> int:
         width, height = png_dimensions(image_path)
         require(width >= 128 and height >= 128, f"{image_name} is too small")
 
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    license_policy = (ROOT / "LICENSE_POLICY.md").read_text(encoding="utf-8")
+    notice_text = (ROOT / "NOTICE").read_text(encoding="utf-8")
+    contribution_text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    pr_template_text = (
+        ROOT / ".github" / "pull_request_template.md"
+    ).read_text(encoding="utf-8")
+    codeowners_text = (ROOT / ".github" / "CODEOWNERS").read_text(
+        encoding="utf-8"
+    )
+    workflow_text = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
+        encoding="utf-8"
+    )
+    require(
+        license_text.startswith("# PolyForm Noncommercial License 1.0.0")
+        and "## Personal Uses" in license_text
+        and "## No Liability" in license_text,
+        "PolyForm Noncommercial license text is missing or incomplete",
+    )
+    require(
+        "v1.3.4" in license_policy
+        and "a60ae4db16af95ab8dd0e8532c6bea1b96d1bde0" in license_policy
+        and "MIT" in license_policy,
+        "License history does not preserve the previously published MIT boundary",
+    )
+    require(
+        notice_text.startswith("Required Notice: Copyright (c) 2026 Kaluzaburza"),
+        "Required copyright notice is missing",
+    )
+    require(
+        "relicense the contribution" in contribution_text
+        and "Contribution Certificate 1.0" in contribution_text
+        and "Signed-off-by:" in contribution_text,
+        "Contribution rights and sign-off terms are incomplete",
+    )
+    require(
+        "I accept [CONTRIBUTING.md]" in pr_template_text
+        and "Signed-off-by:" in pr_template_text
+        and "* @Kaluzaburza" in codeowners_text,
+        "Pull-request rights confirmation or CODEOWNERS is missing",
+    )
+    for test_command in (
+        "python tools/test_tariff_profiles.py",
+        "python tools/test_tariff_optimizer.py",
+        "python tools/test_rcm_history.py",
+        "python tools/test_rcm_optimizer.py",
+        "python tools/test_automation_matrix.py",
+        "python tools/test_automation_matrix.py --exhaustive",
+    ):
+        require(test_command in workflow_text, f"CI does not run {test_command}")
+
     print(f"HACS layout: OK ({len(integration_dirs)} integration)")
     print(f"Manifest: OK (version {manifest['version']})")
     print(f"Localized entities: {len(catalog)} (English and Polish)")
@@ -1127,6 +1392,9 @@ def main() -> int:
     print("Text-state localization: OK")
     print("Fresh PL/EN asset installation: OK")
     print("Brand assets: OK")
+    print("Noncommercial license and MIT history boundary: OK")
+    print("Contribution rights, sign-off and CODEOWNERS: OK")
+    print("RCE/tariff/RCEm CI regression matrix: OK")
     return 0
 
 
