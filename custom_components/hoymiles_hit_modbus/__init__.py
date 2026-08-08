@@ -27,6 +27,7 @@ from .const import (
     ATTR_OVERWRITE,
     CONF_SOURCE_DEVICE_ID,
     DOMAIN,
+    EMS_PACKAGE_SENTINEL,
     PLATFORMS,
     SERVICE_INSTALL_ASSETS,
     VERSION,
@@ -44,7 +45,6 @@ INSTALL_ASSETS_SCHEMA = vol.Schema(
         vol.Optional(ATTR_OVERWRITE, default=False): cv.boolean,
     }
 )
-EMS_PACKAGE_SENTINEL = "input_boolean.hoymiles_rce_automation_enabled"
 EMS_PACKAGE_DOCS_URL = (
     "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
     "#4-dashboard-and-ems-automation"

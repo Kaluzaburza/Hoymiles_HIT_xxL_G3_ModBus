@@ -11,16 +11,13 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, EMS_PACKAGE_SENTINEL
 from .entity import HoymilesProxyEntity
 from .localization import localized_text_state
 from .models import RuntimeData
 from .rcm_sensor import HoymilesRCMOptimizerSensor
 from .rce_sensor import HoymilesRCEOptimizerSensor
 from .tariff_sensor import HoymilesTariffOptimizerSensor
-
-
-EMS_PACKAGE_SENTINEL = "input_boolean.hoymiles_rce_automation_enabled"
 
 
 async def async_setup_entry(
