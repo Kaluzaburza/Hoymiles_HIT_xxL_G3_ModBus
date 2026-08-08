@@ -10,16 +10,15 @@ inverters using Modbus RTU over an ESP32 RS485 bridge.
 parallel systems and troubleshooting remain documented below.
 
 > [!IMPORTANT]
-> **License / Licencja:** version 1.4.2 and later are open-source software under
-> the OSI-approved [MIT License](LICENSE). Private and commercial use,
-> modification, distribution and sale are permitted when the copyright and
-> permission notices are retained. See the bilingual
-> [license policy](LICENSE_POLICY.md).
+> **License / Licencja:** this project is open-source software under the
+> [MIT License](LICENSE). Private and commercial use, modification and
+> distribution are permitted when the copyright and permission notices are
+> retained. The software is provided without warranty.
 >
-> Wersja 1.4.2 i kolejne są oprogramowaniem open source na licencji MIT
-> zatwierdzonej przez OSI. Dozwolone jest użycie prywatne i komercyjne,
-> modyfikowanie, rozpowszechnianie oraz sprzedaż z zachowaniem informacji o
-> prawach autorskich i treści zezwolenia.
+> Projekt jest oprogramowaniem open source na [licencji MIT](LICENSE).
+> Dozwolone jest użycie prywatne i komercyjne, modyfikowanie oraz
+> rozpowszechnianie z zachowaniem informacji o prawach autorskich i treści
+> zezwolenia. Oprogramowanie jest udostępniane bez gwarancji.
 
 ## Support the project / Wesprzyj projekt
 
@@ -37,7 +36,7 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.4.3** is the current release. It contains:
+Version **1.4.4** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -63,6 +62,11 @@ Version **1.4.3** is the current release. It contains:
 - 5-second grid voltage, phase-power and live energy-flow polling;
 - a bilingual dynamic Home Assistant dashboard with RCE, tariff charging,
   RCEm, revenue, PV production and installation-diagnostic views;
+- native, high-contrast history and statistics charts for power flow, LOAD,
+  PV strings, grid, battery, revenue and production, plus responsive cards for
+  desktop and mobile layouts;
+- explicit EMS control ownership and conflict diagnostics so automatic modes
+  cannot silently compete for inverter control;
 - automatic in-place migration of existing storage-mode dashboards to the
   alternating-row cards, with a rollback backup and frontend cache busting;
 - English and Polish entity names, select options, config flow and services.
@@ -86,15 +90,15 @@ The HACS integration creates localized, stable proxy entities from the native
 ESPHome device. It listens to Home Assistant state events, so it does **not**
 add another Modbus polling cycle.
 
-## Screenshots / Zrzuty ekranu
+## Dashboard overview / Podgląd dashboardu
 
-### Live energy flow / Bieżący przepływ energii
+The single overview below shows the live start page, RCE optimizer, tariff
+charging and RCEm 253 V+ voltage protection from the current release.
 
-![Hoymiles dashboard with live grid, PV, home and battery energy flow](docs/images/dashboard-energy-flow.png)
+Poniższy podgląd przedstawia bieżący panel główny, optymalizator RCE, tanie
+ładowanie oraz ochronę napięciową RCEm 253 V+ z aktualnego wydania.
 
-### RCE automation / Automatyka cenowa RCE
-
-![Hoymiles EMS automation with the daily PSE RCE price chart](docs/images/dashboard-rce-automation.png)
+![Hoymiles dashboard overview: start, RCE, tariff charging and RCEm](docs/images/dashboard-overview.png)
 
 ## Requirements
 
@@ -262,8 +266,8 @@ open until all eight ESP32 API client slots are occupied.
    `Successful handshake with hoymiles-inverter`.
 
 Do not increase `api.max_connections` above 8 as a workaround. It only delays
-the same saturation and consumes more ESP32 memory. The v1.3.3 firmware also
-uses staggered polling intervals and limits verbose Modbus logging so normal
+the same saturation and consumes more ESP32 memory. The current firmware uses
+staggered polling intervals and limits verbose Modbus logging so normal
 operation leaves more time for the native API.
 
 ## 3. Add the integrations
@@ -528,7 +532,7 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.3** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.4** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 optymalizator sprzedaży RCE, automatyczne ładowanie w taryfach
 G11/G12/G12w/G13, eksperymentalną ochronę eksportu RCEm 253 V+, serwisowe
@@ -678,7 +682,7 @@ osiem miejsc klientów API w ESP32.
    `Successful handshake with hoymiles-inverter`.
 
 Nie zwiększaj `api.max_connections` powyżej 8. Taki zabieg jedynie odsuwa
-problem i zużywa dodatkową pamięć ESP32. Firmware v1.3.3 rozkłada odczyty w
+problem i zużywa dodatkową pamięć ESP32. Aktualny firmware rozkłada odczyty w
 czasie i ogranicza szczegółowe logi Modbus, aby pozostawić więcej czasu dla API.
 
 Nowy dashboard strategiczny nie wymaga ponownego wklejania konfiguracji po

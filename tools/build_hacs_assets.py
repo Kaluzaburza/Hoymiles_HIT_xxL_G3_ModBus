@@ -301,7 +301,12 @@ ENGLISH_REPLACEMENTS = {
     "EMS taryfowy — operator / profil cenowy": (
         "Tariff EMS — DSO / price profile"
     ),
-    "Tanie ładowanie — ostatnie 30 dni": "Low-cost charging — last 30 days",
+    "Energia taniego ładowania — ostatnie 30 dni": (
+        "Low-cost charging energy — last 30 days"
+    ),
+    "Oszczędność taryfowa — ostatnie 30 dni": (
+        "Tariff savings — last 30 days"
+    ),
     "Automatyczne ładowanie taryfowe — ustawienia": (
         "Automatic tariff charging — settings"
     ),
@@ -1372,6 +1377,13 @@ ENGLISH_REPLACEMENTS = {
     "Rezystancja izolacji": "Insulation resistance",
     "Wyprodukowano dzisiaj": "Generated today",
     "Moc — ostatnie 24 godziny [W]": "Power — last 24 hours [W]",
+    "Odbiorniki — moc ostatnie 24 godziny [W]": (
+        "Loads — power over the last 24 hours [W]"
+    ),
+    "Zużycie domu — ostatnie 30 dni [kWh]": (
+        "Home consumption — last 30 days [kWh]"
+    ),
+    "name: Zużycie domu": "name: Home consumption",
     "name: Moc": "name: Power",
     "Odbiory — moc": "Loads — power",
     "Odbiory — energia": "Loads — energy",
@@ -1802,7 +1814,17 @@ ENGLISH_REPLACEMENTS = {
     "Napięcie sieci — sterowanie według najwyższej fazy": "Grid voltage — controlled by the highest phase",
     "Maksimum": "Maximum",
     "Średnia 10 min": "10-minute average",
-    "Napięcie L1/L2/L3 i średnia 10-minutowa": "L1/L2/L3 voltage and 10-minute average",
+    "Napięcie L1/L2/L3 i średnia 10-minutowa — ostatnie 24 godziny": (
+        "L1/L2/L3 voltage and 10-minute average — last 24 hours"
+    ),
+    "Temperatura ogniw — ostatnie 7 dni": "Cell temperature — last 7 days",
+    "Napięcie sieci — ostatnie 7 dni": "Grid voltage — last 7 days",
+    "Temperatury falownika — ostatnie 7 dni": (
+        "Inverter temperatures — last 7 days"
+    ),
+    "Radiator falownika": "Inverter heatsink",
+    "Radiator toru baterii": "Battery-stage heatsink",
+    "Wnętrze falownika (CAV)": "Inverter interior (CAV)",
     "Plan ochrony eksportu": "Export protection plan",
     "Regulator — wartości bieżące": "Controller — current values",
     "Historyczne okno ryzyka aktywne": "Historical risk window active",
@@ -1935,6 +1957,39 @@ ENGLISH_REPLACEMENTS = {
     "Battery Max Charge Power oraz — po osobnym włączeniu — do maksymalnego": "Battery Max Charge Power and, when separately enabled, the maximum",
     "limitu eksportu. Tryb obserwacyjny nigdy nie zapisuje falownika. RCEm nie": "export limit. Observation mode never writes to the inverter. RCEm does not",
     "przełącza GCF, Grid Charge, asymetrii ani nastaw zabezpieczeń.": "switch GCF, Grid Charge, unbalance or protection settings.",
+    "Steruje teraz": "Current controller",
+    "Konflikt sterowania": "Control conflict",
+    "RCE — konfiguracja zaawansowana": "RCE — advanced configuration",
+    "Własna encja Solcast — dzisiaj": "Custom Solcast entity — today",
+    "Własna encja Solcast — jutro": "Custom Solcast entity — tomorrow",
+    "RCE — decyzja automatyki": "RCE — automation decision",
+    "Decyzja optymalizatora": "Optimizer decision",
+    "Cena RCE teraz": "Current RCE price",
+    "Cena graniczna planu": "Plan price floor",
+    "Chroniony minimalny SOC": "Protected minimum SOC",
+    "Energia dostępna ponad rezerwę": "Energy available above reserve",
+    "Planowany eksport z baterii": "Planned battery export",
+    "SOC na końcu horyzontu": "SOC at the end of the horizon",
+    "Korzyść optymalizacji": "Optimization benefit",
+    "Przychód zrealizowany dzisiaj": "Revenue realized today",
+    "RCE — szczegóły i diagnostyka": "RCE — details and diagnostics",
+    "Pojemność ustawiona w falowniku": "Capacity configured in the inverter",
+    "Pojemność efektywna (awaryjne źródło BMS)": (
+        "Effective capacity (BMS emergency fallback)"
+    ),
+    "Cennik profilu wygasł. Automatyczne ładowanie jest zablokowane.": (
+        "The tariff profile has expired. Automatic charging is blocked."
+    ),
+    "Zaktualizuj integrację albo wybierz profil **Manual** z aktualnymi cenami.": (
+        "Update the integration or select **Manual** with current prices."
+    ),
+    "Harmonogram ręczny — rozładowanie": "Manual schedule — discharge",
+    "Harmonogram ręczny — ładowanie": "Manual schedule — charge",
+    "Automatyka RCE": "RCE automation",
+    "Tanie ładowanie": "Low-cost charging",
+    "RCEm 253 V+ — obserwacja": "RCEm 253 V+ — observation",
+    "Sterowanie ręczne": "Manual control",
+    "'Taryfa' if": "'Tariff' if",
 }
 
 

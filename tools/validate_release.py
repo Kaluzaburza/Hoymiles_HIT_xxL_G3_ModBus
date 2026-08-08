@@ -66,7 +66,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.3"
+    const_module.VERSION = "1.4.4"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -424,7 +424,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.3", "Release version must be 1.4.3")
+    require(manifest["version"] == "1.4.4", "Release version must be 1.4.4")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -634,8 +634,8 @@ def main() -> int:
             f"{dashboard_path.name} does not mark the tomorrow chart as future data",
         )
         require(
-            "energy: sensor.hoymiles_hit_total_capacity" in dashboard_text,
-            f"{dashboard_path.name} does not use the effective battery capacity",
+            "energy: sensor.hoymiles_hit_battery_capacity" in dashboard_text,
+            f"{dashboard_path.name} does not use the inverter-configured battery capacity",
         )
         require(
             "invert_power:" not in dashboard_text,
@@ -652,6 +652,32 @@ def main() -> int:
             and not re.search(r"^\s*-?\s*type:\s+entities\s*$", dashboard_text, re.M),
             f"{dashboard_path.name} does not use all "
             f"{expected_zebra_cards} zebra entity cards",
+        )
+        require(
+            dashboard_text.count("type: statistics-graph") >= 12
+            and "period: 5minute" in dashboard_text
+            and "min_y_axis: 220" in dashboard_text
+            and 'color: "#FF1744"' in dashboard_text
+            and 'color: "#00B0FF"' in dashboard_text
+            and 'color: "#FFD600"' in dashboard_text,
+            f"{dashboard_path.name} lacks the native statistics graph set",
+        )
+        load_graph_title = (
+            "Odbiorniki — moc ostatnie 24 godziny [W]"
+            if dashboard_path.name.endswith("_pl.yaml")
+            else "Loads — power over the last 24 hours [W]"
+        )
+        load_energy_title = (
+            "Zużycie domu — ostatnie 30 dni [kWh]"
+            if dashboard_path.name.endswith("_pl.yaml")
+            else "Home consumption — last 30 days [kWh]"
+        )
+        require(
+            load_graph_title in dashboard_text
+            and load_energy_title in dashboard_text
+            and "entity: sensor.hoymiles_actual_load_energy_today"
+            in dashboard_text,
+            f"{dashboard_path.name} lacks the LOAD power/energy graphs",
         )
 
     rce_sensor_source = (
@@ -872,7 +898,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.3.md"
+        ROOT / "docs" / "releases" / "v1.4.4.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
@@ -904,10 +930,7 @@ def main() -> int:
         and "does not flash the ESP32" in release_procedure,
         "Release procedure does not require complete HACS/ESP32 instructions",
     )
-    readme_images = [
-        ROOT / "docs" / "images" / "dashboard-energy-flow.png",
-        ROOT / "docs" / "images" / "dashboard-rce-automation.png",
-    ]
+    readme_images = [ROOT / "docs" / "images" / "dashboard-overview.png"]
     for image in readme_images:
         require(image.is_file(), f"Missing README image: {image.relative_to(ROOT)}")
         require(
@@ -931,7 +954,7 @@ def main() -> int:
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.3** is the current release",
+        "Version **1.4.4** is the current release",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",
@@ -961,6 +984,10 @@ def main() -> int:
             "url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
             in entry_text,
             f"Public ESPHome entry point has no remote package: {entry_file.name}",
+        )
+        require(
+            "ref: v1.4.4" in entry_text,
+            f"ESPHome entry point is not pinned to v1.4.4: {entry_file.name}",
         )
         require(
             "dashboard_import:" in entry_text
@@ -1384,18 +1411,18 @@ def main() -> int:
         "MIT license text is missing or incomplete",
     )
     require(
-        hashlib.sha256((ROOT / "LICENSE").read_bytes()).hexdigest()
+        hashlib.sha256(
+            (ROOT / "LICENSE").read_bytes().replace(b"\r\n", b"\n")
+        ).hexdigest()
         == "fa0bb01cef85cd8e77d7930efae10d9c93812cfa6e4878f3d7d57ad23c224290",
         "LICENSE is not the reviewed MIT text",
     )
     require(
-        "v1.3.4" in license_policy
-        and "v1.4.0" in license_policy
-        and "v1.4.1" in license_policy
-        and "v1.4.2" in license_policy
-        and "MIT License" in license_policy
-        and "PolyForm Noncommercial 1.0.0" in license_policy,
-        "License policy does not document the MIT/PolyForm/MIT history",
+        "[MIT License](LICENSE)" in license_policy
+        and "Private and commercial use" in license_policy
+        and "Oprogramowanie jest udostępniane bez gwarancji" in license_policy
+        and "PolyForm" not in license_policy,
+        "License policy does not describe the current MIT terms cleanly",
     )
     require(
         notice_text.startswith("Copyright (c) 2026 Kaluzaburza")
@@ -1443,7 +1470,7 @@ def main() -> int:
     print("Text-state localization: OK")
     print("Fresh PL/EN asset installation: OK")
     print("Brand assets: OK")
-    print("MIT/OSI license and historical license boundaries: OK")
+    print("MIT/OSI license and current license documentation: OK")
     print("Contribution rights, sign-off and CODEOWNERS: OK")
     print("RCE/tariff/RCEm CI regression matrix: OK")
     return 0

@@ -27,7 +27,7 @@ ASSET_STORAGE_KEY = f"{DOMAIN}.assets"
 LOVELACE_RESOURCES_KEY = "lovelace_resources"
 LOVELACE_STORAGE_PREFIX = "lovelace."
 ZEBRA_CARD_TYPE = "custom:hoymiles-zebra-entities-card"
-FRONTEND_ASSET_REVISION = 7
+FRONTEND_ASSET_REVISION = 8
 FRONTEND_STATIC_ROUTE = "static-r2"
 FRONTEND_RESOURCE_URL = (
     f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-rce-chart-card.js"

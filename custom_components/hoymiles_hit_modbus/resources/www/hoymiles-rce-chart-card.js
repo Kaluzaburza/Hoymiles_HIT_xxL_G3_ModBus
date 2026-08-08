@@ -58,7 +58,6 @@ class HoymilesRceChartCard extends HTMLElement {
     this._renderKey = "";
     this._states = {};
     this._language = document.documentElement.lang || "en";
-    this._unsubscribeStates = undefined;
   }
 
   setConfig(config) {
@@ -75,30 +74,6 @@ class HoymilesRceChartCard extends HTMLElement {
     this._states = hass.states || {};
     this._language = hass.language || this._language;
     this._update();
-  }
-
-  connectedCallback() {
-    if (this._unsubscribeStates) return;
-    const request = new CustomEvent("context-request", {
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    });
-    request.context = "states";
-    request.subscribe = true;
-    request.callback = (states, unsubscribe) => {
-      this._states = states || {};
-      this._unsubscribeStates = unsubscribe;
-      this._update();
-    };
-    this.dispatchEvent(request);
-  }
-
-  disconnectedCallback() {
-    if (typeof this._unsubscribeStates === "function") {
-      this._unsubscribeStates();
-    }
-    this._unsubscribeStates = undefined;
   }
 
   _update() {
@@ -850,6 +825,246 @@ if (
     description: "Entities card with alternating row backgrounds.",
     preview: false,
   });
+}
+
+class HoymilesResponsiveGlanceCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  setConfig(config) {
+    if (!config?.entities) {
+      throw new Error("Responsive glance card requires an entities list");
+    }
+    this._config = { ...config };
+    this._mount();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  _mount() {
+    if (!this.isConnected || !this._config) return;
+    const style = document.createElement("style");
+    const minimumWidth = Math.max(Number(this._config.minimum_width) || 112, 80);
+    style.textContent = `
+      :host { display: block; }
+      ha-card { overflow: hidden; }
+      .title {
+        color: var(--ha-card-header-color, var(--primary-text-color));
+        font-size: var(--ha-card-header-font-size, 24px);
+        line-height: 1.2;
+        padding: 20px 16px 10px;
+      }
+      .entities {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, ${minimumWidth}px), 1fr));
+        gap: 8px;
+        padding: ${this._config.title ? "6px 12px 16px" : "16px 12px"};
+      }
+      .entity {
+        appearance: none;
+        background: transparent;
+        border: 0;
+        border-radius: 10px;
+        color: var(--primary-text-color);
+        cursor: pointer;
+        display: grid;
+        grid-template-rows: 28px auto auto;
+        justify-items: center;
+        min-width: 0;
+        padding: 8px 6px;
+        text-align: center;
+      }
+      .entity:hover { background: var(--secondary-background-color); }
+      ha-state-icon {
+        color: var(--state-icon-color);
+        height: 24px;
+        width: 24px;
+      }
+      .name {
+        color: var(--secondary-text-color);
+        font-size: 13px;
+        line-height: 1.25;
+        margin-top: 5px;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        white-space: normal;
+      }
+      .state {
+        font-size: 14px;
+        line-height: 1.3;
+        margin-top: 4px;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        white-space: normal;
+      }
+    `;
+    this._card = document.createElement("ha-card");
+    this._title = document.createElement("div");
+    this._title.className = "title";
+    this._title.textContent = this._config.title || "";
+    this._entities = document.createElement("div");
+    this._entities.className = "entities";
+    this._card.append(
+      ...(this._config.title ? [this._title] : []),
+      this._entities
+    );
+    this.shadowRoot.replaceChildren(style, this._card);
+    this._render();
+  }
+
+  _render() {
+    if (!this.isConnected || !this._config) return;
+    if (!this._entities) {
+      this._mount();
+      return;
+    }
+
+    const hass = this._hass;
+    const rows = this._config.entities.map((entry) => {
+      const entityConfig = typeof entry === "string" ? { entity: entry } : entry;
+      const entityId = entityConfig.entity;
+      const stateObj = hass?.states?.[entityId];
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "entity";
+      button.title = entityConfig.name || stateObj?.attributes?.friendly_name || entityId;
+      button.addEventListener("click", () => {
+        this.dispatchEvent(
+          new CustomEvent("hass-more-info", {
+            bubbles: true,
+            composed: true,
+            detail: { entityId },
+          })
+        );
+      });
+
+      const icon = document.createElement("ha-state-icon");
+      icon.hass = hass;
+      icon.stateObj = stateObj;
+      if (entityConfig.icon) icon.icon = entityConfig.icon;
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent =
+        entityConfig.name || stateObj?.attributes?.friendly_name || entityId;
+
+      const state = document.createElement("div");
+      state.className = "state";
+      state.textContent = stateObj
+        ? hass?.formatEntityState?.(stateObj) ?? stateObj.state
+        : "—";
+
+      if (this._config.show_name === false) name.hidden = true;
+      if (this._config.show_state === false) state.hidden = true;
+      button.append(icon, name, state);
+      return button;
+    });
+    this._entities.replaceChildren(...rows);
+  }
+
+  getCardSize() {
+    return this._card?.getCardSize?.() ?? 2;
+  }
+}
+
+if (!customElements.get("hoymiles-responsive-glance-card")) {
+  customElements.define(
+    "hoymiles-responsive-glance-card",
+    HoymilesResponsiveGlanceCard
+  );
+}
+
+class HoymilesResponsiveStackCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._cards = [];
+    this._renderVersion = 0;
+  }
+
+  setConfig(config) {
+    if (!Array.isArray(config?.cards) || config.cards.length === 0) {
+      throw new Error("Responsive stack card requires a cards list");
+    }
+    this._config = { ...config };
+    this._mount();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    for (const card of this._cards) card.hass = hass;
+  }
+
+  connectedCallback() {
+    this._mount();
+  }
+
+  async _mount() {
+    if (!this.isConnected || !this._config) return;
+    const renderVersion = ++this._renderVersion;
+    const helpers = await window.loadCardHelpers();
+    if (renderVersion !== this._renderVersion) return;
+    const cards = this._config.cards.map((config) =>
+      helpers.createCardElement(config)
+    );
+    if (this._hass) {
+      for (const card of cards) card.hass = this._hass;
+    }
+    const minimumWidth = Math.max(Number(this._config.minimum_width) || 280, 180);
+    const gap = Math.max(Number(this._config.gap) || 8, 0);
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { display: block; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, ${minimumWidth}px), 1fr));
+        gap: ${gap}px;
+        align-items: start;
+      }
+    `;
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.append(...cards);
+    this.shadowRoot.replaceChildren(style, grid);
+    this._cards = cards;
+  }
+
+  getCardSize() {
+    return Math.max(...this._cards.map((card) => card.getCardSize?.() ?? 1), 1);
+  }
+}
+
+if (!customElements.get("hoymiles-responsive-stack-card")) {
+  customElements.define(
+    "hoymiles-responsive-stack-card",
+    HoymilesResponsiveStackCard
+  );
+}
+
+for (const card of [
+  {
+    type: "hoymiles-responsive-glance-card",
+    name: "Hoymiles Responsive Glance",
+    description: "Glance card that wraps cleanly on phones.",
+  },
+  {
+    type: "hoymiles-responsive-stack-card",
+    name: "Hoymiles Responsive Stack",
+    description: "Multi-card grid that becomes one column on narrow screens.",
+  },
+]) {
+  if (!window.customCards.some((item) => item.type === card.type)) {
+    window.customCards.push({ ...card, preview: false });
+  }
 }
 
 class HoymilesPowerFlowCard extends HTMLElement {

@@ -1,6 +1,7 @@
 # Automation simulation report
 
 Date: 2026-08-08 (Europe/Warsaw)
+Validated release: **v1.4.4**
 
 This report covers the pure planning logic used by the RCE market-price
 optimizer, tariff-aware grid charging and RCEm 253 V+ voltage management. The
@@ -59,7 +60,9 @@ and winter-like load, and BMS limits below inverter power.
 - RCEm repeated-window/outlier history suite passed;
 - RCEm safety, headroom and BMS-limit suite passed.
 - RCE chart, zebra entities card, battery-capacity conversion and PL/EN dynamic
-  dashboard strategy JavaScript validation passed.
+  dashboard strategy JavaScript validation passed;
+- responsive glance wrapping, native graph definitions and the four current
+  documentation views were validated without dashboard configuration errors.
 
 The quick 488-scenario matrix runs on every push and pull request. The complete
 matrix runs on the scheduled GitHub workflow and manual workflow dispatch.

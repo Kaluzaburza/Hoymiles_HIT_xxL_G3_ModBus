@@ -18,6 +18,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_state_change_event,
     async_track_time_interval,
 )
@@ -309,6 +310,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             current_day_energy_kwh=None,
         )
         self._history_refresh_running = False
+        self._recalculate_cancel = None
         self._attributes: dict[str, Any] = {
             "status_code": "missing_data",
             "missing_entities": [],
@@ -384,8 +386,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     async def _async_history_timer(self, now: datetime) -> None:
         """Refresh recorder-backed LOAD history once per hour."""
         await self._async_refresh_load_history()
-        self._recalculate()
-        self.async_write_ha_state()
+        self._recalculate_and_write()
 
     async def _async_refresh_load_history(self) -> None:
         """Restore four complete days from the raw phase energy counters."""
@@ -496,15 +497,35 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self,
         event: Event[EventStateChangedData],
     ) -> None:
-        """Recalculate after a source state changes."""
-        self._recalculate()
-        self.async_write_ha_state()
+        """Coalesce fast ESPHome updates into one optimizer refresh."""
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+        self._recalculate_cancel = async_call_later(
+            self.hass,
+            5,
+            self._async_debounced_recalculate,
+        )
+
+    @callback
+    def _async_debounced_recalculate(self, now: datetime) -> None:
+        self._recalculate_cancel = None
+        self._recalculate_and_write()
 
     @callback
     def _async_timer(self, now: datetime) -> None:
         """Refresh the active slot and rolling forecast every minute."""
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+            self._recalculate_cancel = None
+        self._recalculate_and_write()
+
+    def _recalculate_and_write(self) -> None:
+        """Write to HA only when the material plan state changed."""
+        previous_state = self.native_value
+        previous_attributes = self._attributes
         self._recalculate()
-        self.async_write_ha_state()
+        if previous_state != self.native_value or previous_attributes != self._attributes:
+            self.async_write_ha_state()
 
     def _recalculate(self) -> None:
         try:

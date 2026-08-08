@@ -6,6 +6,82 @@ All notable changes to this project are documented in this file.
 
 No changes yet.
 
+## [1.4.4] - 2026-08-08
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.4**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.4.4**.
+2. **Home Assistant:** restart once after HACS finishes. The managed dashboard,
+   EMS package and frontend cards are then refreshed automatically. Existing
+   dashboard customizations remain preserved. **PL:** po zakończeniu
+   aktualizacji wykonaj jeden restart Home Assistanta. Zarządzany dashboard,
+   pakiet EMS oraz karty frontendowe zostaną odświeżone automatycznie, a własne
+   modyfikacje dashboardu pozostaną zachowane.
+3. **ESP32 / ESPHome:** this release changes `packages/battery.yaml`. Refresh
+   the top-level `hoymiles-inverter.yaml`, confirm that its remote package is
+   pinned to **v1.4.4**, then validate, compile and upload the firmware. HACS
+   updates Home Assistant but does **not** flash ESP32. **PL:** ta wersja
+   zmienia `packages/battery.yaml`. Odśwież główny plik
+   `hoymiles-inverter.yaml`, sprawdź przypięcie pakietu do **v1.4.4**, następnie
+   wykonaj walidację, kompilację i wgraj firmware. HACS aktualizuje Home
+   Assistanta, ale **nie** wgrywa firmware ESP32.
+4. **Verification / Weryfikacja:** confirm **Installation status / Stan
+   instalacji = Ready / Gotowe**, check the battery capacity value, open the
+   new native charts and verify that **EMS control conflict / Konflikt
+   sterowania** is off. Notification and automation switches should retain the
+   state selected before restart. **PL:** sprawdź **Stan instalacji = Gotowe**,
+   pojemność baterii, nowe wykresy oraz wyłączony **Konflikt sterowania**.
+   Przełączniki powiadomień i automatyk powinny zachować stan sprzed restartu.
+
+### Added
+
+- Add high-contrast native Home Assistant history/statistics charts for the
+  start page, LOAD/EPS, PV strings, battery, grid, revenue and PV production.
+- Use a consistent power-flow palette: PV green, home red, grid yellow and
+  battery blue; PV1–PV4 progress from red through orange/yellow to green.
+- Add responsive summary cards that wrap cleanly on desktop and mobile without
+  relying on Mushroom for layout.
+- Add an explicit EMS control-owner sensor and conflict detector covering RCE,
+  tariff charging, RCEm, manual schedules and battery balancing.
+- Add a current four-panel dashboard overview to the documentation.
+
+### Changed
+
+- Preserve user-selected helper states across Home Assistant restarts instead
+  of reapplying YAML `initial` values; this includes mobile notifications and
+  automatic-mode controls.
+- Coalesce rapid state changes in the RCE and tariff optimizers and suppress
+  unchanged RCE/tariff/RCEm state writes, reducing Recorder and frontend churn.
+- Block tariff charging when the selected built-in price table has expired.
+- Prefer the inverter-configured battery capacity register 4102 over the
+  sometimes differently scaled BMS capacity register 1907.
+- Use the physical battery-capacity entity consistently in RCEm and the power
+  flow card.
+- Simplify project licensing documentation to the current MIT terms.
+
+### Fixed
+
+- Schedule the delayed startup Repairs check on the Home Assistant event loop.
+- Keep dynamic dashboard cards readable at narrow widths and prevent fixed
+  glance columns from overflowing.
+- Refresh the bundled dashboard/card asset revision so HACS updates cannot
+  retain stale frontend files.
+
+### Polski
+
+- Dodano kontrastowe, natywne wykresy Home Assistanta dla przepływu mocy,
+  LOAD/EPS, stringów PV, baterii, sieci, zysków i produkcji.
+- Przełączniki powiadomień i automatyk zachowują ustawienie po restarcie HA.
+- Dodano wskazanie właściciela sterowania EMS i wykrywanie konfliktu między
+  automatykami.
+- Ograniczono zbędne przeliczenia oraz zapisy RCE/taryfy/RCEm do Recorder.
+- Nieaktualny cennik taryfowy bezpiecznie blokuje automatyczne ładowanie.
+- Pojemność baterii jest pobierana przede wszystkim z rejestru falownika 4102,
+  a rejestr BMS 1907 pozostaje źródłem awaryjnym.
+- Dokumentacja licencji pokazuje teraz prosty, aktualny stan: MIT.
+
 ## [1.4.3] - 2026-08-08
 
 ### User update steps / Kroki po aktualizacji

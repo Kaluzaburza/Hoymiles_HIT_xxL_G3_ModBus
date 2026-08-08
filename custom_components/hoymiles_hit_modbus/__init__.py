@@ -266,9 +266,13 @@ async def async_setup_entry(
     if hass.is_running:
         _async_update_ems_package_issue(hass, entry)
     else:
+        async def async_update_ems_package_issue_after_start(_event) -> None:
+            """Update repairs on the Home Assistant event loop."""
+            _async_update_ems_package_issue(hass, entry)
+
         hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED,
-            lambda _event: _async_update_ems_package_issue(hass, entry),
+            async_update_ems_package_issue_after_start,
         )
     return True
 
