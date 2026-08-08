@@ -512,9 +512,13 @@ Regenerate the localized entity catalog and bundled assets:
 python tools/build_hacs_assets.py
 ```
 
-GitHub Actions run HACS validation, Hassfest and local structural tests. The
-reviewed multi-system automation matrix and its field-test limits are recorded
-in the [automation simulation report](docs/AUTOMATION_TEST_REPORT.md).
+GitHub Actions run an advisory HACS official-index check, mandatory Hassfest
+and mandatory project structural/logic tests. The integration is distributed
+through HACS as a **custom repository** because the official HACS catalog
+requires an OSI-approved license, while this project deliberately prohibits
+commercial reuse. The reviewed multi-system automation matrix and its
+field-test limits are recorded in the
+[automation simulation report](docs/AUTOMATION_TEST_REPORT.md).
 
 ## Support
 

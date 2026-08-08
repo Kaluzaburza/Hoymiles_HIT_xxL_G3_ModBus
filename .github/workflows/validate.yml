@@ -11,14 +11,22 @@ permissions:
   contents: read
 
 jobs:
-  validate-hacs:
+  validate-hacs-advisory:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: HACS validation
+      - name: HACS official-index eligibility (advisory)
+        id: hacs
+        continue-on-error: true
         uses: hacs/action@main
         with:
           category: integration
+      - name: Explain the intentional license result
+        if: steps.hacs.outcome == 'failure'
+        run: |
+          echo "::warning::The HACS official-index validator accepts only OSI-approved licenses."
+          echo "::warning::This project intentionally uses PolyForm Noncommercial 1.0.0 to prohibit commercial reuse."
+          echo "::warning::Installation and updates through HACS as a custom repository remain supported; project-checks stay mandatory."
 
   hassfest:
     runs-on: ubuntu-latest

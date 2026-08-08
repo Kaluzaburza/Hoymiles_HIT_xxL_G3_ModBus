@@ -28,15 +28,20 @@ No changes yet.
 ### Fixed
 
 - Restore the official, byte-identical PolyForm Noncommercial 1.0.0 license
-  text so GitHub and the HACS validator identify its SPDX id correctly instead
-  of reporting `NOASSERTION`.
+  text and document the intentional HACS official-index limitation. GitHub
+  Licensee currently reports PolyForm as `NOASSERTION`, while HACS requires an
+  OSI-approved license for its default catalog. Custom-repository installation
+  and release-based updates remain supported.
 - Preserve all v1.4.0 integration, dashboard and automation functionality; this
   hotfix contains no runtime ESPHome changes.
 
 ### Polski
 
-- Przywrócono oficjalny, niezmodyfikowany tekst PolyForm Noncommercial 1.0.0,
-  dzięki czemu GitHub i HACS rozpoznają identyfikator SPDX.
+- Przywrócono oficjalny, niezmodyfikowany tekst PolyForm Noncommercial 1.0.0 i
+  opisano świadome ograniczenie oficjalnego katalogu HACS. GitHub Licensee
+  zgłasza PolyForm jako `NOASSERTION`, a katalog domyślny HACS wymaga licencji
+  OSI. Instalacja jako niestandardowe repozytorium i aktualizacje z wydań
+  pozostają obsługiwane.
 - Hotfix zawiera cały zakres v1.4.0 i nie wymaga ponownego wgrywania ESP32.
 
 ## [1.4.0] - 2026-08-08
