@@ -83,3 +83,16 @@ package tag from the same release.
 8. Confirm that `LICENSE`, `NOTICE`, `LICENSE_POLICY.md`, `CONTRIBUTING.md` and
    `.github/CODEOWNERS` are present. Do not describe the project as OSI open
    source; use **source-available for noncommercial use**.
+
+## HACS license compatibility
+
+The official HACS default index accepts only OSI-approved licenses. PolyForm
+Noncommercial 1.0.0 is intentionally not OSI-approved because it restricts
+commercial use, and GitHub Licensee may expose it as `NOASSERTION`. Therefore:
+
+- keep the official HACS Action visible as an advisory check;
+- keep Hassfest and all `project-checks` mandatory;
+- publish a full GitHub Release so HACS custom-repository users receive the
+  version and release notes;
+- never replace PolyForm with MIT merely to make the official-index check
+  green.

@@ -40,7 +40,7 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.4.0** is the current release. It contains:
+Version **1.4.1** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -512,9 +512,13 @@ Regenerate the localized entity catalog and bundled assets:
 python tools/build_hacs_assets.py
 ```
 
-GitHub Actions run HACS validation, Hassfest and local structural tests. The
-reviewed multi-system automation matrix and its field-test limits are recorded
-in the [automation simulation report](docs/AUTOMATION_TEST_REPORT.md).
+GitHub Actions run an advisory HACS official-index check, mandatory Hassfest
+and mandatory project structural/logic tests. The integration is distributed
+through HACS as a **custom repository** because the official HACS catalog
+requires an OSI-approved license, while this project deliberately prohibits
+commercial reuse. The reviewed multi-system automation matrix and its
+field-test limits are recorded in the
+[automation simulation report](docs/AUTOMATION_TEST_REPORT.md).
 
 ## Support
 
@@ -530,7 +534,7 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.0** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.1** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 optymalizator sprzedaży RCE, automatyczne ładowanie w taryfach
 G11/G12/G12w/G13, eksperymentalną ochronę eksportu RCEm 253 V+, serwisowe

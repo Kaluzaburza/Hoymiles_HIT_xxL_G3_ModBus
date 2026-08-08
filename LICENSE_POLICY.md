@@ -35,6 +35,12 @@ Third-party components retain their own licenses. Hoymiles, Home Assistant,
 ESPHome, HACS, PSE and Solcast names and marks belong to their respective
 owners. This independent project is not endorsed by those organizations.
 
+The HACS default catalog requires an OSI-approved license. Because PolyForm
+Noncommercial intentionally restricts commercial use, this project is
+distributed through HACS as a custom repository. GitHub Licensee may display
+`NOASSERTION`; the authoritative terms are the byte-identical [LICENSE](LICENSE)
+file and the SPDX identifier `PolyForm-Noncommercial-1.0.0`.
+
 ---
 
 Repozytorium jest **dostępne źródłowo do użytku niekomercyjnego** na warunkach
@@ -65,3 +71,9 @@ Wydania do **v1.3.4** oraz historia do commita podanego wyżej zostały wcześni
 opublikowane na licencji MIT. Już udzielonych praw do tych kopii nie można
 cofnąć; nowe wersje są objęte PolyForm Noncommercial 1.0.0, o ile konkretny
 plik nie stanowi inaczej.
+
+Domyślny katalog HACS wymaga licencji zatwierdzonej przez OSI. Ponieważ
+PolyForm Noncommercial celowo ogranicza użycie komercyjne, projekt jest
+udostępniany w HACS jako repozytorium niestandardowe. GitHub Licensee może
+wyświetlać `NOASSERTION`; wiążący jest niezmodyfikowany plik [LICENSE](LICENSE)
+i identyfikator SPDX `PolyForm-Noncommercial-1.0.0`.
