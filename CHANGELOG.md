@@ -39,6 +39,9 @@ No changes yet.
 - Freeze the target SOC, action and contiguous planned-slot end when automatic
   tariff charging starts. Live SOC, load and forecast recalculations can extend
   the accepted window but cannot shorten it or repeatedly stop/restart charging.
+- Schedule a missing dynamic reserve backwards from the next expensive period.
+  An all-low G12w weekend therefore stays in Self-Use and performs one complete
+  charge only in the last blocks actually required before the tariff changes.
 - Add a 1% start deadband, a 90-second minimum confirmation period and
   fail-closed handling for genuinely missing optimizer data.
 - Stop treating a transient `current_slot_planned = false` result as an
@@ -54,6 +57,9 @@ No changes yet.
   podczas nocnego ładowania taryfowego.
 - Cel SOC, działanie oraz koniec ciągłego okna są zapamiętywane przy starcie
   cyklu i nie zmieniają się od chwilowych przeliczeń prognozy lub obciążenia.
+- Brakująca rezerwa jest planowana wstecz od następnej drogiej strefy. Cały
+  tani weekend G12w pozostaje w Self-Use, a jeden ciągły cykl zaczyna się
+  dopiero w ostatnich blokach niezbędnych do zgromadzenia wymaganej energii.
 - Dodano histerezę startu, minimalny czas potwierdzenia oraz 15-sekundową
   stabilizację powiadomień push.
 

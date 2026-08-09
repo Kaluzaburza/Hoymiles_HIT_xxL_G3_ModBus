@@ -406,6 +406,8 @@ def main() -> None:
     assert dynamic_reserve.status_code == "ready"
     assert dynamic_reserve.planned_stored_energy_kwh >= 0.39
     assert dynamic_reserve.target_soc_percent >= 27.0 - 0.1
+    assert not dynamic_reserve.current_slot_planned
+    assert dynamic_reserve.planned_charges[0].start.strftime("%H:%M") == "05:30"
     user_changed_reserve = optimize_tariff_charging(
         settings(
             cheap_now,
@@ -417,6 +419,30 @@ def main() -> None:
     )
     assert user_changed_reserve.planned_stored_energy_kwh >= 1.39
     assert user_changed_reserve.target_soc_percent >= 37.0 - 0.1
+
+    # G12w is low-price throughout Sunday.  A small reserve gap must not
+    # start Grid Charge in the morning; it is restored once, immediately
+    # before Monday's first expensive slot.
+    sunday_morning = datetime(2026, 8, 9, 6, 13, tzinfo=ZONE)
+    weekend_reserve = optimize_tariff_charging(
+        settings(
+            sunday_morning,
+            schedule=schedule("G12w"),
+            battery_soc_percent=25.0,
+            reserve_soc_percent=27.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    assert weekend_reserve.status_code == "ready"
+    assert not weekend_reserve.current_slot_planned
+    assert weekend_reserve.current_action == "none"
+    assert weekend_reserve.planned_charges[0].start == datetime(
+        2026, 8, 10, 5, 30, tzinfo=ZONE
+    )
+    assert weekend_reserve.planned_charges[-1].start < datetime(
+        2026, 8, 10, 6, 0, tzinfo=ZONE
+    )
 
     # Do not buy energy only because SOC is initially below the dynamic floor
     # when forecast PV will rebuild the reserve before the next cheap window.

@@ -505,10 +505,17 @@ def optimize_tariff_charging(
     ]
 
     # The configured Self-Use reserve plus the user's safety correction is a
-    # real planning floor.  If the battery is still below that dynamic floor
-    # when a low-price slot arrives, restore only the missing energy.  PV
-    # forecast before the cheap slot is honoured, so this does not force an
-    # unnecessary early grid charge on a normal sunny day.
+    # real planning floor.  Being below that floor during a long low-price
+    # period is not, however, a reason to charge immediately.  Self-Use can
+    # safely buy the unavoidable household deficit at the same low rate.  The
+    # reserve only needs to be restored before the next non-low slot, and only
+    # when forecast PV has not restored it by then.
+    #
+    # Build this reserve-restoration run backwards from that deadline.  This
+    # gives the inverter one stable, contiguous charge rather than repeatedly
+    # taking small bites from every replan (especially on all-low G12w
+    # weekends).  A trial simulation accounts for home LOAD consuming part of
+    # the shared Grid Charge power and for the battery/BMS charge limit.
     reserve_energy = (
         max(settings.battery_capacity_kwh, 0.001)
         * min(max(settings.reserve_soc_percent, 0.0), 100.0)
@@ -521,38 +528,88 @@ def optimize_tariff_charging(
         / 100.0
         < reserve_energy - _EPSILON
     ):
-        charge_efficiency = min(
-            max(settings.charge_efficiency_percent / 100.0, 0.01),
-            1.0,
+        reserve_deadline = next(
+            (
+                index
+                for index, (_, zone) in enumerate(rates)
+                if zone not in {"low", "g11"}
+            ),
+            None,
         )
-        for index in range(len(starts)):
-            if rates[index][1] != "low":
-                continue
-            projected = simulation.battery_after_kwh.get(index, 0.0)
-            if projected >= reserve_energy - _EPSILON:
-                break
-            if support_limits[index] > _EPSILON:
-                planned_support[index] = support_limits[index]
-            requested_ac = (reserve_energy - projected) / charge_efficiency
-            available = block_limits[index] - planned.get(index, 0.0)
-            if requested_ac > _EPSILON and available > _EPSILON:
-                planned[index] = planned.get(index, 0.0) + min(
-                    requested_ac,
-                    available,
-                )
-            simulation = _simulate(
-                settings,
-                starts,
-                loads,
-                planned,
-                planned_support,
-                rates,
-                slot_fractions,
+        if reserve_deadline is not None and reserve_deadline > 0:
+            deadline_slot = reserve_deadline - 1
+            projected_at_deadline = simulation.battery_after_kwh.get(
+                deadline_slot,
+                settings.battery_capacity_kwh
+                * settings.battery_soc_percent
+                / 100.0,
             )
-            if simulation.battery_after_kwh.get(index, 0.0) >= (
-                reserve_energy - _EPSILON
-            ):
-                break
+            if projected_at_deadline < reserve_energy - _EPSILON:
+                for index in range(reserve_deadline - 1, -1, -1):
+                    if rates[index][1] != "low":
+                        continue
+                    available = block_limits[index] - planned.get(index, 0.0)
+                    if available <= _EPSILON:
+                        continue
+
+                    base_amount = planned.get(index, 0.0)
+                    full_trial = dict(planned)
+                    full_trial[index] = base_amount + available
+                    full_simulation = _simulate(
+                        settings,
+                        starts,
+                        loads,
+                        full_trial,
+                        planned_support,
+                        rates,
+                        slot_fractions,
+                    )
+                    full_projected = full_simulation.battery_after_kwh.get(
+                        deadline_slot,
+                        projected_at_deadline,
+                    )
+                    if full_projected <= projected_at_deadline + _EPSILON:
+                        continue
+
+                    if full_projected >= reserve_energy - _EPSILON:
+                        # Find the smallest import that reaches the reserve at
+                        # the deadline.  This avoids filling more than the
+                        # requested safety floor merely because a whole block
+                        # was available.
+                        lower = 0.0
+                        upper = available
+                        selected_simulation = full_simulation
+                        for _ in range(18):
+                            middle = (lower + upper) / 2.0
+                            trial = dict(planned)
+                            trial[index] = base_amount + middle
+                            trial_simulation = _simulate(
+                                settings,
+                                starts,
+                                loads,
+                                trial,
+                                planned_support,
+                                rates,
+                                slot_fractions,
+                            )
+                            trial_projected = (
+                                trial_simulation.battery_after_kwh.get(
+                                    deadline_slot,
+                                    projected_at_deadline,
+                                )
+                            )
+                            if trial_projected >= reserve_energy - _EPSILON:
+                                upper = middle
+                                selected_simulation = trial_simulation
+                            else:
+                                lower = middle
+                        planned[index] = base_amount + upper
+                        simulation = selected_simulation
+                        break
+
+                    planned[index] = base_amount + available
+                    simulation = full_simulation
+                    projected_at_deadline = full_projected
 
     # Half a kilowatt-hour provides sufficient precision for the dashboard and
     # keeps the repeated storage simulation inexpensive even for 230 kWh banks.
