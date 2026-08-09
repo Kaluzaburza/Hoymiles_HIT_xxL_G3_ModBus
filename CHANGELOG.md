@@ -6,6 +6,57 @@ All notable changes to this project are documented in this file.
 
 No changes yet.
 
+## [1.4.5] - 2026-08-09
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.5**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.4.5**.
+2. **Home Assistant:** restart once after HACS finishes. The managed EMS
+   package is refreshed automatically and creates the internal target/slot
+   memory used by the hotfix. **PL:** po zakończeniu aktualizacji wykonaj jeden
+   restart Home Assistanta. Zarządzany pakiet EMS odświeży się automatycznie i
+   utworzy wewnętrzną pamięć celu oraz okna używaną przez poprawkę.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. This hotfix changes
+   only the Home Assistant integration and EMS package; the compatible ESPHome
+   package remains **v1.4.4**. HACS does not flash ESP32. **PL:** ponowna
+   kompilacja ani wgrywanie firmware ESP32 nie są wymagane. Hotfix zmienia
+   wyłącznie integrację Home Assistanta i pakiet EMS, a zgodny pakiet ESPHome
+   pozostaje w wersji **v1.4.4**. HACS nie aktualizuje ESP32.
+4. **Verification / Weryfikacja:** confirm **Installation status / Stan
+   instalacji = Ready / Gotowe**. During the next planned low-cost period,
+   Grid Charge should start once, retain one target and return to Self-Use only
+   after reaching it or when the latched charging window ends. A stable EMS
+   change produces one push notification after 15 seconds. **PL:** sprawdź
+   **Stan instalacji = Gotowe**. W kolejnym zaplanowanym tanim okresie Grid
+   Charge powinien uruchomić się jeden raz, zachować jeden cel i wrócić do
+   Self-Use dopiero po jego osiągnięciu albo zakończeniu zapamiętanego okna.
+   Stabilna zmiana EMS wysyła jedno powiadomienie po 15 sekundach.
+
+### Fixed
+
+- Freeze the target SOC, action and contiguous planned-slot end when automatic
+  tariff charging starts. Live SOC, load and forecast recalculations can extend
+  the accepted window but cannot shorten it or repeatedly stop/restart charging.
+- Add a 1% start deadband, a 90-second minimum confirmation period and
+  fail-closed handling for genuinely missing optimizer data.
+- Stop treating a transient `current_slot_planned = false` result as an
+  immediate command to return to Self-Use.
+- Debounce EMS and inverter-status push notifications for 15 seconds and reject
+  duplicate no-op state transitions.
+- Expose the end of the current contiguous optimizer run for deterministic
+  controller latching and regression testing.
+
+### Polski
+
+- Usunięto pętlę naprzemiennego przełączania Ładowanie z sieci / Autokonsumpcja
+  podczas nocnego ładowania taryfowego.
+- Cel SOC, działanie oraz koniec ciągłego okna są zapamiętywane przy starcie
+  cyklu i nie zmieniają się od chwilowych przeliczeń prognozy lub obciążenia.
+- Dodano histerezę startu, minimalny czas potwierdzenia oraz 15-sekundową
+  stabilizację powiadomień push.
+
 ## [1.4.4] - 2026-08-08
 
 ### User update steps / Kroki po aktualizacji

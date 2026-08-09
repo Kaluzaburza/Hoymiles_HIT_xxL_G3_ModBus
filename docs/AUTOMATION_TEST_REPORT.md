@@ -1,7 +1,7 @@
 # Automation simulation report
 
-Date: 2026-08-08 (Europe/Warsaw)
-Validated release: **v1.4.4**
+Date: 2026-08-09 (Europe/Warsaw)
+Validated release: **v1.4.5**
 
 This report covers the pure planning logic used by the RCE market-price
 optimizer, tariff-aware grid charging and RCEm 253 V+ voltage management. The
@@ -57,6 +57,8 @@ and winter-like load, and BMS limits below inverter power.
 - RCE Recorder reconstruction passed;
 - official 2026 tariff profile schedules and prices passed;
 - tariff optimizer deterministic suite passed;
+- tariff active-window regression passed: the contiguous slot end and target
+  remain stable while live SOC and forecast inputs are recalculated;
 - RCEm repeated-window/outlier history suite passed;
 - RCEm safety, headroom and BMS-limit suite passed.
 - RCE chart, zebra entities card, battery-capacity conversion and PL/EN dynamic

@@ -66,7 +66,7 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.4"
+    const_module.VERSION = "1.4.5"
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -424,7 +424,7 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.4", "Release version must be 1.4.4")
+    require(manifest["version"] == "1.4.5", "Release version must be 1.4.5")
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -789,6 +789,12 @@ def main() -> int:
             "max_age:\n      days: 4",
             "hoymiles_tariff_charge_enabled:",
             "hoymiles_tariff_type:",
+            "hoymiles_tariff_latched_target_soc:",
+            "hoymiles_tariff_latched_slot_end:",
+            "input_number.hoymiles_tariff_latched_target_soc",
+            "input_datetime.hoymiles_tariff_latched_slot_end",
+            "'current_slot_end'",
+            'for: "00:00:15"',
             "unique_id: hoymiles_tariff_planned_charge_slot",
             "id: hoymiles_automatic_ems_mode_interlock",
             "id: hoymiles_tariff_grid_charge_control",
@@ -858,6 +864,13 @@ def main() -> int:
                 f"Dynamic RCE reserve marker missing in {package_path.name}: {marker}",
             )
         require(
+            "or not is_state(\n"
+            "                       'binary_sensor.hoymiles_tariff_planned_charge_slot', 'on')"
+            not in package_text,
+            f"Tariff control still stops on a transient live-plan change in "
+            f"{package_path.name}",
+        )
+        require(
             "[-grid / 1000, 0]" not in package_text,
             f"Grid export power still uses the reversed sign in {package_path.name}",
         )
@@ -898,7 +911,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.4.md"
+        ROOT / "docs" / "releases" / "v1.4.5.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
@@ -954,7 +967,7 @@ def main() -> int:
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.4** is the current release",
+        "Version **1.4.5** is the current release",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",

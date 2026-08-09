@@ -145,6 +145,7 @@ class TariffOptimizerResult:
     target_soc_percent: float
     current_slot_planned: bool
     current_action: str
+    current_slot_end: datetime | None
     current_price_pln_kwh: float
     current_zone: str
     next_charge_start: datetime | None
@@ -735,6 +736,13 @@ def optimize_tariff_charging(
     savings = max(reference_cost - optimized_grid_cost, 0.0)
     current_planned = bool(charges and charges[0].start == now_slot)
     current_action = charges[0].action if current_planned else "none"
+    current_slot_end: datetime | None = None
+    if current_planned:
+        current_slot_end = charges[0].start + timedelta(minutes=30)
+        for item in charges[1:]:
+            if item.start != current_slot_end or item.action != current_action:
+                break
+            current_slot_end += timedelta(minutes=30)
     next_start = charges[0].start if charges else None
 
     current_index = 0
@@ -843,6 +851,7 @@ def optimize_tariff_charging(
         target_soc_percent=min(max(target_energy / capacity * 100.0, 0.0), 100.0),
         current_slot_planned=current_planned,
         current_action=current_action,
+        current_slot_end=current_slot_end,
         current_price_pln_kwh=current_price,
         current_zone=current_zone,
         next_charge_start=next_start,
