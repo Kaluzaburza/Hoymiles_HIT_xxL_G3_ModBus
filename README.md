@@ -528,6 +528,11 @@ Please open an issue and include:
 - relevant logs with secrets removed;
 - the affected Modbus register and the expected value.
 
+For a complete, privacy-filtered report use Home Assistant's native **Download
+diagnostics** action or run the optional one-command terminal collector. See
+[Diagnostics / Diagnostyka](docs/DIAGNOSTICS.md) for exact steps and the data
+included in each report.
+
 ---
 
 ## Polski
@@ -776,6 +781,14 @@ taryfowe albo RCEm. Włączenie jednego wyłącza pozostałe. Wyrównywanie maga
 ma wyższy priorytet i na czas cyklu blokuje automatyczne oraz ręczne plany.
 Automatyka nie steruje asymetrią trójfazową. Maksymalny limit eksportu może być
 zmieniany wyłącznie przez jawnie włączony regulator eksportu RCEm.
+
+### Zgłaszanie problemów
+
+Do zgłoszenia dołącz dokładną godzinę błędu, model i firmware falownika oraz
+raport utworzony przez natywną akcję Home Assistant **Pobierz diagnostykę**.
+Przy błędach ESPHome, Modbus, uruchamiania albo pętli automatyzacji użyj także
+jednej komendy tworzącej rozszerzoną paczkę. Instrukcja i opis maskowanych danych
+znajdują się w dokumencie [Diagnostyka](docs/DIAGNOSTICS.md).
 
 ### Bezpieczeństwo
 

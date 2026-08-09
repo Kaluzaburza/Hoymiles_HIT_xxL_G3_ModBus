@@ -4,7 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+
+- Add Home Assistant's native **Download diagnostics** report with integration
+  and firmware versions, entity/catalog coverage, current optimizer and EMS
+  state plus 24 hours of significant control history.
+- Add a one-command Terminal & SSH collector that creates a single redacted
+  support archive with relevant Core/ESPHome logs and host diagnostics.
+- Add bilingual support instructions and automated privacy regression tests.
+
+### Polski
+
+- Dodano natywny raport **Pobierz diagnostykę** z wersjami, kompletnością encji,
+  stanami automatyk i 24-godzinną historią istotnych zmian sterowania.
+- Dodano jedną komendę terminalową tworzącą odfiltrowaną paczkę z logami Core,
+  ESPHome i informacjami systemowymi oraz instrukcję PL/EN.
 
 ## [1.4.5] - 2026-08-09
 

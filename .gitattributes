@@ -4,6 +4,7 @@
 *.yml text eol=lf
 *.json text eol=lf
 *.js text eol=lf
+*.sh text eol=lf
 *.md text eol=lf
 LICENSE text eol=lf
 *.png binary
