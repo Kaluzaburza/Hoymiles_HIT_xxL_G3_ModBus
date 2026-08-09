@@ -369,6 +369,12 @@ ENGLISH_REPLACEMENTS = {
     "EMS taryfowy — wewnętrzne działanie aktywnego bloku": (
         "Tariff EMS — internal active-slot action"
     ),
+    "EMS taryfowy — koniec zapamiętanego bloku": (
+        "Tariff EMS — latched active-slot end"
+    ),
+    "EMS taryfowy — zapamiętany cel aktywnego ładowania": (
+        "Tariff EMS — latched active charging target"
+    ),
     "EMS taryfowy — sprawność ładowania": "Tariff EMS — charge efficiency",
     "EMS taryfowy — sprawność późniejszego rozładowania": (
         "Tariff EMS — subsequent discharge efficiency"

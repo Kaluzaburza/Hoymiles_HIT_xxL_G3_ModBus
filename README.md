@@ -36,7 +36,7 @@ wykorzystać energię:
 
 [☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
 
-Version **1.4.4** is the current release. It contains:
+Version **1.4.5** is the current release. It contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -49,7 +49,8 @@ Version **1.4.4** is the current release. It contains:
   PV surplus in the revenue statistics;
 - automatic G11/G12/G12w/G13 grid charging with 2026 presets for PGE, TAURON,
   ENEA, ENERGA and STOEN, a manual profile, physical charge lead time,
-  forecast-error correction and estimated savings;
+  forecast-error correction, estimated savings and a latched charging target
+  that prevents rapid Grid Charge/Self-Use oscillation;
 - experimental **RCEm 253 V+** voltage management, starting in observation
   mode, with four-day voltage history, battery-headroom planning, optional
   morning pre-discharge and a user-capped export controller;
@@ -532,13 +533,15 @@ Please open an issue and include:
 ## Polski
 
 Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.4** udostępnia
+przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.5** udostępnia
 276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
 optymalizator sprzedaży RCE, automatyczne ładowanie w taryfach
 G11/G12/G12w/G13, eksperymentalną ochronę eksportu RCEm 253 V+, serwisowe
 wyrównywanie LiFePO4, statystyki przychodu i produkcji oraz dynamiczny dashboard
 PL/EN. Planowanie korzysta z Solcast, historii Recorder, rzeczywistego LOAD,
 pojemności magazynu, limitów BMS i topologii pojedynczej lub równoległej.
+Automatyczne ładowanie taryfowe zapamiętuje cel oraz czas rozpoczętego okna,
+dzięki czemu bieżące przeliczenia nie zapętlają trybów Grid Charge/Self-Use.
 
 ### Podłączenie ESP32 i konwertera RS485
 

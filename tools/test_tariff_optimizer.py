@@ -259,6 +259,26 @@ def main() -> None:
     assert abs(net_power_lead.planned_stored_energy_kwh - 10.0) < 1e-6
     assert abs(net_power_lead.planned_direct_load_kwh - 8.0) < 1e-6
 
+    combined_active = optimize_tariff_charging(
+        settings(
+            pre_peak.replace(hour=13, minute=0),
+            battery_soc_percent=20.0,
+            reserve_soc_percent=20.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            load_by_slot_kwh=loaded_cheap_period,
+            charge_power_kw=10.0,
+            battery_charge_power_kw=20.0,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert combined_active.current_slot_planned
+    assert combined_active.current_action == "grid_support_and_charge"
+    assert combined_active.current_slot_end is not None
+    assert combined_active.current_slot_end > combined_active.planned_charges[0].start
+
     # On a single 10 kW inverter, a 50% command is only 5 kW.  The same 10 kWh
     # therefore needs all four half-hour slots from 13:00 until 15:00.
     five_kw_lead = optimize_tariff_charging(
@@ -325,6 +345,32 @@ def main() -> None:
     )
     assert minute_later.current_slot_planned
     assert abs(minute_later.target_soc_percent - too_late.target_soc_percent) < 0.1
+    assert minute_later.current_slot_end == pre_peak.replace(hour=15, minute=0)
+
+    # The controller latches the end of the complete contiguous run selected
+    # at cycle start.  A live replan may remove the current slot after SOC moves,
+    # but it must not shorten this already accepted 14:00-15:00 charging window.
+    active_contiguous_run = optimize_tariff_charging(
+        settings(
+            pre_peak.replace(hour=14, minute=0),
+            battery_soc_percent=20.0,
+            reserve_soc_percent=20.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            load_by_slot_kwh=peak_load,
+            charge_power_kw=10.0,
+            battery_charge_power_kw=20.0,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert active_contiguous_run.current_slot_planned
+    assert active_contiguous_run.current_action == "battery_charge"
+    assert active_contiguous_run.current_slot_end == pre_peak.replace(
+        hour=15,
+        minute=0,
+    )
 
     # Live correction ignores tiny dawn samples, then progressively lowers
     # only today's forecast when a string fault causes sustained shortfall.
@@ -360,6 +406,8 @@ def main() -> None:
     assert dynamic_reserve.status_code == "ready"
     assert dynamic_reserve.planned_stored_energy_kwh >= 0.39
     assert dynamic_reserve.target_soc_percent >= 27.0 - 0.1
+    assert not dynamic_reserve.current_slot_planned
+    assert dynamic_reserve.planned_charges[0].start.strftime("%H:%M") == "05:30"
     user_changed_reserve = optimize_tariff_charging(
         settings(
             cheap_now,
@@ -371,6 +419,30 @@ def main() -> None:
     )
     assert user_changed_reserve.planned_stored_energy_kwh >= 1.39
     assert user_changed_reserve.target_soc_percent >= 37.0 - 0.1
+
+    # G12w is low-price throughout Sunday.  A small reserve gap must not
+    # start Grid Charge in the morning; it is restored once, immediately
+    # before Monday's first expensive slot.
+    sunday_morning = datetime(2026, 8, 9, 6, 13, tzinfo=ZONE)
+    weekend_reserve = optimize_tariff_charging(
+        settings(
+            sunday_morning,
+            schedule=schedule("G12w"),
+            battery_soc_percent=25.0,
+            reserve_soc_percent=27.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    assert weekend_reserve.status_code == "ready"
+    assert not weekend_reserve.current_slot_planned
+    assert weekend_reserve.current_action == "none"
+    assert weekend_reserve.planned_charges[0].start == datetime(
+        2026, 8, 10, 5, 30, tzinfo=ZONE
+    )
+    assert weekend_reserve.planned_charges[-1].start < datetime(
+        2026, 8, 10, 6, 0, tzinfo=ZONE
+    )
 
     # Do not buy energy only because SOC is initially below the dynamic floor
     # when forecast PV will rebuild the reserve before the next cheap window.

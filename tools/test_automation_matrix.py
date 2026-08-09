@@ -462,9 +462,21 @@ def assert_automation_interlocks() -> None:
         "input_boolean.hoymiles_charge_cycle_active",
         "is_state('timer.hoymiles_discharge', 'active')",
         "is_state('timer.hoymiles_charge', 'active')",
+        "input_number.hoymiles_tariff_latched_target_soc",
+        "input_datetime.hoymiles_tariff_latched_slot_end",
+        "states.input_boolean.hoymiles_tariff_charge_active",
+        "'current_slot_end'",
+        'for: "00:00:15"',
     )
     for marker in required_markers:
         assert marker in source, f"Missing automation interlock marker: {marker}"
+    transient_stop = (
+        "or not is_state(\n"
+        "                       'binary_sensor.hoymiles_tariff_planned_charge_slot', 'on')"
+    )
+    assert transient_stop not in source, (
+        "Tariff charging still stops immediately when the live plan flickers"
+    )
 
 
 def main() -> None:

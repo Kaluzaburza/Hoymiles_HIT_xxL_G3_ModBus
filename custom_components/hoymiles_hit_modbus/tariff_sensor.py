@@ -440,6 +440,11 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 ],
                 "current_slot_planned": result.current_slot_planned,
                 "current_action": result.current_action,
+                "current_slot_end": (
+                    result.current_slot_end.isoformat()
+                    if result.current_slot_end is not None
+                    else None
+                ),
                 "current_price_pln_kwh": round(result.current_price_pln_kwh, 4),
                 "current_zone": result.current_zone,
                 "next_charge_start": (
@@ -498,6 +503,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 "planned_slots": [],
                 "current_slot_planned": False,
                 "current_action": "none",
+                "current_slot_end": None,
             }
 
     def _optimizer_input(
