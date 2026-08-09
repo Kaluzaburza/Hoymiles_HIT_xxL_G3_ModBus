@@ -3447,6 +3447,9 @@
       "badges": [],
       "cards": [
         {
+          "type": "custom:hoymiles-diagnostics-download-card"
+        },
+        {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "Overview — essential power registers",
           "show_header_toggle": false,

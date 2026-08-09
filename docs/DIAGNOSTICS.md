@@ -1,8 +1,20 @@
 # Diagnostics / Diagnostyka
 
-The integration provides two support reports. Start with the native Home
-Assistant report. Use the terminal archive when the fault concerns disconnects,
-ESPHome, Modbus communication, an automation loop or a failed startup.
+The integration provides three access methods for support data. Start with the
+one-click dashboard ZIP or native Home Assistant report. Use the terminal
+archive when the fault concerns disconnects, ESPHome, Modbus communication, an
+automation loop or a failed startup.
+
+## Download one ZIP from the dashboard
+
+Open the last **Diagnostics** view and press **Collect data and download ZIP**.
+An administrator's browser receives a fresh ZIP containing the native report,
+24 hours of significant control history and filtered Home Assistant Core logs.
+The archive is built in memory and is not left in `/config`.
+
+Home Assistant Core cannot open a live ESPHome device-log session. For a
+low-level UART/Modbus fault, also save the relevant excerpt from ESPHome Device
+Builder. The current ESPHome entity states are already present in the ZIP.
 
 ## One-click Home Assistant report
 
@@ -40,9 +52,21 @@ public issue.
 
 ---
 
-Integracja udostępnia dwa raporty. Zacznij od raportu natywnego. Paczki
-terminalowej użyj, gdy problem dotyczy rozłączeń, ESPHome, komunikacji Modbus,
-pętli automatyzacji albo nieudanego uruchomienia.
+Integracja udostępnia trzy sposoby zebrania danych. Zacznij od ZIP-u z
+dashboardu albo raportu natywnego. Paczki terminalowej użyj, gdy problem
+dotyczy rozłączeń, ESPHome, komunikacji Modbus, pętli automatyzacji albo
+nieudanego uruchomienia.
+
+## Pobranie jednego ZIP-u z dashboardu
+
+Otwórz ostatnią zakładkę **Diagnostyka** i naciśnij **Zbierz dane i pobierz
+ZIP**. Przeglądarka administratora otrzyma świeżą paczkę zawierającą natywny
+raport, 24 godziny istotnych zmian sterowania i odfiltrowane logi HA Core.
+Paczka powstaje w pamięci i nie pozostaje w katalogu `/config`.
+
+Proces Home Assistant Core nie może sam otworzyć sesji logów urządzenia
+ESPHome. Przy niskopoziomowym błędzie UART/Modbus zapisz dodatkowo odpowiedni
+fragment z ESPHome Device Builder. Bieżące stany encji ESPHome są już w ZIP-ie.
 
 ## Raport Home Assistant jednym kliknięciem
 

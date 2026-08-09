@@ -33,6 +33,7 @@ from .const import (
     VERSION,
 )
 from .models import RuntimeData
+from .support_http import HoymilesSupportBundleView
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -201,6 +202,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # import.meta out of the global bootstrap avoids intermittent first-load
     # strategy timeouts after a Home Assistant restart.
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
+    hass.http.register_view(HoymilesSupportBundleView())
 
     async def async_handle_install_assets(call: ServiceCall) -> None:
         paths = await async_install_assets(

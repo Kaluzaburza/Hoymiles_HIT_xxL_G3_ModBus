@@ -11,6 +11,8 @@ All notable changes to this project are documented in this file.
   state plus 24 hours of significant control history.
 - Add a one-command Terminal & SSH collector that creates a single redacted
   support archive with relevant Core/ESPHome logs and host diagnostics.
+- Add an administrator-only card to the final Diagnostics dashboard view. One
+  click creates an in-memory ZIP and downloads it directly in the browser.
 - Add bilingual support instructions and automated privacy regression tests.
 
 ### Polski
@@ -19,6 +21,8 @@ All notable changes to this project are documented in this file.
   stanami automatyk i 24-godzinną historią istotnych zmian sterowania.
 - Dodano jedną komendę terminalową tworzącą odfiltrowaną paczkę z logami Core,
   ESPHome i informacjami systemowymi oraz instrukcję PL/EN.
+- Dodano kartę w ostatniej zakładce Diagnostyka. Administrator jednym
+  kliknięciem pobiera ZIP tworzony w pamięci, bez pozostawiania go w `/config`.
 
 ## [1.4.5] - 2026-08-09
 

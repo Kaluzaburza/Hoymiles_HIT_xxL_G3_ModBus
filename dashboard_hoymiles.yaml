@@ -2425,6 +2425,7 @@ views:
     icon: mdi:tools
     badges: []
     cards:
+      - type: custom:hoymiles-diagnostics-download-card
       - type: custom:hoymiles-zebra-entities-card
         title: Overview — skrócone rejestry mocy
         show_header_toggle: false

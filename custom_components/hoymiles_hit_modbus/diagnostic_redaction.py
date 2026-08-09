@@ -45,6 +45,11 @@ _EMAIL_RE = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
 _IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 _MAC_RE = re.compile(r"\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b", re.IGNORECASE)
 _OPAQUE_RE = re.compile(r"\b(?:[A-Za-z0-9+/_-]{40,}={0,2})\b")
+_SECRET_VALUE_RE = re.compile(
+    r"\b(password|token|secret|api[_ -]?key|authorization|ssid|serial)"
+    r"\b\s*[:=]\s*[\"']?[^,;\s\"']+",
+    re.IGNORECASE,
+)
 
 
 def _key_is_sensitive(key: str) -> bool:
@@ -59,7 +64,11 @@ def _key_is_sensitive(key: str) -> bool:
 
 def _sanitize_text(value: str) -> str:
     """Mask common secrets and network/user identifiers in free-form text."""
-    sanitized = _URL_RE.sub("[REDACTED_URL]", value)
+    sanitized = _SECRET_VALUE_RE.sub(
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        value,
+    )
+    sanitized = _URL_RE.sub("[REDACTED_URL]", sanitized)
     sanitized = _EMAIL_RE.sub("[REDACTED_EMAIL]", sanitized)
     sanitized = _IPV4_RE.sub("[REDACTED_IP]", sanitized)
     sanitized = _MAC_RE.sub("[REDACTED_MAC]", sanitized)

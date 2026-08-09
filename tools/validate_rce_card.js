@@ -113,6 +113,26 @@ if (
 }
 console.log("Zebra entities card: registered without duplicate metadata");
 
+const DiagnosticsDownloadCard = registry.get(
+  "hoymiles-diagnostics-download-card",
+);
+if (!DiagnosticsDownloadCard) {
+  throw new Error("The diagnostics download custom element was not registered");
+}
+for (const expected of [
+  "/api/hoymiles_hit_modbus/support-bundle",
+  "this._hass.fetchWithAuth(",
+  "this._hass.user?.is_admin",
+  "response.blob()",
+  "URL.createObjectURL(blob)",
+  "Zbierz dane i pobierz ZIP",
+]) {
+  if (!source.includes(expected)) {
+    throw new Error(`Diagnostics download card is missing: ${expected}`);
+  }
+}
+console.log("Diagnostics download card: registered with browser ZIP handling");
+
 const ResponsiveGlanceCard = registry.get("hoymiles-responsive-glance-card");
 if (!ResponsiveGlanceCard) {
   throw new Error("The responsive glance custom element was not registered");
