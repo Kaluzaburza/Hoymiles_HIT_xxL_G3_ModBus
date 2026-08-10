@@ -803,6 +803,13 @@ rest:
 
 template:
   - sensor:
+      # Version marker used by the HACS integration to detect whether the
+      # managed package copied during an update has already been loaded by HA.
+      - name: "Hoymiles EMS Package Version"
+        unique_id: hoymiles_ems_package_version
+        icon: mdi:package-variant-closed-check
+        state: "1.4.7"
+
       # Rejestr zbiorczy LOAD 2169/30015 obejmuje również zużycie własne
       # falowników i straty przetwarzania. Suma faz 2170-2172 odpowiada
       # rzeczywistemu obciążeniu odbiorników i jest odpytywana szybkim blokiem.

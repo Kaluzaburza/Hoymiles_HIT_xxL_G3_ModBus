@@ -374,7 +374,10 @@ homeassistant:
 ```
 
 Do not create a second `homeassistant:` key. Check the configuration and restart
-Home Assistant.
+Home Assistant. After every HACS update, check the integration's **Installation
+status** and **Settings → System → Repairs**. A managed EMS package copied after
+YAML was loaded can require one additional restart; the status returns to
+`Ready` automatically when its package version matches the integration.
 
 The integration registers its versioned frontend module automatically. Do not
 add a manual `/local/hoymiles-rce-chart-card.js` resource. Starting with
@@ -393,7 +396,9 @@ strategy:
 The strategy loads the current Polish or English dashboard bundled with the
 installed integration. After a HACS update and Home Assistant restart, the
 dashboard therefore uses the new version automatically instead of retaining a
-stale storage-mode copy.
+stale storage-mode copy. The separate YAML EMS package is version-checked; if
+activation needs another restart, Home Assistant shows the exact next step
+instead of reporting the installation as ready too early.
 
 Existing storage-mode Hoymiles dashboards are upgraded in place when an
 installed release contains a reviewed migration. Only the required managed
@@ -801,6 +806,12 @@ EN bezpośrednio z integracji. Stary sposób z plikiem
 niezmodyfikowane pliki automatycznie, a pliki zmienione przez użytkownika
 pozostawia bez nadpisania. Migracja starych identyfikatorów nadal tworzy kopię
 `.pre-stable-entity-ids.bak`.
+
+Po aktualizacji HACS sprawdź **Stan instalacji** oraz **Ustawienia → System →
+Naprawy**. Zarządzany pakiet EMS skopiowany już po wczytaniu YAML może wymagać
+jeszcze jednego restartu. Integracja porównuje wersję aktywnego pakietu z własną
+wersją, pokazuje dokładny kolejny krok i automatycznie wraca do stanu `Gotowe`
+po poprawnym wczytaniu pliku.
 
 Od wersji 1.3.4 integracja potrafi bezpiecznie migrować również aktywny
 dashboard zapisany przez Home Assistanta w trybie `storage`. Zmienia wyłącznie

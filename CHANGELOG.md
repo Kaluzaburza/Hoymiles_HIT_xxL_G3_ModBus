@@ -4,6 +4,49 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-08-10
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.7**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.4.7**.
+2. **Home Assistant:** after HACS finishes, validate the configuration and
+   restart Home Assistant. Then check **Installation status / Stan instalacji**
+   and **Repairs / Naprawy**. If another restart is requested, validate the
+   configuration and restart once more; this is expected when the new package
+   was copied after YAML had already loaded. **PL:** po aktualizacji sprawdź
+   konfigurację i uruchom Home Assistant ponownie. Jeżeli Stan instalacji lub
+   Naprawa wymagają kolejnego restartu, sprawdź konfigurację i wykonaj go jeszcze
+   raz. Jest to oczekiwane, gdy nowy pakiet skopiowano po wczytaniu YAML.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. The compatible ESPHome
+   package remains **v1.4.4**. **PL:** nie trzeba przebudowywać ani wgrywać
+   ESP32; zgodny pakiet ESPHome pozostaje w wersji **v1.4.4**.
+4. **Verification / Weryfikacja:** confirm **Installation status / Stan
+   instalacji = Ready / Gotowe**, `restart_required: false`, EMS package version
+   `1.4.7` and no Hoymiles Repair. **PL:** sprawdź stan `Gotowe`, atrybut
+   `restart_required: false`, wersję pakietu EMS `1.4.7` oraz brak Naprawy
+   Hoymiles.
+
+### Fixed
+
+- Add an explicit version marker to every managed EMS package and compare it
+  with the installed integration version.
+- Show a bilingual Home Assistant Repair and a precise Installation status
+  when a HACS update needs one additional restart before the new YAML package
+  becomes active.
+- Clear the Repair automatically as soon as the matching package version is
+  loaded, while keeping the existing missing-packages diagnosis separate.
+
+### Polski
+
+- Dodano znacznik wersji do zarządzanego pakietu EMS i porównanie go z wersją
+  integracji.
+- Stan instalacji i Naprawy jasno informują o wymaganym dodatkowym restarcie,
+  zamiast przedwcześnie pokazywać `Gotowe` po aktualizacji HACS.
+- Komunikat znika automatycznie po wczytaniu zgodnej wersji pakietu; brak
+  włączonej obsługi `packages` nadal ma osobną, jednoznaczną diagnostykę.
+
 ## [1.4.6] - 2026-08-10
 
 ### User update steps / Kroki po aktualizacji

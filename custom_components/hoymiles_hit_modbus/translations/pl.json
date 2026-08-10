@@ -25,6 +25,10 @@
     "ems_package_not_loaded": {
       "title": "Automatyka EMS wymaga włączenia pakietów",
       "description": "Integracja skopiowała plik automatyki, ale Home Assistant go nie wczytał. Dodaj `packages: !include_dir_named packages` pod istniejącą sekcją `homeassistant:` w pliku `configuration.yaml`, sprawdź konfigurację i uruchom Home Assistant ponownie. Nie twórz drugiej sekcji `homeassistant:`."
+    },
+    "ems_package_restart_required": {
+      "title": "Aktualizacja pakietu EMS wymaga ponownego uruchomienia",
+      "description": "Integracja zaktualizowała zarządzany pakiet EMS po wczytaniu konfiguracji. Sprawdź konfigurację i uruchom Home Assistant ponownie jeszcze raz. Jeśli komunikat pozostaje po restarcie, wykonaj kopię własnych zmian i użyj akcji `hoymiles_hit_modbus.install_assets` z opcją `overwrite: true`, a następnie uruchom Home Assistant ponownie."
     }
   },
   "services": {

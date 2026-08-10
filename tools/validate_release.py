@@ -447,13 +447,22 @@ def main() -> int:
     require(
         'EMS_PACKAGE_SENTINEL = "input_boolean.hoymiles_rce_discharge_enabled"'
         in const_source
-        and "from .const import DOMAIN, EMS_PACKAGE_SENTINEL"
-        in sensor_platform_source
+        and 'EMS_PACKAGE_VERSION_ENTITY = "sensor.hoymiles_ems_package_version"'
+        in const_source
+        and "EMS_PACKAGE_VERSION_ENTITY," in sensor_platform_source
         and "EMS_PACKAGE_SENTINEL," in init_source
         and "hoymiles_rce_discharge_enabled:" in ems_package_source
         and "hoymiles_rce_automation_enabled" not in init_source
         and "hoymiles_rce_automation_enabled" not in sensor_platform_source,
         "Setup status and Repairs must use an existing shared EMS package sentinel",
+    )
+    require(
+        "ems_package_restart_required" in init_source
+        and "_ems_package_restart_issue_id" in init_source
+        and "package_version.state == VERSION" in init_source
+        and '"restart_required": self._ems_restart_required'
+        in sensor_platform_source,
+        "Managed EMS package updates do not expose the required restart state",
     )
     require(
         "def suggested_object_id(self)" in entity_source,
@@ -550,6 +559,11 @@ def main() -> int:
     english = load_json(COMPONENT / "translations" / "en.json")
     polish = load_json(COMPONENT / "translations" / "pl.json")
     require(
+        "ems_package_restart_required" in english.get("issues", {})
+        and "ems_package_restart_required" in polish.get("issues", {}),
+        "EMS package restart Repair is not translated in both languages",
+    )
+    require(
         entity_translation_keys(english) == entity_translation_keys(polish),
         "English and Polish entity translation keys differ",
     )
@@ -572,6 +586,19 @@ def main() -> int:
     ]
     for asset in required_assets:
         require(asset.is_file(), f"Missing bundled asset: {asset.relative_to(ROOT)}")
+
+    for package_path in (
+        ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml",
+        required_assets[2],
+        required_assets[3],
+    ):
+        package_text = package_path.read_text(encoding="utf-8")
+        require(
+            "unique_id: hoymiles_ems_package_version" in package_text
+            and f'state: "{manifest["version"]}"' in package_text,
+            f"EMS package version marker does not match {manifest['version']} "
+            f"in {package_path.relative_to(ROOT)}",
+        )
 
     expected_zebra_cards = (
         ROOT / "dashboard_hoymiles.yaml"

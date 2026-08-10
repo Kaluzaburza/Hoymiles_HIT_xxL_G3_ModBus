@@ -2203,6 +2203,20 @@ def static_translations(language: str) -> dict:
                         "Home Assistant ponownie. Nie twórz drugiej sekcji "
                         "`homeassistant:`."
                     ),
+                },
+                "ems_package_restart_required": {
+                    "title": (
+                        "Aktualizacja pakietu EMS wymaga ponownego uruchomienia"
+                    ),
+                    "description": (
+                        "Integracja zaktualizowała zarządzany pakiet EMS po "
+                        "wczytaniu konfiguracji. Sprawdź konfigurację i uruchom "
+                        "Home Assistant ponownie jeszcze raz. Jeśli komunikat "
+                        "pozostaje po restarcie, wykonaj kopię własnych zmian i "
+                        "użyj akcji `hoymiles_hit_modbus.install_assets` z opcją "
+                        "`overwrite: true`, a następnie uruchom Home Assistant "
+                        "ponownie."
+                    ),
                 }
             },
             "services": {
@@ -2263,6 +2277,17 @@ def static_translations(language: str) -> dict:
                     "under the existing `homeassistant:` section in "
                     "`configuration.yaml`, validate the configuration and restart "
                     "Home Assistant. Do not create a second `homeassistant:` section."
+                ),
+            },
+            "ems_package_restart_required": {
+                "title": "EMS package update requires another restart",
+                "description": (
+                    "The integration updated the managed EMS package after Home "
+                    "Assistant had loaded its configuration. Validate the "
+                    "configuration and restart Home Assistant once more. If this "
+                    "message remains after the restart, back up your custom "
+                    "changes, run `hoymiles_hit_modbus.install_assets` with "
+                    "`overwrite: true`, and restart Home Assistant again."
                 ),
             }
         },
