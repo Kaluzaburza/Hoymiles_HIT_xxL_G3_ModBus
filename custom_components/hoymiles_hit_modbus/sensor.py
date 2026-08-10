@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import (
     DOMAIN,
     EMS_PACKAGE_SENTINEL,
+    EMS_PACKAGE_VERSION,
     EMS_PACKAGE_VERSION_ENTITY,
     VERSION,
 )
@@ -85,7 +86,7 @@ class HoymilesSetupStatusSensor(SensorEntity):
 
     @property
     def _ems_restart_required(self) -> bool:
-        return self._ems_loaded and self._ems_version != VERSION
+        return self._ems_loaded and self._ems_version != EMS_PACKAGE_VERSION
 
     @property
     def _esp_online(self) -> bool:
@@ -168,6 +169,7 @@ class HoymilesSetupStatusSensor(SensorEntity):
             "esp32_online": self._esp_online,
             "ems_package_loaded": self._ems_loaded,
             "ems_package_version": self._ems_version,
+            "expected_ems_package_version": EMS_PACKAGE_VERSION,
             "integration_version": VERSION,
             "restart_required": self._ems_restart_required,
             "source_entities": source_count,

@@ -389,91 +389,6 @@ views:
             name: Korzyść optymalizacji
           - entity: sensor.hoymiles_rce_realized_revenue_today
             name: Przychód zrealizowany dzisiaj
-      - type: custom:hoymiles-zebra-entities-card
-        title: RCE — szczegóły i diagnostyka
-        show_header_toggle: false
-        state_color: true
-        view_layout:
-          position: sidebar
-        entities:
-          - entity: sensor.hoymiles_rce_status
-            name: Stan automatyki
-          - entity: sensor.hoymiles_hit_rce_optimized_plan
-            name: Stan optymalizatora
-          - entity: sensor.hoymiles_rce_current_price
-            name: Bieżąca cena RCE
-          - entity: sensor.hoymiles_rce_automatic_price_floor
-            name: Automatyczna cena graniczna planu
-          - entity: sensor.hoymiles_rce_optimization_gain
-            name: Korzyść względem niekontrolowanego eksportu
-          - entity: sensor.hoymiles_rce_bms_safe_discharge_power
-            name: Bezpieczna moc rozładowania według BMS
-          - entity: sensor.hoymiles_rce_effective_discharge_power_percent
-            name: Efektywny limit rozładowania
-          - entity: binary_sensor.hoymiles_sale_block_active
-            name: Blokada aktywna teraz
-          - entity: sensor.hoymiles_solcast_forecast_today
-            name: Prognozowana produkcja PV dzisiaj
-          - entity: sensor.hoymiles_solcast_forecast_remaining_today
-            name: Pozostała prognozowana produkcja dzisiaj
-          - entity: sensor.hoymiles_solcast_forecast_tomorrow
-            name: Prognozowana produkcja PV jutro
-          - entity: sensor.hoymiles_load_average_4_days
-            name: Średnie dobowe zużycie LOAD
-          - entity: sensor.hoymiles_load_history_coverage
-            name: Zebrana historia zużycia dobowego
-          - entity: sensor.hoymiles_night_load_average_4_days
-            name: Średnie zużycie w oknie nocnym
-          - entity: sensor.hoymiles_night_load_history_coverage
-            name: Zebrana historia zużycia nocnego
-          - entity: sensor.hoymiles_actual_load_energy_today
-            name: Rzeczywiste zużycie odbiorników dzisiaj
-          - entity: sensor.hoymiles_rce_pv_self_consumption_today
-            name: PV → odbiorniki — rejestr diagnostyczny
-          - entity: sensor.hoymiles_rce_battery_to_load_today
-            name: Energia oddana przez baterię — diagnostycznie
-          - entity: sensor.hoymiles_rce_grid_to_load_today
-            name: Energia pobrana z sieci — diagnostycznie
-          - entity: sensor.hoymiles_rce_pv_self_consumption_power
-            name: PV → odbiorniki teraz
-          - entity: sensor.hoymiles_rce_modeled_day_load
-            name: Modelowane dzienne zużycie odbiorników
-          - entity: sensor.hoymiles_rce_protected_home_energy
-            name: Łączna energia chroniona dla domu
-          - entity: sensor.hoymiles_rce_base_reserve_energy
-            name: Rezerwa bazowa Self-Use i korekta
-          - entity: sensor.hoymiles_rce_protected_night_energy
-            name: Chronione zużycie domu do końca najbliższej nocy
-          - entity: sensor.hoymiles_rce_additional_forecast_reserve
-            name: Dodatkowa rezerwa ponad próg awaryjny
-          - entity: sensor.hoymiles_rce_available_energy_now
-            name: Energia dostępna teraz ponad rezerwę
-          - entity: sensor.hoymiles_rce_dynamic_minimum_soc
-            name: Wyliczony minimalny SOC dla RCE
-          - entity: sensor.hoymiles_rce_planned_battery_export
-            name: Zaplanowany eksport sterowany RCE — od teraz
-          - entity: sensor.hoymiles_rce_self_use_baseline_export
-            name: Prognozowana nadwyżka w Self-Use — od teraz
-          - entity: sensor.hoymiles_rce_natural_pv_export
-            name: Nieunikniona nadwyżka PV pozostała po optymalizacji
-          - entity: sensor.hoymiles_rce_expected_total_export
-            name: Łączny prognozowany eksport — od teraz
-          - entity: sensor.hoymiles_rce_ending_battery_soc
-            name: Przewidywany SOC na końcu horyzontu
-          - entity: sensor.hoymiles_hit_grid_energy_sell_today
-            name: Cała energia wysłana do sieci dzisiaj
-          - entity: sensor.hoymiles_rce_realized_controlled_export_today
-            name: Zrealizowany eksport sterowany RCE dzisiaj
-          - entity: sensor.hoymiles_rce_realized_natural_export_today
-            name: Zrealizowana naturalna nadwyżka PV dzisiaj
-          - entity: sensor.hoymiles_rce_unclassified_export_today
-            name: Eksport nierozpoznany po restarcie lub aktualizacji
-          - entity: sensor.hoymiles_rce_realized_controlled_revenue_today
-            name: Przychód ze sterowanego eksportu dzisiaj
-          - entity: sensor.hoymiles_rce_realized_natural_revenue_today
-            name: Przychód z naturalnej nadwyżki dzisiaj
-          - entity: sensor.hoymiles_rce_realized_revenue_today
-            name: Łączny zrealizowany przychód dzisiaj
       - type: vertical-stack
         cards:
           - type: custom:hoymiles-rce-chart-card
@@ -606,6 +521,89 @@ views:
           Automatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu
           wybranego bloku, po osiągnięciu minimalnego SOC albo po wyłączeniu
           przełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu.
+      - type: custom:hoymiles-zebra-entities-card
+        title: RCE — szczegóły i diagnostyka
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_rce_status
+            name: Stan automatyki
+          - entity: sensor.hoymiles_hit_rce_optimized_plan
+            name: Stan optymalizatora
+          - entity: sensor.hoymiles_rce_current_price
+            name: Bieżąca cena RCE
+          - entity: sensor.hoymiles_rce_automatic_price_floor
+            name: Automatyczna cena graniczna planu
+          - entity: sensor.hoymiles_rce_optimization_gain
+            name: Korzyść względem niekontrolowanego eksportu
+          - entity: sensor.hoymiles_rce_bms_safe_discharge_power
+            name: Bezpieczna moc rozładowania według BMS
+          - entity: sensor.hoymiles_rce_effective_discharge_power_percent
+            name: Efektywny limit rozładowania
+          - entity: binary_sensor.hoymiles_sale_block_active
+            name: Blokada aktywna teraz
+          - entity: sensor.hoymiles_solcast_forecast_today
+            name: Prognozowana produkcja PV dzisiaj
+          - entity: sensor.hoymiles_solcast_forecast_remaining_today
+            name: Pozostała prognozowana produkcja dzisiaj
+          - entity: sensor.hoymiles_solcast_forecast_tomorrow
+            name: Prognozowana produkcja PV jutro
+          - entity: sensor.hoymiles_load_average_4_days
+            name: Średnie dobowe zużycie LOAD
+          - entity: sensor.hoymiles_load_history_coverage
+            name: Zebrana historia zużycia dobowego
+          - entity: sensor.hoymiles_night_load_average_4_days
+            name: Średnie zużycie w oknie nocnym
+          - entity: sensor.hoymiles_night_load_history_coverage
+            name: Zebrana historia zużycia nocnego
+          - entity: sensor.hoymiles_actual_load_energy_today
+            name: Rzeczywiste zużycie odbiorników dzisiaj
+          - entity: sensor.hoymiles_rce_pv_self_consumption_today
+            name: PV → odbiorniki — rejestr diagnostyczny
+          - entity: sensor.hoymiles_rce_battery_to_load_today
+            name: Energia oddana przez baterię — diagnostycznie
+          - entity: sensor.hoymiles_rce_grid_to_load_today
+            name: Energia pobrana z sieci — diagnostycznie
+          - entity: sensor.hoymiles_rce_pv_self_consumption_power
+            name: PV → odbiorniki teraz
+          - entity: sensor.hoymiles_rce_modeled_day_load
+            name: Modelowane dzienne zużycie odbiorników
+          - entity: sensor.hoymiles_rce_protected_home_energy
+            name: Łączna energia chroniona dla domu
+          - entity: sensor.hoymiles_rce_base_reserve_energy
+            name: Rezerwa bazowa Self-Use i korekta
+          - entity: sensor.hoymiles_rce_protected_night_energy
+            name: Chronione zużycie domu do końca najbliższej nocy
+          - entity: sensor.hoymiles_rce_additional_forecast_reserve
+            name: Dodatkowa rezerwa ponad próg awaryjny
+          - entity: sensor.hoymiles_rce_available_energy_now
+            name: Energia dostępna teraz ponad rezerwę
+          - entity: sensor.hoymiles_rce_dynamic_minimum_soc
+            name: Wyliczony minimalny SOC dla RCE
+          - entity: sensor.hoymiles_rce_planned_battery_export
+            name: Zaplanowany eksport sterowany RCE — od teraz
+          - entity: sensor.hoymiles_rce_self_use_baseline_export
+            name: Prognozowana nadwyżka w Self-Use — od teraz
+          - entity: sensor.hoymiles_rce_natural_pv_export
+            name: Nieunikniona nadwyżka PV pozostała po optymalizacji
+          - entity: sensor.hoymiles_rce_expected_total_export
+            name: Łączny prognozowany eksport — od teraz
+          - entity: sensor.hoymiles_rce_ending_battery_soc
+            name: Przewidywany SOC na końcu horyzontu
+          - entity: sensor.hoymiles_hit_grid_energy_sell_today
+            name: Cała energia wysłana do sieci dzisiaj
+          - entity: sensor.hoymiles_rce_realized_controlled_export_today
+            name: Zrealizowany eksport sterowany RCE dzisiaj
+          - entity: sensor.hoymiles_rce_realized_natural_export_today
+            name: Zrealizowana naturalna nadwyżka PV dzisiaj
+          - entity: sensor.hoymiles_rce_unclassified_export_today
+            name: Eksport nierozpoznany po restarcie lub aktualizacji
+          - entity: sensor.hoymiles_rce_realized_controlled_revenue_today
+            name: Przychód ze sterowanego eksportu dzisiaj
+          - entity: sensor.hoymiles_rce_realized_natural_revenue_today
+            name: Przychód z naturalnej nadwyżki dzisiaj
+          - entity: sensor.hoymiles_rce_realized_revenue_today
+            name: Łączny zrealizowany przychód dzisiaj
       - type: markdown
         view_layout:
           position: sidebar

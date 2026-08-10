@@ -389,91 +389,6 @@ views:
             name: Optimization benefit
           - entity: sensor.hoymiles_rce_realized_revenue_today
             name: Revenue realized today
-      - type: custom:hoymiles-zebra-entities-card
-        title: RCE — details and diagnostics
-        show_header_toggle: false
-        state_color: true
-        view_layout:
-          position: sidebar
-        entities:
-          - entity: sensor.hoymiles_rce_status
-            name: Automation status
-          - entity: sensor.hoymiles_hit_rce_optimized_plan
-            name: Optimizer status
-          - entity: sensor.hoymiles_rce_current_price
-            name: Current RCE price
-          - entity: sensor.hoymiles_rce_automatic_price_floor
-            name: Automatic plan price floor
-          - entity: sensor.hoymiles_rce_optimization_gain
-            name: Gain versus uncontrolled export
-          - entity: sensor.hoymiles_rce_bms_safe_discharge_power
-            name: Safe discharge power reported by BMS
-          - entity: sensor.hoymiles_rce_effective_discharge_power_percent
-            name: Effective discharge limit
-          - entity: binary_sensor.hoymiles_sale_block_active
-            name: Lockout active now
-          - entity: sensor.hoymiles_solcast_forecast_today
-            name: Forecast PV production today
-          - entity: sensor.hoymiles_solcast_forecast_remaining_today
-            name: Remaining forecast PV production today
-          - entity: sensor.hoymiles_solcast_forecast_tomorrow
-            name: Forecast PV production tomorrow
-          - entity: sensor.hoymiles_load_average_4_days
-            name: Average daily LOAD
-          - entity: sensor.hoymiles_load_history_coverage
-            name: Collected daily-load history
-          - entity: sensor.hoymiles_night_load_average_4_days
-            name: Average protected-window consumption
-          - entity: sensor.hoymiles_night_load_history_coverage
-            name: Collected night-load history
-          - entity: sensor.hoymiles_actual_load_energy_today
-            name: Actual load consumption today
-          - entity: sensor.hoymiles_rce_pv_self_consumption_today
-            name: PV → loads — diagnostic register
-          - entity: sensor.hoymiles_rce_battery_to_load_today
-            name: Energy supplied by battery — diagnostic
-          - entity: sensor.hoymiles_rce_grid_to_load_today
-            name: Energy imported from grid — diagnostic
-          - entity: sensor.hoymiles_rce_pv_self_consumption_power
-            name: PV → loads now
-          - entity: sensor.hoymiles_rce_modeled_day_load
-            name: Modeled daytime load
-          - entity: sensor.hoymiles_rce_protected_home_energy
-            name: Total energy protected for the home
-          - entity: sensor.hoymiles_rce_base_reserve_energy
-            name: Base Self-Use reserve and safety correction
-          - entity: sensor.hoymiles_rce_protected_night_energy
-            name: Protected home consumption until the end of the nearest night
-          - entity: sensor.hoymiles_rce_additional_forecast_reserve
-            name: Additional reserve above the outage threshold
-          - entity: sensor.hoymiles_rce_available_energy_now
-            name: Energy currently available above the reserve
-          - entity: sensor.hoymiles_rce_dynamic_minimum_soc
-            name: Calculated minimum SOC for RCE
-          - entity: sensor.hoymiles_rce_planned_battery_export
-            name: Planned RCE-controlled export — from now
-          - entity: sensor.hoymiles_rce_self_use_baseline_export
-            name: Forecast Self-Use surplus — from now
-          - entity: sensor.hoymiles_rce_natural_pv_export
-            name: Unavoidable PV surplus remaining after optimization
-          - entity: sensor.hoymiles_rce_expected_total_export
-            name: Total forecast export — from now
-          - entity: sensor.hoymiles_rce_ending_battery_soc
-            name: Forecast SOC at the end of the horizon
-          - entity: sensor.hoymiles_hit_grid_energy_sell_today
-            name: Total energy exported to grid today
-          - entity: sensor.hoymiles_rce_realized_controlled_export_today
-            name: Realized RCE-controlled export today
-          - entity: sensor.hoymiles_rce_realized_natural_export_today
-            name: Realized natural PV surplus today
-          - entity: sensor.hoymiles_rce_unclassified_export_today
-            name: Export unclassified after restart or upgrade
-          - entity: sensor.hoymiles_rce_realized_controlled_revenue_today
-            name: Controlled-export revenue today
-          - entity: sensor.hoymiles_rce_realized_natural_revenue_today
-            name: Natural-surplus revenue today
-          - entity: sensor.hoymiles_rce_realized_revenue_today
-            name: Total realized revenue today
       - type: vertical-stack
         cards:
           - type: custom:hoymiles-rce-chart-card
@@ -606,6 +521,89 @@ views:
           The automation returns to **Self-Use** after the selected
           slot ends, the minimum SOC is reached, or the
           switch is disabled. The export lockout excludes the configured hours.
+      - type: custom:hoymiles-zebra-entities-card
+        title: RCE — details and diagnostics
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.hoymiles_rce_status
+            name: Automation status
+          - entity: sensor.hoymiles_hit_rce_optimized_plan
+            name: Optimizer status
+          - entity: sensor.hoymiles_rce_current_price
+            name: Current RCE price
+          - entity: sensor.hoymiles_rce_automatic_price_floor
+            name: Automatic plan price floor
+          - entity: sensor.hoymiles_rce_optimization_gain
+            name: Gain versus uncontrolled export
+          - entity: sensor.hoymiles_rce_bms_safe_discharge_power
+            name: Safe discharge power reported by BMS
+          - entity: sensor.hoymiles_rce_effective_discharge_power_percent
+            name: Effective discharge limit
+          - entity: binary_sensor.hoymiles_sale_block_active
+            name: Lockout active now
+          - entity: sensor.hoymiles_solcast_forecast_today
+            name: Forecast PV production today
+          - entity: sensor.hoymiles_solcast_forecast_remaining_today
+            name: Remaining forecast PV production today
+          - entity: sensor.hoymiles_solcast_forecast_tomorrow
+            name: Forecast PV production tomorrow
+          - entity: sensor.hoymiles_load_average_4_days
+            name: Average daily LOAD
+          - entity: sensor.hoymiles_load_history_coverage
+            name: Collected daily-load history
+          - entity: sensor.hoymiles_night_load_average_4_days
+            name: Average protected-window consumption
+          - entity: sensor.hoymiles_night_load_history_coverage
+            name: Collected night-load history
+          - entity: sensor.hoymiles_actual_load_energy_today
+            name: Actual load consumption today
+          - entity: sensor.hoymiles_rce_pv_self_consumption_today
+            name: PV → loads — diagnostic register
+          - entity: sensor.hoymiles_rce_battery_to_load_today
+            name: Energy supplied by battery — diagnostic
+          - entity: sensor.hoymiles_rce_grid_to_load_today
+            name: Energy imported from grid — diagnostic
+          - entity: sensor.hoymiles_rce_pv_self_consumption_power
+            name: PV → loads now
+          - entity: sensor.hoymiles_rce_modeled_day_load
+            name: Modeled daytime load
+          - entity: sensor.hoymiles_rce_protected_home_energy
+            name: Total energy protected for the home
+          - entity: sensor.hoymiles_rce_base_reserve_energy
+            name: Base Self-Use reserve and safety correction
+          - entity: sensor.hoymiles_rce_protected_night_energy
+            name: Protected home consumption until the end of the nearest night
+          - entity: sensor.hoymiles_rce_additional_forecast_reserve
+            name: Additional reserve above the outage threshold
+          - entity: sensor.hoymiles_rce_available_energy_now
+            name: Energy currently available above the reserve
+          - entity: sensor.hoymiles_rce_dynamic_minimum_soc
+            name: Calculated minimum SOC for RCE
+          - entity: sensor.hoymiles_rce_planned_battery_export
+            name: Planned RCE-controlled export — from now
+          - entity: sensor.hoymiles_rce_self_use_baseline_export
+            name: Forecast Self-Use surplus — from now
+          - entity: sensor.hoymiles_rce_natural_pv_export
+            name: Unavoidable PV surplus remaining after optimization
+          - entity: sensor.hoymiles_rce_expected_total_export
+            name: Total forecast export — from now
+          - entity: sensor.hoymiles_rce_ending_battery_soc
+            name: Forecast SOC at the end of the horizon
+          - entity: sensor.hoymiles_hit_grid_energy_sell_today
+            name: Total energy exported to grid today
+          - entity: sensor.hoymiles_rce_realized_controlled_export_today
+            name: Realized RCE-controlled export today
+          - entity: sensor.hoymiles_rce_realized_natural_export_today
+            name: Realized natural PV surplus today
+          - entity: sensor.hoymiles_rce_unclassified_export_today
+            name: Export unclassified after restart or upgrade
+          - entity: sensor.hoymiles_rce_realized_controlled_revenue_today
+            name: Controlled-export revenue today
+          - entity: sensor.hoymiles_rce_realized_natural_revenue_today
+            name: Natural-surplus revenue today
+          - entity: sensor.hoymiles_rce_realized_revenue_today
+            name: Total realized revenue today
       - type: markdown
         view_layout:
           position: sidebar
