@@ -1,42 +1,133 @@
 # Hoymiles HIT xxL G3 Modbus
 
-Home Assistant and ESPHome integration for Hoymiles HIT xxL G3 hybrid
-inverters using Modbus RTU over an ESP32 RS485 bridge.
+### Local EMS for Home Assistant / Lokalny EMS dla Home Assistanta
+
+**Nie tylko pokazuje. Myśli. / It does not just display data. It makes
+explainable energy decisions.**
+
+Gotowy, lokalny system zarządzania energią dla falowników hybrydowych Hoymiles
+HIT xxL G3. Łączy komunikację Modbus RTU przez ESP32 z automatyką magazynu,
+prognozą PV, cenami RCE, taryfami energii i kontrolą eksportu. Zamiast zostawiać
+użytkownika z setkami encji, wylicza plan, wykonuje bezpieczne działania i
+pokazuje, dlaczego podjął daną decyzję.
+
+A local and explainable Home Assistant energy-management system for Hoymiles
+HIT xxL G3 hybrid inverters. It combines ESPHome/Modbus monitoring with ready
+battery, PV forecast, market-price, tariff and export-control automation.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
+[![Latest release](https://img.shields.io/github/v/release/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus?label=release)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/releases/latest)
+[![Validate](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **New to Home Assistant? / Pierwsza instalacja?** Use the concise bilingual
 [five-step quick start / szybki start](docs/QUICK_START.md). Advanced wiring,
 parallel systems and troubleshooting remain documented below.
 
+**Project links / Najważniejsze linki:**
+[Quick start / Szybki start](docs/QUICK_START.md) ·
+[Changelog](CHANGELOG.md) ·
+[Diagnostics / Diagnostyka](docs/DIAGNOSTICS.md) ·
+[Automation test report](docs/AUTOMATION_TEST_REPORT.md) ·
+[Issues](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/issues)
+
+## Dashboard overview / Podgląd dashboardu
+
+The overview shows the live power flow, RCE optimizer, tariff charging and
+experimental RCEm 253 V+ controller. The dashboard is supplied in Polish and
+English and adapts to desktop and mobile layouts.
+
+Podgląd przedstawia przepływ energii, optymalizator RCE, ładowanie taryfowe i
+eksperymentalny regulator RCEm 253 V+. Dashboard jest dostarczany po polsku i
+angielsku oraz dopasowuje się do komputera i telefonu.
+
+![Hoymiles dashboard overview: start, RCE, tariff charging and RCEm](docs/images/dashboard-overview.png)
+
+## More than Modbus monitoring / Więcej niż monitoring Modbus
+
+Modbus is the foundation, not the end product. The integration exposes stable,
+localized inverter entities, while the included EMS uses them to plan and
+control energy. Users can inspect the inputs, calculated reserve, selected time
+windows, controller ownership and the reason why an action was taken or
+withheld.
+
+Modbus jest fundamentem, a nie końcem projektu. Integracja udostępnia stabilne,
+tłumaczone encje falownika, natomiast dostarczony EMS wykorzystuje je do
+planowania i sterowania energią. Użytkownik widzi dane wejściowe, wyliczoną
+rezerwę, wybrane okna, właściciela sterowania i powód wykonania albo pominięcia
+działania.
+
+| System reads / System analizuje | It calculates / Wylicza | It can control / Może sterować |
+|---|---|---|
+| PV, true household LOAD, grid, battery SOC/capacity, BMS limits | Home and outage reserve, battery headroom, forecast surplus, feasible charge/export energy | Self-Use, Grid Charge, Grid Discharge, charge/discharge power and SOC targets |
+| Solcast today/tomorrow, four-day Recorder history | Expected day/night balance and forecast-error correction | When to preserve, charge or release battery energy |
+| PSE RCE prices, tariff zones, L1/L2/L3 voltage | Valuable export blocks, physical charging lead time and high-voltage risk windows | Mutually exclusive RCE, tariff or RCEm plans |
+
+## EMS modules / Moduły EMS
+
+| Module / Moduł | Purpose / Zastosowanie | Operation / Tryb pracy |
+|---|---|---|
+| Local Modbus and dashboard | Fast PV, LOAD, grid, battery, GEN, alarms and energy-flow monitoring | Core; local ESPHome and Home Assistant path |
+| RCE optimizer | Selects valuable permitted 30-minute export blocks while protecting home energy | Optional; PSE internet data and Solcast required |
+| Tariff charging | Simulates the energy balance and charges early enough to cover future expensive zones | Optional; acts only when the model finds a need and usable cheap window |
+| RCEm 253 V+ | Learns recurring high-voltage periods, prepares battery headroom and can regulate charging/export without changing grid protection | **Experimental**; starts in observation-only mode |
+| LiFePO4 balancing | Uses PV first, completes from the grid, slows the final 99–100% stage and holds full SOC | Optional service cycle; temporarily owns EMS |
+| Parallel systems | Detects single/Master/Slave topology, presents system totals and uses guarded system-wide EMS commands | Requires correct manufacturer parallel and RS485 wiring |
+
+Only one automatic module owns EMS at a time. Interlocks prevent RCE, tariff
+charging, RCEm, balancing and manual schedules from silently competing for the
+same inverter registers.
+
+## Local-first and explainable / Lokalnie i przejrzyście
+
+Inverter communication, automation logic and control execution remain inside
+ESPHome and Home Assistant. No external AI service is used. Internet access is
+needed only by features that explicitly consume outside data: Solcast forecasts
+and the public PSE RCE API. Core monitoring and manual EMS control do not depend
+on those providers.
+
+Komunikacja z falownikiem, logika automatyk i wykonywanie decyzji pozostają w
+ESPHome oraz Home Assistant. System nie korzysta z zewnętrznej usługi AI.
+Internet jest potrzebny tylko funkcjom pobierającym dane zewnętrzne: prognozie
+Solcast i publicznemu API cen RCE PSE. Podstawowy monitoring i ręczne sterowanie
+EMS nie zależą od tych usług.
+
+Revenue and savings values are operational estimates based on measured energy,
+configured tariffs and published RCE prices. They are not an electricity bill
+or a guarantee of financial results.
+
+Wartości przychodu i oszczędności są estymacją operacyjną opartą na zmierzonej
+energii, skonfigurowanej taryfie i opublikowanych cenach RCE. Nie są fakturą ani
+gwarancją wyniku finansowego.
+
+## Safety boundary / Granica bezpieczeństwa
+
 > [!IMPORTANT]
-> **License / Licencja:** this project is open-source software under the
-> [MIT License](LICENSE). Private and commercial use, modification and
-> distribution are permitted when the copyright and permission notices are
-> retained. The software is provided without warranty.
+> **EMS manages energy. It does not manage grid safety. / EMS zarządza energią,
+> nie bezpieczeństwem sieci.**
 >
-> Projekt jest oprogramowaniem open source na [licencji MIT](LICENSE).
-> Dozwolone jest użycie prywatne i komercyjne, modyfikowanie oraz
-> rozpowszechnianie z zachowaniem informacji o prawach autorskich i treści
-> zezwolenia. Oprogramowanie jest udostępniane bez gwarancji.
+> The integration does not change certified grid profiles, protection
+> thresholds or the three-phase-unbalance setting. It cannot disable inverter
+> safety functions. EMS writes are limited to documented operational energy
+> controls such as mode, battery targets, charging, discharging and explicitly
+> enabled export regulation.
+>
+> Integracja nie zmienia certyfikowanych profili sieciowych, progów zabezpieczeń
+> ani ustawienia asymetrii trójfazowej i nie wyłącza funkcji bezpieczeństwa
+> falownika. Zapisy EMS są ograniczone do udokumentowanego sterowania energią:
+> trybu pracy, celów baterii, ładowania, rozładowania oraz jawnie włączonej
+> regulacji eksportu.
 
-## Support the project / Wesprzyj projekt
+> [!WARNING]
+> This project writes operating parameters to a high-power inverter. Verify the
+> exact model, register map, wiring, battery/BMS limits and operator requirements
+> before enabling writable entities or automatic control. You use it at your own
+> risk.
 
-This independent project was built from a real need for reliable, transparent
-Hoymiles control in Home Assistant. Your support helps fund testing on real
-installations, documentation, and safer EMS/RCE automation. If the integration
-has saved you time or helps you use your energy more effectively, you can
-support its continued development:
+<details>
+<summary><strong>Technical scope / Szczegółowy zakres techniczny</strong></summary>
 
-Ten niezależny projekt powstał z realnej potrzeby niezawodnego i przejrzystego
-sterowania falownikiem Hoymiles w Home Assistant. Wsparcie pomaga rozwijać
-automatykę EMS/RCE, prowadzić testy na rzeczywistych instalacjach i tworzyć
-lepszą dokumentację. Jeśli integracja oszczędziła Ci czas lub pomaga lepiej
-wykorzystać energię:
-
-[☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
-
-Version **1.4.5** is the current release. It contains:
+The current release contains:
 
 - 276 localized read-only and writable Modbus entities;
 - four physical PV inputs (PV1–PV4);
@@ -55,7 +146,7 @@ Version **1.4.5** is the current release. It contains:
   mode, with four-day voltage history, battery-headroom planning, optional
   morning pre-discharge and a user-capped export controller;
 - scheduled LiFePO4 storage balancing: use PV first, finish from the grid,
-  slow the final 99â€“100% stage and hold full SOC for a configured period;
+  slow the final 99–100% stage and hold full SOC for a configured period;
 - Solcast-, Recorder- and true LOAD-based planning for today and tomorrow,
   including a dynamic SOC reserve that protects the home through the night;
 - automatic single/Master/Slave topology detection and system-wide live power
@@ -72,10 +163,7 @@ Version **1.4.5** is the current release. It contains:
   alternating-row cards, with a rollback backup and frontend cache busting;
 - English and Polish entity names, select options, config flow and services.
 
-> [!WARNING]
-> This project writes operating parameters to a high-power inverter. Verify the
-> register map, wiring, battery limits and grid-code requirements for your exact
-> model before enabling writable entities. You use it at your own risk.
+</details>
 
 ## Architecture
 
@@ -90,16 +178,6 @@ Hoymiles inverter ── RS485/Modbus RTU ── ESP32/ESPHome
 The HACS integration creates localized, stable proxy entities from the native
 ESPHome device. It listens to Home Assistant state events, so it does **not**
 add another Modbus polling cycle.
-
-## Dashboard overview / Podgląd dashboardu
-
-The single overview below shows the live start page, RCE optimizer, tariff
-charging and RCEm 253 V+ voltage protection from the current release.
-
-Poniższy podgląd przedstawia bieżący panel główny, optymalizator RCE, tanie
-ładowanie oraz ochronę napięciową RCEm 253 V+ z aktualnego wydania.
-
-![Hoymiles dashboard overview: start, RCE, tariff charging and RCEm](docs/images/dashboard-overview.png)
 
 ## Requirements
 
@@ -521,6 +599,23 @@ field-test limits are recorded in the
 
 ## Support
 
+The project and all EMS functions remain free and open source. If it saves you
+time or helps you use the installation more effectively, you can support
+continued development, documentation and testing on real systems:
+
+Projekt i wszystkie funkcje EMS pozostają darmowe i otwarte. Jeżeli system
+oszczędził Ci czas albo pomaga lepiej wykorzystywać instalację, możesz wesprzeć
+dalszy rozwój, dokumentację i testy na rzeczywistych układach:
+
+[☕ Support development / Postaw kawę autorowi](https://buycoffee.to/kaluzaaa)
+
+The software is free; optional direct help covers the author's time spent on
+configuration, commissioning or diagnosis. There is no feature paywall.
+
+Oprogramowanie jest darmowe. Opcjonalne bezpośrednie wsparcie dotyczy czasu
+autora poświęconego na konfigurację, uruchomienie albo diagnostykę — żadna
+funkcja EMS nie jest zablokowana opłatą.
+
 Please open an issue and include:
 
 - exact inverter model and firmware version;
@@ -541,16 +636,18 @@ Send the ZIP with a problem description and the exact local fault time to
 
 ## Polski
 
-Integracja łączy falowniki hybrydowe Hoymiles HIT xxL G3 z Home Assistantem
-przez ESP32 i magistralę RS485/Modbus RTU. Wersja **1.4.5** udostępnia
-276 encji, cztery wejścia PV, ustawienia baterii i EMS, harmonogramy dobowe,
-optymalizator sprzedaży RCE, automatyczne ładowanie w taryfach
-G11/G12/G12w/G13, eksperymentalną ochronę eksportu RCEm 253 V+, serwisowe
-wyrównywanie LiFePO4, statystyki przychodu i produkcji oraz dynamiczny dashboard
-PL/EN. Planowanie korzysta z Solcast, historii Recorder, rzeczywistego LOAD,
-pojemności magazynu, limitów BMS i topologii pojedynczej lub równoległej.
-Automatyczne ładowanie taryfowe zapamiętuje cel oraz czas rozpoczętego okna,
-dzięki czemu bieżące przeliczenia nie zapętlają trybów Grid Charge/Self-Use.
+Hoymiles HIT xxL G3 Modbus nie kończy się na odczycie rejestrów. Jest lokalnym,
+wyjaśnialnym EMS-em działającym w Home Assistant. ESP32 zapewnia komunikację
+RS485/Modbus RTU z falownikiem, a gotowe moduły zarządzają energią na podstawie
+PV, rzeczywistego LOAD, SOC i pojemności magazynu, limitów BMS, historii
+Recorder, prognozy Solcast, taryf, cen RCE oraz napięć sieci. Dashboard pokazuje
+nie tylko wyniki, lecz także plan, chronioną rezerwę i powód decyzji.
+
+System obejmuje cztery fizyczne wejścia PV, baterię, sieć, LOAD/EPS, GEN,
+harmonogramy dobowe, optymalizację RCE, ładowanie taryfowe, eksperymentalne
+zarządzanie RCEm 253 V+, wyrównywanie LiFePO4, statystyki przychodu i produkcji
+oraz instalacje pojedyncze i równoległe. Interlocki zapewniają, że w danej chwili
+tylko jeden automat jest właścicielem sterowania EMS.
 
 ### Podłączenie ESP32 i konwertera RS485
 
@@ -803,3 +900,15 @@ Integracja zapisuje ustawienia falownika. Przed użyciem sprawdź model, mapę
 rejestrów, limity BMS oraz wymagania operatora sieci. Tryb EMS jest zapisywany
 atomowo jako cały blok `4300–4306`, tak jak po użyciu przycisku **Save** w
 aplikacji producenta.
+
+## License / Licencja
+
+This project is open-source software under the [MIT License](LICENSE). Private
+and commercial use, modification and distribution are permitted when the
+copyright and permission notices are retained. The software is provided
+without warranty.
+
+Projekt jest oprogramowaniem open source na [licencji MIT](LICENSE). Dozwolone
+jest użycie prywatne i komercyjne, modyfikowanie oraz rozpowszechnianie z
+zachowaniem informacji o prawach autorskich i treści zezwolenia. Oprogramowanie
+jest udostępniane bez gwarancji.

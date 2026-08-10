@@ -982,7 +982,11 @@ def main() -> int:
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.5** is the current release",
+        "Nie tylko pokazuje. Myśli.",
+        "Local EMS for Home Assistant",
+        "/releases/latest",
+        "More than Modbus monitoring",
+        "Safety boundary / Granica bezpieczeństwa",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",

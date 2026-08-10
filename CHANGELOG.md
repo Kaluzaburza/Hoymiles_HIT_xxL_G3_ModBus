@@ -17,6 +17,14 @@ All notable changes to this project are documented in this file.
   the diagnostic card and inside the downloaded archive.
 - Add bilingual support instructions and automated privacy regression tests.
 
+### Changed
+
+- Reframe the README around the project as a local, explainable EMS while
+  retaining the Hoymiles/Modbus repository name and technical search terms.
+- Replace the release-specific feature wall with a concise module overview,
+  explicit local/cloud boundaries, safety scope and links to detailed material.
+- Add a pre-automation commissioning checklist to the bilingual quick start.
+
 ### Fixed
 
 - Calculate the LOAD/EPS home-consumption history by integrating the clean
@@ -34,6 +42,13 @@ All notable changes to this project are documented in this file.
   kliknięciem pobiera ZIP tworzony w pamięci, bez pozostawiania go w `/config`.
 - Na karcie i w ZIP-ie dodano adres `info@kaluzaaa.com` oraz jasną informację,
   aby do raportu dołączyć opis problemu i dokładny czas wystąpienia błędu.
+- Uporządkowano README wokół projektu jako lokalnego, wyjaśnialnego EMS bez
+  zmiany nazwy repozytorium i fraz Hoymiles/Modbus używanych przy wyszukiwaniu.
+- Skrócono prezentację funkcji, doprecyzowano granice pracy lokalnej,
+  bezpieczeństwo, status eksperymentalnego RCEm oraz zasady bezpłatnego projektu
+  i opcjonalnego wsparcia autora.
+- Do szybkiego startu PL/EN dodano kontrolę uruchomieniową przed włączeniem
+  automatycznego sterowania EMS.
 - Wykres zużycia domu w zakładce LOAD/EPS jest teraz liczony z czystej sumy
   mocy faz LOAD (rejestry 2170-2172). Nie korzysta już z liczników dobowych,
   które mogły zawierać autokonsumpcję falownika i straty przetwarzania;
