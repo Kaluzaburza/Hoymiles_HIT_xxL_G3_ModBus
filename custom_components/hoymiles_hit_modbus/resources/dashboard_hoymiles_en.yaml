@@ -1750,7 +1750,7 @@ views:
         stat_types:
           - change
         entities:
-          - entity: sensor.hoymiles_actual_load_energy_today
+          - entity: sensor.hoymiles_actual_load_energy_total
             name: Home consumption
             color: "#FF1744"
       - type: custom:hoymiles-zebra-entities-card

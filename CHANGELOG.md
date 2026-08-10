@@ -17,6 +17,13 @@ All notable changes to this project are documented in this file.
   the diagnostic card and inside the downloaded archive.
 - Add bilingual support instructions and automated privacy regression tests.
 
+### Fixed
+
+- Calculate the LOAD/EPS home-consumption history by integrating the clean
+  per-phase LOAD power (registers 2170-2172). The chart no longer uses inverter
+  daily counters that can include inverter self-consumption and conversion
+  losses, and starts a new clean long-term statistics series.
+
 ### Polski
 
 - Dodano natywny raport **Pobierz diagnostykę** z wersjami, kompletnością encji,
@@ -27,6 +34,10 @@ All notable changes to this project are documented in this file.
   kliknięciem pobiera ZIP tworzony w pamięci, bez pozostawiania go w `/config`.
 - Na karcie i w ZIP-ie dodano adres `info@kaluzaaa.com` oraz jasną informację,
   aby do raportu dołączyć opis problemu i dokładny czas wystąpienia błędu.
+- Wykres zużycia domu w zakładce LOAD/EPS jest teraz liczony z czystej sumy
+  mocy faz LOAD (rejestry 2170-2172). Nie korzysta już z liczników dobowych,
+  które mogły zawierać autokonsumpcję falownika i straty przetwarzania;
+  tworzona jest nowa, czysta historia statystyk.
 
 ## [1.4.5] - 2026-08-09
 

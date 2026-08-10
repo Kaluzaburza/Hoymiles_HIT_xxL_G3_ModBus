@@ -675,7 +675,7 @@ def main() -> int:
         require(
             load_graph_title in dashboard_text
             and load_energy_title in dashboard_text
-            and "entity: sensor.hoymiles_actual_load_energy_today"
+            and "entity: sensor.hoymiles_actual_load_energy_total"
             in dashboard_text,
             f"{dashboard_path.name} lacks the LOAD power/energy graphs",
         )
@@ -821,6 +821,10 @@ def main() -> int:
             "timer.hoymiles_battery_balancing_watchdog",
             "input_boolean.hoymiles_battery_balancing_active",
             "sensor.hoymiles_actual_load_energy_today",
+            "unique_id: hoymiles_actual_load_energy_total",
+            "unique_id: hoymiles_actual_load_energy_daily",
+            "source: sensor.hoymiles_actual_load_energy_total",
+            "source_entity: sensor.hoymiles_actual_load_power",
             "sensor.hoymiles_actual_load_power",
             "sensor.hoymiles_hit_load_power_l1n",
             "sensor.hoymiles_hit_load_power_l2n",
@@ -863,6 +867,17 @@ def main() -> int:
                 marker in package_text,
                 f"Dynamic RCE reserve marker missing in {package_path.name}: {marker}",
             )
+        require(
+            'source_registers: "2129 + 2130 + 2131"' not in package_text
+            and "sensor.hoymiles_hit_load_energy_use_l1n_today"
+            not in package_text
+            and "sensor.hoymiles_hit_load_energy_use_l2n_today"
+            not in package_text
+            and "sensor.hoymiles_hit_load_energy_use_l3n_today"
+            not in package_text,
+            f"Clean home-energy calculation regressed to inverter daily LOAD "
+            f"counters in {package_path.name}",
+        )
         require(
             "or not is_state(\n"
             "                       'binary_sensor.hoymiles_tariff_planned_charge_slot', 'on')"
