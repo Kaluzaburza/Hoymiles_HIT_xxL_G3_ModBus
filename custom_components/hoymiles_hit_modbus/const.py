@@ -7,12 +7,13 @@ from homeassistant.const import Platform
 
 DOMAIN = "hoymiles_hit_modbus"
 NAME = "Hoymiles HIT xxL G3 Modbus"
-VERSION = "1.4.6"
+VERSION = "1.4.7"
 
 # Existing helper created by the managed Home Assistant EMS package. Keep the
 # setup-status sensor and Repairs check on this single shared sentinel so they
 # cannot drift to a helper name that the package never creates.
 EMS_PACKAGE_SENTINEL = "input_boolean.hoymiles_rce_discharge_enabled"
+EMS_PACKAGE_VERSION_ENTITY = "sensor.hoymiles_ems_package_version"
 
 CONF_SOURCE_DEVICE_ID = "source_device_id"
 CONF_COPY_ASSETS = "copy_assets"

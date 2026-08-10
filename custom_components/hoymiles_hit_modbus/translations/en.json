@@ -25,6 +25,10 @@
     "ems_package_not_loaded": {
       "title": "EMS automation requires Home Assistant packages",
       "description": "The integration copied the automation file, but Home Assistant did not load it. Add `packages: !include_dir_named packages` under the existing `homeassistant:` section in `configuration.yaml`, validate the configuration and restart Home Assistant. Do not create a second `homeassistant:` section."
+    },
+    "ems_package_restart_required": {
+      "title": "EMS package update requires another restart",
+      "description": "The integration updated the managed EMS package after Home Assistant had loaded its configuration. Validate the configuration and restart Home Assistant once more. If this message remains after the restart, back up your custom changes, run `hoymiles_hit_modbus.install_assets` with `overwrite: true`, and restart Home Assistant again."
     }
   },
   "services": {

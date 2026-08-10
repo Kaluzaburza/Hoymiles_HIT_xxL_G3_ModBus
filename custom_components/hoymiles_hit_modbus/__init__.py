@@ -28,6 +28,7 @@ from .const import (
     CONF_SOURCE_DEVICE_ID,
     DOMAIN,
     EMS_PACKAGE_SENTINEL,
+    EMS_PACKAGE_VERSION_ENTITY,
     PLATFORMS,
     SERVICE_INSTALL_ASSETS,
     VERSION,
@@ -57,15 +58,36 @@ def _ems_package_issue_id(entry: ConfigEntry) -> str:
     return f"ems_package_not_loaded_{entry.entry_id}"
 
 
+def _ems_package_restart_issue_id(entry: ConfigEntry) -> str:
+    """Return the stable issue id for an EMS package activation restart."""
+    return f"ems_package_restart_required_{entry.entry_id}"
+
+
 def _async_update_ems_package_issue(
     hass: HomeAssistant,
     entry: ConfigEntry,
 ) -> None:
-    """Explain the one remaining YAML step when the EMS package is absent."""
+    """Explain the remaining YAML or restart step for the EMS package."""
     issue_id = _ems_package_issue_id(entry)
+    restart_issue_id = _ems_package_restart_issue_id(entry)
     if hass.states.get(EMS_PACKAGE_SENTINEL) is not None:
         ir.async_delete_issue(hass, DOMAIN, issue_id)
+        package_version = hass.states.get(EMS_PACKAGE_VERSION_ENTITY)
+        if package_version is not None and package_version.state == VERSION:
+            ir.async_delete_issue(hass, DOMAIN, restart_issue_id)
+            return
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            restart_issue_id,
+            is_fixable=False,
+            issue_domain=DOMAIN,
+            learn_more_url=EMS_PACKAGE_DOCS_URL,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="ems_package_restart_required",
+        )
         return
+    ir.async_delete_issue(hass, DOMAIN, restart_issue_id)
     ir.async_create_issue(
         hass,
         DOMAIN,
@@ -288,4 +310,9 @@ async def async_unload_entry(
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         ir.async_delete_issue(hass, DOMAIN, _ems_package_issue_id(entry))
+        ir.async_delete_issue(
+            hass,
+            DOMAIN,
+            _ems_package_restart_issue_id(entry),
+        )
     return unloaded

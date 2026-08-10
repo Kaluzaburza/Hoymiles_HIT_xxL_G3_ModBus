@@ -53,12 +53,16 @@ credible source data must be confirmed by the installer or user.
 ## Updating
 
 1. Read the numbered **User update steps** in HACS.
-2. Update the integration in HACS and restart Home Assistant if requested.
+2. Update the integration in HACS, validate the configuration and restart Home
+   Assistant if requested.
 3. Rebuild ESP32 only when the release notes explicitly require it. Open the
    device in ESPHome and use **Install**; do not copy the repository's
    `packages` directory.
-4. Check **Installation status**. `Ready` means ESP32, entity coverage and the
-   EMS package are available.
+4. Check **Installation status** and **Repairs** after the restart. If the
+   managed EMS package was copied after YAML had already loaded, follow the
+   displayed instruction and restart once more. `Ready` with
+   `restart_required: false` means ESP32, entity coverage and the current EMS
+   package are available.
 
 ## Polski — pięć kroków
 
@@ -113,8 +117,11 @@ wiarygodność danych wejściowych musi potwierdzić instalator albo użytkownik
 ## Aktualizacja
 
 1. Przeczytaj numerowane **Kroki po aktualizacji** wyświetlone w HACS.
-2. Zaktualizuj integrację w HACS i wykonaj restart, jeżeli opis tego wymaga.
+2. Zaktualizuj integrację w HACS, sprawdź konfigurację i wykonaj restart, jeżeli
+   opis tego wymaga.
 3. ESP32 przebuduj tylko wtedy, gdy changelog mówi o tym wprost. Otwórz
    urządzenie w ESPHome i wybierz **Install** — nie kopiuj katalogu `packages`.
-4. Sprawdź **Stan instalacji**. `Gotowe` oznacza dostępny ESP32, komplet encji i
-   aktywny pakiet EMS.
+4. Po restarcie sprawdź **Stan instalacji** i **Naprawy**. Jeżeli pakiet EMS
+   został skopiowany już po wczytaniu YAML, wykonaj wyświetlony kolejny krok i
+   uruchom Home Assistant jeszcze raz. `Gotowe` oraz `restart_required: false`
+   oznaczają dostępny ESP32, komplet encji i bieżący pakiet EMS.

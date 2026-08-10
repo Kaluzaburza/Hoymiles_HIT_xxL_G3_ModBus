@@ -11,7 +11,12 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, EMS_PACKAGE_SENTINEL
+from .const import (
+    DOMAIN,
+    EMS_PACKAGE_SENTINEL,
+    EMS_PACKAGE_VERSION_ENTITY,
+    VERSION,
+)
 from .entity import HoymilesProxyEntity
 from .localization import localized_text_state
 from .models import RuntimeData
@@ -74,6 +79,15 @@ class HoymilesSetupStatusSensor(SensorEntity):
         return self.hass.states.get(EMS_PACKAGE_SENTINEL) is not None
 
     @property
+    def _ems_version(self) -> str | None:
+        state = self.hass.states.get(EMS_PACKAGE_VERSION_ENTITY)
+        return state.state if state is not None else None
+
+    @property
+    def _ems_restart_required(self) -> bool:
+        return self._ems_loaded and self._ems_version != VERSION
+
+    @property
     def _esp_online(self) -> bool:
         return any(
             (state := self.hass.states.get(entity_id)) is not None
@@ -97,6 +111,12 @@ class HoymilesSetupStatusSensor(SensorEntity):
                 "Wymagane włączenie pakietów i restart"
                 if self._language_is_polish
                 else "Enable packages and restart"
+            )
+        if self._ems_restart_required:
+            return (
+                "Wymagany ponowny restart"
+                if self._language_is_polish
+                else "Restart required to finish update"
             )
         return "Gotowe" if self._language_is_polish else "Ready"
 
@@ -132,6 +152,12 @@ class HoymilesSetupStatusSensor(SensorEntity):
                 if self._language_is_polish
                 else "Enable homeassistant: packages: !include_dir_named packages and restart HA."
             )
+        elif self._ems_restart_required:
+            next_step = (
+                "Sprawdź konfigurację i uruchom Home Assistant ponownie jeszcze raz."
+                if self._language_is_polish
+                else "Validate the configuration and restart Home Assistant once more."
+            )
         else:
             next_step = (
                 "Instalacja jest gotowa."
@@ -141,6 +167,9 @@ class HoymilesSetupStatusSensor(SensorEntity):
         return {
             "esp32_online": self._esp_online,
             "ems_package_loaded": self._ems_loaded,
+            "ems_package_version": self._ems_version,
+            "integration_version": VERSION,
+            "restart_required": self._ems_restart_required,
             "source_entities": source_count,
             "expected_entities": self._expected_entity_count,
             "firmware_coverage_percent": coverage,
@@ -153,7 +182,11 @@ class HoymilesSetupStatusSensor(SensorEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
-                (*self._source_entity_ids, EMS_PACKAGE_SENTINEL),
+                (
+                    *self._source_entity_ids,
+                    EMS_PACKAGE_SENTINEL,
+                    EMS_PACKAGE_VERSION_ENTITY,
+                ),
                 self._async_handle_state_change,
             )
         )
