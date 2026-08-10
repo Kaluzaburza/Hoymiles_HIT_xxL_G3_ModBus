@@ -32,6 +32,24 @@ variants and advanced troubleshooting.
    Never create a second `homeassistant:` key. Finally add the community
    dashboard **Hoymiles HIT xxL G3** in **Settings → Dashboards**.
 
+### Before enabling automatic EMS
+
+Keep RCE, tariff charging, RCEm and battery balancing disabled until this short
+check is complete:
+
+1. **Installation status** is `Ready` and the ESPHome device remains online.
+2. PV, true LOAD, grid, battery voltage/current and SOC are plausible when
+   compared once with the inverter display or manufacturer application.
+3. Battery capacity, inverter power, BMS charge/discharge limits and the
+   Self-Use outage reserve match the physical installation.
+4. Solcast today/tomorrow sensors are available before forecast-based planning
+   is enabled. RCE additionally needs current PSE price data.
+5. Leave RCEm in **observation-only** mode until its voltage history and proposed
+   actions have been reviewed on the target site.
+
+The integration interlocks automatic owners, but correct physical limits and
+credible source data must be confirmed by the installer or user.
+
 ## Updating
 
 1. Read the numbered **User update steps** in HACS.
@@ -71,6 +89,26 @@ variants and advanced troubleshooting.
    Nigdy nie twórz drugiego klucza `homeassistant:`. Na koniec w
    **Ustawienia → Panele** dodaj społecznościowy dashboard
    **Hoymiles HIT xxL G3**.
+
+### Przed włączeniem automatycznego EMS
+
+Pozostaw RCE, ładowanie taryfowe, RCEm i wyrównywanie magazynu wyłączone do
+zakończenia krótkiej kontroli:
+
+1. **Stan instalacji** ma wartość `Gotowe`, a urządzenie ESPHome pozostaje
+   dostępne.
+2. Moc PV, rzeczywisty LOAD, przepływ sieci, napięcie/prąd baterii i SOC mają
+   wiarygodne wartości po jednorazowym porównaniu z ekranem falownika albo
+   aplikacją producenta.
+3. Pojemność magazynu, moc falownika, limity ładowania/rozładowania BMS i rezerwa
+   awaryjna Self-Use odpowiadają fizycznej instalacji.
+4. Encje Solcast dla dzisiaj i jutra są dostępne przed uruchomieniem planowania
+   zależnego od prognozy. RCE wymaga również aktualnych cen PSE.
+5. Pozostaw RCEm w trybie **tylko obserwacja**, dopóki nie sprawdzisz historii
+   napięć i proponowanych działań na docelowej instalacji.
+
+Integracja blokuje konflikt właścicieli EMS, ale poprawne limity fizyczne i
+wiarygodność danych wejściowych musi potwierdzić instalator albo użytkownik.
 
 ## Aktualizacja
 

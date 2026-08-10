@@ -4,7 +4,85 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-No changes yet.
+## [1.4.6] - 2026-08-10
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.6**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.4.6**.
+2. **Home Assistant:** restart once after HACS finishes. The managed dashboard,
+   EMS package and frontend card are refreshed automatically. Existing
+   dashboard customizations remain protected by the normal migration backup.
+   **PL:** po zakończeniu aktualizacji wykonaj jeden restart Home Assistanta.
+   Zarządzany dashboard, pakiet EMS i karta frontendowa zostaną odświeżone
+   automatycznie, a dotychczasowe modyfikacje chroni standardowa kopia migracji.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. This release changes
+   the Home Assistant integration, managed EMS package, dashboard and
+   documentation only; the compatible ESPHome package remains **v1.4.4**.
+   HACS does not flash ESP32. **PL:** nie trzeba ponownie kompilować ani wgrywać
+   ESP32. Wydanie zmienia integrację Home Assistanta, zarządzany pakiet EMS,
+   dashboard i dokumentację; zgodny pakiet ESPHome pozostaje w wersji
+   **v1.4.4**. HACS nie aktualizuje ESP32.
+4. **Verification / Weryfikacja:** confirm **Installation status / Stan
+   instalacji = Ready / Gotowe**. In LOAD/EPS, the 30-day home-consumption chart
+   starts a new clean series from the real phase LOAD; previous inflated
+   statistics are intentionally not copied. As an administrator, open the last
+   Diagnostics view and verify that **Download diagnostic ZIP** produces one
+   archive. **PL:** sprawdź **Stan instalacji = Gotowe**. W LOAD/EPS wykres
+   zużycia domu rozpocznie nową, czystą serię z rzeczywistej mocy faz LOAD;
+   poprzednie zawyżone statystyki celowo nie są kopiowane. Jako administrator
+   otwórz ostatnią zakładkę Diagnostyka i sprawdź pobranie jednego ZIP-a.
+
+### Added
+
+- Add Home Assistant's native **Download diagnostics** report with integration
+  and firmware versions, entity/catalog coverage, current optimizer and EMS
+  state plus 24 hours of significant control history.
+- Add a one-command Terminal & SSH collector that creates a single redacted
+  support archive with relevant Core/ESPHome logs and host diagnostics.
+- Add an administrator-only card to the final Diagnostics dashboard view. One
+  click creates an in-memory ZIP and downloads it directly in the browser.
+- Show the support email and the required fault description/time directly on
+  the diagnostic card and inside the downloaded archive.
+- Add bilingual support instructions and automated privacy regression tests.
+
+### Changed
+
+- Reframe the README around the project as a local, explainable EMS while
+  retaining the Hoymiles/Modbus repository name and technical search terms.
+- Replace the release-specific feature wall with a concise module overview,
+  explicit local/cloud boundaries, safety scope and links to detailed material.
+- Add a pre-automation commissioning checklist to the bilingual quick start.
+
+### Fixed
+
+- Calculate the LOAD/EPS home-consumption history by integrating the clean
+  per-phase LOAD power (registers 2170-2172). The chart no longer uses inverter
+  daily counters that can include inverter self-consumption and conversion
+  losses, and starts a new clean long-term statistics series.
+
+### Polski
+
+- Dodano natywny raport **Pobierz diagnostykę** z wersjami, kompletnością encji,
+  stanami automatyk i 24-godzinną historią istotnych zmian sterowania.
+- Dodano jedną komendę terminalową tworzącą odfiltrowaną paczkę z logami Core,
+  ESPHome i informacjami systemowymi oraz instrukcję PL/EN.
+- Dodano kartę w ostatniej zakładce Diagnostyka. Administrator jednym
+  kliknięciem pobiera ZIP tworzony w pamięci, bez pozostawiania go w `/config`.
+- Na karcie i w ZIP-ie dodano adres `info@kaluzaaa.com` oraz jasną informację,
+  aby do raportu dołączyć opis problemu i dokładny czas wystąpienia błędu.
+- Uporządkowano README wokół projektu jako lokalnego, wyjaśnialnego EMS bez
+  zmiany nazwy repozytorium i fraz Hoymiles/Modbus używanych przy wyszukiwaniu.
+- Skrócono prezentację funkcji, doprecyzowano granice pracy lokalnej,
+  bezpieczeństwo, status eksperymentalnego RCEm oraz zasady bezpłatnego projektu
+  i opcjonalnego wsparcia autora.
+- Do szybkiego startu PL/EN dodano kontrolę uruchomieniową przed włączeniem
+  automatycznego sterowania EMS.
+- Wykres zużycia domu w zakładce LOAD/EPS jest teraz liczony z czystej sumy
+  mocy faz LOAD (rejestry 2170-2172). Nie korzysta już z liczników dobowych,
+  które mogły zawierać autokonsumpcję falownika i straty przetwarzania;
+  tworzona jest nowa, czysta historia statystyk.
 
 ## [1.4.5] - 2026-08-09
 

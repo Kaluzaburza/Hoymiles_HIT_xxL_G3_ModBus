@@ -21,11 +21,36 @@ body:
     id: problem
     attributes:
       label: Problem description
+      description: >-
+        Describe what happened, what you expected and whether the inverter was
+        in Self-Use, Grid Charge or Discharge to Grid.
+    validations:
+      required: true
+  - type: input
+    id: fault_time
+    attributes:
+      label: Exact local date and time of the fault
+      description: >-
+        This lets us align the report, Recorder history and inverter behaviour.
+      placeholder: 2026-08-09 14:37 Europe/Warsaw
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic report
+      description: >-
+        Drag the native diagnostics JSON or terminal .tar.gz archive here.
+        Review it before publishing. Instructions:
+        https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/blob/main/docs/DIAGNOSTICS.md
+      placeholder: Drag and drop the diagnostic file here.
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
       label: Relevant logs
-      description: Remove passwords, API keys and other secrets.
+      description: >-
+        Optional additional excerpt. Remove passwords, API keys and other
+        secrets.
       render: text

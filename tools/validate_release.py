@@ -66,7 +66,9 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.5"
+    const_module.VERSION = json.loads(
+        (COMPONENT / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -424,7 +426,10 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.5", "Release version must be 1.4.5")
+    require(
+        re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"]) is not None,
+        "Release version must use semantic MAJOR.MINOR.PATCH format",
+    )
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -432,6 +437,10 @@ def main() -> int:
     config_flow_source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
     sensor_platform_source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     const_source = (COMPONENT / "const.py").read_text(encoding="utf-8")
+    require(
+        f'VERSION = "{manifest["version"]}"' in const_source,
+        "const.py VERSION does not match manifest.json",
+    )
     ems_package_source = (
         ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
     ).read_text(encoding="utf-8")
@@ -675,7 +684,7 @@ def main() -> int:
         require(
             load_graph_title in dashboard_text
             and load_energy_title in dashboard_text
-            and "entity: sensor.hoymiles_actual_load_energy_today"
+            and "entity: sensor.hoymiles_actual_load_energy_total"
             in dashboard_text,
             f"{dashboard_path.name} lacks the LOAD power/energy graphs",
         )
@@ -821,6 +830,10 @@ def main() -> int:
             "timer.hoymiles_battery_balancing_watchdog",
             "input_boolean.hoymiles_battery_balancing_active",
             "sensor.hoymiles_actual_load_energy_today",
+            "unique_id: hoymiles_actual_load_energy_total",
+            "unique_id: hoymiles_actual_load_energy_daily",
+            "source: sensor.hoymiles_actual_load_energy_total",
+            "source_entity: sensor.hoymiles_actual_load_power",
             "sensor.hoymiles_actual_load_power",
             "sensor.hoymiles_hit_load_power_l1n",
             "sensor.hoymiles_hit_load_power_l2n",
@@ -863,6 +876,17 @@ def main() -> int:
                 marker in package_text,
                 f"Dynamic RCE reserve marker missing in {package_path.name}: {marker}",
             )
+        require(
+            'source_registers: "2129 + 2130 + 2131"' not in package_text
+            and "sensor.hoymiles_hit_load_energy_use_l1n_today"
+            not in package_text
+            and "sensor.hoymiles_hit_load_energy_use_l2n_today"
+            not in package_text
+            and "sensor.hoymiles_hit_load_energy_use_l3n_today"
+            not in package_text,
+            f"Clean home-energy calculation regressed to inverter daily LOAD "
+            f"counters in {package_path.name}",
+        )
         require(
             "or not is_state(\n"
             "                       'binary_sensor.hoymiles_tariff_planned_charge_slot', 'on')"
@@ -911,7 +935,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.5.md"
+        ROOT / "docs" / "releases" / f"v{manifest['version']}.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",
@@ -967,7 +991,11 @@ def main() -> int:
         "GitHub Release notes are incomplete for HACS users",
     )
     for documentation_marker in (
-        "Version **1.4.5** is the current release",
+        "Nie tylko pokazuje. Myśli.",
+        "Local EMS for Home Assistant",
+        "/releases/latest",
+        "More than Modbus monitoring",
+        "Safety boundary / Granica bezpieczeństwa",
         "Tariff-aware grid charging",
         "RCEm 253 V+ voltage management",
         "LiFePO4 storage balancing",

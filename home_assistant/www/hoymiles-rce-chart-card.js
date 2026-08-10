@@ -728,6 +728,237 @@ if (!window.customCards.some((card) => card.type === "hoymiles-rce-chart-card"))
   });
 }
 
+class HoymilesDiagnosticsDownloadCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._busy = false;
+    this._status = "";
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    const previousLanguage = this._language;
+    this._hass = hass;
+    this._language = String(hass?.language || "en").toLowerCase();
+    if (previousLanguage !== this._language || !this.shadowRoot?.childElementCount) {
+      this._render();
+    }
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  _translations() {
+    if (this._language?.startsWith("pl")) {
+      return {
+        title: "Pakiet diagnostyczny",
+        description:
+          "Jednym kliknięciem zbierz stan integracji, historię sterowania z 24 godzin i odfiltrowane logi Home Assistanta.",
+        privacy:
+          "Sekrety i identyfikatory instalacji są maskowane. Przejrzyj ZIP przed publicznym udostępnieniem.",
+        contact:
+          "W razie błędu pobierz ZIP i wyślij go wraz z opisem problemu oraz dokładną datą i godziną wystąpienia na:",
+        button: "Zbierz dane i pobierz ZIP",
+        preparing: "Przygotowywanie pakietu…",
+        downloaded: "Pakiet został pobrany.",
+        adminOnly: "Pobranie pakietu wymaga konta administratora Home Assistanta.",
+        error: "Nie udało się utworzyć pakietu. Sprawdź uprawnienia administratora i log HA.",
+      };
+    }
+    return {
+      title: "Diagnostic package",
+      description:
+        "Collect integration state, 24 hours of control history and filtered Home Assistant logs with one click.",
+      privacy:
+        "Secrets and installation identifiers are masked. Review the ZIP before sharing it publicly.",
+      contact:
+        "If an error occurs, download the ZIP and email it with a problem description and the exact date and time to:",
+      button: "Collect data and download ZIP",
+      preparing: "Preparing package…",
+      downloaded: "The package has been downloaded.",
+      adminOnly: "Downloading the package requires a Home Assistant administrator account.",
+      error:
+        "The package could not be created. Check administrator access and the HA log.",
+    };
+  }
+
+  async _download() {
+    if (this._busy || !this._hass) return;
+    const text = this._translations();
+    if (!this._hass.user?.is_admin) {
+      this._status = text.adminOnly;
+      this._updateAction();
+      return;
+    }
+    this._busy = true;
+    this._status = text.preparing;
+    this._updateAction();
+    try {
+      const response = await this._hass.fetchWithAuth(
+        "/api/hoymiles_hit_modbus/support-bundle",
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Diagnostic download failed (${response.status})`);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match?.[1] || "hoymiles_diagnostics.zip";
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = filename;
+      anchor.style.display = "none";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 30_000);
+      this._status = text.downloaded;
+    } catch (error) {
+      console.error("Hoymiles diagnostic download failed", error);
+      this._status = text.error;
+    } finally {
+      this._busy = false;
+      this._updateAction();
+    }
+  }
+
+  _updateAction() {
+    const button = this.shadowRoot?.querySelector("button");
+    const status = this.shadowRoot?.querySelector(".status");
+    if (button) {
+      button.disabled = this._busy || Boolean(
+        this._hass?.user && !this._hass.user.is_admin
+      );
+      button.textContent = this._busy
+        ? this._translations().preparing
+        : this._translations().button;
+    }
+    if (status) {
+      status.textContent = this._status;
+      status.hidden = !this._status;
+    }
+  }
+
+  _render() {
+    if (!this.isConnected || !this._config) return;
+    const text = this._translations();
+    this.shadowRoot.innerHTML = `
+      <ha-card>
+        <div class="content">
+          <div class="heading">
+            <ha-icon icon="mdi:file-download-outline"></ha-icon>
+            <div>
+              <h2>${text.title}</h2>
+              <p>${text.description}</p>
+            </div>
+          </div>
+          <div class="privacy">
+            <ha-icon icon="mdi:shield-lock-outline"></ha-icon>
+            <span>${text.privacy}</span>
+          </div>
+          <div class="contact">
+            <span>${text.contact}</span>
+            <a href="mailto:info@kaluzaaa.com?subject=Hoymiles%20HIT%20-%20raport%20diagnostyczny">info@kaluzaaa.com</a>
+          </div>
+          <button type="button">${text.button}</button>
+          <div class="status" role="status" aria-live="polite" hidden></div>
+        </div>
+      </ha-card>
+      <style>
+        :host { display: block; }
+        .content { padding: 18px; }
+        .heading { align-items: flex-start; display: flex; gap: 14px; }
+        .heading > ha-icon {
+          color: var(--primary-color);
+          margin-top: 2px;
+          --mdc-icon-size: 34px;
+        }
+        h2 { font-size: 20px; margin: 0 0 6px; }
+        p { color: var(--secondary-text-color); margin: 0; }
+        .privacy {
+          align-items: center;
+          background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+          border-radius: 9px;
+          display: flex;
+          gap: 9px;
+          margin: 16px 0;
+          padding: 10px 12px;
+        }
+        .privacy ha-icon { color: var(--primary-color); flex: 0 0 auto; }
+        .contact {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px 8px;
+          margin: 0 0 16px;
+        }
+        .contact a {
+          color: var(--primary-color);
+          font-weight: 700;
+          text-decoration: none;
+        }
+        .contact a:hover { text-decoration: underline; }
+        button {
+          background: var(--primary-color);
+          border: 0;
+          border-radius: 8px;
+          color: var(--text-primary-color, white);
+          cursor: pointer;
+          font: inherit;
+          font-weight: 600;
+          min-height: 42px;
+          padding: 0 18px;
+        }
+        button:hover { filter: brightness(1.08); }
+        button:disabled { cursor: wait; opacity: 0.65; }
+        .status { margin-top: 11px; }
+        @media (max-width: 520px) {
+          button { width: 100%; }
+        }
+      </style>
+    `;
+    this.shadowRoot.querySelector("button")?.addEventListener(
+      "click",
+      () => this._download()
+    );
+    this._updateAction();
+  }
+
+  getCardSize() {
+    return 3;
+  }
+}
+
+if (!customElements.get("hoymiles-diagnostics-download-card")) {
+  customElements.define(
+    "hoymiles-diagnostics-download-card",
+    HoymilesDiagnosticsDownloadCard
+  );
+}
+
+if (
+  !window.customCards.some(
+    (card) => card.type === "hoymiles-diagnostics-download-card"
+  )
+) {
+  window.customCards.push({
+    type: "hoymiles-diagnostics-download-card",
+    name: "Hoymiles Diagnostic Download",
+    description: "Download a privacy-filtered support ZIP.",
+    preview: false,
+  });
+}
+
 class HoymilesZebraEntitiesCard extends HTMLElement {
   constructor() {
     super();

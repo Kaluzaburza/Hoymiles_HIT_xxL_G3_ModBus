@@ -55,6 +55,8 @@ jobs:
           python tools/test_rcm_optimizer.py
       - name: Test cross-system automation matrix
         run: python tools/test_automation_matrix.py
+      - name: Test diagnostic privacy filters
+        run: python tools/test_diagnostics.py
       - name: Run exhaustive pre-release automation matrix
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: python tools/test_automation_matrix.py --exhaustive

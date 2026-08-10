@@ -593,10 +593,22 @@ input_number:
     unit_of_measurement: "%"
     icon: mdi:battery-high
 
-# The daily LOAD meter increases during the day and resets at midnight.
-# sum_differences_nonnegative sums only positive increments from the last
-# 96 hours, accounting for the reset. Recorder restores the buffer after restart.
+# Czysta moc LOAD jest sumą faz 2170-2172 i nie zawiera zużycia własnego
+# falownika ani strat przetwarzania. Całka tej mocy jest wspólnym źródłem
+# energii dla wykresu zużycia domu, licznika dziennego i historii RCE.
 sensor:
+  - platform: integration
+    source: sensor.hoymiles_actual_load_power
+    name: "Hoymiles Actual Load Energy Total"
+    unique_id: hoymiles_actual_load_energy_total
+    unit_prefix: k
+    unit_time: h
+    round: 3
+    method: left
+
+  # The daily LOAD meter increases during the day and resets at midnight.
+  # sum_differences_nonnegative sums only positive increments from the last
+  # 96 hours, accounting for the reset. Recorder restores the buffer after restart.
   - platform: statistics
     name: "Hoymiles Load Energy Last 4 Days"
     unique_id: hoymiles_load_energy_last_4_days
@@ -665,6 +677,12 @@ sensor:
     method: left
 
 utility_meter:
+  hoymiles_actual_load_energy_daily:
+    name: "Hoymiles Actual Load Energy Daily"
+    unique_id: hoymiles_actual_load_energy_daily
+    source: sensor.hoymiles_actual_load_energy_total
+    cycle: daily
+
   hoymiles_rce_grid_export_energy_daily:
     name: "Hoymiles RCE Grid Export Energy Daily"
     unique_id: hoymiles_rce_grid_export_energy_daily
@@ -817,19 +835,13 @@ template:
         device_class: energy
         state_class: total_increasing
         availability: >-
-          {{ is_number(states('sensor.hoymiles_hit_load_energy_use_l1n_today'))
-             and is_number(states('sensor.hoymiles_hit_load_energy_use_l2n_today'))
-             and is_number(states('sensor.hoymiles_hit_load_energy_use_l3n_today')) }}
+          {{ is_number(states('sensor.hoymiles_actual_load_energy_daily')) }}
         state: >-
-          {% set l1 = [states('sensor.hoymiles_hit_load_energy_use_l1n_today')
-                       | float(0), 0] | max %}
-          {% set l2 = [states('sensor.hoymiles_hit_load_energy_use_l2n_today')
-                       | float(0), 0] | max %}
-          {% set l3 = [states('sensor.hoymiles_hit_load_energy_use_l3n_today')
-                       | float(0), 0] | max %}
-          {{ (l1 + l2 + l3) | round(1) }}
+          {{ states('sensor.hoymiles_actual_load_energy_daily')
+             | float(0) | round(3) }}
         attributes:
-          source_registers: "2129 + 2130 + 2131"
+          source_entity: sensor.hoymiles_actual_load_power
+          integration_method: left
           excludes_inverter_self_consumption: true
 
       - name: "Hoymiles EMS Push Notification Status"
