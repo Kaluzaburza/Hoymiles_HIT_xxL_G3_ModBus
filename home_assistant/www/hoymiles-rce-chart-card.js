@@ -762,6 +762,8 @@ class HoymilesDiagnosticsDownloadCard extends HTMLElement {
           "Jednym kliknięciem zbierz stan integracji, historię sterowania z 24 godzin i odfiltrowane logi Home Assistanta.",
         privacy:
           "Sekrety i identyfikatory instalacji są maskowane. Przejrzyj ZIP przed publicznym udostępnieniem.",
+        contact:
+          "W razie błędu pobierz ZIP i wyślij go wraz z opisem problemu oraz dokładną datą i godziną wystąpienia na:",
         button: "Zbierz dane i pobierz ZIP",
         preparing: "Przygotowywanie pakietu…",
         downloaded: "Pakiet został pobrany.",
@@ -775,6 +777,8 @@ class HoymilesDiagnosticsDownloadCard extends HTMLElement {
         "Collect integration state, 24 hours of control history and filtered Home Assistant logs with one click.",
       privacy:
         "Secrets and installation identifiers are masked. Review the ZIP before sharing it publicly.",
+      contact:
+        "If an error occurs, download the ZIP and email it with a problem description and the exact date and time to:",
       button: "Collect data and download ZIP",
       preparing: "Preparing package…",
       downloaded: "The package has been downloaded.",
@@ -863,6 +867,10 @@ class HoymilesDiagnosticsDownloadCard extends HTMLElement {
             <ha-icon icon="mdi:shield-lock-outline"></ha-icon>
             <span>${text.privacy}</span>
           </div>
+          <div class="contact">
+            <span>${text.contact}</span>
+            <a href="mailto:info@kaluzaaa.com?subject=Hoymiles%20HIT%20-%20raport%20diagnostyczny">info@kaluzaaa.com</a>
+          </div>
           <button type="button">${text.button}</button>
           <div class="status" role="status" aria-live="polite" hidden></div>
         </div>
@@ -888,6 +896,18 @@ class HoymilesDiagnosticsDownloadCard extends HTMLElement {
           padding: 10px 12px;
         }
         .privacy ha-icon { color: var(--primary-color); flex: 0 0 auto; }
+        .contact {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px 8px;
+          margin: 0 0 16px;
+        }
+        .contact a {
+          color: var(--primary-color);
+          font-weight: 700;
+          text-decoration: none;
+        }
+        .contact a:hover { text-decoration: underline; }
         button {
           background: var(--primary-color);
           border: 0;

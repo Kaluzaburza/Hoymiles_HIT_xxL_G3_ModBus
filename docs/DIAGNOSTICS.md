@@ -12,6 +12,10 @@ An administrator's browser receives a fresh ZIP containing the native report,
 24 hours of significant control history and filtered Home Assistant Core logs.
 The archive is built in memory and is not left in `/config`.
 
+Email the ZIP to [info@kaluzaaa.com](mailto:info@kaluzaaa.com) together with a
+description of the problem, what you expected and the exact local date and time
+when it occurred.
+
 Home Assistant Core cannot open a live ESPHome device-log session. For a
 low-level UART/Modbus fault, also save the relevant excerpt from ESPHome Device
 Builder. The current ESPHome entity states are already present in the ZIP.
@@ -63,6 +67,10 @@ Otwórz ostatnią zakładkę **Diagnostyka** i naciśnij **Zbierz dane i pobierz
 ZIP**. Przeglądarka administratora otrzyma świeżą paczkę zawierającą natywny
 raport, 24 godziny istotnych zmian sterowania i odfiltrowane logi HA Core.
 Paczka powstaje w pamięci i nie pozostaje w katalogu `/config`.
+
+Wyślij ZIP na [info@kaluzaaa.com](mailto:info@kaluzaaa.com) razem z opisem
+problemu, oczekiwanym zachowaniem oraz dokładną lokalną datą i godziną jego
+wystąpienia.
 
 Proces Home Assistant Core nie może sam otworzyć sesji logów urządzenia
 ESPHome. Przy niskopoziomowym błędzie UART/Modbus zapisz dodatkowo odpowiedni

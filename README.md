@@ -534,6 +534,9 @@ action or the optional one-command terminal collector. See
 [Diagnostics / Diagnostyka](docs/DIAGNOSTICS.md) for exact steps and the data
 included in each report.
 
+Send the ZIP with a problem description and the exact local fault time to
+[info@kaluzaaa.com](mailto:info@kaluzaaa.com).
+
 ---
 
 ## Polski
@@ -791,6 +794,8 @@ utworzony przez natywną akcję Home Assistant **Pobierz diagnostykę**. Przy
 błędach ESPHome, Modbus, uruchamiania albo pętli automatyzacji możesz użyć także
 jednej komendy tworzącej rozszerzoną paczkę. Instrukcja i opis maskowanych
 danych znajdują się w dokumencie [Diagnostyka](docs/DIAGNOSTICS.md).
+ZIP wraz z opisem problemu i dokładną lokalną godziną wystąpienia błędu wyślij
+na [info@kaluzaaa.com](mailto:info@kaluzaaa.com).
 
 ### Bezpieczeństwo
 

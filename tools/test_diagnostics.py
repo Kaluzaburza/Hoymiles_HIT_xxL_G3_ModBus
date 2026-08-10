@@ -103,6 +103,7 @@ def main() -> None:
             archive.read(name).decode("utf-8") for name in archive.namelist()
         )
     require("Modbus timeout" in archive_text, "Relevant Core log was omitted")
+    require("info@kaluzaaa.com" in archive_text, "Support email is missing from ZIP")
     require("unrelated component" not in archive_text, "Unrelated log leaked")
     for forbidden in (
         "192.168.8.106",
@@ -150,6 +151,10 @@ def main() -> None:
     require(
         card_source.read_bytes() == bundled_card.read_bytes(),
         "Bundled diagnostics card differs from its source",
+    )
+    require(
+        b"info@kaluzaaa.com" in card_source.read_bytes(),
+        "Diagnostic card does not show the support email",
     )
     print("Diagnostics privacy and browser ZIP tests passed")
 

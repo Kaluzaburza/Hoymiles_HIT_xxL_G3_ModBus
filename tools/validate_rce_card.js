@@ -126,6 +126,7 @@ for (const expected of [
   "response.blob()",
   "URL.createObjectURL(blob)",
   "Zbierz dane i pobierz ZIP",
+  "info@kaluzaaa.com",
 ]) {
   if (!source.includes(expected)) {
     throw new Error(`Diagnostics download card is missing: ${expected}`);

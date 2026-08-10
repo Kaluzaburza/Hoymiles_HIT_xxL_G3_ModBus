@@ -13,6 +13,8 @@ All notable changes to this project are documented in this file.
   support archive with relevant Core/ESPHome logs and host diagnostics.
 - Add an administrator-only card to the final Diagnostics dashboard view. One
   click creates an in-memory ZIP and downloads it directly in the browser.
+- Show the support email and the required fault description/time directly on
+  the diagnostic card and inside the downloaded archive.
 - Add bilingual support instructions and automated privacy regression tests.
 
 ### Polski
@@ -23,6 +25,8 @@ All notable changes to this project are documented in this file.
   ESPHome i informacjami systemowymi oraz instrukcję PL/EN.
 - Dodano kartę w ostatniej zakładce Diagnostyka. Administrator jednym
   kliknięciem pobiera ZIP tworzony w pamięci, bez pozostawiania go w `/config`.
+- Na karcie i w ZIP-ie dodano adres `info@kaluzaaa.com` oraz jasną informację,
+  aby do raportu dołączyć opis problemu i dokładny czas wystąpienia błędu.
 
 ## [1.4.5] - 2026-08-09
 
