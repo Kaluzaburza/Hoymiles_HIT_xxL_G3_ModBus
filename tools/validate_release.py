@@ -441,6 +441,14 @@ def main() -> int:
         f'VERSION = "{manifest["version"]}"' in const_source,
         "const.py VERSION does not match manifest.json",
     )
+    ems_package_version_match = re.search(
+        r'^EMS_PACKAGE_VERSION = "([^"]+)"$', const_source, re.MULTILINE
+    )
+    require(
+        ems_package_version_match is not None,
+        "const.py is missing EMS_PACKAGE_VERSION",
+    )
+    expected_ems_package_version = ems_package_version_match.group(1)
     ems_package_source = (
         ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
     ).read_text(encoding="utf-8")
@@ -459,7 +467,10 @@ def main() -> int:
     require(
         "ems_package_restart_required" in init_source
         and "_ems_package_restart_issue_id" in init_source
-        and "package_version.state == VERSION" in init_source
+        and "package_version.state == EMS_PACKAGE_VERSION" in init_source
+        and "EMS_PACKAGE_VERSION," in sensor_platform_source
+        and '"expected_ems_package_version": EMS_PACKAGE_VERSION'
+        in sensor_platform_source
         and '"restart_required": self._ems_restart_required'
         in sensor_platform_source,
         "Managed EMS package updates do not expose the required restart state",
@@ -595,19 +606,35 @@ def main() -> int:
         package_text = package_path.read_text(encoding="utf-8")
         require(
             "unique_id: hoymiles_ems_package_version" in package_text
-            and f'state: "{manifest["version"]}"' in package_text,
-            f"EMS package version marker does not match {manifest['version']} "
+            and f'state: "{expected_ems_package_version}"' in package_text,
+            "EMS package version marker does not match "
+            f"{expected_ems_package_version} "
             f"in {package_path.relative_to(ROOT)}",
         )
 
-    expected_zebra_cards = (
+    dashboard_source = (
         ROOT / "dashboard_hoymiles.yaml"
-    ).read_text(encoding="utf-8").count(
+    ).read_text(encoding="utf-8")
+    expected_zebra_cards = dashboard_source.count(
         "type: custom:hoymiles-zebra-entities-card"
     )
     require(
         expected_zebra_cards >= 56,
         "Source dashboard unexpectedly lost zebra entity cards",
+    )
+    rce_plan_index = dashboard_source.index("title: Plan rozładowań RCE")
+    rce_details_index = dashboard_source.index(
+        "title: RCE — szczegóły i diagnostyka"
+    )
+    rce_details_end = dashboard_source.index(
+        "\n      - type: markdown\n",
+        rce_details_index,
+    )
+    require(
+        rce_plan_index < rce_details_index
+        and "position: sidebar"
+        not in dashboard_source[rce_details_index:rce_details_end],
+        "RCE details must remain in the main column below the discharge plan",
     )
     for dashboard_json in required_assets[-2:]:
         dashboard_data = load_json(dashboard_json)

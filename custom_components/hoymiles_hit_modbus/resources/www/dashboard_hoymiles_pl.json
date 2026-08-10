@@ -613,13 +613,64 @@
           ]
         },
         {
+          "type": "vertical-stack",
+          "cards": [
+            {
+              "type": "custom:hoymiles-rce-chart-card",
+              "title": "RCE — dzisiaj",
+              "entity": "sensor.hoymiles_rce_day",
+              "plan_entity": "sensor.hoymiles_hit_rce_optimized_plan",
+              "current_price_entity": "sensor.hoymiles_rce_current_price",
+              "active_entity": "input_boolean.hoymiles_rce_discharge_active",
+              "block_enabled_entity": "input_boolean.hoymiles_sale_block_enabled",
+              "block_start_entity": "input_datetime.hoymiles_sale_block_start",
+              "block_end_entity": "input_datetime.hoymiles_sale_block_end"
+            },
+            {
+              "type": "custom:hoymiles-rce-chart-card",
+              "title": "RCE — jutro",
+              "entity": "sensor.hoymiles_rce_day_tomorrow",
+              "future_data": true,
+              "plan_entity": "sensor.hoymiles_hit_rce_optimized_plan",
+              "current_price_entity": "sensor.hoymiles_rce_current_price",
+              "active_entity": "input_boolean.hoymiles_rce_discharge_active",
+              "block_enabled_entity": "input_boolean.hoymiles_sale_block_enabled",
+              "block_start_entity": "input_datetime.hoymiles_sale_block_start",
+              "block_end_entity": "input_datetime.hoymiles_sale_block_end"
+            }
+          ]
+        },
+        {
+          "type": "markdown",
+          "title": "Wymagane źródło prognozy",
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entity_id": [
+            "input_boolean.hoymiles_rce_dynamic_soc_enabled",
+            "sensor.hoymiles_rce_reserve_status",
+            "sensor.hoymiles_rce_dynamic_minimum_soc"
+          ],
+          "content": "Automatyka wymaga zewnętrznej integracji\n**Solcast PV Forecast** producenta **BJReplay**:\n[instalacja i konfiguracja](https://github.com/BJReplay/ha-solcast-solar).\n\nWymagane są prognozy **Forecast Today** i **Forecast Tomorrow**.\nEncje są wykrywane automatycznie w polskiej i angielskiej wersji HA;\nw razie niestandardowych nazw można wpisać je u góry.\n\nAlgorytm symuluje bilans co 30 minut od teraz przez dzisiejszą noc,\ncały kolejny dzień i następną noc do **90 minut po wschodzie**.\nNajpierw odkłada poza sprzedażą rezerwę awaryjną Self-Use, korektę\nbezpieczeństwa oraz pełne przewidywane zużycie domu do końca\nnajbliższej chronionej nocy. Prognozowane PV przed zachodem nie\npomniejsza tej nocnej rezerwy. Dopiero pozostałą energię przydziela\ndo najdroższych dostępnych bloków RCE dzisiaj lub jutro.\n\nCena sprzedaży nie jest ustawiana ręcznie. Optymalizator porównuje\npełny wynik finansowy wszystkich dostępnych bloków w horyzoncie,\nwybiera najwyższe ceny i uwzględnia naturalny eksport PV. Wcześniejsze\nrozładowanie wykona tylko wtedy, gdy zwiększy przychód lub utworzy\nmiejsce w baterii przed późniejszą nadwyżką sprzedawaną taniej.\n\nMoc systemu jest liczona jako **moc jednego falownika × automatycznie\nwykryta liczba falowników × ustawiony procent rozładowania**.\nDo zebrania co najmniej 24 godzin historii używane jest awaryjne\nzużycie dobowe z pola u góry. Następnie algorytm korzysta z dostępnej\nhistorii i stopniowo dochodzi do pełnej średniej z czterech dni;\nfaktyczne pokrycie historii jest pokazane w karcie stanu.\n\nPole rezerwy Self-Use nie jest zmieniane. Pozostaje energią dostępną\nponiżej normalnego progu wyłącznie podczas zaniku sieci."
+        },
+        {
+          "type": "markdown",
+          "title": "Plan rozładowań RCE",
+          "entity_id": [
+            "sensor.hoymiles_rce_discharge_plan",
+            "sensor.hoymiles_rce_automatic_price_floor",
+            "sensor.hoymiles_rce_optimization_gain",
+            "input_boolean.hoymiles_sale_block_enabled",
+            "input_datetime.hoymiles_sale_block_start",
+            "input_datetime.hoymiles_sale_block_end"
+          ],
+          "content": "{% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}\n{% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'planned_duration_minutes') | int(0) %}\n{% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}\n{% set export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'expected_export_kwh') | float(0) %}\n{% set battery_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                                   'planned_battery_export_kwh')\n                                   | float(0) %}\n{% set pv_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                              'natural_pv_export_kwh') | float(0) %}\n{% set baseline_export = states(\n     'sensor.hoymiles_rce_self_use_baseline_export') | float(0) %}\n{% set battery_revenue = state_attr(\n     'sensor.hoymiles_rce_discharge_plan',\n     'planned_battery_revenue_pln') | float(0) %}\n{% set pv_revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                               'natural_pv_revenue_pln') | float(0) %}\n{% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'estimated_revenue_pln') | float(0) %}\n{% set price_floor = states(\n     'sensor.hoymiles_rce_automatic_price_floor') %}\n{% set gain = states('sensor.hoymiles_rce_optimization_gain') %}\n{% set preview = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'plan_is_preview') %}\n{% set scope = state_attr('sensor.hoymiles_rce_discharge_plan',\n                          'planning_scope') %}\n**Horyzont:** {{ dates }}<br>\n**Zakres cen:** {{ 'dzisiaj i jutro'\n   if scope == 'today_and_tomorrow'\n   else 'tylko dzisiaj — jutro zostanie dopisane automatycznie' }}<br>\n**Tryb planu:** {{ 'podgląd — automatyczne rozładowanie jest wyłączone'\n   if preview else 'aktywny' }}<br>\n**Automatyczna cena graniczna planu:** {{ price_floor\n   if price_floor not in ['unknown', 'unavailable'] else 'brak sprzedaży' }}\n{{ 'PLN/kWh' if price_floor not in ['unknown', 'unavailable'] else '' }}<br>\n**Korzyść optymalizacji:** {{ gain\n   if gain not in ['unknown', 'unavailable'] else '0' }} PLN<br>\n**Najbardziej opłacalne okresy wybrane przez algorytm:**<br>\n{{ periods or 'Brak danych do przygotowania planu.' }}\n\n**Łączny plan:** {{ minutes // 60 }} h\n{{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}\nbloków po 30 min)<br>\n**Zaplanowany eksport sterowany od teraz:** {{ battery_export | round(2) }}\nkWh → {{ battery_revenue | round(2) }} PLN<br>\n**Nadwyżka prognozowana przy pozostawieniu Self-Use:**\n{{ baseline_export | round(2) }} kWh<br>\n**Nieunikniona nadwyżka PV pozostała po optymalizacji:**\n{{ pv_export | round(2) }}\nkWh → {{ pv_revenue | round(2) }} PLN<br>\n**Łączny przyszły eksport od teraz:** {{ export | round(2) }} kWh<br>\n**Łączny przyszły szacunkowy przychód:** {{ revenue | round(2) }} PLN\n\nDane przyszłego planu nie zawierają energii sprzedanej wcześniej\ndzisiaj. Eksport zrealizowany jest rozdzielany wyżej na sprzedaż\nsterowaną RCE i naturalną nadwyżkę w trybie Self-Use.\n\nAutomatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu\nwybranego bloku, po osiągnięciu minimalnego SOC albo po wyłączeniu\nprzełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu."
+        },
+        {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "RCE — szczegóły i diagnostyka",
           "show_header_toggle": false,
           "state_color": true,
-          "view_layout": {
-            "position": "sidebar"
-          },
           "entities": [
             {
               "entity": "sensor.hoymiles_rce_status",
@@ -778,60 +829,6 @@
               "name": "Łączny zrealizowany przychód dzisiaj"
             }
           ]
-        },
-        {
-          "type": "vertical-stack",
-          "cards": [
-            {
-              "type": "custom:hoymiles-rce-chart-card",
-              "title": "RCE — dzisiaj",
-              "entity": "sensor.hoymiles_rce_day",
-              "plan_entity": "sensor.hoymiles_hit_rce_optimized_plan",
-              "current_price_entity": "sensor.hoymiles_rce_current_price",
-              "active_entity": "input_boolean.hoymiles_rce_discharge_active",
-              "block_enabled_entity": "input_boolean.hoymiles_sale_block_enabled",
-              "block_start_entity": "input_datetime.hoymiles_sale_block_start",
-              "block_end_entity": "input_datetime.hoymiles_sale_block_end"
-            },
-            {
-              "type": "custom:hoymiles-rce-chart-card",
-              "title": "RCE — jutro",
-              "entity": "sensor.hoymiles_rce_day_tomorrow",
-              "future_data": true,
-              "plan_entity": "sensor.hoymiles_hit_rce_optimized_plan",
-              "current_price_entity": "sensor.hoymiles_rce_current_price",
-              "active_entity": "input_boolean.hoymiles_rce_discharge_active",
-              "block_enabled_entity": "input_boolean.hoymiles_sale_block_enabled",
-              "block_start_entity": "input_datetime.hoymiles_sale_block_start",
-              "block_end_entity": "input_datetime.hoymiles_sale_block_end"
-            }
-          ]
-        },
-        {
-          "type": "markdown",
-          "title": "Wymagane źródło prognozy",
-          "view_layout": {
-            "position": "sidebar"
-          },
-          "entity_id": [
-            "input_boolean.hoymiles_rce_dynamic_soc_enabled",
-            "sensor.hoymiles_rce_reserve_status",
-            "sensor.hoymiles_rce_dynamic_minimum_soc"
-          ],
-          "content": "Automatyka wymaga zewnętrznej integracji\n**Solcast PV Forecast** producenta **BJReplay**:\n[instalacja i konfiguracja](https://github.com/BJReplay/ha-solcast-solar).\n\nWymagane są prognozy **Forecast Today** i **Forecast Tomorrow**.\nEncje są wykrywane automatycznie w polskiej i angielskiej wersji HA;\nw razie niestandardowych nazw można wpisać je u góry.\n\nAlgorytm symuluje bilans co 30 minut od teraz przez dzisiejszą noc,\ncały kolejny dzień i następną noc do **90 minut po wschodzie**.\nNajpierw odkłada poza sprzedażą rezerwę awaryjną Self-Use, korektę\nbezpieczeństwa oraz pełne przewidywane zużycie domu do końca\nnajbliższej chronionej nocy. Prognozowane PV przed zachodem nie\npomniejsza tej nocnej rezerwy. Dopiero pozostałą energię przydziela\ndo najdroższych dostępnych bloków RCE dzisiaj lub jutro.\n\nCena sprzedaży nie jest ustawiana ręcznie. Optymalizator porównuje\npełny wynik finansowy wszystkich dostępnych bloków w horyzoncie,\nwybiera najwyższe ceny i uwzględnia naturalny eksport PV. Wcześniejsze\nrozładowanie wykona tylko wtedy, gdy zwiększy przychód lub utworzy\nmiejsce w baterii przed późniejszą nadwyżką sprzedawaną taniej.\n\nMoc systemu jest liczona jako **moc jednego falownika × automatycznie\nwykryta liczba falowników × ustawiony procent rozładowania**.\nDo zebrania co najmniej 24 godzin historii używane jest awaryjne\nzużycie dobowe z pola u góry. Następnie algorytm korzysta z dostępnej\nhistorii i stopniowo dochodzi do pełnej średniej z czterech dni;\nfaktyczne pokrycie historii jest pokazane w karcie stanu.\n\nPole rezerwy Self-Use nie jest zmieniane. Pozostaje energią dostępną\nponiżej normalnego progu wyłącznie podczas zaniku sieci."
-        },
-        {
-          "type": "markdown",
-          "title": "Plan rozładowań RCE",
-          "entity_id": [
-            "sensor.hoymiles_rce_discharge_plan",
-            "sensor.hoymiles_rce_automatic_price_floor",
-            "sensor.hoymiles_rce_optimization_gain",
-            "input_boolean.hoymiles_sale_block_enabled",
-            "input_datetime.hoymiles_sale_block_start",
-            "input_datetime.hoymiles_sale_block_end"
-          ],
-          "content": "{% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}\n{% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'planned_duration_minutes') | int(0) %}\n{% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}\n{% set export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'expected_export_kwh') | float(0) %}\n{% set battery_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                                   'planned_battery_export_kwh')\n                                   | float(0) %}\n{% set pv_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                              'natural_pv_export_kwh') | float(0) %}\n{% set baseline_export = states(\n     'sensor.hoymiles_rce_self_use_baseline_export') | float(0) %}\n{% set battery_revenue = state_attr(\n     'sensor.hoymiles_rce_discharge_plan',\n     'planned_battery_revenue_pln') | float(0) %}\n{% set pv_revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                               'natural_pv_revenue_pln') | float(0) %}\n{% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'estimated_revenue_pln') | float(0) %}\n{% set price_floor = states(\n     'sensor.hoymiles_rce_automatic_price_floor') %}\n{% set gain = states('sensor.hoymiles_rce_optimization_gain') %}\n{% set preview = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'plan_is_preview') %}\n{% set scope = state_attr('sensor.hoymiles_rce_discharge_plan',\n                          'planning_scope') %}\n**Horyzont:** {{ dates }}<br>\n**Zakres cen:** {{ 'dzisiaj i jutro'\n   if scope == 'today_and_tomorrow'\n   else 'tylko dzisiaj — jutro zostanie dopisane automatycznie' }}<br>\n**Tryb planu:** {{ 'podgląd — automatyczne rozładowanie jest wyłączone'\n   if preview else 'aktywny' }}<br>\n**Automatyczna cena graniczna planu:** {{ price_floor\n   if price_floor not in ['unknown', 'unavailable'] else 'brak sprzedaży' }}\n{{ 'PLN/kWh' if price_floor not in ['unknown', 'unavailable'] else '' }}<br>\n**Korzyść optymalizacji:** {{ gain\n   if gain not in ['unknown', 'unavailable'] else '0' }} PLN<br>\n**Najbardziej opłacalne okresy wybrane przez algorytm:**<br>\n{{ periods or 'Brak danych do przygotowania planu.' }}\n\n**Łączny plan:** {{ minutes // 60 }} h\n{{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}\nbloków po 30 min)<br>\n**Zaplanowany eksport sterowany od teraz:** {{ battery_export | round(2) }}\nkWh → {{ battery_revenue | round(2) }} PLN<br>\n**Nadwyżka prognozowana przy pozostawieniu Self-Use:**\n{{ baseline_export | round(2) }} kWh<br>\n**Nieunikniona nadwyżka PV pozostała po optymalizacji:**\n{{ pv_export | round(2) }}\nkWh → {{ pv_revenue | round(2) }} PLN<br>\n**Łączny przyszły eksport od teraz:** {{ export | round(2) }} kWh<br>\n**Łączny przyszły szacunkowy przychód:** {{ revenue | round(2) }} PLN\n\nDane przyszłego planu nie zawierają energii sprzedanej wcześniej\ndzisiaj. Eksport zrealizowany jest rozdzielany wyżej na sprzedaż\nsterowaną RCE i naturalną nadwyżkę w trybie Self-Use.\n\nAutomatyka wróci do **Autokonsumpcji (Self-Use)** po zakończeniu\nwybranego bloku, po osiągnięciu minimalnego SOC albo po wyłączeniu\nprzełącznika. Blokada sprzedaży wyklucza wskazane godziny z planu."
         },
         {
           "type": "markdown",

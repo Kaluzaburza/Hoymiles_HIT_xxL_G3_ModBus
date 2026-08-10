@@ -4,6 +4,45 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-08-10
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.8**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.4.8**.
+2. **Home Assistant:** restart Home Assistant once after HACS finishes. The
+   managed dashboard refreshes automatically. When updating directly from
+   version 1.4.6 or older, follow an additional restart request shown by
+   **Installation status / Stan instalacji** or **Repairs / Naprawy**.
+   **PL:** po aktualizacji wykonaj jeden restart Home Assistanta. Dashboard
+   odświeży się automatycznie. Przy aktualizacji bezpośrednio z wersji 1.4.6
+   lub starszej wykonaj dodatkowy restart tylko wtedy, gdy poprosi o niego
+   Stan instalacji lub Naprawy.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. The compatible ESPHome
+   package remains **v1.4.4**. **PL:** nie trzeba przebudowywać ani wgrywać
+   ESP32; zgodny pakiet ESPHome pozostaje w wersji **v1.4.4**.
+4. **Verification / Weryfikacja:** in **RCE automation / Automatyka RCE**, check
+   that **RCE details and diagnostics / RCE — szczegóły i diagnostyka** appears
+   in the main column directly below **RCE discharge plan / Plan rozładowań
+   RCE**. Confirm **Installation status / Stan instalacji = Ready / Gotowe**.
+
+### Fixed
+
+- Move RCE optimization and diagnostic data from the narrow sidebar into the
+  main column directly below the discharge plan.
+- Keep dashboard-only releases independent from the managed EMS package schema
+  version, preventing an unnecessary second restart after visual hotfixes.
+- Preserve the existing RCE, tariff charging and RCM optimizer logic unchanged.
+
+### Polski
+
+- Przeniesiono dane optymalizacji i diagnostyki RCE z wąskiej kolumny bocznej
+  pod plan rozładowań, dzięki czemu są czytelniejsze na komputerze i telefonie.
+- Rozdzielono wersję integracji od wersji niezmienionego pakietu EMS, aby
+  poprawki wizualne nie wymuszały niepotrzebnego drugiego restartu.
+- Logika automatyk RCE, taniego ładowania i RCM pozostała bez zmian.
+
 ## [1.4.7] - 2026-08-10
 
 ### User update steps / Kroki po aktualizacji

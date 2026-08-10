@@ -28,6 +28,7 @@ from .const import (
     CONF_SOURCE_DEVICE_ID,
     DOMAIN,
     EMS_PACKAGE_SENTINEL,
+    EMS_PACKAGE_VERSION,
     EMS_PACKAGE_VERSION_ENTITY,
     PLATFORMS,
     SERVICE_INSTALL_ASSETS,
@@ -73,7 +74,10 @@ def _async_update_ems_package_issue(
     if hass.states.get(EMS_PACKAGE_SENTINEL) is not None:
         ir.async_delete_issue(hass, DOMAIN, issue_id)
         package_version = hass.states.get(EMS_PACKAGE_VERSION_ENTITY)
-        if package_version is not None and package_version.state == VERSION:
+        if (
+            package_version is not None
+            and package_version.state == EMS_PACKAGE_VERSION
+        ):
             ir.async_delete_issue(hass, DOMAIN, restart_issue_id)
             return
         ir.async_create_issue(
