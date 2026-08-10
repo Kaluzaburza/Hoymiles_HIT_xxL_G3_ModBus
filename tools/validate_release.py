@@ -66,7 +66,9 @@ def load_assets_module():
 
     const_module = types.ModuleType("custom_components.hoymiles_hit_modbus.const")
     const_module.DOMAIN = "hoymiles_hit_modbus"
-    const_module.VERSION = "1.4.5"
+    const_module.VERSION = json.loads(
+        (COMPONENT / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
     sys.modules[const_module.__name__] = const_module
 
     path = COMPONENT / "assets.py"
@@ -424,7 +426,10 @@ def main() -> int:
         f"manifest.json is missing: {sorted(required_manifest - set(manifest))}",
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
-    require(manifest["version"] == "1.4.5", "Release version must be 1.4.5")
+    require(
+        re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"]) is not None,
+        "Release version must use semantic MAJOR.MINOR.PATCH format",
+    )
 
     entity_source = (COMPONENT / "entity.py").read_text(encoding="utf-8")
     init_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
@@ -432,6 +437,10 @@ def main() -> int:
     config_flow_source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
     sensor_platform_source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     const_source = (COMPONENT / "const.py").read_text(encoding="utf-8")
+    require(
+        f'VERSION = "{manifest["version"]}"' in const_source,
+        "const.py VERSION does not match manifest.json",
+    )
     ems_package_source = (
         ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
     ).read_text(encoding="utf-8")
@@ -926,7 +935,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
-        ROOT / "docs" / "releases" / "v1.4.5.md"
+        ROOT / "docs" / "releases" / f"v{manifest['version']}.md"
     ).read_text(encoding="utf-8")
     release_match = re.search(
         rf"^## \[{re.escape(manifest['version'])}\][^\n]*\n(.*?)(?=^## \[|\Z)",

@@ -4,6 +4,36 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-08-10
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.4.6**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.4.6**.
+2. **Home Assistant:** restart once after HACS finishes. The managed dashboard,
+   EMS package and frontend card are refreshed automatically. Existing
+   dashboard customizations remain protected by the normal migration backup.
+   **PL:** po zakończeniu aktualizacji wykonaj jeden restart Home Assistanta.
+   Zarządzany dashboard, pakiet EMS i karta frontendowa zostaną odświeżone
+   automatycznie, a dotychczasowe modyfikacje chroni standardowa kopia migracji.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. This release changes
+   the Home Assistant integration, managed EMS package, dashboard and
+   documentation only; the compatible ESPHome package remains **v1.4.4**.
+   HACS does not flash ESP32. **PL:** nie trzeba ponownie kompilować ani wgrywać
+   ESP32. Wydanie zmienia integrację Home Assistanta, zarządzany pakiet EMS,
+   dashboard i dokumentację; zgodny pakiet ESPHome pozostaje w wersji
+   **v1.4.4**. HACS nie aktualizuje ESP32.
+4. **Verification / Weryfikacja:** confirm **Installation status / Stan
+   instalacji = Ready / Gotowe**. In LOAD/EPS, the 30-day home-consumption chart
+   starts a new clean series from the real phase LOAD; previous inflated
+   statistics are intentionally not copied. As an administrator, open the last
+   Diagnostics view and verify that **Download diagnostic ZIP** produces one
+   archive. **PL:** sprawdź **Stan instalacji = Gotowe**. W LOAD/EPS wykres
+   zużycia domu rozpocznie nową, czystą serię z rzeczywistej mocy faz LOAD;
+   poprzednie zawyżone statystyki celowo nie są kopiowane. Jako administrator
+   otwórz ostatnią zakładkę Diagnostyka i sprawdź pobranie jednego ZIP-a.
+
 ### Added
 
 - Add Home Assistant's native **Download diagnostics** report with integration
