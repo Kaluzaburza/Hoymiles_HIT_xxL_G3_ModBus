@@ -686,8 +686,15 @@ def main() -> int:
         "class HoymilesZebraEntitiesCard" in card_source
         and 'customElements.define(\n    "hoymiles-zebra-entities-card"' in card_source
         and "color-mix(" in card_source
-        and "var(--primary-text-color) 7%" in card_source,
+        and "var(--hoymiles-aurora-accent) 9%" in card_source,
         "Theme-aware zebra entities card is not registered",
+    )
+    require(
+        "class HoymilesAuroraFrameCard" in card_source
+        and "class HoymilesAuroraStatusCard" in card_source
+        and "class HoymilesAuroraHistoryCard" in card_source
+        and "class HoymilesAuroraFinanceCard" in card_source,
+        "Complete Aurora dashboard card set is not registered",
     )
     for dashboard_path in required_assets[:2]:
         dashboard_text = dashboard_path.read_text(encoding="utf-8")
@@ -697,9 +704,33 @@ def main() -> int:
             f"{dashboard_path.name} does not mark the tomorrow chart as future data",
         )
         require(
-            "energy: sensor.hoymiles_hit_battery_capacity" in dashboard_text,
-            f"{dashboard_path.name} does not use the inverter-configured battery capacity",
+            "type: custom:hoymiles-aurora-energy-card" in dashboard_text
+            and "type: custom:hoymiles-aurora-status-card" in dashboard_text
+            and "type: custom:hoymiles-aurora-history-card" in dashboard_text
+            and "type: custom:hoymiles-aurora-finance-card" in dashboard_text
+            and "type: custom:hoymiles-aurora-frame-card" in dashboard_text
+            and "battery_soc_entity: sensor.hoymiles_hit_overview_battery_soc"
+            in dashboard_text
+            and "forecast_remaining_entity: "
+            "sensor.hoymiles_solcast_forecast_remaining_today"
+            in dashboard_text,
+            f"{dashboard_path.name} does not contain the complete Aurora card",
         )
+        require(
+            "path: automatyka-ems" in dashboard_text
+            and "sensor.hoymiles_rce_revenue_total" in dashboard_text
+            and "sensor.hoymiles_rce_grid_export_energy_total" in dashboard_text,
+            f"{dashboard_path.name} lacks the consolidated RCE results view",
+        )
+        for hidden_path in ("zyski", "falownik", "generator", "stany-alarmy"):
+            require(
+                re.search(
+                    rf"path:\s+{re.escape(hidden_path)}"
+                    rf"[\s\S]{{0,120}}?subview:\s+true",
+                    dashboard_text,
+                ),
+                f"{dashboard_path.name} still exposes {hidden_path} in navigation",
+            )
         require(
             "invert_power:" not in dashboard_text,
             (
@@ -760,6 +791,7 @@ def main() -> int:
         (
             "exports[candidate.start] = low" in rce_optimizer_source
             or "trial[candidate.start] = low" in rce_optimizer_source
+            or "exports = best_trial" in rce_optimizer_source
         )
         and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source,
         "RCE optimizer can still invalidate feasible plans by rounding upward",
@@ -857,7 +889,7 @@ def main() -> int:
             "input_number.hoymiles_tariff_latched_target_soc",
             "input_datetime.hoymiles_tariff_latched_slot_end",
             "'current_slot_end'",
-            'for: "00:00:15"',
+            'for: "00:00:45"',
             "unique_id: hoymiles_tariff_planned_charge_slot",
             "id: hoymiles_automatic_ems_mode_interlock",
             "id: hoymiles_tariff_grid_charge_control",
@@ -1198,8 +1230,8 @@ def main() -> int:
             f"{language} dashboard still contains non-clickable HTML tables",
         )
         require(
-            "decimal_places: 2" in dashboard_text,
-            f"{language} dashboard does not show power flow with two decimals",
+            "type: custom:hoymiles-aurora-energy-card" in dashboard_text,
+            f"{language} dashboard does not use the Aurora live-energy card",
         )
         require(
             "sensor.hoymiles_hit_battery_current_inverter" in dashboard_text,
@@ -1227,16 +1259,12 @@ def main() -> int:
             if language == "Polish"
             else "Alarms — quick view"
         )
+        start_section = dashboard_text.split("  - title: Start", 1)[1].split(
+            "\n  - title:", 1
+        )[0]
         require(
-            f"- type: custom:hoymiles-zebra-entities-card\n        title: {state_title}"
-            in dashboard_text
-            and f"- type: custom:hoymiles-zebra-entities-card\n        title: {alarm_title}"
-            in dashboard_text,
-            f"{language} dashboard status/alarm cards are not clickable entity cards",
-        )
-        require(
-            dashboard_text.count("action: more-info") >= 32,
-            f"{language} dashboard status/alarm rows do not explicitly open more-info history",
+            state_title not in start_section and alarm_title not in start_section,
+            f"{language} Start view still duplicates diagnostics/status cards",
         )
         require(
             f"path: {'sterowanie' if language == 'Polish' else 'control'}\n    icon: mdi:tune-variant\n    type: sidebar"
@@ -1318,16 +1346,20 @@ def main() -> int:
         'name: "Maksymalna moc rozładowania do sieci"' in polish_dashboard,
         "Polish dashboard lacks the localized Maximum Discharge Power name",
     )
-    require(
-        "title: Sieć — napięcia i częstotliwość" in polish_dashboard
-        and "title: Odbiór — moc" in polish_dashboard,
-        "Polish dashboard does not split live grid voltage and load power into two cards",
-    )
-    require(
-        "title: Grid — voltages and frequency" in english_dashboard
-        and "title: Loads — power" in english_dashboard,
-        "English dashboard does not split live grid voltage and load power into two cards",
-    )
+    for dashboard_text, language in (
+        (polish_dashboard, "Polish"),
+        (english_dashboard, "English"),
+    ):
+        for entity_id in (
+            "sensor.hoymiles_hit_grid_voltage_l1",
+            "sensor.hoymiles_hit_grid_voltage_l2",
+            "sensor.hoymiles_hit_grid_voltage_l3",
+            "sensor.hoymiles_hit_inverter_grid_frequency",
+        ):
+            require(
+                entity_id in dashboard_text,
+                f"{language} dashboard lacks grid diagnostic entity {entity_id}",
+            )
     require(
         "potrzebna domowi" not in english_dashboard,
         "English dashboard contains an untranslated RCE reserve explanation",

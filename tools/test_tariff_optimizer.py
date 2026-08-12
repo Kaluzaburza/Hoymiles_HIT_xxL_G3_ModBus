@@ -17,8 +17,11 @@ from tariff_optimizer import (  # noqa: E402
     TariffSchedule,
     _simulate,
     adaptive_forecast_factor,
+    horizon_gap_load_reserve_kwh,
     is_polish_public_holiday,
     optimize_tariff_charging,
+    resolve_planning_horizon,
+    robust_weighted_estimate,
     tariff_rate,
 )
 
@@ -391,6 +394,162 @@ def main() -> None:
     assert 0.8 < confidence < 0.9
     assert 0.50 < failed_string_factor < 0.60
 
+    # A 28-day weighted load estimate absorbs one abnormal day while recent
+    # demand remains more important than old history.
+    robust_load, load_uncertainty, load_days = robust_weighted_estimate(
+        [18.0] * 13 + [120.0] + [20.0] * 14
+    )
+    assert load_days == 28
+    assert robust_load is not None and 19.0 < robust_load < 21.0
+    assert 0.0 < load_uncertainty < 0.25
+
+    # Day 3 is optional.  When available, winter PV is included before grid
+    # energy is bought for that day's peak; without it the same load requires
+    # a low-price charge on the preceding night.
+    day_3_start = datetime(2026, 8, 5, 18, 0, tzinfo=ZONE)
+    day_3_load = {day_3_start: 8.0}
+    day_3_without_pv = optimize_tariff_charging(
+        settings(
+            monday,
+            horizon_days=3,
+            battery_soc_percent=20.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            load_by_slot_kwh=day_3_load,
+            charge_power_kw=10.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    day_3_with_pv = optimize_tariff_charging(
+        settings(
+            monday,
+            horizon_days=3,
+            battery_soc_percent=20.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            load_by_slot_kwh=day_3_load,
+            pv_by_slot_kwh={day_3_start: 8.0},
+            charge_power_kw=10.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert day_3_without_pv.planned_grid_import_kwh > 0.0
+    assert day_3_with_pv.planned_grid_import_kwh == 0.0
+    assert day_3_with_pv.horizon_days == 3
+    assert day_3_with_pv.horizon_end == datetime(2026, 8, 6, 0, 0, tzinfo=ZONE)
+    assert day_3_with_pv.planning_horizon_hours >= 48.0
+    assert abs(day_3_with_pv.modeled_load_kwh - 8.0) < 1e-6
+    assert abs(day_3_with_pv.modeled_pv_kwh - 8.0) < 1e-6
+
+    # Forecast uncertainty may retain a small terminal margin without adding
+    # another user field.  It is restored in a low-price period and remains
+    # bounded by the configured maximum SOC.
+    terminal_margin = optimize_tariff_charging(
+        settings(
+            monday,
+            battery_soc_percent=20.0,
+            reserve_soc_percent=20.0,
+            terminal_reserve_soc_percent=30.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            charge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert terminal_margin.planned_stored_energy_kwh >= 1.99
+    assert terminal_margin.ending_battery_soc_percent >= 29.9
+    assert terminal_margin.terminal_shortfall_kwh < 0.01
+
+    # Live feedback can derate a nominal 10 kW command to the 5 kW actually
+    # delivered.  Planning then reserves twice as many half-hour blocks rather
+    # than discovering the shortfall in the last minutes of the cheap window.
+    delivered_shortfall = optimize_tariff_charging(
+        settings(
+            pre_peak,
+            battery_soc_percent=20.0,
+            reserve_soc_percent=20.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            load_by_slot_kwh=peak_load,
+            charge_power_kw=5.0,
+            requested_charge_power_kw=10.0,
+            battery_charge_power_kw=20.0,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert delivered_shortfall.requested_charge_power_kw == 10.0
+    assert delivered_shortfall.charge_power_kw == 5.0
+    assert delivered_shortfall.effective_power_factor == 0.5
+    assert len(delivered_shortfall.planned_charges) == 4
+
+    # The horizon follows real elapsed half-hours across DST.  It neither
+    # invents the missing spring hour nor drops the repeated autumn hour.
+    spring_dst = optimize_tariff_charging(
+        settings(
+            datetime(2026, 3, 28, 23, 30, tzinfo=ZONE),
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    autumn_dst = optimize_tariff_charging(
+        settings(
+            datetime(2026, 10, 24, 23, 30, tzinfo=ZONE),
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    assert spring_dst.planning_slot_count == 47
+    assert autumn_dst.planning_slot_count == 51
+
+    # A fresh Day 3 forecast promises a *real* 48-hour horizon.  The spring
+    # clock jump shortens three calendar days, so the end is extended to the
+    # next complete half-hour instead of silently exposing a forecast gap.
+    spring_day_3 = optimize_tariff_charging(
+        settings(
+            datetime(2026, 3, 28, 23, 30, tzinfo=ZONE),
+            horizon_days=3,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    assert spring_day_3.planning_horizon_hours >= 48.0
+    assert spring_day_3.planning_horizon_extended_to_minimum
+    assert spring_day_3.horizon_end == datetime(2026, 3, 31, 0, 30, tzinfo=ZONE)
+
+    # Without Day 3, the compatible calendar fallback remains shorter late in
+    # the day.  Its explicit gap reserve assumes zero PV and retains average
+    # home consumption for exactly the unmodelled tail.
+    _, fallback_end, fallback_hours, fallback_extended = resolve_planning_horizon(
+        datetime(2026, 8, 3, 23, 30, tzinfo=ZONE),
+        2,
+    )
+    assert fallback_end == datetime(2026, 8, 5, 0, 0, tzinfo=ZONE)
+    assert abs(fallback_hours - 24.5) < 1e-6
+    assert not fallback_extended
+    assert abs(
+        horizon_gap_load_reserve_kwh(24.0, fallback_hours) - 23.5
+    ) < 1e-6
+
+    # The HA sensor must expose why a fallback was selected, the exact values
+    # passed to the pure model and whether power feedback is still learning.
+    tariff_sensor_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "tariff_sensor.py"
+    ).read_text(encoding="utf-8")
+    for required_attribute in (
+        '"planning_horizon_fallback_reason"',
+        '"planning_horizon_gap_to_target_hours"',
+        '"fallback_zero_pv_load_reserve_kwh"',
+        '"model_input_forecast_day_3_kwh"',
+        '"model_input_modeled_load_kwh"',
+        '"model_input_effective_charge_power_kw"',
+        '"charge_power_feedback_state"',
+        '"charge_power_feedback_samples_remaining"',
+        '"charge_power_feedback_applied_factor"',
+    ):
+        assert required_attribute in tariff_sensor_source
+
     # The reserve is dynamic.  With Self-Use 25% and a 2-point correction the
     # optimizer restores 27%; changing the user threshold changes the target.
     cheap_now = monday.replace(hour=22, minute=0)
@@ -565,6 +724,19 @@ def main() -> None:
     assert g11.status_code == "no_discount_window"
     assert g11.planned_grid_import_kwh == 0
 
+    g11_below_reserve = optimize_tariff_charging(
+        settings(
+            monday,
+            schedule=schedule("G11"),
+            battery_soc_percent=15.0,
+            reserve_soc_percent=20.0,
+            terminal_reserve_soc_percent=50.0,
+        )
+    )
+    assert g11_below_reserve.terminal_reserve_soc_percent == 50.0
+    assert g11_below_reserve.effective_terminal_reserve_soc_percent == 15.0
+    assert g11_below_reserve.planned_grid_import_kwh == 0.0
+
     # A nominally lower zone is rejected if conversion losses and the user's
     # minimum margin make shifting energy more expensive than buying it later.
     narrow_spread = TariffSchedule(
@@ -580,6 +752,22 @@ def main() -> None:
     )
     assert narrow.planned_grid_import_kwh == 0
     assert narrow.automation_savings_pln == 0
+
+    # Even at perfect conversion efficiency, a four-grosz spread is smaller
+    # than the automatic six-grosz battery-throughput allowance.  The home is
+    # supplied directly later instead of consuming a cycle for a paper gain.
+    wear_limited = optimize_tariff_charging(
+        settings(
+            monday,
+            schedule=narrow_spread,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+            battery_wear_cost_pln_kwh=0.06,
+        )
+    )
+    assert wear_limited.planned_grid_import_kwh == 0.0
+    assert wear_limited.planned_battery_wear_cost_pln == 0.0
 
     # A real spread must be exploited even when both prices are below the G11
     # reference; decisions use the future avoided cost, not a fixed G11 gate.
@@ -631,6 +819,25 @@ def main() -> None:
     )
     holiday = datetime(2026, 12, 25, 10, 0, tzinfo=ZONE)
     assert tariff_rate(holiday, holiday_only) == (0.62, "low")
+
+    # An official price table must never leak over New Year merely because the
+    # plan started on 31 December.  The HA sensor catches this as an expired
+    # profile; the pure optimizer also refuses an uncovered slot.
+    official = TariffSchedule(
+        tariff_type="G12",
+        g11_price_pln_kwh=0.0,
+        low_price_pln_kwh=0.0,
+        medium_price_pln_kwh=0.0,
+        peak_price_pln_kwh=0.0,
+        cheap_windows=(),
+        operator="PGE",
+    )
+    try:
+        tariff_rate(datetime(2027, 1, 1, 0, 0, tzinfo=ZONE), official)
+    except ValueError as err:
+        assert "does not cover" in str(err)
+    else:
+        raise AssertionError("expired official tariff profile was accepted")
 
     # Deterministic property sweep: varied batteries, loads, power limits and
     # efficiencies must never violate energy, shared-power or cost invariants.

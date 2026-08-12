@@ -1,11 +1,13 @@
-# Automation simulation report
+# Automation simulation and safety report
 
-Date: 2026-08-09 (Europe/Warsaw)
-Validated release: **v1.4.5**
+Date: 2026-08-12 (Europe/Warsaw)
+Validated release candidate: **v1.5.0**
 
-This report covers the pure planning logic used by the RCE market-price
-optimizer, tariff-aware grid charging and RCEm 253 V+ voltage management. The
-tests do not write to Home Assistant or an inverter.
+This report covers the deterministic planning and control safeguards used by
+the RCE market-price optimizer, tariff-aware grid charging and experimental
+RCEm 253 V+ voltage management. The tests do not write to a real inverter.
+They verify arithmetic, state transitions, interlocks and fail-safe behaviour
+before field acceptance on each installation.
 
 ## Representative systems
 
@@ -16,64 +18,145 @@ tests do not write to Home Assistant or an inverter.
 | HIT-20 | 1 × 20 kW | 40 kWh | 55 kWh | 28 kWh | 11 kWh | 250 A |
 | Parallel HIT-20 | 2 × 20 kW | 230 kWh | 120 kWh | 48 kWh | 19 kWh | 700 A |
 
-The values are deliberately representative rather than manufacturer claims.
-They combine undersized and oversized storage, weak and strong PV, ordinary
-and winter-like load, and BMS limits below inverter power.
+The values are representative test fixtures, not manufacturer performance
+claims. They intentionally combine undersized and oversized storage, weak and
+strong PV, ordinary and winter-like load, parallel operation and BMS limits
+below inverter power.
 
-## Full matrix result
+## Scenario-matrix result
 
-**2064/2064 scenarios passed.**
+**Quick matrix: 488/488 scenarios passed.**
+**Exhaustive matrix: 2064/2064 scenarios passed.**
 
-- RCE: 576 scenarios — 209 ready, 11 home protected and 356 intentional home
-  energy shortage states.
-- Tariff charging: 720 scenarios — 14 ready, 224 no charge needed, 322
-  insufficient cheap window, 122 no discount window, 32 shortage in a cheap
-  period and 6 no cheap window.
-- RCEm: 648 scenarios — 378 controlling, 108 emergency, 72 ready, 54 battery
-  limited and 36 preparing pre-discharge.
-- Reproducible randomized RCE boundary sweep: 120 scenarios.
-- Home Assistant interlock markers for RCE, tariff charging, RCEm, battery
-  balancing and manual charge/discharge timers are present.
+The complete sweep covers:
 
-## Boundaries exercised
+- inverter power of 10, 15, 20 and 2 × 20 kW;
+- SOC below reserve, mid-range and nearly full;
+- no PV, a severe forecast miss, ordinary production and overflow;
+- today's and tomorrow's price peaks, negative prices and blocked export
+  periods;
+- G11, G12, G12w and G13, weekday/weekend/holiday and DST boundaries;
+- 240.0–253.2 V, zero-export and user export caps, full batteries,
+  insufficient headroom and BMS-limited power;
+- power/energy invariants for every half-hour slot, conversion losses,
+  minimum-SOC floors and end-of-horizon battery bounds.
 
-- inverter power: 10, 15, 20 and 2 × 20 kW;
-- battery SOC: below reserve, mid-range and nearly full;
-- PV: none, severe forecast miss, normal production and overflow;
-- RCE: today's peak, tomorrow's higher peak, volatile prices, negative prices
-  and blocked 22:00–06:00 slots;
-- tariffs: G11, G12, G12w and G13, weekday/weekend, morning/noon/end-of-window;
-- physical charge lead time: 10 kWh at 10 kW starts at 14:00 for a 15:00 peak;
-  at 5 kW it uses four half-hour blocks; home load during Grid Charge reduces
-  the power available to the battery and moves the start earlier;
-- RCEm voltage: 240.0–253.2 V, 0/50/100% user export caps, full battery,
-  insufficient headroom and BMS-limited charge/discharge power;
-- power and energy invariants for every half-hour slot, SOC reserve floors,
-  export lockout, efficiencies and end-of-horizon battery bounds.
+## RCE safeguards exercised
 
-## Existing deterministic regression suites
+- The protected energy reserve is rounded **up** to a full 1% SOC step and is
+  enforced for every planned export slot, not only at the end of the plan.
+- The model distinguishes energy available now from energy expected later from
+  PV, so a 48-hour export plan cannot silently treat forecast energy as current
+  battery energy.
+- Day-three availability, forecast, expected load, shortfall and terminal
+  reserve reason are explicit. Missing data is not presented as a zero
+  shortfall.
+- A day-three AC shortfall is converted to the required DC battery reserve with
+  the household-discharge efficiency. Its value equals the avoided import cost,
+  preventing a low-price export followed by a more expensive grid purchase.
+- Gross additional revenue and net optimization benefit are separate. Net
+  benefit subtracts battery-wear cost and includes the change in terminal
+  energy value.
+- Export lockout, GCF/zero-export, physical system/BMS limits, stale inputs and
+  Master/Slave readiness are fail-closed.
 
-- RCE optimizer: 14 named scenarios passed;
-- RCE Recorder reconstruction passed;
-- official 2026 tariff profile schedules and prices passed;
-- tariff optimizer deterministic suite passed;
-- tariff active-window regression passed: the contiguous slot end and target
-  remain stable while live SOC and forecast inputs are recalculated;
-- RCEm repeated-window/outlier history suite passed;
-- RCEm safety, headroom and BMS-limit suite passed.
-- RCE chart, zebra entities card, battery-capacity conversion and PL/EN dynamic
-  dashboard strategy JavaScript validation passed;
-- responsive glance wrapping, native graph definitions and the four current
-  documentation views were validated without dashboard configuration errors.
+## Tariff-charging safeguards exercised
 
-The quick 488-scenario matrix runs on every push and pull request. The complete
-matrix runs on the scheduled GitHub workflow and manual workflow dispatch.
+- Planning uses a real rolling horizon of at least 48 hours when fresh day-three
+  Solcast data is available, including 47/48/49-slot DST days.
+- If the third-day tail is missing or stale, the unknown period is modelled as
+  zero PV plus average household load and a conservative reserve, capped by the
+  user's maximum SOC.
+- The plan exposes the exact PV and LOAD values used by the optimizer instead
+  of displaying only unrelated live sensors.
+- Effective Grid Charge power can be learned from confirmed charging sessions.
+  The state is explicit: not observed, collecting, learned live or restored
+  from previous evidence. Learning never occurs from Self-Use or a zero-power
+  sample.
+- Charging lead time includes household load and conversion losses. A required
+  10 kWh cannot be postponed to the last minutes of a cheap window when the
+  available battery-charging power needs a full hour or longer.
+- G11 does not cycle the battery merely because all hours have the same price.
+
+## RCEm 253 V+ safeguards exercised
+
+- RCEm starts in **observation-only** mode and does not change certified grid
+  protection settings.
+- Voltage risk uses per-phase history and robust recurring-window detection;
+  current voltage can override historical expectations when the grid is calmer
+  or worse than usual.
+- The planner combines interval PV, weekday/weekend household LOAD, battery
+  headroom, BMS limits and the user's legal/contractual export cap.
+- Pre-discharge is permitted only when it creates useful headroom before a
+  later high-voltage/PV-risk window and still protects household energy.
+- Missing/stale profile data degrades to a conservative plan. At night, a
+  supposedly safe live export power is deliberately reported as unavailable
+  rather than invented from non-representative conditions.
+- Multiple risk windows retain operational headroom independently; energy
+  prepared for an early window is not double-counted for a later one.
+
+## Static control-contract checks
+
+These repository tests verify scheduler markers, interlocks and planner
+contracts statically. They do not execute a real Home Assistant automation or
+a Modbus write/read-back cycle; live acceptance evidence is documented
+separately below.
+
+- Exactly one owner may control EMS: RCE, tariff charging, RCEm, battery
+  balancing or a manual schedule.
+- Mode, SOC and power writes are idempotent and require read-back confirmation.
+- Freshness gates cover SOC, price, forecast, plan, inverter availability and
+  parallel topology. Persistent loss of required control data returns the
+  inverter to Self-Use.
+- RCE decisions are latched to the selected 30-minute block; tariff targets are
+  latched to the required charging window. This prevents rapid mode chatter.
+- Notification debounce and fingerprints suppress repeated phone alerts while
+  preserving a genuinely different stable state.
+
+## Live candidate acceptance — 2026-08-12
+
+The same candidate archive was installed on a single-inverter Home Assistant
+test system and on the two-inverter field system at `miernik.com.pl` during the
+2026-08-12 01:06–02:00 CEST deployment and capture window. The
+archive SHA-256 was verified before installation on both hosts. Home Assistant
+configuration validation passed, the managed EMS package and Aurora dashboard
+were synchronized, and no dashboard configuration errors remained after the
+required restart cycle. Candidate archive SHA-256:
+`260EC0A1B6374003298CAD60F76A4AD43FEC74C687FD7C1B6110508F489016CC`.
+
+Observed field checks on the parallel installation:
+
+- **RCE:** the protected reserve was 57.50 kWh (25% of a 230 kWh battery),
+  current energy above reserve was 66.70 kWh and the projected end-of-horizon
+  SOC was 28.3%. The plan stayed above the control reserve in every selected
+  block and selected the highest-value allowed half-hour periods.
+- **Tariff charging:** TAURON G12w produced `no_charge_needed`; 298.88 kWh of
+  conservative modelled PV covered 83.41 kWh of modelled household demand.
+  The missing day-three tail was visible and conservatively protected instead
+  of being treated as free PV. No unnecessary Grid Charge cycle was created.
+- **RCEm 253 V+:** four days and 70,915 phase-voltage samples identified three
+  recurring risk windows. Daily maxima included 263.3, 253.6, 254.9 and
+  257.1 V. The model found about 11.88 kWh of expected surplus in the risk
+  windows, calculated independent headroom for each one and remained in
+  observation mode. This is useful site evidence, not permission to change
+  certified inverter protection thresholds.
+- **Parallel readiness:** both inverters reported ready and the controller
+  remained in Self-Use while the automatic modules were disabled for review.
+
+The local zero-export installation also behaved correctly: RCE was blocked by
+GCF at 0%, tariff charging reported no required charge, and RCEm remained an
+observation-only diagnostic. These observations confirm the expected safe
+behaviour on these two materially different configurations; they do not prove
+behaviour on every possible installation.
 
 ## Remaining field-test limits
 
-The simulations validate planning arithmetic and safety invariants, not the
-inverter firmware, Modbus transport, wiring or a distribution grid. RCEm still
-requires observation on a real high-voltage export site before it should be
-described as field-proven. Parallel Master/Slave command propagation remains
-dependent on the physical inverter topology and firmware. Users must retain
-the inverter's certified grid protections and BMS limits.
+The simulations validate planning arithmetic and software safety invariants,
+not inverter firmware, Modbus transport, wiring, an electricity meter or the
+distribution grid. RCEm still requires observation on a real high-voltage
+export site before it can be described as field-proven. Parallel command
+propagation remains dependent on the physical Hoymiles topology and firmware.
+
+This evidence can support a documented commissioning or acceptance process,
+but it is **not a formal certificate** for the inverter, battery or complete
+installation. See [Safety, compliance and commissioning evidence](SAFETY_AND_COMPLIANCE.md).

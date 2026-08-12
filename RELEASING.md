@@ -47,8 +47,9 @@ adoption metadata as optional. Do not claim that HACS or `dashboard_import`
 flashes firmware automatically.
 
 The instructions must say that HACS updates the Home Assistant integration but
-does not flash the ESP32. Users must use the top-level ESPHome file and remote
-package tag from the same release.
+does not flash the ESP32. Users must use the top-level ESPHome file and the
+compatible remote-package tag named in that release's notes. When firmware is
+unchanged, retain and document the last compatible ESPHome tag.
 
 ## Release checklist
 

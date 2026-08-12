@@ -27,19 +27,24 @@ parallel systems and troubleshooting remain documented below.
 **Project links / Najważniejsze linki:**
 [Quick start / Szybki start](docs/QUICK_START.md) ·
 [Changelog](CHANGELOG.md) ·
+[Safety & audit readiness / Bezpieczeństwo i gotowość do audytu](docs/SAFETY_AND_COMPLIANCE.md) ·
 [Diagnostics / Diagnostyka](docs/DIAGNOSTICS.md) ·
 [Automation test report](docs/AUTOMATION_TEST_REPORT.md) ·
 [Issues](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/issues)
 
 ## Dashboard overview / Podgląd dashboardu
 
-The overview shows the live power flow, RCE optimizer, tariff charging and
-experimental RCEm 253 V+ controller. The dashboard is supplied in Polish and
-English and adapts to desktop and mobile layouts.
+The Aurora overview combines live power flow, installation health, RCE results,
+tariff charging and the experimental RCEm 253 V+ controller. Everyday views
+show only decisions and benefits; each optimizer has a separate expert mode
+for model inputs, safety gates and diagnostics. The dashboard is supplied in
+Polish and English and adapts to desktop and mobile layouts.
 
-Podgląd przedstawia przepływ energii, optymalizator RCE, ładowanie taryfowe i
-eksperymentalny regulator RCEm 253 V+. Dashboard jest dostarczany po polsku i
-angielsku oraz dopasowuje się do komputera i telefonu.
+Widok Aurora łączy przepływ energii, stan instalacji, wyniki RCE, ładowanie
+taryfowe i eksperymentalny regulator RCEm 253 V+. Zwykły widok pokazuje
+decyzje i korzyści, a osobny tryb ekspercki odsłania dane modelu, blokady
+bezpieczeństwa i diagnostykę. Dashboard jest dostarczany po polsku i angielsku
+oraz dopasowuje się do komputera i telefonu.
 
 ![Hoymiles dashboard overview: start, RCE, tariff charging and RCEm](docs/images/dashboard-overview.png)
 
@@ -60,7 +65,7 @@ działania.
 | System reads / System analizuje | It calculates / Wylicza | It can control / Może sterować |
 |---|---|---|
 | PV, true household LOAD, grid, battery SOC/capacity, BMS limits | Home and outage reserve, battery headroom, forecast surplus, feasible charge/export energy | Self-Use, Grid Charge, Grid Discharge, charge/discharge power and SOC targets |
-| Solcast today/tomorrow, four-day Recorder history | Expected day/night balance and forecast-error correction | When to preserve, charge or release battery energy |
+| Solcast today/tomorrow/optional day three, Recorder history | Expected day/night balance, uncertainty and forecast-error correction | When to preserve, charge or release battery energy |
 | PSE RCE prices, tariff zones, L1/L2/L3 voltage | Valuable export blocks, physical charging lead time and high-voltage risk windows | Mutually exclusive RCE, tariff or RCEm plans |
 
 ## EMS modules / Moduły EMS
@@ -124,6 +129,30 @@ gwarancją wyniku finansowego.
 > before enabling writable entities or automatic control. You use it at your own
 > risk.
 
+### EMS ready for a documented acceptance process / EMS gotowy do udokumentowanego odbioru
+
+The 2026 Polish home-storage programme describes an EMS as a decision-making
+system that analyses weather or economic data and controls battery charging,
+discharging and time profiles. This project implements those functional
+capabilities and adds control ownership, stale-data gates, physical BMS and
+inverter limits, command acknowledgement, safe Self-Use fallback and a
+downloadable diagnostic evidence package.
+
+Program Przydomowe Magazyny Energii opisuje EMS jako system decyzyjny, który
+analizuje dane pogodowe lub ekonomiczne oraz steruje ładowaniem, rozładowaniem
+i profilami czasowymi. Projekt realizuje te funkcje, a dodatkowo posiada
+arbitraż właściciela sterowania, kontrolę świeżości danych, limity fizyczne
+BMS/falownika, potwierdzanie zapisów, bezpieczny powrót do Self-Use oraz paczkę
+diagnostyczną do protokołu odbioru.
+
+This is a statement of implemented functionality, **not a formal certificate
+for the inverter, battery or complete installation**. See the detailed
+[safety, audit and functional programme-mapping matrix](docs/SAFETY_AND_COMPLIANCE.md).
+
+Jest to deklaracja zaimplementowanych i testowalnych funkcji, **nie formalny
+certyfikat falownika, magazynu ani kompletnej instalacji**. Szczegóły zawiera
+[matryca bezpieczeństwa, audytu i mapowania funkcji programu](docs/SAFETY_AND_COMPLIANCE.md).
+
 <details>
 <summary><strong>Technical scope / Szczegółowy zakres techniczny</strong></summary>
 
@@ -134,21 +163,26 @@ The current release contains:
 - grid, load/EPS, battery/BMS, generator and inverter registers;
 - safe atomic EMS writes for registers 4300–4306;
 - daily grid charge/discharge schedules and optional mobile push notifications;
-- a 48-hour PSE RCE profit optimizer that selects the most valuable permitted
+- a rolling 48-hour PSE RCE optimizer that selects the most valuable permitted
   half-hour blocks, protects home demand and outage reserve, observes BMS and
-  parallel-system power limits, and separates controlled export from natural
-  PV surplus in the revenue statistics;
+  parallel-system power limits, quantizes the sale plan conservatively to
+  battery-SOC resolution, values optional day-three reserve and separates
+  controlled export from natural PV surplus in the revenue statistics;
 - automatic G11/G12/G12w/G13 grid charging with 2026 presets for PGE, TAURON,
   ENEA, ENERGA and STOEN, a manual profile, physical charge lead time,
-  forecast-error correction, estimated savings and a latched charging target
+  forecast-error correction, learned effective Grid Charge power, estimated
+  savings, terminal uncertainty reserve and a latched charging target/window
   that prevents rapid Grid Charge/Self-Use oscillation;
 - experimental **RCEm 253 V+** voltage management, starting in observation
-  mode, with four-day voltage history, battery-headroom planning, optional
+  mode, with four-day phase-voltage history, interval Solcast and weekday/
+  weekend LOAD profiles, per-window battery-headroom planning, optional
   morning pre-discharge and a user-capped export controller;
 - scheduled LiFePO4 storage balancing: use PV first, finish from the grid,
   slow the final 99–100% stage and hold full SOC for a configured period;
-- Solcast-, Recorder- and true LOAD-based planning for today and tomorrow,
-  including a dynamic SOC reserve that protects the home through the night;
+- Solcast-, Recorder- and true LOAD-based rolling planning for today, tomorrow
+  and an optional third-day tail, including a dynamic SOC reserve that protects
+  the home through the night and conservative fallback for unknown forecast
+  periods;
 - automatic single/Master/Slave topology detection and system-wide live power
   values for parallel installations;
 - 5-second grid voltage, phase-power and live energy-flow polling;
@@ -157,8 +191,9 @@ The current release contains:
 - native, high-contrast history and statistics charts for power flow, LOAD,
   PV strings, grid, battery, revenue and production, plus responsive cards for
   desktop and mobile layouts;
-- explicit EMS control ownership and conflict diagnostics so automatic modes
-  cannot silently compete for inverter control;
+- explicit EMS control ownership, data-freshness gates, idempotent writes with
+  read-back acknowledgement and conflict diagnostics so automatic modes cannot
+  silently compete for inverter control;
 - automatic in-place migration of existing storage-mode dashboards to the
   alternating-row cards, with a rollback backup and frontend cache busting;
 - English and Polish entity names, select options, config flow and services.
@@ -405,7 +440,7 @@ installed release contains a reviewed migration. Only the required managed
 card types, entity rows or asset paths are changed; view order, layout, custom
 entities and other user cards are preserved. Before writing, the integration
 creates an exact `.pre-<release>.bak` copy in `/config/.storage` (for example
-`.pre-1.4.0.bak` in this release).
+`.pre-1.5.0.bak` for this release).
 
 The copied `/config/dashboard_hoymiles.yaml` remains available for legacy and
 manual installations. The managed-asset installer updates an unchanged
@@ -469,23 +504,34 @@ automatically rebuilds the plan when the second day appears. It does not use a
 fixed minimum selling price. Instead, it calculates exportable battery energy,
 natural PV surplus, inverter/BMS power, conversion losses, the protected home
 reserve and the export lockout, then assigns energy to the most valuable
-permitted blocks. Missing or stale safety-critical inputs prevent controlled
-battery export.
+permitted blocks. The reserve is rounded up to a full inverter SOC step and
+enforced in every export block. An optional third-day PV/LOAD shortfall adds a
+terminal reserve. The model converts that AC shortfall into required battery
+energy with the household-discharge efficiency and values it against avoided
+grid purchase, so it will not sell cheaply only to buy the energy back later.
+Missing day-three data is identified explicitly. Missing or stale
+safety-critical inputs prevent controlled battery export.
 
-The dashboard distinguishes forecast revenue from realized revenue and
-separates deliberate battery export, natural PV surplus and unclassified
-historical export. These values are operational estimates based on the PSE RCE
-price and measured inverter energy; they are not a settlement invoice.
+The dashboard distinguishes forecast revenue from realized revenue, separates
+deliberate battery export, natural PV surplus and unclassified historical
+export, and reports both gross additional revenue and the net optimization
+benefit after battery-wear cost and terminal-energy value. These values are
+operational estimates based on the PSE RCE price and measured inverter energy;
+they are not a settlement invoice.
 
 ### Tariff-aware grid charging
 
 The tariff planner simulates the household and battery balance in 30-minute
-steps through the end of tomorrow. It considers Solcast, four-day day/night
-LOAD history, the outage reserve, BMS limits, charge/discharge efficiencies,
+steps over a rolling horizon. Fresh day-three Solcast data extends the actual
+simulation to at least 48 hours. If day three is missing or stale, the shorter
+known horizon is reported explicitly and the unknown tail to 48 hours is
+protected by a conservative terminal reserve based on zero PV and average
+household LOAD instead of being treated as free energy.
+The model considers the outage reserve, BMS limits, conversion efficiencies,
 the configured Grid Charge power and the fact that this shared AC limit first
-supplies the house. It therefore starts early enough to physically store the
-required energy before an expensive period and can preserve battery SOC while
-cheap grid energy directly supplies current LOAD.
+supplies the house. It can learn effective battery-charging power from confirmed
+sessions, starts early enough to physically store the required energy before an
+expensive period and preserves battery SOC when that is cheaper than cycling.
 
 Bundled profiles cover G11, G12, G12w and G13 where offered by PGE, TAURON,
 ENEA, ENERGA and STOEN. They include seasonal windows, weekends and Polish
@@ -497,12 +543,14 @@ bill. Choose **Manual** when the supplier, product or price differs.
 ### RCEm 253 V+ voltage management
 
 RCEm learns recurring high-voltage windows from the previous four days and
-combines them with live L1/L2/L3 voltage, a rolling ten-minute value, PV/load
-power, Solcast and storage headroom. It can reserve battery space before the
-risk window and regulate global battery charge power so more PV is absorbed as
-voltage rises. Optional morning discharge can create missing headroom without
-crossing the protected home SOC. Optional export regulation never exceeds the
-smaller of the existing inverter value and the user cap.
+combines them with live L1/L2/L3 voltage, a rolling ten-minute value, interval
+Solcast P90/P50 profiles, weekday/weekend household LOAD and storage headroom.
+Each risk window receives its own energy and headroom plan so one period cannot
+consume space reserved for the next. It can regulate global battery charge
+power so more PV is absorbed as voltage rises. Optional morning discharge can
+create only the useful missing headroom without crossing the protected home
+SOC. Optional export regulation never exceeds the smaller of the existing
+inverter value and the user cap.
 
 RCEm starts in **observation-only** mode and performs no writes until the user
 explicitly disables that mode. It never disables certified grid protection,
@@ -818,7 +866,7 @@ dashboard zapisany przez Home Assistanta w trybie `storage`. Zmienia wyłącznie
 zarządzane typy kart, wiersze encji lub ścieżki zasobów, zachowując układ i
 własne encje użytkownika. Przed każdą zmianą tworzy kopię
 `.pre-<wersja>.bak` w `/config/.storage` — dla tego wydania jest to na przykład
-`.pre-1.4.0.bak` — i automatycznie aktualizuje stary zasób `/local`.
+`.pre-1.5.0.bak` — i automatycznie aktualizuje stary zasób `/local`.
 
 Jeżeli firmware ESP32 jest starszy od integracji HACS, nowe encje pojawią się
 jako **niedostępne**, a nie jako brakujące. Atrybut

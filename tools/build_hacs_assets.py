@@ -337,6 +337,9 @@ ENGLISH_REPLACEMENTS = {
     "EMS taryfowy — automatyczne ładowanie włączone": (
         "Tariff EMS — automatic charging enabled"
     ),
+    "EMS taryfowy — pokaż dane zaawansowane": (
+        "Tariff EMS — show advanced data"
+    ),
     "EMS taryfowy — trwa automatyczne ładowanie": (
         "Tariff EMS — automatic charging in progress"
     ),
@@ -720,9 +723,11 @@ ENGLISH_REPLACEMENTS = {
         "the following expensive hours. Total system power, maximum SOC and"
     ),
     "i rozładowania BMS oraz straty obu konwersji są uwzględniane w": (
-        "separate BMS charge and discharge limits together with both conversion"
+        "separate BMS charge/discharge limits and conversion losses are included in"
     ),
-    "obliczeniach.": "losses are included in the calculation.",
+    "obliczeniach. Marginalne przesunięcie energii jest odrzucane, jeżeli": (
+        "the calculation. A marginal energy shift is rejected when"
+    ),
     "RCE i ładowanie taryfowe są teraz rozdzielone. Włączenie jednego": (
         "RCE and tariff charging are currently separate. Enabling one"
     ),
@@ -927,6 +932,8 @@ ENGLISH_REPLACEMENTS = {
     ),
     "Automatyka RCE — ustawienia": "RCE automation — settings",
     "Automatyka EMS": "EMS automation",
+    "RCE i Wyniki": "RCE and Results",
+    "Wyniki sprzedaży — archiwum": "Sales results — archive",
     "Automatyka RCE — konfiguracja wymagana": (
         "RCE automation — required configuration"
     ),
@@ -1383,6 +1390,7 @@ ENGLISH_REPLACEMENTS = {
     "Rezystancja izolacji": "Insulation resistance",
     "Wyprodukowano dzisiaj": "Generated today",
     "Moc — ostatnie 24 godziny [W]": "Power — last 24 hours [W]",
+    "Moc — ostatnie 24 godziny": "Power — last 24 hours",
     "Odbiorniki — moc ostatnie 24 godziny [W]": (
         "Loads — power over the last 24 hours [W]"
     ),
@@ -1444,6 +1452,8 @@ ENGLISH_REPLACEMENTS = {
     "Sieć równoległa falowników": "Parallel inverter network",
     'name: "Topologia sieci"': 'name: "Network topology"',
     'name: "Gotowość sterowania EMS"': 'name: "EMS control readiness"',
+    'name: "Moc czynna łącznie"': 'name: "Total active power"',
+    'name: "Moc bierna łącznie"': 'name: "Total reactive power"',
     'name: "Typ urządzenia (kod)"': 'name: "Device type (code)"',
     'name: "Wykryta liczba falowników"': 'name: "Detected inverter count"',
     'name: "Adres 1 (Master)"': 'name: "Address 1 (Master)"',
@@ -1534,6 +1544,10 @@ ENGLISH_REPLACEMENTS = {
     "Maksymalny limit eksportu": "Maximum export power limit",
     "Tryb złącza GEN": "GEN port mode",
     "Falownik — fazy, moc i magistrala DC": "Inverter — phases, power and DC bus",
+    "Falownik — magistrala DC": "Inverter — DC bus",
+    "Falownik — fazy AC": "Inverter — AC phases",
+    "Falownik — moce AC": "Inverter — AC power",
+    "Sterowanie i zakończenie harmonogramu": "Schedule control and stop",
     "Rezerwa SOC — Self-Use": "SOC reserve — Self-Use",
     "Docelowy SOC — ładowanie z sieci": "Target SOC — grid charge",
     "Minimalny SOC — rozładowanie do sieci": "Minimum SOC — grid discharge",
@@ -1802,6 +1816,9 @@ ENGLISH_REPLACEMENTS = {
     "bloków po 30 min": "30-minute blocks",
     # RCEm 253 V+ voltage-aware export protection.
     "RCEm 253 V+ — automatyka włączona": "RCEm 253 V+ — automation enabled",
+    "RCEm 253 V+ — pokaż dane zaawansowane": (
+        "RCEm 253 V+ — show advanced data"
+    ),
     "RCEm 253 V+ — tylko obserwacja": "RCEm 253 V+ — observation only",
     "RCEm 253 V+ — trwa aktywna regulacja": "RCEm 253 V+ — active control in progress",
     "RCEm 253 V+ — korekta bezpieczeństwa SOC": "RCEm 253 V+ — SOC safety correction",
@@ -1965,6 +1982,62 @@ ENGLISH_REPLACEMENTS = {
     "przełącza GCF, Grid Charge, asymetrii ani nastaw zabezpieczeń.": "switch GCF, Grid Charge, unbalance or protection settings.",
     "Steruje teraz": "Current controller",
     "Konflikt sterowania": "Control conflict",
+    "EMS RCE — pokaż dane zaawansowane": "EMS RCE — show advanced data",
+    "Pokaż dane zaawansowane": "Show advanced data",
+    "Ukryj dane zaawansowane": "Hide advanced data",
+    "Dane zaawansowane (tryb ekspercki)": "Advanced data (expert mode)",
+    "Dlaczego taki plan?": "Why this plan?",
+    "Automat liczy decyzję z **ostrożnych wartości użytych przez model**,": (
+        "The automation bases its decision on **conservative values used by the model**,"
+    ),
+    "a nie z surowej prognozy wyświetlanej przez Solcast.": (
+        "not on the raw forecast displayed by Solcast."
+    ),
+    "Pozostałe PV dzisiaj": "PV remaining today",
+    "PV jutro": "PV tomorrow",
+    "Bezpieczne dobowe zużycie domu": "Conservative daily home consumption",
+    "Rezerwa baterii": "Battery reserve",
+    "Przewidywany SOC na końcu planu": "Forecast SOC at the end of the plan",
+    "Horyzont jest tymczasowo skrócony, ponieważ prognoza trzeciego dnia": (
+        "The horizon is temporarily limited because the day-three forecast"
+    ),
+    "jest niedostępna lub nieaktualna. Plan zachowuje dodatkowy margines.": (
+        "is unavailable or stale. The plan retains an additional safety margin."
+    ),
+    "model skalibrowany": "model calibrated",
+    "zbieranie próbek — używany limit ustawiony": (
+        "collecting samples — configured limit is used"
+    ),
+    "RCEm — gotowość i diagnostyka sterowania": (
+        "RCEm — control readiness and diagnostics"
+    ),
+    "RCEm — decyzja i plan ochrony eksportu": (
+        "RCEm — decision and export-protection plan"
+    ),
+    "Najbliższe przewidywane okno ryzyka": "Next predicted risk window",
+    "brak produkcji lub eksportu": "no production or export",
+    "P90 napięcia dla bieżącego kwadransa": (
+        "Voltage P90 for the current quarter-hour"
+    ),
+    "Źródło profilu PV": "PV profile source",
+    "profil zastępczy": "fallback profile",
+    "pewność": "confidence",
+    "Profil odbiorników": "Load profile",
+    "Nieuniknione ładowanie do chwili szczytu": (
+        "Unavoidable charging before the risk peak"
+    ),
+    "nadwyżka": "surplus",
+    "wymagane miejsce": "required headroom",
+    "Dodatkowa rezerwa po horyzoncie (deficyt dnia 3)": (
+        "Additional reserve after the horizon (day-three deficit)"
+    ),
+    "brak danych o przyczynie": "reason unavailable",
+    "Moc czynna L1": "Active power L1",
+    "Moc czynna L2": "Active power L2",
+    "Moc czynna L3": "Active power L3",
+    "Moc bierna L1": "Reactive power L1",
+    "Moc bierna L2": "Reactive power L2",
+    "Moc bierna L3": "Reactive power L3",
     "RCE — konfiguracja zaawansowana": "RCE — advanced configuration",
     "Własna encja Solcast — dzisiaj": "Custom Solcast entity — today",
     "Własna encja Solcast — jutro": "Custom Solcast entity — tomorrow",
@@ -1977,8 +2050,37 @@ ENGLISH_REPLACEMENTS = {
     "Planowany eksport z baterii": "Planned battery export",
     "SOC na końcu horyzontu": "SOC at the end of the horizon",
     "Korzyść optymalizacji": "Optimization benefit",
+    "Korzyść optymalizacji netto": "Net optimization benefit",
+    "Wzrost przychodu brutto przed kosztem baterii": (
+        "Gross revenue increase before battery wear cost"
+    ),
     "Przychód zrealizowany dzisiaj": "Revenue realized today",
     "RCE — szczegóły i diagnostyka": "RCE — details and diagnostics",
+    "Tanie ładowanie — ustawienia": "Low-cost charging — settings",
+    "Co zrobi automat": "What the automation will do",
+    "Tanie ładowanie — diagnostyka": "Low-cost charging — diagnostics",
+    "Jak działa tanie ładowanie": "How low-cost charging works",
+    "Jak działa automatyka taryfowa — szczegóły": (
+        "How tariff automation works — details"
+    ),
+    "Brakuje danych do pełnego planu.": "Some data required for the complete plan is missing.",
+    "Otwórz dane zaawansowane,": "Open advanced data",
+    "aby zobaczyć szczegóły diagnostyczne.": "to view diagnostic details.",
+    "Automat przewiduje zużycie domu i produkcję PV, a następnie sprawdza,": (
+        "The automation forecasts home consumption and PV production, then checks"
+    ),
+    "czy energii wystarczy do kolejnej taniej strefy. Jeżeli zabraknie,": (
+        "whether energy will last until the next low-cost period. If not,"
+    ),
+    "wybiera najtańsze dostępne bloki i ładuje tylko tyle, ile rzeczywiście": (
+        "it selects the cheapest available slots and charges only as much as"
+    ),
+    "potrzeba. Chroni ustawioną rezerwę SOC, uwzględnia straty oraz nie": (
+        "is actually needed. It protects the configured SOC reserve, accounts for losses,"
+    ),
+    "uruchamia się równocześnie z RCE ani inną automatyką EMS.": (
+        "and never runs together with RCE or another EMS automation."
+    ),
     "Pojemność ustawiona w falowniku": "Capacity configured in the inverter",
     "Pojemność efektywna (awaryjne źródło BMS)": (
         "Effective capacity (BMS emergency fallback)"
@@ -1995,6 +2097,187 @@ ENGLISH_REPLACEMENTS = {
     "Tanie ładowanie": "Low-cost charging",
     "RCEm 253 V+ — obserwacja": "RCEm 253 V+ — observation",
     "Sterowanie ręczne": "Manual control",
+    "Dane i sterowanie gotowe": "Data and control ready",
+    "Eksport fizycznie dozwolony": "Physical export permitted",
+    "Falownik gotowy do zapisu EMS": "Inverter ready for EMS writes",
+    "Adaptacyjne dobowe zużycie odbiorników": "Adaptive daily load consumption",
+    "Adaptacyjne zużycie w oknie nocnym": "Adaptive protected-night consumption",
+    "Pokrycie historii zużycia": "Load history coverage",
+    "Pokrycie historii nocnej": "Night-load history coverage",
+    "Jeżeli Solcast udostępnia **Forecast Day 3**, integracja wykorzysta ją": (
+        "If Solcast provides **Forecast Day 3**, the integration uses it"
+    ),
+    "automatycznie do wyceny energii, którą warto zachować po końcu": (
+        "automatically to value energy worth retaining after the end of the"
+    ),
+    "48-godzinnego rynku. Brak tej encji nie blokuje pracy. Encje są": (
+        "48-hour market horizon. Its absence does not block operation. Entities are"
+    ),
+    "wykrywane automatycznie w polskiej i angielskiej wersji HA; w razie": (
+        "detected automatically in Polish and English HA; for"
+    ),
+    "niestandardowych nazw można wpisać dzisiaj i jutro u góry.": (
+        "custom names, the Today and Tomorrow entities can be entered above."
+    ),
+    "wybiera najwyższe ceny i uwzględnia naturalny eksport PV, koszt": (
+        "selects the highest prices and includes natural PV export, battery"
+    ),
+    "zużycia baterii oraz wartość energii zachowanej na kolejny dzień.": (
+        "wear cost, and the value of energy retained for the following day."
+    ),
+    "Wcześniejsze rozładowanie wykona tylko wtedy, gdy zwiększy wynik netto": (
+        "An earlier discharge is used only when it increases the net result"
+    ),
+    "lub utworzy miejsce w baterii przed późniejszą nadwyżką sprzedawaną": (
+        "or creates battery headroom before a later surplus would be sold"
+    ),
+    "taniej.": "more cheaply.",
+    "zużycie dobowe z pola u góry. Następnie algorytm uczy się maksymalnie": (
+        "daily consumption entered above. The algorithm then learns from up to"
+    ),
+    "z 28 pełnych dni: większą wagę nadaje dniom ostatnim, odrzuca": (
+        "28 complete days, gives recent days more weight, rejects"
+    ),
+    "pojedyncze skoki oraz buduje osobne profile 48 półgodzinnych bloków": (
+        "isolated spikes, and builds separate 48 half-hour profiles"
+    ),
+    "dla dni roboczych i weekendów. Ostatnie cztery dni pozostają szybkim": (
+        "for weekdays and weekends. The latest four days remain a fast"
+    ),
+    "zabezpieczeniem po świeżej instalacji. Faktyczne pokrycie i wybrany": (
+        "fallback after a fresh installation. Actual coverage and the selected"
+    ),
+    "model są pokazane w diagnostyce.": "model are shown in diagnostics.",
+    "Rezerwa jest wyznaczana konserwatywnie z przedziałów **P10/P50/P90**": (
+        "The reserve is conservatively derived from Solcast **P10/P50/P90**"
+    ),
+    "Solcast i z błędu prognozy zmierzonego w poprzednich dniach. W ciągu": (
+        "bands and forecast error measured on previous days. During"
+    ),
+    "dnia korekta porównuje prognozę z produkcją rzeczywistą, ale nie": (
+        "the day, correction compares forecast with actual production but does not"
+    ),
+    "obniża ochrony domu na podstawie krótkiej próbki po wschodzie.": (
+        "reduce home protection based on a short post-sunrise sample."
+    ),
+    "Jakość danych:": "Data quality:",
+    "uwagi:": "issues:",
+    "brak oceny": "not assessed",
+    "Prognoza dzisiaj P10 / P50 / P90:": "Today forecast P10 / P50 / P90:",
+    "Prognoza jutro P10 / P50 / P90:": "Tomorrow forecast P10 / P50 / P90:",
+    "Pewność prognozy / udział wariantu ostrożnego:": (
+        "Forecast confidence / conservative-case share:"
+    ),
+    "Model odbiorników:": "Load model:",
+    "dni historii": "history days",
+    "tryb awaryjny": "fallback mode",
+    "Fizyczna moc planu:": "Physical plan power:",
+    "żądana": "requested",
+    "żądany": "requested",
+    "dostępna": "available",
+    "źródło limitu:": "limit source:",
+    "GCF:": "GCF:",
+    "włączone": "enabled",
+    "wyłączone": "disabled",
+    "Koszt zużycia baterii w planie:": "Planned battery wear cost:",
+    "korzyść netto:": "net benefit:",
+    "Energia zachowana po horyzoncie:": "Energy retained after the horizon:",
+    "wartość": "value",
+    "Horyzont symulacji:": "Simulation horizon:",
+    "dni, do": "days, until",
+    "Prognoza dnia 3:": "Day 3 forecast:",
+    "brak — bezpieczny zapas zastępczy": "unavailable — safe fallback reserve",
+    "Budżet mocy Grid Charge:": "Grid Charge power budget:",
+    "efektywny": "effective",
+    "źródło": "source",
+    "Uczenie rzeczywistej mocy:": "Actual power learning:",
+    "próbek": "samples",
+    "współczynnik": "factor",
+    "Rezerwa końcowa z niepewnością:": "Terminal uncertainty reserve:",
+    "margines": "margin",
+    "Stabilność decyzji:": "Decision stability:",
+    "min bez istotnej zmiany": "min without a material change",
+    "EMS RCE — koniec zapamiętanego bloku": "EMS RCE — latched slot end",
+    "Gotowe - sterowanie bezpośrednie": "Ready - direct control",
+    "Gotowe - Master steruje siecią równoległą": (
+        "Ready - Master controls the parallel network"
+    ),
+    "Brak sygnału żywotności ESP32": "No ESP32 liveness signal",
+    "ESP32 nie raportował sygnału żywotności od ponad 3 minut": (
+        "ESP32 has not reported its liveness signal for more than 3 minutes"
+    ),
+    "Sieć równoległa nie potwierdziła gotowości": (
+        "The parallel network has not confirmed readiness"
+    ),
+    "Sterowanie EMS lub sieć równoległa nie są gotowe": (
+        "EMS control or the parallel network is not ready"
+    ),
+    "Cena RCE nie była raportowana od ponad 5 minut": (
+        "RCE price has not been reported for more than 5 minutes"
+    ),
+    "Plan RCE i dane PSE są nieaktualne": "The RCE plan and PSE data are stale",
+    "Brak potwierdzenia ustawień eksportu": "Export settings are not confirmed",
+    "Plan taryfowy i prognoza nie były raportowane od ponad 5 minut": (
+        "The tariff plan and forecast have not been reported for more than 5 minutes"
+    ),
+    "Falownik nie potwierdził limitu ładowania": (
+        "The inverter did not confirm the charging limit"
+    ),
+    "Falownik nie potwierdził celu SOC przed startem": (
+        "The inverter did not confirm the target SOC before start"
+    ),
+    "Falownik nie potwierdził nowego limitu ładowania": (
+        "The inverter did not confirm the new charging limit"
+    ),
+    "Falownik nie potwierdził celu SOC": (
+        "The inverter did not confirm the target SOC"
+    ),
+    "EMS — bezpieczne wyjście po utracie danych lub potwierdzenia": (
+        "EMS — safe exit after data or acknowledgement loss"
+    ),
+    "Aktywny cykl RCE albo taryfowy wraca do Self-Use po dwóch minutach": (
+        "An active RCE or tariff cycle returns to Self-Use after two minutes"
+    ),
+    "nieprzerwanej utraty danych, gotowości Master/Slave lub prawa do eksportu.": (
+        "of continuous loss of data, Master/Slave readiness, or export permission."
+    ),
+    "Przy niedostępnej encji EMS znacznik pozostaje aktywny i próba jest": (
+        "When the EMS entity is unavailable, ownership remains active and the attempt is"
+    ),
+    "ponawiana co minutę po odzyskaniu łączności.": (
+        "retried every minute after connectivity is restored."
+    ),
+    "bilans do końca jutra, a po automatycznym wykryciu Forecast Day 3 —": (
+        "the balance through tomorrow, and after automatically detecting Forecast Day 3 —"
+    ),
+    "również kolejny dzień. W trybie **Grid Charge** ustawiona moc jest": (
+        "also the following day. In **Grid Charge**, the configured"
+    ),
+    "różnica ceny nie pokrywa strat i automatycznie przyjętego kosztu": (
+        "the price spread does not cover losses and the automatically assumed"
+    ),
+    "zużycia magazynu.": "battery wear cost.",
+    "Model zużycia wykorzystuje do 28 pełnych dni, większą wagę nadaje": (
+        "The load model uses up to 28 complete days, gives greater weight to"
+    ),
+    "obserwacjom najnowszym i rozdziela profil na dzień roboczy oraz": (
+        "recent observations, and separates weekday and"
+    ),
+    "weekend. Plan korzysta z pasma niepewności P10/P50/P90, zachowuje": (
+        "weekend profiles. The plan uses P10/P50/P90 uncertainty bands, retains"
+    ),
+    "rezerwę na końcu horyzontu i nie reaguje na każdą drobną zmianę": (
+        "a terminal reserve, and does not react to every small forecast"
+    ),
+    "prognozy. Podczas prawdziwego Grid Charge mierzy też osiągniętą moc;": (
+        "change. During real Grid Charge it also measures delivered power;"
+    ),
+    "po kilku wiarygodnych próbkach koryguje wyprzedzenie kolejnych okien,": (
+        "after several reliable samples it corrects future lead times,"
+    ),
+    "nie ucząc się na rozruchu ani na zwalnianiu ładowania blisko 100% SOC.": (
+        "without learning from ramp-up or charge taper near 100% SOC."
+    ),
     "'Taryfa' if": "'Tariff' if",
 }
 

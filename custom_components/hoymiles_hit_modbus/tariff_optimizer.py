@@ -7,59 +7,72 @@ tariff slot that occurs before the energy is needed by the home.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from math import ceil
 
 try:  # Package import in Home Assistant; direct import in deterministic tests.
-    from .tariff_profiles import MANUAL_OPERATOR, get_tariff_profile, profile_rate
+    from .forecast_model import adaptive_forecast_factor
+    from .tariff_profiles import (
+        MANUAL_OPERATOR,
+        get_tariff_profile,
+        profile_is_valid,
+        profile_rate,
+    )
 except ImportError:  # pragma: no cover - exercised by tools/test_tariff_optimizer.py
-    from tariff_profiles import MANUAL_OPERATOR, get_tariff_profile, profile_rate
+    from forecast_model import adaptive_forecast_factor
+    from tariff_profiles import (
+        MANUAL_OPERATOR,
+        get_tariff_profile,
+        profile_is_valid,
+        profile_rate,
+    )
 
 
 SLOT = timedelta(minutes=30)
 _EPSILON = 1e-6
-LIVE_FORECAST_MIN_EXPECTED_KWH = 2.0
-LIVE_FORECAST_FULL_CONFIDENCE_KWH = 6.0
-LIVE_FORECAST_MIN_FACTOR = 0.15
+DEFAULT_BATTERY_WEAR_COST_PLN_KWH = 0.06
 
 
-def adaptive_forecast_factor(
-    historical_factor: float,
-    actual_energy_kwh: float,
-    expected_elapsed_kwh: float | None,
+def robust_weighted_estimate(
+    values: Sequence[float],
     *,
-    eligible: bool,
-) -> tuple[float, float | None, float]:
-    """Blend complete-day history with live cumulative PV underproduction.
+    max_points: int = 28,
+) -> tuple[float | None, float, int]:
+    """Return a recency-weighted, outlier-resistant estimate and uncertainty.
 
-    Small morning samples are deliberately ignored.  Once Solcast expected at
-    least 2 kWh, cumulative production gradually gains authority and reaches
-    full confidence at 6 kWh.  The live signal can only lower today's
-    forecast; tomorrow remains based on complete-day history.
+    ``values`` must be ordered from oldest to newest.  Up to 28 complete days
+    are retained, recent observations receive more authority and isolated
+    spikes are winsorised around the sample median.  The uncertainty is the
+    weighted mean absolute relative error and is intended for diagnostics and
+    a small automatic planning margin, not as a user setting.
     """
-    historical = min(max(historical_factor, LIVE_FORECAST_MIN_FACTOR), 1.0)
-    if (
-        not eligible
-        or expected_elapsed_kwh is None
-        or expected_elapsed_kwh < LIVE_FORECAST_MIN_EXPECTED_KWH
-    ):
-        return historical, None, 0.0
+    clean = [float(value) for value in values if 0.0 < float(value) < 1_000.0]
+    clean = clean[-max(max_points, 1) :]
+    if not clean:
+        return None, 0.0, 0
 
-    live_ratio = min(
-        max(actual_energy_kwh / max(expected_elapsed_kwh, _EPSILON), 0.0),
-        1.10,
+    ordered = sorted(clean)
+    middle = len(ordered) // 2
+    centre = (
+        ordered[middle]
+        if len(ordered) % 2
+        else (ordered[middle - 1] + ordered[middle]) / 2.0
     )
-    confidence = min(
-        max(
-            expected_elapsed_kwh / LIVE_FORECAST_FULL_CONFIDENCE_KWH,
-            0.0,
-        ),
-        1.0,
-    )
-    conservative_live = min(max(live_ratio, LIVE_FORECAST_MIN_FACTOR), historical)
-    effective = historical + (conservative_live - historical) * confidence
-    return min(max(effective, LIVE_FORECAST_MIN_FACTOR), historical), live_ratio, confidence
+    lower = max(centre * 0.45, 0.05)
+    upper = max(centre * 1.75, lower)
+    clipped = [min(max(value, lower), upper) for value in clean]
+    # Half-life is roughly seven observations.  This remains responsive to a
+    # changed household while no longer allowing one unusual day to dominate.
+    weights = [0.5 ** ((len(clipped) - 1 - index) / 7.0) for index in range(len(clipped))]
+    weight_sum = sum(weights)
+    estimate = sum(value * weight for value, weight in zip(clipped, weights)) / weight_sum
+    uncertainty = sum(
+        abs(value - estimate) / max(estimate, _EPSILON) * weight
+        for value, weight in zip(clipped, weights)
+    ) / weight_sum
+    return estimate, min(max(uncertainty, 0.0), 1.0), len(clean)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +118,20 @@ class TariffOptimizerInput:
     # Battery-side DC discharge limit reported by the BMS.
     battery_discharge_power_kw: float | None = None
     pv_charge_power_kw: float | None = None
+    # Optional third forecast day.  Two days remains the safe compatibility
+    # fallback when the Solcast Day 3 sensor is disabled or unavailable.
+    horizon_days: int = 2
+    # Energy retained at the end of the planning horizon.  This is separate
+    # from the operational Self-Use floor and protects the next, not-yet-priced
+    # period from deterministic point-forecast error.
+    terminal_reserve_soc_percent: float | None = None
+    # Nominal configured AC budget, retained for diagnostics when feedback has
+    # conservatively derated ``charge_power_kw``.
+    requested_charge_power_kw: float | None = None
+    # Conservative throughput cost used internally to reject marginal cycles.
+    # It is intentionally automatic: users should not need battery-finance
+    # expertise to avoid shifting energy for a few groszy.
+    battery_wear_cost_pln_kwh: float = DEFAULT_BATTERY_WEAR_COST_PLN_KWH
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +177,21 @@ class TariffOptimizerResult:
     current_zone: str
     next_charge_start: datetime | None
     charge_power_kw: float
+    requested_charge_power_kw: float
+    effective_power_factor: float
+    horizon_days: int
+    horizon_end: datetime
+    terminal_reserve_soc_percent: float
+    terminal_shortfall_kwh: float
+    planned_battery_wear_cost_pln: float
+    planning_slot_count: int
+    baseline_optimization_cost_pln: float
+    optimized_optimization_cost_pln: float
+    planning_horizon_hours: float = 0.0
+    planning_horizon_extended_to_minimum: bool = False
+    modeled_load_kwh: float = 0.0
+    modeled_pv_kwh: float = 0.0
+    effective_terminal_reserve_soc_percent: float = 0.0
 
 
 @dataclass(slots=True)
@@ -164,6 +206,8 @@ class _Simulation:
     uncovered_import_kwh: dict[int, float]
     total_grid_import_kwh: float
     total_grid_cost_pln: float
+    total_optimization_cost_pln: float
+    terminal_shortfall_kwh: float
 
 
 def floor_half_hour(value: datetime) -> datetime:
@@ -173,6 +217,65 @@ def floor_half_hour(value: datetime) -> datetime:
         second=0,
         microsecond=0,
     )
+
+
+def resolve_planning_horizon(
+    now: datetime,
+    horizon_days: int,
+    *,
+    minimum_hours: float = 0.0,
+) -> tuple[int, datetime, float, bool]:
+    """Return a calendar horizon, optionally extended to real elapsed hours.
+
+    ``horizon_days`` retains the historical meaning used by this integration:
+    two means the remainder of today plus tomorrow, while three additionally
+    includes Day 3.  A calendar boundary can be shorter than expected late in
+    the day and around the spring DST transition.  When a fresh Day 3 forecast
+    is available, ``minimum_hours`` therefore guarantees a real elapsed
+    planning interval without changing the compatible two-day fallback.
+    """
+    resolved_days = min(max(int(horizon_days), 2), 3)
+    calendar_end = datetime.combine(
+        now.date() + timedelta(days=resolved_days),
+        datetime.min.time(),
+        tzinfo=now.tzinfo,
+    )
+    end_utc = calendar_end.astimezone(timezone.utc)
+    extended = False
+    if minimum_hours > _EPSILON:
+        target_utc = now.astimezone(timezone.utc) + timedelta(
+            hours=max(minimum_hours, 0.0)
+        )
+        # End on a complete half-hour boundary so the simulation never models
+        # only an implicit fraction of its final slot.
+        target_floor = floor_half_hour(target_utc)
+        if target_floor < target_utc:
+            target_floor += SLOT
+        if target_floor > end_utc:
+            end_utc = target_floor
+            extended = True
+    end = end_utc.astimezone(now.tzinfo)
+    actual_hours = max(
+        (end_utc - now.astimezone(timezone.utc)).total_seconds() / 3600.0,
+        0.0,
+    )
+    return resolved_days, end, actual_hours, extended
+
+
+def horizon_gap_load_reserve_kwh(
+    average_daily_load_kwh: float,
+    planning_horizon_hours: float,
+    *,
+    target_hours: float = 48.0,
+) -> float:
+    """Return conservative LOAD energy for the unmodelled horizon tail.
+
+    Missing or stale Day 3 data must not be replaced by invented PV.  The safe
+    fallback assumes zero PV for the hours missing from the target horizon and
+    retains enough battery energy for the average household load instead.
+    """
+    missing_hours = max(target_hours - max(planning_horizon_hours, 0.0), 0.0)
+    return max(average_daily_load_kwh, 0.0) * missing_hours / 24.0
 
 
 def _in_window(minute: int, start: int, end: int) -> bool:
@@ -235,6 +338,11 @@ def tariff_rate(
     if schedule.operator != MANUAL_OPERATOR:
         profile = get_tariff_profile(schedule.operator, schedule.tariff_type)
         if profile is not None:
+            if not profile_is_valid(profile, start.date()):
+                raise ValueError(
+                    "official tariff profile does not cover planning slot "
+                    f"{start.date().isoformat()}"
+                )
             return profile_rate(
                 start,
                 profile,
@@ -306,6 +414,29 @@ def _slot_loads(settings: TariffOptimizerInput, starts: list[datetime]) -> list[
         else day_per_slot
         for start in starts
     ]
+
+
+def _effective_terminal_reserve_soc_percent(
+    settings: TariffOptimizerInput,
+) -> float:
+    """Return the terminal SOC threshold that the simulation really applies."""
+    reserve_soc = min(max(settings.reserve_soc_percent, 0.0), 100.0)
+    if settings.schedule.tariff_type.casefold().replace(" ", "") == "g11":
+        # G11 has no cheaper execution window.  A virtual terminal reserve must
+        # not manufacture a battery cycle at the same tariff.
+        return min(
+            reserve_soc,
+            min(max(settings.battery_soc_percent, 0.0), 100.0),
+        )
+    requested = (
+        settings.terminal_reserve_soc_percent
+        if settings.terminal_reserve_soc_percent is not None
+        else reserve_soc
+    )
+    return min(
+        max(requested, reserve_soc),
+        min(max(settings.maximum_soc_percent, reserve_soc), 100.0),
+    )
 
 
 def _simulate(
@@ -417,6 +548,48 @@ def _simulate(
             stored[index] = stored_energy
         battery_after[index] = battery
 
+    terminal_soc = _effective_terminal_reserve_soc_percent(settings)
+    terminal_target = min(
+        max(capacity * min(max(terminal_soc, 0.0), 100.0) / 100.0, reserve),
+        maximum,
+    )
+    if settings.schedule.tariff_type.casefold().replace(" ", "") == "g11":
+        terminal_target = min(
+            reserve,
+            capacity
+            * min(max(settings.battery_soc_percent, 0.0), 100.0)
+            / 100.0,
+        )
+    terminal_shortfall = max(terminal_target - battery, 0.0)
+    terminal_import = 0.0
+    terminal_cost_adjustment = 0.0
+    if terminal_shortfall > _EPSILON and starts:
+        # Treat the missing terminal energy as a virtual import at the end of
+        # the horizon.  Earlier low-price charging can replace it, so the same
+        # cost minimisation loop can protect the following unpriced period.
+        terminal_import = terminal_shortfall / charge_efficiency
+        last_index = len(starts) - 1
+        shortage += terminal_import
+        uncovered_import[last_index] = (
+            uncovered_import.get(last_index, 0.0) + terminal_import
+        )
+        if first_shortage is None:
+            first_shortage = last_index
+        terminal_reference_rate = max(
+            settings.schedule.medium_price_pln_kwh,
+            settings.schedule.peak_price_pln_kwh,
+            rates[last_index][0],
+            *(
+                price
+                for price, zone in rates
+                if zone not in {"low", "g11"}
+            ),
+        )
+        terminal_cost_adjustment = max(
+            terminal_reference_rate - rates[last_index][0],
+            0.0,
+        ) * terminal_import
+
     explicit_grid_import = sum(accepted.values()) + sum(accepted_support.values())
     total_grid_import = explicit_grid_import + sum(uncovered_import.values())
     total_grid_cost = sum(
@@ -427,6 +600,14 @@ def _simulate(
         )
         * rates[index][0]
         for index in range(len(starts))
+    )
+    total_optimization_cost = (
+        total_grid_cost
+        + terminal_cost_adjustment
+        + sum(stored.values()) * max(
+            settings.battery_wear_cost_pln_kwh,
+            0.0,
+        )
     )
     return _Simulation(
         shortage_kwh=shortage,
@@ -439,24 +620,32 @@ def _simulate(
         uncovered_import_kwh=uncovered_import,
         total_grid_import_kwh=total_grid_import,
         total_grid_cost_pln=total_grid_cost,
+        total_optimization_cost_pln=total_optimization_cost,
+        terminal_shortfall_kwh=terminal_shortfall,
     )
 
 
 def optimize_tariff_charging(
     settings: TariffOptimizerInput,
 ) -> TariffOptimizerResult:
-    """Build the least-cost feasible charging plan for today and tomorrow."""
+    """Build the least-cost feasible charging plan for two or three days."""
     now_slot = floor_half_hour(settings.now)
-    horizon_end = datetime.combine(
-        settings.now.date() + timedelta(days=2),
-        datetime.min.time(),
-        tzinfo=settings.now.tzinfo,
+    (
+        horizon_days,
+        horizon_end,
+        planning_horizon_hours,
+        horizon_extended,
+    ) = resolve_planning_horizon(
+        settings.now,
+        settings.horizon_days,
+        minimum_hours=48.0 if int(settings.horizon_days) >= 3 else 0.0,
     )
     starts: list[datetime] = []
-    cursor = now_slot
-    while cursor < horizon_end:
-        starts.append(cursor)
-        cursor += SLOT
+    cursor_utc = now_slot.astimezone(timezone.utc)
+    horizon_end_utc = horizon_end.astimezone(timezone.utc)
+    while cursor_utc < horizon_end_utc:
+        starts.append(cursor_utc.astimezone(settings.now.tzinfo))
+        cursor_utc += SLOT
 
     first_fraction = max(
         min((30 - settings.now.minute % 30) / 30.0, 1.0),
@@ -468,6 +657,10 @@ def optimize_tariff_charging(
     loads = _slot_loads(settings, starts)
     if loads:
         loads[0] *= first_fraction
+    modeled_pv = sum(
+        max(settings.pv_by_slot_kwh.get(start, 0.0), 0.0) * fraction
+        for start, fraction in zip(starts, slot_fractions)
+    )
     rates = [tariff_rate(start, settings.schedule) for start in starts]
     baseline = _simulate(
         settings,
@@ -482,6 +675,12 @@ def optimize_tariff_charging(
     planned_support: dict[int, float] = {}
     simulation = baseline
     charge_power = max(settings.charge_power_kw, 0.0)
+    requested_charge_power = max(
+        settings.requested_charge_power_kw
+        if settings.requested_charge_power_kw is not None
+        else charge_power,
+        0.0,
+    )
     charge_efficiency = min(
         max(settings.charge_efficiency_percent / 100.0, 0.01), 1.0
     )
@@ -664,8 +863,8 @@ def optimize_tariff_charging(
                     - simulation.accepted_import_kwh.get(index, 0.0)
                 )
                 cost_reduction = (
-                    simulation.total_grid_cost_pln
-                    - trial_simulation.total_grid_cost_pln
+                    simulation.total_optimization_cost_pln
+                    - trial_simulation.total_optimization_cost_pln
                 )
                 if (
                     reduction > 1e-5
@@ -712,8 +911,8 @@ def optimize_tariff_charging(
                     - simulation.accepted_support_kwh.get(index, 0.0)
                 )
                 cost_reduction = (
-                    simulation.total_grid_cost_pln
-                    - trial_simulation.total_grid_cost_pln
+                    simulation.total_optimization_cost_pln
+                    - trial_simulation.total_optimization_cost_pln
                 )
                 if (
                     reduction > 1e-5
@@ -786,9 +985,14 @@ def optimize_tariff_charging(
     planned_stored = sum(item.stored_energy_kwh for item in charges)
     planned_direct = sum(item.direct_load_kwh for item in charges)
     cost = sum(item.grid_import_kwh * item.price_pln_kwh for item in charges)
+    wear_cost = planned_stored * max(settings.battery_wear_cost_pln_kwh, 0.0)
     baseline_grid_cost = baseline.total_grid_cost_pln
     optimized_grid_cost = simulation.total_grid_cost_pln
-    automation_savings = max(baseline_grid_cost - optimized_grid_cost, 0.0)
+    automation_savings = max(
+        baseline.total_optimization_cost_pln
+        - simulation.total_optimization_cost_pln,
+        0.0,
+    )
     reference_cost = baseline.total_grid_import_kwh * settings.schedule.g11_price_pln_kwh
     savings = max(reference_cost - optimized_grid_cost, 0.0)
     current_planned = bool(charges and charges[0].start == now_slot)
@@ -913,4 +1117,33 @@ def optimize_tariff_charging(
         current_zone=current_zone,
         next_charge_start=next_start,
         charge_power_kw=charge_power,
+        requested_charge_power_kw=requested_charge_power,
+        effective_power_factor=(
+            min(max(charge_power / requested_charge_power, 0.0), 1.0)
+            if requested_charge_power > _EPSILON
+            else 1.0
+        ),
+        horizon_days=horizon_days,
+        horizon_end=horizon_end,
+        terminal_reserve_soc_percent=min(
+            max(
+                settings.terminal_reserve_soc_percent
+                if settings.terminal_reserve_soc_percent is not None
+                else settings.reserve_soc_percent,
+                settings.reserve_soc_percent,
+            ),
+            settings.maximum_soc_percent,
+        ),
+        terminal_shortfall_kwh=simulation.terminal_shortfall_kwh,
+        planned_battery_wear_cost_pln=wear_cost,
+        planning_slot_count=len(starts),
+        baseline_optimization_cost_pln=baseline.total_optimization_cost_pln,
+        optimized_optimization_cost_pln=simulation.total_optimization_cost_pln,
+        planning_horizon_hours=planning_horizon_hours,
+        planning_horizon_extended_to_minimum=horizon_extended,
+        modeled_load_kwh=sum(loads),
+        modeled_pv_kwh=modeled_pv,
+        effective_terminal_reserve_soc_percent=(
+            _effective_terminal_reserve_soc_percent(settings)
+        ),
     )

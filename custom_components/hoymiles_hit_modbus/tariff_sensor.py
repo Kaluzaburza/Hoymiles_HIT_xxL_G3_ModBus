@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import date, datetime, timedelta
 from functools import partial
 import logging
@@ -21,10 +22,16 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, NAME
+from .forecast_model import (
+    blend_low_expected,
+    robust_weighted_factor,
+    uncertainty_risk_weight,
+)
 from .models import RuntimeData
 from .rce_sensor import (
     REMAINING_TODAY_CANDIDATES,
@@ -43,19 +50,31 @@ from .tariff_optimizer import (
     TariffSchedule,
     adaptive_forecast_factor,
     floor_half_hour,
+    horizon_gap_load_reserve_kwh,
     is_polish_public_holiday,
     optimize_tariff_charging,
+    resolve_planning_horizon,
+    robust_weighted_estimate,
 )
 from .tariff_profiles import (
     MANUAL_OPERATOR,
     PROFILE_YEAR,
     SUPPORTED_OPERATORS,
     get_tariff_profile,
+    profile_is_valid,
     profile_summary,
 )
 
 
 _LOGGER = logging.getLogger(__name__)
+CHARGE_POWER_FEEDBACK_MIN_SAMPLES = 5
+PLANNING_HORIZON_TARGET_HOURS = 48.0
+
+DAY_3_FORECAST_CANDIDATES = (
+    "sensor.solcast_pv_forecast_forecast_day_3",
+    "sensor.solcast_pv_forecast_day_3",
+    "sensor.solcast_forecast_day_3",
+)
 
 WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_rce_optimized_plan",
@@ -66,8 +85,14 @@ WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_maximum_discharge_current",
     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
     "sensor.hoymiles_hit_pv_total_energy_today",
+    "sensor.hoymiles_hit_overview_battery_power",
+    "sensor.hoymiles_hit_grid_to_battery_power",
+    "sensor.hoymiles_hit_overview_load_active_power",
+    "sensor.hoymiles_tariff_grid_charge_power",
     "number.hoymiles_hit_self_use_soc",
+    "select.hoymiles_hit_ems_mode",
     "input_boolean.hoymiles_tariff_charge_enabled",
+    "input_boolean.hoymiles_tariff_charge_active",
     "input_boolean.hoymiles_tariff_weekend_low_price",
     "input_boolean.hoymiles_tariff_polish_holidays_low_price",
     "input_select.hoymiles_tariff_operator",
@@ -94,6 +119,7 @@ WATCHED_TARIFF_ENTITIES = {
     "sun.sun",
     *TODAY_FORECAST_CANDIDATES,
     *TOMORROW_FORECAST_CANDIDATES,
+    *DAY_3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
 
@@ -158,6 +184,27 @@ def _state_attribute_profile(
     return values if sum(values) > 0 else ()
 
 
+def _state_attribute_daily_values(
+    state: State | None,
+    attribute: str,
+) -> tuple[float, ...]:
+    """Return chronological, valid complete-day values from an attribute."""
+    if state is None:
+        return ()
+    raw = state.attributes.get(attribute)
+    if not isinstance(raw, dict):
+        return ()
+    values: list[float] = []
+    for key in sorted(raw):
+        try:
+            value = float(raw[key])
+        except (TypeError, ValueError):
+            continue
+        if 0.0 < value < 1_000.0:
+            values.append(value)
+    return tuple(values[-28:])
+
+
 def _detailed_pv_expected_elapsed_kwh(
     state: State | None,
     target_date: date,
@@ -213,8 +260,35 @@ def _detailed_pv_expected_elapsed_kwh(
     return expected if found else None
 
 
-class HoymilesTariffOptimizerSensor(SensorEntity):
-    """Calculate a home-first, two-day low-tariff charging plan."""
+def _forecast_interval_kwh(
+    state: State | None,
+) -> tuple[float | None, float | None, float | None]:
+    """Read Solcast P10/P50/P90 totals without depending on one version."""
+    if state is None:
+        return None, None, None
+    analysis = state.attributes.get("analysis")
+    analysis = analysis if isinstance(analysis, dict) else {}
+
+    def number(*keys: str) -> float | None:
+        for source in (state.attributes, analysis):
+            for key in keys:
+                try:
+                    value = float(source[key])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if value >= 0.0:
+                    return value
+        return None
+
+    return (
+        number("estimate10", "estimate10_kwh"),
+        number("estimate", "estimate_kwh"),
+        number("estimate90", "estimate90_kwh"),
+    )
+
+
+class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
+    """Calculate a home-first two- or three-day low-tariff charging plan."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -239,7 +313,17 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
         self._forecast_accuracy_factor = 0.90
         self._forecast_accuracy_days = 0
         self._forecast_accuracy_source = "automatic_conservative_fallback"
+        self._forecast_accuracy_uncertainty = 0.10
+        self._forecast_accuracy_refreshed_at: datetime | None = None
         self._forecast_refresh_running = False
+        self._forecast_retry_pending = False
+        self._delivered_power_ratios: deque[float] = deque(maxlen=24)
+        self._effective_charge_power_factor = 1.0
+        self._effective_charge_power_source = "configured"
+        self._charge_power_feedback_last_ratio: float | None = None
+        self._charge_power_feedback_last_sample_at: datetime | None = None
+        self._plan_signature: tuple[Any, ...] | None = None
+        self._plan_changed_at: datetime | None = None
         self._recalculate_cancel = None
 
     @property
@@ -272,6 +356,53 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        restored = await self.async_get_last_state()
+        if (
+            restored is not None
+            and restored.attributes.get("charge_power_feedback_version") == 1
+        ):
+            try:
+                factor = float(
+                    restored.attributes["effective_charge_power_factor"]
+                )
+                sample_count = int(
+                    restored.attributes.get(
+                        "effective_charge_power_feedback_samples", 0
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                factor = 1.0
+                sample_count = 0
+            if (
+                0.50 <= factor <= 1.0
+                and sample_count >= CHARGE_POWER_FEEDBACK_MIN_SAMPLES
+            ):
+                self._effective_charge_power_factor = factor
+                self._effective_charge_power_source = (
+                    "restored_grid_charge_feedback"
+                )
+                for _ in range(min(sample_count, self._delivered_power_ratios.maxlen)):
+                    self._delivered_power_ratios.append(factor)
+                try:
+                    last_ratio = float(
+                        restored.attributes.get(
+                            "charge_power_feedback_last_ratio",
+                            factor,
+                        )
+                    )
+                except (TypeError, ValueError):
+                    last_ratio = factor
+                self._charge_power_feedback_last_ratio = min(
+                    max(last_ratio, 0.35),
+                    1.10,
+                )
+                last_sample_at = restored.attributes.get(
+                    "charge_power_feedback_last_sample_at"
+                )
+                if isinstance(last_sample_at, str):
+                    parsed = dt_util.parse_datetime(last_sample_at)
+                    if parsed is not None:
+                        self._charge_power_feedback_last_sample_at = parsed
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
@@ -290,7 +421,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             async_track_time_interval(
                 self.hass,
                 self._async_forecast_accuracy_timer,
-                timedelta(hours=1),
+                timedelta(hours=12),
             )
         )
         await self._async_refresh_forecast_accuracy()
@@ -299,6 +430,21 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
 
     @callback
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
+        # Solcast may finish loading a few seconds after this integration.
+        # When the first startup calibration found no forecast entity, retry
+        # as soon as any watched source becomes available instead of keeping
+        # the conservative fallback until the 12-hour timer fires.
+        if (
+            self._forecast_accuracy_refreshed_at is None
+            and not self._forecast_refresh_running
+            and not self._forecast_retry_pending
+            and self._forecast_accuracy_source_available()
+        ):
+            self._forecast_retry_pending = True
+            self.hass.async_create_task(
+                self._async_retry_initial_forecast_accuracy(),
+                "hoymiles tariff initial forecast calibration",
+            )
         if self._recalculate_cancel is not None:
             self._recalculate_cancel()
         self._recalculate_cancel = async_call_later(
@@ -317,12 +463,105 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
         if self._recalculate_cancel is not None:
             self._recalculate_cancel()
             self._recalculate_cancel = None
+        self._update_delivered_power_feedback()
         self._recalculate_and_write()
 
+    def _update_delivered_power_feedback(self) -> None:
+        """Learn a conservative real Grid Charge budget during active runs."""
+        active_state = self.hass.states.get(
+            "input_boolean.hoymiles_tariff_charge_active"
+        )
+        if active_state is None or active_state.state != "on":
+            return
+        if dt_util.utcnow() - active_state.last_changed < timedelta(minutes=2):
+            # Ignore inverter ramp-up and Modbus propagation after a command.
+            return
+        if not self.hass.states.is_state(
+            "select.hoymiles_hit_ems_mode", "grid_charge"
+        ):
+            return
+        if self._attributes.get("current_action") not in {
+            "battery_charge",
+            "grid_support_and_charge",
+        }:
+            return
+        soc = _state_number(self.hass, "sensor.hoymiles_hit_overview_battery_soc")
+        maximum_soc = _state_number(
+            self.hass, "input_number.hoymiles_tariff_maximum_soc"
+        )
+        if soc is None or maximum_soc is None or soc >= maximum_soc - 5.0:
+            # Exclude the normal high-SOC taper from the power calibration.
+            return
+        battery_power_w = _state_number(
+            self.hass, "sensor.hoymiles_hit_grid_to_battery_power"
+        )
+        battery_power_is_ac = battery_power_w is not None
+        if battery_power_w is None:
+            battery_power_w = _state_number(
+                self.hass, "sensor.hoymiles_tariff_grid_charge_power"
+            )
+        requested_kw = self._attributes.get("requested_charge_power_kw")
+        if battery_power_w is None or not isinstance(requested_kw, (int, float)):
+            return
+        battery_power_kw = max(battery_power_w, 0.0) / 1000.0
+        if battery_power_kw < 0.25 or requested_kw < 0.5:
+            return
+        load_w = _state_number(
+            self.hass, "sensor.hoymiles_hit_overview_load_active_power"
+        )
+        load_kw = max(load_w or 0.0, 0.0) / 1000.0
+        efficiency = (
+            _state_number(
+                self.hass, "input_number.hoymiles_tariff_charge_efficiency"
+            )
+            or 90.0
+        ) / 100.0
+        battery_ac_kw = (
+            battery_power_kw
+            if battery_power_is_ac
+            else battery_power_kw / max(efficiency, 0.5)
+        )
+        delivered_grid_budget = battery_ac_kw + load_kw
+        ratio = min(max(delivered_grid_budget / requested_kw, 0.35), 1.10)
+        self._delivered_power_ratios.append(ratio)
+        self._charge_power_feedback_last_ratio = ratio
+        self._charge_power_feedback_last_sample_at = dt_util.utcnow()
+        if len(self._delivered_power_ratios) < CHARGE_POWER_FEEDBACK_MIN_SAMPLES:
+            return
+        target = min(max(median(self._delivered_power_ratios), 0.50), 1.0)
+        # Smooth the estimate so one ramp-up minute cannot move a complete
+        # charging window.  Recovery is allowed as later runs prove it.
+        self._effective_charge_power_factor = (
+            self._effective_charge_power_factor * 0.75 + target * 0.25
+        )
+        self._effective_charge_power_source = "live_grid_charge_feedback"
+
     async def _async_forecast_accuracy_timer(self, now: datetime) -> None:
-        """Refresh the automatic Solcast bias correction once per hour."""
+        """Refresh complete-day Solcast calibration twice per day."""
         await self._async_refresh_forecast_accuracy()
         self._recalculate_and_write()
+
+    def _forecast_accuracy_source_available(self) -> bool:
+        """Return whether the configured Solcast today source is numeric."""
+        configured = _state_text(
+            self.hass,
+            "input_text.hoymiles_solcast_forecast_today_entity",
+        )
+        _, forecast_state = _first_numeric_state(
+            self.hass,
+            TODAY_FORECAST_CANDIDATES,
+            configured,
+        )
+        return forecast_state is not None
+
+    async def _async_retry_initial_forecast_accuracy(self) -> None:
+        """Retry the startup calibration after late forecast discovery."""
+        try:
+            await self._async_refresh_forecast_accuracy()
+            if self._forecast_accuracy_refreshed_at is not None:
+                self._recalculate_and_write()
+        finally:
+            self._forecast_retry_pending = False
 
     def _recalculate_and_write(self) -> None:
         """Write only when the plan or its diagnostics actually changed."""
@@ -352,7 +591,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             actual_entity = "sensor.hoymiles_hit_pv_total_energy_today"
             timezone = ZoneInfo(self.hass.config.time_zone)
             now = dt_util.now().astimezone(timezone)
-            start = now - timedelta(days=7)
+            start = now - timedelta(days=29)
             query = partial(
                 recorder_history.get_significant_states,
                 self.hass,
@@ -386,8 +625,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                         continue
                     destination.setdefault(local_day, []).append(numeric)
 
-            ratios: list[float] = []
-            for day in sorted(set(forecast_by_day) & set(actual_by_day))[-5:]:
+            dated_ratios: list[tuple[int, float]] = []
+            for day in sorted(set(forecast_by_day) & set(actual_by_day))[-28:]:
                 forecasts = [value for value in forecast_by_day[day] if value > 0.5]
                 actuals = actual_by_day[day]
                 if not forecasts or not actuals:
@@ -396,13 +635,26 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 actual = max(actuals)
                 if actual <= 0.5:
                     continue
-                ratios.append(min(max(actual / forecast, 0.65), 1.10))
-            if ratios:
+                age_days = max((now.date() - day).days, 1)
+                dated_ratios.append(
+                    (age_days, min(max(actual / forecast, 0.50), 1.10))
+                )
+            if dated_ratios:
                 # Never increase a forecast automatically; optimism could cause
-                # the home reserve to be undersized.  Underproduction is learned.
-                self._forecast_accuracy_factor = min(median(ratios), 1.0)
-                self._forecast_accuracy_days = len(ratios)
-                self._forecast_accuracy_source = "recorder_actual_vs_solcast"
+                # the home reserve to be undersized.  A weighted lower-middle
+                # quantile is robust to one cloudless or failed-string day and
+                # gives recent observations more authority.
+                (
+                    self._forecast_accuracy_factor,
+                    self._forecast_accuracy_uncertainty,
+                    self._forecast_accuracy_days,
+                ) = robust_weighted_factor(
+                    [(float(age), ratio) for age, ratio in dated_ratios]
+                )
+                self._forecast_accuracy_source = (
+                    "recorder_28d_weighted_actual_vs_solcast"
+                )
+            self._forecast_accuracy_refreshed_at = now
         except Exception:  # noqa: BLE001 - retain the conservative safe fallback
             _LOGGER.exception("Cannot learn Solcast forecast accuracy")
         finally:
@@ -420,24 +672,60 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 }
                 return
             result = optimize_tariff_charging(settings)
+            planned_slots = [
+                {
+                    "date": item.start.date().isoformat(),
+                    "start": item.start.strftime("%H:%M"),
+                    "end": (item.start + timedelta(minutes=30)).strftime("%H:%M"),
+                    "zone": item.zone,
+                    "price": round(item.price_pln_kwh, 4),
+                    "action": item.action,
+                    "grid_import_kwh": round(item.grid_import_kwh, 3),
+                    "stored_energy_kwh": round(item.stored_energy_kwh, 3),
+                    "direct_load_kwh": round(item.direct_load_kwh, 3),
+                    "target_soc_percent": round(item.target_soc_percent, 1),
+                }
+                for item in result.planned_charges
+            ]
+            signature = tuple(
+                (
+                    item["date"],
+                    item["start"],
+                    item["action"],
+                    round(float(item["grid_import_kwh"]), 1),
+                )
+                for item in planned_slots
+            ) + ((round(result.target_soc_percent), result.status_code),)
+            now = dt_util.now()
+            if signature != self._plan_signature:
+                self._plan_signature = signature
+                self._plan_changed_at = now
+            stable_seconds = (
+                max((now - self._plan_changed_at).total_seconds(), 0.0)
+                if self._plan_changed_at is not None
+                else 0.0
+            )
+            feedback_samples = len(self._delivered_power_ratios)
+            feedback_ready = (
+                feedback_samples >= CHARGE_POWER_FEEDBACK_MIN_SAMPLES
+            )
+            if self._effective_charge_power_source == "restored_grid_charge_feedback":
+                feedback_state = "learned_restored"
+            elif feedback_ready:
+                feedback_state = "learned_live"
+            elif feedback_samples:
+                feedback_state = "collecting"
+            else:
+                feedback_state = "not_observed"
+            feedback_median = (
+                median(self._delivered_power_ratios)
+                if self._delivered_power_ratios
+                else None
+            )
             self._attributes = {
                 "status_code": result.status_code,
                 "missing_entities": [],
-                "planned_slots": [
-                    {
-                        "date": item.start.date().isoformat(),
-                        "start": item.start.strftime("%H:%M"),
-                        "end": (item.start + timedelta(minutes=30)).strftime("%H:%M"),
-                        "zone": item.zone,
-                        "price": round(item.price_pln_kwh, 4),
-                        "action": item.action,
-                        "grid_import_kwh": round(item.grid_import_kwh, 3),
-                        "stored_energy_kwh": round(item.stored_energy_kwh, 3),
-                        "direct_load_kwh": round(item.direct_load_kwh, 3),
-                        "target_soc_percent": round(item.target_soc_percent, 1),
-                    }
-                    for item in result.planned_charges
-                ],
+                "planned_slots": planned_slots,
                 "current_slot_planned": result.current_slot_planned,
                 "current_action": result.current_action,
                 "current_slot_end": (
@@ -465,12 +753,28 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                     2,
                 ),
                 "planned_cost_pln": round(result.planned_cost_pln, 2),
+                "planned_battery_wear_cost_pln": round(
+                    result.planned_battery_wear_cost_pln,
+                    2,
+                ),
+                "battery_wear_cost_pln_kwh": round(
+                    settings.battery_wear_cost_pln_kwh,
+                    3,
+                ),
                 "baseline_grid_cost_pln": round(
                     result.baseline_grid_cost_pln,
                     2,
                 ),
                 "optimized_grid_cost_pln": round(
                     result.optimized_grid_cost_pln,
+                    2,
+                ),
+                "baseline_optimization_cost_pln": round(
+                    result.baseline_optimization_cost_pln,
+                    2,
+                ),
+                "optimized_optimization_cost_pln": round(
+                    result.optimized_optimization_cost_pln,
                     2,
                 ),
                 "automation_savings_pln": round(
@@ -493,6 +797,157 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                     1,
                 ),
                 "effective_charge_power_kw": round(result.charge_power_kw, 2),
+                "requested_charge_power_kw": round(
+                    result.requested_charge_power_kw, 2
+                ),
+                "effective_charge_power_factor": round(
+                    result.effective_power_factor, 3
+                ),
+                "effective_charge_power_source": (
+                    self._effective_charge_power_source
+                ),
+                "charge_power_feedback_version": 1,
+                "effective_charge_power_feedback_samples": feedback_samples,
+                "charge_power_feedback_state": feedback_state,
+                "charge_power_feedback_ready": feedback_ready,
+                "charge_power_feedback_samples_required": (
+                    CHARGE_POWER_FEEDBACK_MIN_SAMPLES
+                ),
+                "charge_power_feedback_samples_remaining": max(
+                    CHARGE_POWER_FEEDBACK_MIN_SAMPLES - feedback_samples,
+                    0,
+                ),
+                "charge_power_feedback_observed_median_ratio": (
+                    round(feedback_median, 3)
+                    if feedback_median is not None
+                    else None
+                ),
+                "charge_power_feedback_last_ratio": (
+                    round(self._charge_power_feedback_last_ratio, 3)
+                    if self._charge_power_feedback_last_ratio is not None
+                    else None
+                ),
+                "charge_power_feedback_last_sample_at": (
+                    self._charge_power_feedback_last_sample_at.isoformat()
+                    if self._charge_power_feedback_last_sample_at is not None
+                    else None
+                ),
+                "charge_power_feedback_applied_factor": round(
+                    result.effective_power_factor,
+                    3,
+                ),
+                "planning_horizon_days": result.horizon_days,
+                "planning_horizon_end": result.horizon_end.isoformat(),
+                "planning_horizon_hours": round(
+                    result.planning_horizon_hours,
+                    2,
+                ),
+                "planning_horizon_extended_to_minimum": (
+                    result.planning_horizon_extended_to_minimum
+                ),
+                "planning_slot_count": result.planning_slot_count,
+                "terminal_reserve_soc_percent": round(
+                    result.terminal_reserve_soc_percent, 1
+                ),
+                "terminal_reserve_soc_percent_effective": round(
+                    result.effective_terminal_reserve_soc_percent,
+                    1,
+                ),
+                "terminal_shortfall_kwh": round(
+                    result.terminal_shortfall_kwh, 2
+                ),
+                "model_input_horizon_start": settings.now.isoformat(),
+                "model_input_horizon_end": result.horizon_end.isoformat(),
+                "model_input_horizon_hours": round(
+                    result.planning_horizon_hours,
+                    2,
+                ),
+                "model_input_modeled_pv_kwh": round(
+                    result.modeled_pv_kwh,
+                    2,
+                ),
+                "model_input_modeled_load_kwh": round(
+                    result.modeled_load_kwh,
+                    2,
+                ),
+                "model_input_battery_capacity_kwh": round(
+                    settings.battery_capacity_kwh,
+                    2,
+                ),
+                "model_input_battery_soc_percent": round(
+                    settings.battery_soc_percent,
+                    1,
+                ),
+                "model_input_reserve_soc_percent": round(
+                    settings.reserve_soc_percent,
+                    1,
+                ),
+                "model_input_maximum_soc_percent": round(
+                    settings.maximum_soc_percent,
+                    1,
+                ),
+                "model_input_terminal_reserve_soc_percent": round(
+                    result.effective_terminal_reserve_soc_percent,
+                    1,
+                ),
+                "model_input_requested_charge_power_kw": round(
+                    result.requested_charge_power_kw,
+                    2,
+                ),
+                "model_input_effective_charge_power_kw": round(
+                    result.charge_power_kw,
+                    2,
+                ),
+                "model_input_bms_charge_power_limit_kw": (
+                    round(settings.battery_charge_power_kw, 2)
+                    if settings.battery_charge_power_kw is not None
+                    else None
+                ),
+                "model_input_bms_discharge_power_limit_kw": (
+                    round(settings.battery_discharge_power_kw, 2)
+                    if settings.battery_discharge_power_kw is not None
+                    else None
+                ),
+                "model_input_charge_efficiency_percent": round(
+                    settings.charge_efficiency_percent,
+                    1,
+                ),
+                "model_input_discharge_efficiency_percent": round(
+                    settings.discharge_efficiency_percent,
+                    1,
+                ),
+                "model_input_minimum_saving_pln_kwh": round(
+                    settings.minimum_saving_pln_kwh,
+                    4,
+                ),
+                "model_input_battery_wear_cost_pln_kwh": round(
+                    settings.battery_wear_cost_pln_kwh,
+                    4,
+                ),
+                "model_input_tariff_operator": settings.schedule.operator,
+                "model_input_tariff_type": settings.schedule.tariff_type,
+                "model_input_tariff_g11_price_pln_kwh": round(
+                    settings.schedule.g11_price_pln_kwh,
+                    4,
+                ),
+                "model_input_tariff_low_price_pln_kwh": round(
+                    settings.schedule.low_price_pln_kwh,
+                    4,
+                ),
+                "model_input_tariff_medium_price_pln_kwh": round(
+                    settings.schedule.medium_price_pln_kwh,
+                    4,
+                ),
+                "model_input_tariff_peak_price_pln_kwh": round(
+                    settings.schedule.peak_price_pln_kwh,
+                    4,
+                ),
+                "plan_changed_at": (
+                    self._plan_changed_at.isoformat()
+                    if self._plan_changed_at is not None
+                    else None
+                ),
+                "plan_stable_for_minutes": round(stable_seconds / 60.0, 1),
                 **metadata,
             }
         except Exception:  # noqa: BLE001 - automation must fail closed
@@ -583,10 +1038,33 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             )
         if daily_load is None:
             required["sensor.hoymiles_load_average_4_days"] = None
+        complete_daily_loads = _state_attribute_daily_values(
+            rce_state,
+            "recorder_load_daily_kwh",
+        )
+        (
+            robust_daily_load,
+            load_uncertainty_ratio,
+            robust_load_days,
+        ) = robust_weighted_estimate(complete_daily_loads)
+        provisional_load = _state_attribute_number(
+            rce_state,
+            "provisional_daily_load_projection_kwh",
+        )
+        if robust_daily_load is not None and robust_load_days >= 5:
+            # Complete days provide the stable baseline.  Today's live
+            # projection may only raise it, which reacts to exceptional demand
+            # without allowing an incomplete morning to understate the home.
+            daily_load = max(robust_daily_load, provisional_load or 0.0)
         average_load_profile = _state_attribute_profile(
             rce_state,
             "recorder_load_profile_30m_kwh",
         )
+        if not average_load_profile:
+            average_load_profile = _state_attribute_profile(
+                rce_state,
+                "recorder_load_average_profile_30m_kwh",
+            )
         weekday_load_profile = _state_attribute_profile(
             rce_state,
             "recorder_load_weekday_profile_30m_kwh",
@@ -660,6 +1138,61 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             self.hass,
             REMAINING_TODAY_CANDIDATES,
         )
+        day_3_entity, day_3_state = _first_numeric_state(
+            self.hass,
+            DAY_3_FORECAST_CANDIDATES,
+        )
+        def state_age_minutes(state: State | None) -> float | None:
+            if state is None:
+                return None
+            return max(
+                (dt_util.utcnow() - state.last_updated).total_seconds() / 60.0,
+                0.0,
+            )
+
+        today_forecast_age = state_age_minutes(today_state)
+        tomorrow_forecast_age = state_age_minutes(tomorrow_state)
+        day_3_forecast_age = state_age_minutes(day_3_state)
+        forecast_fresh = all(
+            age is not None and age <= 18 * 60
+            for age in (today_forecast_age, tomorrow_forecast_age)
+        )
+        if not forecast_fresh:
+            required["Solcast forecast freshness"] = None
+        if day_3_state is None:
+            day_3_status = "missing"
+        elif day_3_forecast_age is not None and day_3_forecast_age > 18 * 60:
+            day_3_status = "stale"
+        else:
+            day_3_status = "fresh"
+        if day_3_status == "stale":
+            # Day 3 is optional.  A stale optional forecast reduces the horizon
+            # to two days instead of blocking otherwise safe tariff charging.
+            day_3_state = None
+        selected_horizon_days = 3 if day_3_status == "fresh" else 2
+        (
+            _,
+            selected_horizon_end,
+            selected_horizon_hours,
+            selected_horizon_extended,
+        ) = resolve_planning_horizon(
+            now,
+            selected_horizon_days,
+            minimum_hours=(
+                PLANNING_HORIZON_TARGET_HOURS
+                if day_3_status == "fresh"
+                else 0.0
+            ),
+        )
+        horizon_gap_hours = max(
+            PLANNING_HORIZON_TARGET_HOURS - selected_horizon_hours,
+            0.0,
+        )
+        fallback_reason = (
+            "none"
+            if day_3_status == "fresh"
+            else f"day_3_forecast_{day_3_status}"
+        )
         if today_state is None:
             required["Solcast Forecast Today"] = None
         if tomorrow_state is None:
@@ -676,6 +1209,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             self.hass,
             "sunset",
             now.date() + timedelta(days=1),
+        )
+        sunrise_day_3 = get_astral_event_date(
+            self.hass,
+            "sunrise",
+            now.date() + timedelta(days=2),
+        )
+        sunset_day_3 = get_astral_event_date(
+            self.hass,
+            "sunset",
+            now.date() + timedelta(days=2),
         )
         if any(
             value is None
@@ -704,6 +1247,43 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             "forecast_today_entity": today_entity or "none",
             "forecast_tomorrow_entity": tomorrow_entity or "none",
             "forecast_remaining_today_entity": remaining_entity or "fallback",
+            "forecast_day_3_entity": day_3_entity or "not_available",
+            "forecast_day_3_available": day_3_state is not None,
+            "forecast_day_3_status": day_3_status,
+            "forecast_data_fresh": forecast_fresh,
+            "forecast_today_age_minutes": (
+                round(today_forecast_age, 1)
+                if today_forecast_age is not None
+                else None
+            ),
+            "forecast_tomorrow_age_minutes": (
+                round(tomorrow_forecast_age, 1)
+                if tomorrow_forecast_age is not None
+                else None
+            ),
+            "forecast_day_3_age_minutes": (
+                round(day_3_forecast_age, 1)
+                if day_3_forecast_age is not None
+                else None
+            ),
+            "planning_horizon_target_hours": PLANNING_HORIZON_TARGET_HOURS,
+            "planning_horizon_selected_days": selected_horizon_days,
+            "planning_horizon_selected_end": selected_horizon_end.isoformat(),
+            "planning_horizon_selected_hours": round(
+                selected_horizon_hours,
+                2,
+            ),
+            "planning_horizon_fallback_active": day_3_status != "fresh",
+            "planning_horizon_fallback_reason": fallback_reason,
+            "planning_horizon_limited": horizon_gap_hours > 0.01,
+            "planning_horizon_limitation_reason": (
+                fallback_reason if horizon_gap_hours > 0.01 else "none"
+            ),
+            "planning_horizon_gap_to_target_hours": round(
+                horizon_gap_hours,
+                2,
+            ),
+            "planning_horizon_extended_for_dst": selected_horizon_extended,
             "average_daily_load_kwh": (
                 round(daily_load, 2) if daily_load is not None else None
             ),
@@ -714,6 +1294,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 bool(rce_state.attributes.get("history_complete"))
                 if rce_state is not None
                 else False
+            ),
+            "robust_load_history_days": robust_load_days,
+            "robust_average_daily_load_kwh": (
+                round(robust_daily_load, 2)
+                if robust_daily_load is not None
+                else None
+            ),
+            "load_uncertainty_percent": round(
+                load_uncertainty_ratio * 100.0,
+                1,
             ),
             "load_profile_mode": (
                 "recorder_30m_weekday_weekend"
@@ -727,15 +1317,29 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             "price_model": (
                 "manual marginal all-in prices; fixed monthly fees excluded"
                 if operator == MANUAL_OPERATOR
-                else "official 2026 regional profile; fixed monthly fees excluded"
+                else (
+                    f"official {PROFILE_YEAR} regional profile; "
+                    "fixed monthly fees excluded"
+                )
             ),
             "default_price_reference": (
                 "manual user invoice"
                 if operator == MANUAL_OPERATOR
-                else "2026 incumbent supplier and selected DSO tariffs"
+                else (
+                    f"{PROFILE_YEAR} incumbent supplier and selected DSO tariffs"
+                )
             ),
             "tariff_profile_expired": (
-                operator != MANUAL_OPERATOR and now.year != PROFILE_YEAR
+                operator != MANUAL_OPERATOR
+                and profile is not None
+                and (
+                    not profile_is_valid(profile, now.date())
+                    or not profile_is_valid(
+                        profile,
+                        now.date()
+                        + timedelta(days=(3 if day_3_state is not None else 2) - 1),
+                    )
+                )
             ),
             "forecast_accuracy_factor": round(
                 self._forecast_accuracy_factor,
@@ -743,6 +1347,15 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             ),
             "forecast_accuracy_history_days": self._forecast_accuracy_days,
             "forecast_accuracy_source": self._forecast_accuracy_source,
+            "forecast_accuracy_refreshed_at": (
+                self._forecast_accuracy_refreshed_at.isoformat()
+                if self._forecast_accuracy_refreshed_at is not None
+                else None
+            ),
+            "forecast_accuracy_uncertainty": round(
+                self._forecast_accuracy_uncertainty,
+                3,
+            ),
         }
         if profile is not None:
             metadata.update(
@@ -783,6 +1396,11 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
 
         forecast_today = max(float(today_state.state), 0.0)
         forecast_tomorrow_raw = max(float(tomorrow_state.state), 0.0)
+        forecast_day_3_raw = (
+            max(float(day_3_state.state), 0.0)
+            if day_3_state is not None
+            else 0.0
+        )
         actual_pv_today = _state_number(
             self.hass,
             "sensor.hoymiles_hit_pv_total_energy_today",
@@ -811,15 +1429,56 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             expected_elapsed_raw,
             eligible=live_adjustment_eligible,
         )
+        today_p10, _, today_p90 = _forecast_interval_kwh(today_state)
+        tomorrow_p10, _, tomorrow_p90 = _forecast_interval_kwh(tomorrow_state)
+        day_3_p10, _, day_3_p90 = _forecast_interval_kwh(day_3_state)
+        risk_weight = uncertainty_risk_weight(
+            history_days=self._forecast_accuracy_days,
+            live_confidence=live_forecast_confidence,
+            uncertainty_available=(
+                today_p10 is not None
+                or tomorrow_p10 is not None
+                or day_3_p10 is not None
+            ),
+        )
+        forecast_tomorrow_conservative_raw = blend_low_expected(
+            tomorrow_p10
+            if tomorrow_p10 is not None
+            else forecast_tomorrow_raw,
+            forecast_tomorrow_raw,
+            risk_weight,
+        )
         forecast_tomorrow = (
-            forecast_tomorrow_raw * self._forecast_accuracy_factor
+            forecast_tomorrow_conservative_raw * self._forecast_accuracy_factor
+        )
+        forecast_day_3_conservative_raw = blend_low_expected(
+            day_3_p10 if day_3_p10 is not None else forecast_day_3_raw,
+            forecast_day_3_raw,
+            risk_weight,
+        )
+        forecast_day_3 = (
+            forecast_day_3_conservative_raw * self._forecast_accuracy_factor
         )
         remaining_today_raw = (
             max(float(remaining_state.state), 0.0)
             if remaining_state is not None
             else max(forecast_today - actual_pv_today, 0.0)
         )
-        remaining_today = remaining_today_raw * today_forecast_factor
+        today_interval_factor = (
+            blend_low_expected(
+                today_p10 if today_p10 is not None else forecast_today,
+                forecast_today,
+                risk_weight,
+            )
+            / max(forecast_today, 0.001)
+            if forecast_today > 0.0
+            else 1.0
+        )
+        remaining_today = (
+            remaining_today_raw
+            * today_forecast_factor
+            * min(max(today_interval_factor, 0.0), 1.0)
+        )
 
         pv_today = _detailed_pv_map(
             today_state,
@@ -857,17 +1516,46 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
         pv_by_slot = dict(pv_today)
         for start, energy in pv_tomorrow.items():
             pv_by_slot[start] = pv_by_slot.get(start, 0.0) + energy
+        horizon_days = selected_horizon_days
+        if day_3_state is not None:
+            day_3_date = now.date() + timedelta(days=2)
+            sunrise_day_3_local = (
+                sunrise_day_3.astimezone(timezone)
+                if sunrise_day_3 is not None
+                else sunrise_tomorrow_local + timedelta(days=1)
+            )
+            sunset_day_3_local = (
+                sunset_day_3.astimezone(timezone)
+                if sunset_day_3 is not None
+                else sunset_tomorrow_local + timedelta(days=1)
+            )
+            pv_day_3 = _detailed_pv_map(
+                day_3_state,
+                day_3_date,
+                forecast_day_3,
+                timezone,
+                now_slot,
+            )
+            if not pv_day_3:
+                pv_day_3 = _fallback_pv_map(
+                    day_3_date,
+                    forecast_day_3,
+                    timezone,
+                    now_slot,
+                    sunrise_day_3_local.hour * 60 + sunrise_day_3_local.minute,
+                    sunset_day_3_local.hour * 60 + sunset_day_3_local.minute,
+                )
+            for start, energy in pv_day_3.items():
+                pv_by_slot[start] = pv_by_slot.get(start, 0.0) + energy
 
         load_by_slot: dict[datetime, float] | None = None
         if average_load_profile or weekday_load_profile or weekend_load_profile:
             load_by_slot = {}
-            horizon_end = datetime.combine(
-                now.date() + timedelta(days=2),
-                datetime.min.time(),
-                tzinfo=timezone,
-            )
-            cursor = now_slot
-            while cursor < horizon_end:
+            horizon_end = selected_horizon_end
+            cursor_utc = dt_util.as_utc(now_slot)
+            horizon_end_utc = dt_util.as_utc(horizon_end)
+            while cursor_utc < horizon_end_utc:
+                cursor = cursor_utc.astimezone(timezone)
                 category_profile = (
                     weekend_load_profile
                     if cursor.weekday() >= 5
@@ -883,7 +1571,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                     scale = daily_load / profile_total if profile_total > 0 else 1.0
                     slot = cursor.hour * 2 + cursor.minute // 30
                     load_by_slot[cursor] = slot_profile[slot] * scale
-                cursor += timedelta(minutes=30)
+                cursor_utc += timedelta(minutes=30)
 
         inverter_count_raw = _state_number(
             self.hass,
@@ -925,7 +1613,10 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
         # the battery.  The BMS value therefore limits the battery branch, not
         # the complete grid input; combining them here would subtract LOAD
         # twice and systematically undercharge the storage.
-        effective_power_kw = requested_power_kw
+        effective_power_kw = requested_power_kw * min(
+            max(self._effective_charge_power_factor, 0.50),
+            1.0,
+        )
 
         cheap_windows = (
             (
@@ -959,6 +1650,51 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             max(self_use_reserve_soc + safety_margin_soc, 0.0),
             100.0,
         )
+        capacity_kwh = required["sensor.hoymiles_hit_battery_capacity"]
+        assert capacity_kwh is not None
+        load_risk_kwh = daily_load * min(
+            max(load_uncertainty_ratio * 0.25, 0.02),
+            0.08,
+        )
+        forecast_risk_kwh = (
+            (forecast_tomorrow + forecast_day_3)
+            * min(max(self._forecast_accuracy_uncertainty, 0.0), 0.50)
+            * 0.05
+        )
+        uncertainty_margin_kwh = min(
+            load_risk_kwh + forecast_risk_kwh,
+            capacity_kwh * 0.08,
+        )
+        fallback_gap_load_kwh = (
+            horizon_gap_load_reserve_kwh(
+                daily_load,
+                selected_horizon_hours,
+                target_hours=PLANNING_HORIZON_TARGET_HOURS,
+            )
+            if day_3_status != "fresh"
+            else 0.0
+        )
+        maximum_soc = required["input_number.hoymiles_tariff_maximum_soc"]
+        assert maximum_soc is not None
+        terminal_headroom_kwh = capacity_kwh * max(
+            maximum_soc - reserve_soc,
+            0.0,
+        ) / 100.0
+        uncertainty_margin_applied_kwh = min(
+            uncertainty_margin_kwh,
+            terminal_headroom_kwh,
+        )
+        fallback_gap_load_applied_kwh = min(
+            fallback_gap_load_kwh,
+            max(terminal_headroom_kwh - uncertainty_margin_applied_kwh, 0.0),
+        )
+        terminal_margin_kwh = (
+            uncertainty_margin_applied_kwh + fallback_gap_load_applied_kwh
+        )
+        terminal_reserve_soc = min(
+            reserve_soc + terminal_margin_kwh / max(capacity_kwh, 0.001) * 100.0,
+            maximum_soc,
+        )
         night_start = (
             sunset_today_local.hour * 60 + sunset_today_local.minute - 90
         ) % (24 * 60)
@@ -969,6 +1705,34 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
             {
                 "forecast_remaining_today_kwh": round(remaining_today, 2),
                 "forecast_tomorrow_kwh": round(forecast_tomorrow, 2),
+                "forecast_day_3_kwh": (
+                    round(forecast_day_3, 2)
+                    if day_3_state is not None
+                    else None
+                ),
+                "model_input_forecast_remaining_today_kwh": round(
+                    remaining_today,
+                    2,
+                ),
+                "model_input_forecast_tomorrow_kwh": round(
+                    forecast_tomorrow,
+                    2,
+                ),
+                "model_input_forecast_day_3_kwh": (
+                    round(forecast_day_3, 2)
+                    if day_3_state is not None
+                    else 0.0
+                ),
+                "model_input_forecast_day_3_included": day_3_state is not None,
+                "model_input_average_daily_load_kwh": round(daily_load, 2),
+                "model_input_average_night_load_kwh": (
+                    round(night_load, 2) if night_load is not None else None
+                ),
+                "model_input_load_profile_mode": metadata["load_profile_mode"],
+                "model_input_fallback_zero_pv_hours": round(
+                    horizon_gap_hours,
+                    2,
+                ),
                 "forecast_remaining_today_raw_kwh": round(
                     remaining_today_raw,
                     2,
@@ -976,6 +1740,34 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 "forecast_tomorrow_raw_kwh": round(
                     forecast_tomorrow_raw,
                     2,
+                ),
+                "forecast_day_3_raw_kwh": (
+                    round(forecast_day_3_raw, 2)
+                    if day_3_state is not None
+                    else None
+                ),
+                "forecast_uncertainty_risk_weight": round(risk_weight, 3),
+                "forecast_today_p10_kwh": (
+                    round(today_p10, 2) if today_p10 is not None else None
+                ),
+                "forecast_today_p90_kwh": (
+                    round(today_p90, 2) if today_p90 is not None else None
+                ),
+                "forecast_tomorrow_p10_kwh": (
+                    round(tomorrow_p10, 2)
+                    if tomorrow_p10 is not None
+                    else None
+                ),
+                "forecast_tomorrow_p90_kwh": (
+                    round(tomorrow_p90, 2)
+                    if tomorrow_p90 is not None
+                    else None
+                ),
+                "forecast_day_3_p10_kwh": (
+                    round(day_3_p10, 2) if day_3_p10 is not None else None
+                ),
+                "forecast_day_3_p90_kwh": (
+                    round(day_3_p90, 2) if day_3_p90 is not None else None
                 ),
                 "forecast_today_effective_factor": round(
                     today_forecast_factor,
@@ -1021,6 +1813,39 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 "inverter_power_each_kw": rated_power,
                 "system_power_kw": round(system_power_kw, 2),
                 "requested_charge_power_kw": round(requested_power_kw, 2),
+                "measured_charge_power_factor": round(
+                    self._effective_charge_power_factor,
+                    3,
+                ),
+                "terminal_uncertainty_margin_kwh": round(
+                    terminal_margin_kwh,
+                    2,
+                ),
+                "terminal_statistical_margin_kwh": round(
+                    uncertainty_margin_applied_kwh,
+                    2,
+                ),
+                "fallback_zero_pv_load_reserve_kwh": round(
+                    fallback_gap_load_applied_kwh,
+                    2,
+                ),
+                "fallback_zero_pv_load_reserve_requested_kwh": round(
+                    fallback_gap_load_kwh,
+                    2,
+                ),
+                "model_input_fallback_zero_pv_load_reserve_kwh": round(
+                    fallback_gap_load_applied_kwh,
+                    2,
+                ),
+                "fallback_reserve_capped_by_maximum_soc": (
+                    fallback_gap_load_applied_kwh
+                    + 0.01
+                    < fallback_gap_load_kwh
+                ),
+                "terminal_reserve_soc_percent": round(
+                    terminal_reserve_soc,
+                    1,
+                ),
                 "bms_charge_power_limit_kw": (
                     round(bms_power_kw, 2) if bms_power_kw is not None else None
                 ),
@@ -1062,6 +1887,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                 night_start_minute=night_start,
                 night_end_minute=night_end,
                 charge_power_kw=effective_power_kw,
+                requested_charge_power_kw=requested_power_kw,
                 battery_charge_power_kw=(
                     bms_power_kw
                     if bms_power_kw is not None
@@ -1124,6 +1950,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity):
                     if bms_power_kw is not None
                     else system_power_kw
                 ),
+                horizon_days=horizon_days,
+                terminal_reserve_soc_percent=terminal_reserve_soc,
             ),
             metadata,
         )

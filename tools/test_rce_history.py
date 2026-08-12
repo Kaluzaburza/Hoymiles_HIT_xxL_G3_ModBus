@@ -129,7 +129,44 @@ def test_current_day_window_uses_actual_phase_load() -> None:
     assert abs(result.current_day_energy_kwh - 8.5) < 1e-6
 
 
+def test_extended_history_exposes_28_complete_days_and_profiles() -> None:
+    """The daily cache may retain 28 days without changing profile shape."""
+    now = datetime(2026, 8, 31, 12, 0, tzinfo=WARSAW)
+    samples = {entity_id: [] for entity_id in HISTORY.LOAD_PHASE_ENERGY_ENTITIES}
+    for offset in range(28, 0, -1):
+        day = now.date() - timedelta(days=offset)
+        for phase, entity_id in enumerate(
+            HISTORY.LOAD_PHASE_ENERGY_ENTITIES,
+            start=1,
+        ):
+            samples[entity_id].extend(
+                [
+                    (datetime.combine(day, time(0, 5), tzinfo=WARSAW), 0.0),
+                    (
+                        datetime.combine(day, time(12, 5), tzinfo=WARSAW),
+                        float(phase),
+                    ),
+                    (
+                        datetime.combine(day, time(23, 55), tzinfo=WARSAW),
+                        float(phase * 2),
+                    ),
+                ]
+            )
+    result = HISTORY.summarize_load_history(
+        samples,
+        now=now,
+        night_windows={},
+        history_days=28,
+    )
+    assert result.daily_history_days == 28
+    assert len(result.daily_energy_kwh) == 28
+    assert result.weekday_profile_days + result.weekend_profile_days == 28
+    assert len(result.average_profile_kwh) == 48
+    assert abs(sum(result.average_profile_kwh) - 12.0) < 0.01
+
+
 if __name__ == "__main__":
     test_daily_and_night_history_uses_phase_counters()
     test_current_day_window_uses_actual_phase_load()
-    print("RCE history: recorder reconstruction scenario passed")
+    test_extended_history_exposes_28_complete_days_and_profiles()
+    print("RCE history: 3 recorder reconstruction scenarios passed")

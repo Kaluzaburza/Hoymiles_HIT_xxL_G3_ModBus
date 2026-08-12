@@ -31,6 +31,13 @@ input_boolean:
     name: "EMS RCE — dynamic SOC reserve"
     icon: mdi:weather-partly-cloudy
 
+  # Wyłącznie preferencja interfejsu: pokazuje techniczne dane planu RCE.
+  # Nie bierze udziału w sterowaniu falownikiem.
+  hoymiles_rce_advanced_view:
+    name: "EMS RCE — show advanced data"
+    icon: mdi:tune-variant
+    initial: false
+
   # Wewnętrzny znacznik: tylko cykl rozpoczęty przez automatykę RCE może zostać
   # przez nią finishony. Ręczne harmonogramy zachowują pierwszeństwo.
   hoymiles_rce_discharge_active:
@@ -45,6 +52,13 @@ input_boolean:
     name: "Tariff EMS — automatic charging enabled"
     icon: mdi:battery-clock-outline
 
+  # Wyłącznie preferencja interfejsu: pokazuje techniczne dane planu taryfowego.
+  # Nie bierze udziału w sterowaniu falownikiem.
+  hoymiles_tariff_advanced_view:
+    name: "Tariff EMS — show advanced data"
+    icon: mdi:tune-variant
+    initial: false
+
   hoymiles_tariff_charge_active:
     name: "Tariff EMS — automatic charging in progress"
     icon: mdi:battery-charging-clock
@@ -52,6 +66,13 @@ input_boolean:
   hoymiles_rcm_enabled:
     name: "RCEm 253 V+ — automation enabled"
     icon: mdi:transmission-tower-export
+
+  # Wyłącznie preferencja interfejsu. Dane diagnostyczne pozostają dostępne,
+  # ale nie obciążają podstawowego widoku użytkownika.
+  hoymiles_rcm_advanced_view:
+    name: "RCEm 253 V+ — show advanced data"
+    icon: mdi:tune-variant
+    initial: false
 
   # Tryb obserwacyjny jest domyślnie włączony. Obliczenia i historia działają,
   # ale żaden rejestr falownika nie jest zapisywany.
@@ -61,7 +82,7 @@ input_boolean:
     initial: true
 
   # Opcjonalny drugi regulator. Pozostaje domyślnie wyłączony i nigdy nie
-  # podnosi limitu ponad wartość zastaną w falowniku ani limit użytkownika.
+  # podnosi limitu ponad value zastaną w falowniku ani limit użytkownika.
   hoymiles_rcm_export_control_enabled:
     name: "RCEm 253 V+ — variable export-limit control"
     icon: mdi:transmission-tower-export
@@ -78,7 +99,7 @@ input_boolean:
     icon: mdi:battery-sync
 
   # Wewnętrzny znacznik własności limitu eksportu. Dzięki niemu RCEm odtwarza
-  # dokładnie bezpieczną wartość po wyłączeniu lub przejęciu sterowania.
+  # dokładnie bezpieczną value po wyłączeniu lub przejęciu sterowania.
   hoymiles_rcm_export_control_active:
     name: "RCEm 253 V+ — export-limit control active"
     icon: mdi:transmission-tower-export
@@ -188,6 +209,22 @@ input_datetime:
     has_time: true
     icon: mdi:clock-end
 
+  # Internal state: an accepted RCE half-hour remains owned by the controller
+  # until its boundary. A later forecast refresh cannot interrupt it mid-slot.
+  hoymiles_rce_latched_slot_end:
+    name: "EMS RCE — latched slot end"
+    has_date: true
+    has_time: true
+    icon: mdi:clock-end
+
+  # Internal rate limiter for status notifications. It survives automation
+  # reloads and prevents an unstable upstream state from flooding the phone.
+  hoymiles_ems_last_push_at:
+    name: "EMS — czas ostatniego powiadomienia"
+    has_date: true
+    has_time: true
+    icon: mdi:bell-check-outline
+
 input_text:
   hoymiles_ems_push_notify_target:
     name: "EMS — notification phone (notify entity)"
@@ -218,6 +255,11 @@ input_text:
     max: 32
     initial: "none"
     icon: mdi:cog-clockwise
+
+  hoymiles_ems_last_push_fingerprint:
+    name: "EMS — sygnatura ostatniego powiadomienia"
+    max: 255
+    icon: mdi:fingerprint
 
   hoymiles_battery_balancing_phase:
     name: "Battery balancing — internal stage"
@@ -808,7 +850,7 @@ template:
       - name: "Hoymiles EMS Package Version"
         unique_id: hoymiles_ems_package_version
         icon: mdi:package-variant-closed-check
-        state: "1.4.7"
+        state: "1.5.0"
 
       # Rejestr zbiorczy LOAD 2169/30015 obejmuje również zużycie własne
       # falowników i straty przetwarzania. Suma faz 2170-2172 odpowiada
@@ -877,6 +919,277 @@ template:
           {% else %}
             No valid notify entity
           {% endif %}
+
+  # A shared execution gate used by every automatic EMS writer. The status
+  # published by ESPHome validates the detected topology and, for a parallel
+  # installation, all configured Master/Slave addresses before HA may write.
+  - binary_sensor:
+      - name: "Hoymiles EMS Execution Ready"
+        unique_id: hoymiles_ems_execution_ready
+        icon: mdi:shield-check-outline
+        state: >-
+          {% set ems = states('select.hoymiles_hit_ems_mode') %}
+          {% set parallel =
+            states('sensor.hoymiles_hit_parallel_ems_control_status') %}
+          {% set direct = parallel in [
+            'Ready - direct control',
+            'Ready - direct control',
+            'parallel_ems_ready_direct'] %}
+          {% set master = parallel in [
+            'Ready - Master controls the parallel network',
+            'Ready - Master controls the parallel network',
+            'Ready - wszystkie falowniki zsynchronizowane',
+            'Ready - all inverters synchronized',
+            'parallel_ems_ready_master'] %}
+          {% set count = states(
+            'sensor.hoymiles_hit_number_of_machines_master_and_slave') %}
+          {% set topology_ok = direct or
+            (master and is_number(count)
+             and 2 <= (count | int(0)) <= 10) %}
+          {# The mirrored SOC/mode/topology entities only emit a HA state
+             event when their value changes. Their last_updated timestamp is
+             therefore not a connection heartbeat. ESP Uptime changes every
+             minute and is the reliable liveness signal for the whole device. #}
+          {% set esp_state = states.sensor.hoymiles_hit_esp_uptime %}
+          {% set esp_reported = esp_state.last_reported
+            if esp_state.last_reported is defined else esp_state.last_updated %}
+          {% set esp_age = as_timestamp(now())
+            - as_timestamp(esp_reported, 0) %}
+          {{ ems not in ['unknown', 'unavailable', 'none', '']
+             and is_number(states(
+               'sensor.hoymiles_hit_overview_battery_soc'))
+             and is_number(states('sensor.hoymiles_hit_esp_uptime'))
+             and esp_age >= 0 and esp_age <= 180
+             and topology_ok }}
+        attributes:
+          parallel_status: >-
+            {{ states('sensor.hoymiles_hit_parallel_ems_control_status') }}
+          detected_inverters: >-
+            {{ states(
+              'sensor.hoymiles_hit_number_of_machines_master_and_slave') }}
+          liveness_source: sensor.hoymiles_hit_esp_uptime
+          esp_uptime_age_seconds: >-
+            {% set item = states.sensor.hoymiles_hit_esp_uptime %}
+            {% set reported = item.last_reported
+              if item.last_reported is defined else item.last_updated %}
+            {{ (as_timestamp(now()) - as_timestamp(reported, 0))
+               | round(0) }}
+          reason: >-
+            {% set ems = states('select.hoymiles_hit_ems_mode') %}
+            {% set parallel =
+              states('sensor.hoymiles_hit_parallel_ems_control_status') %}
+            {% set esp_state = states.sensor.hoymiles_hit_esp_uptime %}
+            {% set esp_reported = esp_state.last_reported
+              if esp_state.last_reported is defined
+              else esp_state.last_updated %}
+            {% set esp_age = as_timestamp(now())
+              - as_timestamp(esp_reported, 0) %}
+            {% if ems in ['unknown', 'unavailable', 'none', ''] %}
+              Brak potwierdzonego trybu EMS
+            {% elif not is_number(states(
+              'sensor.hoymiles_hit_overview_battery_soc')) %}
+              Brak aktualnego SOC magazynu
+            {% elif not is_number(states('sensor.hoymiles_hit_esp_uptime')) %}
+              No ESP32 liveness signal
+            {% elif esp_age < 0 or esp_age > 180 %}
+              ESP32 has not reported its liveness signal for more than 3 minutes
+            {% elif parallel not in [
+              'Ready - direct control',
+              'Ready - direct control',
+              'parallel_ems_ready_direct',
+              'Ready - Master controls the parallel network',
+              'Ready - Master controls the parallel network',
+              'Ready - wszystkie falowniki zsynchronizowane',
+              'Ready - all inverters synchronized',
+              'parallel_ems_ready_master'] %}
+              The parallel network has not confirmed readiness
+            {% else %}
+              Ready
+            {% endif %}
+
+      - name: "Hoymiles RCE Control Data Ready"
+        unique_id: hoymiles_rce_control_data_ready
+        icon: mdi:database-check-outline
+        state: >-
+          {% set status = state_attr(
+            'sensor.hoymiles_hit_rce_optimized_plan', 'status_code') %}
+          {% set plan = states.sensor.hoymiles_hit_rce_optimized_plan %}
+          {% set price = states.sensor.hoymiles_rce_current_price %}
+          {% set source = states.sensor.hoymiles_rce_day %}
+          {% set plan_reported = plan.last_reported
+            if plan.last_reported is defined else plan.last_updated %}
+          {% set price_reported = price.last_reported
+            if price.last_reported is defined else price.last_updated %}
+          {% set source_reported = source.last_reported
+            if source.last_reported is defined else source.last_updated %}
+          {% set plan_age = as_timestamp(now())
+            - as_timestamp(plan_reported, 0) %}
+          {% set price_age = as_timestamp(now())
+            - as_timestamp(price_reported, 0) %}
+          {% set source_age = as_timestamp(now())
+            - as_timestamp(source_reported, 0) %}
+          {{ is_state('binary_sensor.hoymiles_ems_execution_ready', 'on')
+             and is_state('binary_sensor.hoymiles_ems_export_allowed', 'on')
+             and status in ['ready', 'waiting_for_market', 'home_protected']
+             and price_age >= 0 and price_age <= 300
+             and (plan_age <= 300 or source_age <= 1200)
+             and is_number(states('sensor.hoymiles_rce_current_price'))
+             and is_number(states(
+               'sensor.hoymiles_rce_effective_minimum_soc'))
+             and is_number(states(
+               'sensor.hoymiles_rce_effective_discharge_power_percent'))
+             and is_number(states(
+               'number.hoymiles_hit_force_discharge_soc'))
+             and is_number(states(
+               'number.hoymiles_hit_maximum_discharge_power')) }}
+        attributes:
+          optimizer_status: >-
+            {{ state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                          'status_code') | default('missing_data', true) }}
+          plan_age_seconds: >-
+            {% set item = states.sensor.hoymiles_hit_rce_optimized_plan %}
+            {% set reported = item.last_reported
+              if item.last_reported is defined else item.last_updated %}
+            {{ (as_timestamp(now()) - as_timestamp(reported, 0))
+               | round(0) }}
+          price_age_seconds: >-
+            {% set item = states.sensor.hoymiles_rce_current_price %}
+            {% set reported = item.last_reported
+              if item.last_reported is defined else item.last_updated %}
+            {{ (as_timestamp(now()) - as_timestamp(reported, 0))
+               | round(0) }}
+          reason: >-
+            {% set plan = states.sensor.hoymiles_hit_rce_optimized_plan %}
+            {% set price = states.sensor.hoymiles_rce_current_price %}
+            {% set source = states.sensor.hoymiles_rce_day %}
+            {% set plan_reported = plan.last_reported
+              if plan.last_reported is defined else plan.last_updated %}
+            {% set price_reported = price.last_reported
+              if price.last_reported is defined else price.last_updated %}
+            {% set source_reported = source.last_reported
+              if source.last_reported is defined else source.last_updated %}
+            {% set plan_age = as_timestamp(now())
+              - as_timestamp(plan_reported, 0) %}
+            {% set price_age = as_timestamp(now())
+              - as_timestamp(price_reported, 0) %}
+            {% set source_age = as_timestamp(now())
+              - as_timestamp(source_reported, 0) %}
+            {% if not is_state(
+              'binary_sensor.hoymiles_ems_execution_ready', 'on') %}
+              EMS control or the parallel network is not ready
+            {% elif not is_state(
+              'binary_sensor.hoymiles_ems_export_allowed', 'on') %}
+              Eksport zablokowany przez GCF lub limit 0%
+            {% elif state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                               'status_code')
+                    in ['missing_data', 'optimizer_error', none] %}
+              Plan RCE jest nieaktualny albo niekompletny
+            {% elif not is_number(states(
+              'sensor.hoymiles_rce_current_price')) %}
+              Brak aktualnej ceny RCE
+            {% elif price_age < 0 or price_age > 300 %}
+              RCE price has not been reported for more than 5 minutes
+            {% elif plan_age > 300 and source_age > 1200 %}
+              The RCE plan and PSE data are stale
+            {% else %}
+              Ready
+            {% endif %}
+
+      - name: "Hoymiles EMS Export Allowed"
+        unique_id: hoymiles_ems_export_allowed
+        icon: mdi:transmission-tower-export
+        state: >-
+          {% set gcf = states(
+            'select.hoymiles_hit_generation_control_function') | lower %}
+          {% set limit = states(
+            'number.hoymiles_hit_maximum_export_power_limit') %}
+          {{ gcf in ['disabled', 'off']
+             or (gcf in ['enabled', 'on']
+                 and is_number(limit) and (limit | float(0)) > 0) }}
+        attributes:
+          gcf: >-
+            {{ states('select.hoymiles_hit_generation_control_function') }}
+          export_limit_percent: >-
+            {{ states('number.hoymiles_hit_maximum_export_power_limit') }}
+          reason: >-
+            {% set gcf = states(
+              'select.hoymiles_hit_generation_control_function') | lower %}
+            {% set limit = states(
+              'number.hoymiles_hit_maximum_export_power_limit') %}
+            {% if gcf in ['disabled', 'off'] %}
+              GCF disabled — eksport bez limitu GCF
+            {% elif gcf in ['enabled', 'on'] and is_number(limit)
+                    and (limit | float(0)) > 0 %}
+              Eksport dozwolony przez GCF
+            {% elif gcf in ['enabled', 'on'] and is_number(limit) %}
+              Zero Export — limit GCF wynosi 0%
+            {% else %}
+              Export settings are not confirmed
+            {% endif %}
+
+      - name: "Hoymiles Tariff Control Data Ready"
+        unique_id: hoymiles_tariff_control_data_ready
+        icon: mdi:database-check-outline
+        state: >-
+          {% set status = state_attr(
+            'sensor.hoymiles_hit_tariff_charge_plan', 'status_code') %}
+          {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
+          {% set forecast = states.sensor.hoymiles_solcast_forecast_today %}
+          {% set plan_reported = plan.last_reported
+            if plan.last_reported is defined else plan.last_updated %}
+          {% set forecast_reported = forecast.last_reported
+            if forecast.last_reported is defined else forecast.last_updated %}
+          {% set plan_age = as_timestamp(now())
+            - as_timestamp(plan_reported, 0) %}
+          {% set forecast_age = as_timestamp(now())
+            - as_timestamp(forecast_reported, 0) %}
+          {{ is_state('binary_sensor.hoymiles_ems_execution_ready', 'on')
+             and status in [
+               'ready',
+               'insufficient_cheap_window',
+               'no_charge_needed',
+               'no_discount_window',
+               'shortage_in_low_period',
+               'no_cheap_window']
+             and (plan_age <= 300 or forecast_age <= 300)
+             and is_number(states('sensor.hoymiles_tariff_target_soc'))
+             and is_number(states(
+               'number.hoymiles_hit_force_charge_soc'))
+             and is_number(states(
+               'number.hoymiles_hit_maximum_charge_power')) }}
+        attributes:
+          optimizer_status: >-
+            {{ state_attr('sensor.hoymiles_hit_tariff_charge_plan',
+                          'status_code') | default('missing_data', true) }}
+          plan_age_seconds: >-
+            {% set item = states.sensor.hoymiles_hit_tariff_charge_plan %}
+            {% set reported = item.last_reported
+              if item.last_reported is defined else item.last_updated %}
+            {{ (as_timestamp(now()) - as_timestamp(reported, 0))
+               | round(0) }}
+          reason: >-
+            {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
+            {% set forecast = states.sensor.hoymiles_solcast_forecast_today %}
+            {% set plan_reported = plan.last_reported
+              if plan.last_reported is defined else plan.last_updated %}
+            {% set forecast_reported = forecast.last_reported
+              if forecast.last_reported is defined else forecast.last_updated %}
+            {% set plan_age = as_timestamp(now())
+              - as_timestamp(plan_reported, 0) %}
+            {% set forecast_age = as_timestamp(now())
+              - as_timestamp(forecast_reported, 0) %}
+            {% if not is_state(
+              'binary_sensor.hoymiles_ems_execution_ready', 'on') %}
+              EMS control or the parallel network is not ready
+            {% elif state_attr('sensor.hoymiles_hit_tariff_charge_plan',
+                               'status_code')
+                    in ['missing_data', 'optimizer_error', 'learning', none] %}
+              Plan taryfowy jest nieaktualny albo niekompletny
+            {% elif plan_age > 300 and forecast_age > 300 %}
+              The tariff plan and forecast have not been reported for more than 5 minutes
+            {% else %}
+              Ready
+            {% endif %}
 
   # Okno ochronne trwa od 90 minut przed zachodem do 90 minut po wschodzie.
   # Próbkowanie co minutę ogranicza liczbę samples statystycznych, zachowując
@@ -3330,11 +3643,11 @@ automation:
       - trigger: state
         entity_id: select.hoymiles_hit_ems_mode
         id: ems_mode
-        for: "00:00:15"
+        for: "00:00:45"
       - trigger: state
         entity_id: sensor.hoymiles_hit_inverter_work_status
         id: inverter_status
-        for: "00:00:15"
+        for: "00:00:45"
     conditions:
       - condition: state
         entity_id: input_boolean.hoymiles_ems_push_notifications_enabled
@@ -3358,6 +3671,18 @@ automation:
              or trigger.from_state is not defined
              or trigger.from_state is none
              or trigger.from_state.state != trigger.to_state.state }}
+      # Suppress only an identical, repeated status for five minutes. A genuinely
+      # different stable mode or inverter fault is delivered immediately.
+      - condition: template
+        value_template: >-
+          {% set last = as_timestamp(states(
+            'input_datetime.hoymiles_ems_last_push_at'), 0) %}
+          {% set fingerprint =
+            states('select.hoymiles_hit_ems_mode') ~ '|' ~
+            states('sensor.hoymiles_hit_inverter_work_status') %}
+          {{ fingerprint != states(
+               'input_text.hoymiles_ems_last_push_fingerprint')
+             or last <= 0 or as_timestamp(now()) - last >= 300 }}
     actions:
       # Tryb EMS i inverter operating status mogą zaktualizować się niemal
       # jednocześnie. Restart automatyzacji scala je w jedno powiadomienie.
@@ -3393,6 +3718,18 @@ automation:
             EMS mode: {{ ems_mode }}
             Inverter status: {{ inverter_status }}
             Changed: {{ changed_status }}
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.hoymiles_ems_last_push_at
+        data:
+          timestamp: "{{ as_timestamp(now()) }}"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.hoymiles_ems_last_push_fingerprint
+        data:
+          value: >-
+            {{ states('select.hoymiles_hit_ems_mode') ~ '|' ~
+               states('sensor.hoymiles_hit_inverter_work_status') }}
 
   - id: hoymiles_initialize_solcast_forecast_entity
     alias: "EMS RCE — set default Solcast entity"
@@ -3636,7 +3973,7 @@ automation:
             {{ states('sensor.hoymiles_rce_current_price') | float(0) }}
       - choose:
           # Przy zmianie daty punkt kontrolny może jeszcze zawierać końcową
-          # wartość sprzętowego licznika z poprzedniego dnia. Nie wolno
+          # value sprzętowego licznika z poprzedniego dnia. Nie wolno
           # przepisywać jej do bieżącego dnia jako eksport nierozpoznany.
           - conditions:
               - condition: template
@@ -3906,6 +4243,8 @@ automation:
           - number.hoymiles_hit_force_charge_soc
           - number.hoymiles_hit_maximum_charge_power
           - select.hoymiles_hit_ems_mode
+          - binary_sensor.hoymiles_tariff_control_data_ready
+          - input_boolean.hoymiles_rcm_enabled
           - input_boolean.hoymiles_battery_balancing_active
       - trigger: homeassistant
         event: start
@@ -3967,11 +4306,17 @@ automation:
                 entity_id: input_boolean.hoymiles_rce_discharge_enabled
                 state: "off"
               - condition: state
+                entity_id: input_boolean.hoymiles_rcm_enabled
+                state: "off"
+              - condition: state
                 entity_id: input_boolean.hoymiles_tariff_charge_active
                 state: "off"
               - condition: state
                 entity_id: input_boolean.hoymiles_battery_balancing_active
                 state: "off"
+              - condition: state
+                entity_id: binary_sensor.hoymiles_tariff_control_data_ready
+                state: "on"
               - condition: state
                 entity_id: binary_sensor.hoymiles_tariff_planned_charge_slot
                 state: "on"
@@ -4047,47 +4392,113 @@ automation:
                     {{ as_timestamp(state_attr(
                       'sensor.hoymiles_hit_tariff_charge_plan',
                       'current_slot_end')) }}
-              - action: number.set_value
-                target:
-                  entity_id: number.hoymiles_hit_maximum_charge_power
-                data:
-                  value: >-
-                    {{ state_attr('sensor.hoymiles_hit_tariff_charge_plan',
-                                  'effective_charge_power_percent')
-                       | float(0) | round(1) }}
-              - action: number.set_value
-                target:
-                  entity_id: number.hoymiles_hit_force_charge_soc
-                data:
-                  value: >-
-                    {% if state_attr(
-                      'sensor.hoymiles_hit_tariff_charge_plan',
-                      'current_action') == 'grid_support' %}
-                      {{ states('sensor.hoymiles_hit_overview_battery_soc')
-                         | float(10) | round(0, 'floor') }}
-                    {% else %}
-                      {{ states('sensor.hoymiles_tariff_target_soc')
-                         | float(100) | round(0, 'ceil') }}
-                    {% endif %}
-              - wait_template: >-
-                  {{ state_attr('sensor.hoymiles_hit_tariff_charge_plan',
-                                'current_action') == 'grid_support'
-                     or (((states('number.hoymiles_hit_force_charge_soc')
-                           | float(0))
-                          - (states(
+              # Idempotent setting writes: a value already confirmed by the
+              # inverter is never sent to Modbus again.
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set wanted = state_attr(
+                        'sensor.hoymiles_hit_tariff_charge_plan',
+                        'effective_charge_power_percent') | float(0) %}
+                      {{ ((states(
+                        'number.hoymiles_hit_maximum_charge_power') | float(0))
+                           - wanted) | abs >= 0.5 }}
+                then:
+                  - action: number.set_value
+                    target:
+                      entity_id: number.hoymiles_hit_maximum_charge_power
+                    data:
+                      value: >-
+                        {{ state_attr(
+                             'sensor.hoymiles_hit_tariff_charge_plan',
+                             'effective_charge_power_percent')
+                           | float(0) | round(1) }}
+                  - wait_template: >-
+                      {% set wanted = state_attr(
+                        'sensor.hoymiles_hit_tariff_charge_plan',
+                        'effective_charge_power_percent') | float(0) %}
+                      {{ ((states(
+                        'number.hoymiles_hit_maximum_charge_power') | float(0))
+                           - wanted) | abs < 0.5 }}
+                    timeout: "00:01:00"
+                    continue_on_timeout: true
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {% set wanted = state_attr(
+                            'sensor.hoymiles_hit_tariff_charge_plan',
+                            'effective_charge_power_percent') | float(0) %}
+                          {{ ((states(
+                            'number.hoymiles_hit_maximum_charge_power')
+                              | float(0)) - wanted) | abs >= 0.5 }}
+                    then:
+                      - if:
+                          - condition: state
+                            entity_id: select.hoymiles_hit_ems_mode
+                            state: "grid_charge"
+                        then:
+                          - action: select.select_option
+                            target:
+                              entity_id: select.hoymiles_hit_ems_mode
+                            data:
+                              option: "self_use"
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.hoymiles_tariff_charge_active
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.hoymiles_tariff_active_action
+                        data:
+                          value: "none"
+                      - stop: "The inverter did not confirm the charging limit"
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set wanted = states(
+                        'input_number.hoymiles_tariff_latched_target_soc')
+                         | float(100) %}
+                      {{ ((states('number.hoymiles_hit_force_charge_soc')
+                            | float(0)) - wanted) | abs >= 1.0 }}
+                then:
+                  - action: number.set_value
+                    target:
+                      entity_id: number.hoymiles_hit_force_charge_soc
+                    data:
+                      value: >-
+                        {{ states(
+                             'input_number.hoymiles_tariff_latched_target_soc')
+                           | float(100) | round(0) }}
+                  - wait_template: >-
+                      {% set wanted = states(
+                        'input_number.hoymiles_tariff_latched_target_soc')
+                         | float(100) %}
+                      {{ ((states('number.hoymiles_hit_force_charge_soc')
+                            | float(0)) - wanted) | abs < 1.0 }}
+                    timeout: "00:01:00"
+                    continue_on_timeout: true
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {% set wanted = states(
                             'input_number.hoymiles_tariff_latched_target_soc')
-                             | float(100))) | abs < 1.1) }}
-                timeout: "00:01:00"
-                continue_on_timeout: false
-              - action: select.select_option
-                target:
-                  entity_id: select.hoymiles_hit_ems_mode
-                data:
-                  option: "grid_charge"
-              - wait_template: >-
-                  {{ is_state('select.hoymiles_hit_ems_mode', 'grid_charge') }}
-                timeout: "00:02:00"
-                continue_on_timeout: false
+                             | float(100) %}
+                          {{ ((states('number.hoymiles_hit_force_charge_soc')
+                                | float(0)) - wanted) | abs >= 1.0 }}
+                    then:
+                      - if:
+                          - condition: state
+                            entity_id: select.hoymiles_hit_ems_mode
+                            state: "grid_charge"
+                        then:
+                          - action: select.select_option
+                            target:
+                              entity_id: select.hoymiles_hit_ems_mode
+                            data:
+                              option: "self_use"
+                      - stop: "The inverter did not confirm the target SOC before start"
+              # Pending ownership survives a temporary API outage. If the mode
+              # write was accepted but its readback disappeared, the fail-safe
+              # will finish or neutralize this exact cycle after reconnect.
               - action: input_text.set_value
                 target:
                   entity_id: input_text.hoymiles_tariff_active_action
@@ -4098,6 +4509,75 @@ automation:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.hoymiles_tariff_charge_active
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ not is_state(
+                        'select.hoymiles_hit_ems_mode', 'grid_charge') }}
+                then:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.hoymiles_hit_ems_mode
+                    data:
+                      option: "grid_charge"
+              - wait_template: >-
+                  {{ is_state('select.hoymiles_hit_ems_mode', 'grid_charge') }}
+                timeout: "00:02:00"
+                continue_on_timeout: true
+              - choose:
+                  - conditions:
+                      - condition: state
+                        entity_id: select.hoymiles_hit_ems_mode
+                        state: "grid_charge"
+                      - condition: state
+                        entity_id: binary_sensor.hoymiles_tariff_control_data_ready
+                        state: "on"
+                      - condition: template
+                        value_template: >-
+                          {% set wanted_power = state_attr(
+                            'sensor.hoymiles_hit_tariff_charge_plan',
+                            'effective_charge_power_percent') | float(0) %}
+                          {% set wanted_soc = states(
+                            'input_number.hoymiles_tariff_latched_target_soc')
+                             | float(100) %}
+                          {{ ((states(
+                            'number.hoymiles_hit_maximum_charge_power')
+                              | float(0)) - wanted_power) | abs < 0.5
+                             and ((states(
+                               'number.hoymiles_hit_force_charge_soc')
+                                | float(0)) - wanted_soc) | abs < 1.1 }}
+                    sequence:
+                      - delay: "00:00:01"
+                default:
+                  # The inverter did not acknowledge the complete transaction.
+                  # Return to neutral; retain pending ownership only while the
+                  # API readback itself is unavailable, so reconnect can recover.
+                  - if:
+                      - condition: state
+                        entity_id: select.hoymiles_hit_ems_mode
+                        state: "grid_charge"
+                    then:
+                      - action: select.select_option
+                        target:
+                          entity_id: select.hoymiles_hit_ems_mode
+                        data:
+                          option: "self_use"
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{ states('select.hoymiles_hit_ems_mode')
+                             not in ['unknown', 'unavailable', 'none', '']
+                             and not is_state(
+                               'select.hoymiles_hit_ems_mode', 'grid_charge') }}
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.hoymiles_tariff_charge_active
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.hoymiles_tariff_active_action
+                        data:
+                          value: "none"
 
           # Aktualizacja ograniczeń BMS podczas bieżącego bloku. Cel SOC nie
           # podąża już za ruchomym planem — używany jest cel zapamiętany przy
@@ -4151,6 +4631,44 @@ automation:
                              'sensor.hoymiles_hit_tariff_charge_plan',
                              'effective_charge_power_percent')
                            | float(0) | round(1) }}
+                  - wait_template: >-
+                      {% set wanted = state_attr(
+                        'sensor.hoymiles_hit_tariff_charge_plan',
+                        'effective_charge_power_percent') | float(0) %}
+                      {{ ((states(
+                        'number.hoymiles_hit_maximum_charge_power') | float(0))
+                           - wanted) | abs < 0.5 }}
+                    timeout: "00:01:00"
+                    continue_on_timeout: true
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {% set wanted = state_attr(
+                            'sensor.hoymiles_hit_tariff_charge_plan',
+                            'effective_charge_power_percent') | float(0) %}
+                          {{ ((states(
+                            'number.hoymiles_hit_maximum_charge_power')
+                              | float(0)) - wanted) | abs >= 0.5 }}
+                    then:
+                      - if:
+                          - condition: state
+                            entity_id: select.hoymiles_hit_ems_mode
+                            state: "grid_charge"
+                        then:
+                          - action: select.select_option
+                            target:
+                              entity_id: select.hoymiles_hit_ems_mode
+                            data:
+                              option: "self_use"
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.hoymiles_tariff_charge_active
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.hoymiles_tariff_active_action
+                        data:
+                          value: "none"
+                      - stop: "The inverter did not confirm the new charging limit"
               - if:
                   - condition: template
                     value_template: >-
@@ -4188,11 +4706,47 @@ automation:
                         {{ states(
                              'input_number.hoymiles_tariff_latched_target_soc')
                            | float(100) | round(0) }}
+                  - wait_template: >-
+                      {% set wanted = states(
+                        'input_number.hoymiles_tariff_latched_target_soc')
+                         | float(100) %}
+                      {{ ((states('number.hoymiles_hit_force_charge_soc')
+                            | float(0)) - wanted) | abs < 1.0 }}
+                    timeout: "00:01:00"
+                    continue_on_timeout: true
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {% set wanted = states(
+                            'input_number.hoymiles_tariff_latched_target_soc')
+                             | float(100) %}
+                          {{ ((states('number.hoymiles_hit_force_charge_soc')
+                                | float(0)) - wanted) | abs >= 1.0 }}
+                    then:
+                      - if:
+                          - condition: state
+                            entity_id: select.hoymiles_hit_ems_mode
+                            state: "grid_charge"
+                        then:
+                          - action: select.select_option
+                            target:
+                              entity_id: select.hoymiles_hit_ems_mode
+                            data:
+                              option: "self_use"
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.hoymiles_tariff_charge_active
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.hoymiles_tariff_active_action
+                        data:
+                          value: "none"
+                      - stop: "The inverter did not confirm the target SOC"
 
           # Stop: end zapamiętanego ciągłego okna, osiągnięcie zamrożonego
           # celu, wyłączenie automatu albo trwała utrata wymaganych danych.
           # Chwilowe zniknięcie bieżącego bloku z ponownie przeliczonego planu
-          # nie przerywa rozpoczętego ładowania. Minimalny czas 90 s pozwala
+          # nie przerywa rozpoczętego ładowania. Minimalny czas 120 s pozwala
           # potwierdzić SOC i wykonanie zapisu Modbus przed komendą Self-Use.
           - conditions:
               - condition: state
@@ -4220,15 +4774,18 @@ automation:
                            in ['battery_charge', 'grid_support_and_charge']
                          and (as_timestamp(now()) - as_timestamp(
                            states.input_boolean.hoymiles_tariff_charge_active
-                             .last_changed)) >= 90
+                             .last_changed)) >= 120
                          and (states(
                            'sensor.hoymiles_hit_overview_battery_soc')
                               | float(0))
                              >= (states(
                                'input_number.hoymiles_tariff_latched_target_soc')
                                  | float(100)) - 0.1)
-                     or not is_state(
-                       'select.hoymiles_hit_ems_mode', 'grid_charge') }}
+                     or (not is_state(
+                           'select.hoymiles_hit_ems_mode', 'grid_charge')
+                         and (as_timestamp(now()) - as_timestamp(
+                           states.select.hoymiles_hit_ems_mode.last_changed))
+                           >= 60) }}
               - condition: template
                 value_template: >-
                   {{ states('select.hoymiles_hit_ems_mode')
@@ -4293,6 +4850,9 @@ automation:
           - sensor.hoymiles_rce_effective_minimum_soc
           - sensor.hoymiles_rce_dynamic_minimum_soc
           - binary_sensor.hoymiles_rce_reserve_ready
+          - binary_sensor.hoymiles_rce_control_data_ready
+          - binary_sensor.hoymiles_ems_export_allowed
+          - input_boolean.hoymiles_rcm_enabled
           - input_boolean.hoymiles_battery_balancing_active
       - trigger: homeassistant
         event: start
@@ -4305,6 +4865,9 @@ automation:
             state: "off"
           - condition: state
             entity_id: input_boolean.hoymiles_rce_discharge_enabled
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.hoymiles_rce_control_data_ready
             state: "on"
           - condition: template
             value_template: >-
@@ -4335,7 +4898,59 @@ automation:
                     'sensor.hoymiles_rce_effective_discharge_power_percent')
                     | float(0))) | abs < 0.5 }}
             timeout: "00:01:00"
-            continue_on_timeout: false
+            continue_on_timeout: true
+      - if:
+          - condition: state
+            entity_id: input_boolean.hoymiles_rce_discharge_active
+            state: "on"
+          - condition: template
+            value_template: >-
+              {{ ((states(
+                   'number.hoymiles_hit_maximum_discharge_power') | float(0))
+                  - (states(
+                    'sensor.hoymiles_rce_effective_discharge_power_percent')
+                     | float(0))) | abs >= 0.5 }}
+        then:
+          - if:
+              - condition: state
+                entity_id: select.hoymiles_hit_ems_mode
+                state: "grid_discharge"
+            then:
+              - action: select.select_option
+                target:
+                  entity_id: select.hoymiles_hit_ems_mode
+                data:
+                  option: "self_use"
+              - wait_template: >-
+                  {{ is_state('select.hoymiles_hit_ems_mode', 'self_use') }}
+                timeout: "00:01:00"
+                continue_on_timeout: true
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.hoymiles_rce_discharge_active
+      # A consecutive planned slot extends ownership before the stop branch is
+      # evaluated. A forecast refresh may shorten only future slots, never the
+      # half-hour that the inverter has already accepted.
+      - if:
+          - condition: state
+            entity_id: input_boolean.hoymiles_rce_discharge_active
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.hoymiles_rce_price_above_threshold
+            state: "on"
+          - condition: template
+            value_template: >-
+              {% set end = (((as_timestamp(now()) / 1800) | int)
+                             * 1800 + 1800) %}
+              {{ end > as_timestamp(states(
+                'input_datetime.hoymiles_rce_latched_slot_end'), 0) }}
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.hoymiles_rce_latched_slot_end
+            data:
+              timestamp: >-
+                {{ (((as_timestamp(now()) / 1800) | int) * 1800 + 1800) }}
       - choose:
           # Battery balancing ustawia własny tryb i nie może zostać
           # przerwane przez aktywny wcześniej blok RCE.
@@ -4388,6 +5003,12 @@ automation:
                 entity_id: input_boolean.hoymiles_tariff_charge_enabled
                 state: "off"
               - condition: state
+                entity_id: input_boolean.hoymiles_rcm_enabled
+                state: "off"
+              - condition: state
+                entity_id: binary_sensor.hoymiles_rce_control_data_ready
+                state: "on"
+              - condition: state
                 entity_id: binary_sensor.hoymiles_rce_price_above_threshold
                 state: "on"
               - condition: state
@@ -4402,7 +5023,12 @@ automation:
                     'sensor.hoymiles_rce_effective_discharge_power_percent'))
                      and (states(
                        'sensor.hoymiles_rce_effective_discharge_power_percent')
-                       | float(0)) > 0 }}
+                       | float(0)) > 0
+                     and ((states(
+                       'number.hoymiles_hit_maximum_discharge_power') | float(0))
+                          - (states(
+                            'sensor.hoymiles_rce_effective_discharge_power_percent')
+                             | float(0))) | abs < 0.5 }}
               - condition: template
                 value_template: >-
                   {{ (states('sensor.hoymiles_hit_overview_battery_soc') | float(0))
@@ -4419,17 +5045,32 @@ automation:
                      and not is_state('timer.hoymiles_charge', 'active')
                      and states('select.hoymiles_hit_ems_mode')
                        not in ['unknown', 'unavailable', 'none'] }}
+              # Never start a late, sub-five-minute fragment after a restart or
+              # delayed plan refresh. This supplies the minimum EMS dwell time.
+              - condition: template
+                value_template: >-
+                  {% set end = (((as_timestamp(now()) / 1800) | int)
+                                 * 1800 + 1800) %}
+                  {{ end - as_timestamp(now()) >= 300 }}
             sequence:
-              # Znacznik jest ustawiany przed komendą. Dzięki temu pierwszy
-              # przyrost licznika oraz sprzedaż podczas utraty łączności nie
-              # zostaną błędnie uznane za naturalną nadwyżkę PV.
-              - action: input_boolean.turn_on
+              - action: input_datetime.set_datetime
                 target:
-                  entity_id: input_boolean.hoymiles_rce_discharge_active
+                  entity_id: input_datetime.hoymiles_rce_latched_slot_end
+                data:
+                  timestamp: >-
+                    {{ (((as_timestamp(now()) / 1800) | int)
+                         * 1800 + 1800) }}
               - if:
                   - condition: state
                     entity_id: input_boolean.hoymiles_rce_dynamic_soc_enabled
                     state: "on"
+                  - condition: template
+                    value_template: >-
+                      {{ ((states(
+                        'number.hoymiles_hit_force_discharge_soc') | float(0))
+                         - (states(
+                           'sensor.hoymiles_rce_effective_minimum_soc')
+                            | float(100))) | abs >= 1.0 }}
                 then:
                   - action: number.set_value
                     target:
@@ -4447,30 +5088,42 @@ automation:
                             | float(100))) | abs < 1.0 }}
                     timeout: "00:01:00"
                     continue_on_timeout: false
-              - action: select.select_option
+              # Set ownership only after every setting has been acknowledged,
+              # but before the mode command so the first export sample belongs
+              # to RCE accounting.
+              - action: input_boolean.turn_on
                 target:
-                  entity_id: select.hoymiles_hit_ems_mode
-                data:
-                  option: "grid_discharge"
+                  entity_id: input_boolean.hoymiles_rce_discharge_active
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ not is_state(
+                        'select.hoymiles_hit_ems_mode', 'grid_discharge') }}
+                then:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.hoymiles_hit_ems_mode
+                    data:
+                      option: "grid_discharge"
               - wait_template: >-
-                  {{ is_state('select.hoymiles_hit_ems_mode', 'grid_discharge')
-                     or (states(
-                       'sensor.hoymiles_hit_overview_grid_total_active_power')
-                       | float(0)) > 1000 }}
+                  {{ is_state('select.hoymiles_hit_ems_mode', 'grid_discharge') }}
                 timeout: "00:01:00"
                 continue_on_timeout: true
               - if:
                   - condition: template
                     value_template: >-
                       {{ not is_state(
-                           'select.hoymiles_hit_ems_mode', 'grid_discharge')
-                         and (states(
-                           'sensor.hoymiles_hit_overview_grid_total_active_power')
-                           | float(0)) <= 1000 }}
+                           'select.hoymiles_hit_ems_mode', 'grid_discharge') }}
                 then:
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: input_boolean.hoymiles_rce_discharge_active
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{ states('select.hoymiles_hit_ems_mode')
+                             not in ['unknown', 'unavailable', 'none', ''] }}
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.hoymiles_rce_discharge_active
 
           # Stop RCE: the slot left the plan, minimum SOC was reached, automation
           # was disabled, or PSE data became unavailable.
@@ -4489,9 +5142,17 @@ automation:
                      or (states(
                        'sensor.hoymiles_rce_effective_discharge_power_percent')
                        | float(0)) <= 0
-                     or not is_state('binary_sensor.hoymiles_rce_price_above_threshold', 'on')
+                     or (not is_state(
+                           'binary_sensor.hoymiles_rce_price_above_threshold', 'on')
+                         and as_timestamp(now()) >= as_timestamp(states(
+                           'input_datetime.hoymiles_rce_latched_slot_end'), 0))
                      or (states('sensor.hoymiles_hit_overview_battery_soc') | float(0))
-                        <= (states('sensor.hoymiles_rce_effective_minimum_soc') | float(100)) }}
+                        <= (states('sensor.hoymiles_rce_effective_minimum_soc') | float(100))
+                     or (not is_state(
+                           'select.hoymiles_hit_ems_mode', 'grid_discharge')
+                         and (as_timestamp(now()) - as_timestamp(
+                           states.select.hoymiles_hit_ems_mode.last_changed))
+                           >= 60) }}
               - condition: template
                 value_template: >-
                   {{ states('select.hoymiles_hit_ems_mode')
@@ -4517,6 +5178,132 @@ automation:
               - action: input_boolean.turn_off
                 target:
                   entity_id: input_boolean.hoymiles_rce_discharge_active
+
+  - id: hoymiles_automatic_ems_control_failsafe
+    alias: "EMS — safe exit after data or acknowledgement loss"
+    description: >-
+      An active RCE or tariff cycle returns to Self-Use after two minutes
+      of continuous loss of data, Master/Slave readiness, or export permission.
+      When the EMS entity is unavailable, ownership remains active and the attempt is
+      retried every minute after connectivity is restored.
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: state
+        entity_id: binary_sensor.hoymiles_ems_execution_ready
+        to: "off"
+        for: "00:02:00"
+      - trigger: state
+        entity_id: binary_sensor.hoymiles_rce_control_data_ready
+        to: "off"
+        for: "00:02:00"
+      - trigger: state
+        entity_id: binary_sensor.hoymiles_tariff_control_data_ready
+        to: "off"
+        for: "00:02:00"
+      - trigger: state
+        entity_id: binary_sensor.hoymiles_ems_export_allowed
+        to: "off"
+        for: "00:00:15"
+    conditions:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: input_boolean.hoymiles_rce_discharge_active
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.hoymiles_tariff_charge_active
+            state: "on"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_rce_discharge_active
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ not is_state(
+                       'binary_sensor.hoymiles_ems_export_allowed', 'on')
+                     or (not is_state(
+                           'binary_sensor.hoymiles_rce_control_data_ready', 'on')
+                         and (as_timestamp(now()) - as_timestamp(
+                           states.binary_sensor.hoymiles_rce_control_data_ready
+                             .last_changed)) >= 120) }}
+              - condition: template
+                value_template: >-
+                  {{ states('select.hoymiles_hit_ems_mode')
+                     not in ['unknown', 'unavailable', 'none', ''] }}
+            sequence:
+              - if:
+                  - condition: state
+                    entity_id: select.hoymiles_hit_ems_mode
+                    state: "grid_discharge"
+                then:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.hoymiles_hit_ems_mode
+                    data:
+                      option: "self_use"
+                  - wait_template: >-
+                      {{ is_state('select.hoymiles_hit_ems_mode', 'self_use') }}
+                    timeout: "00:01:00"
+                    continue_on_timeout: true
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ not is_state(
+                        'select.hoymiles_hit_ems_mode', 'grid_discharge') }}
+                then:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.hoymiles_rce_discharge_active
+
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.hoymiles_tariff_charge_active
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ not is_state(
+                       'binary_sensor.hoymiles_tariff_control_data_ready', 'on')
+                     and (as_timestamp(now()) - as_timestamp(
+                       states.binary_sensor.hoymiles_tariff_control_data_ready
+                         .last_changed)) >= 120 }}
+              - condition: template
+                value_template: >-
+                  {{ states('select.hoymiles_hit_ems_mode')
+                     not in ['unknown', 'unavailable', 'none', ''] }}
+            sequence:
+              - if:
+                  - condition: state
+                    entity_id: select.hoymiles_hit_ems_mode
+                    state: "grid_charge"
+                then:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.hoymiles_hit_ems_mode
+                    data:
+                      option: "self_use"
+                  - wait_template: >-
+                      {{ is_state('select.hoymiles_hit_ems_mode', 'self_use') }}
+                    timeout: "00:01:00"
+                    continue_on_timeout: true
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ not is_state(
+                        'select.hoymiles_hit_ems_mode', 'grid_charge') }}
+                then:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.hoymiles_tariff_charge_active
+                  - action: input_text.set_value
+                    target:
+                      entity_id: input_text.hoymiles_tariff_active_action
+                    data:
+                      value: "none"
 
   - id: hoymiles_daily_grid_discharge
     alias: "EMS — daily discharge do sieci"
@@ -4751,9 +5538,11 @@ automation:
                         'on') }}
           export_control_available: >-
             {{ is_number(states(
-                 'number.hoymiles_hit_maximum_export_power_limit'))
+                  'number.hoymiles_hit_maximum_export_power_limit'))
+               and (states('number.hoymiles_hit_maximum_export_power_limit')
+                    | float(0)) > 0
                and states('select.hoymiles_hit_generation_control_function')
-                 not in ['unknown', 'unavailable', 'none', 'disabled', 'off'] }}
+                  not in ['unknown', 'unavailable', 'none', 'disabled', 'off'] }}
           rcm_blocked: >-
             {{ is_state('input_boolean.hoymiles_rce_discharge_enabled', 'on')
                or is_state('input_boolean.hoymiles_tariff_charge_enabled', 'on')

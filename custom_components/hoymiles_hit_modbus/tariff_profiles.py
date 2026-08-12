@@ -12,6 +12,9 @@ from datetime import date, datetime
 
 
 PROFILE_YEAR = 2026
+PROFILE_DATA_VERSION = "2026.1"
+PROFILE_VALID_FROM = date(PROFILE_YEAR, 1, 1)
+PROFILE_VALID_UNTIL = date(PROFILE_YEAR, 12, 31)
 MANUAL_OPERATOR = "Manual"
 SUPPORTED_OPERATORS = ("PGE", "TAURON", "ENEA", "ENERGA", "STOEN")
 SUPPORTED_GROUPS = ("G11", "G12", "G12w", "G13")
@@ -33,6 +36,9 @@ class TariffProfile:
     weekend_low_price: bool
     polish_holidays_low_price: bool
     source_url: str
+    valid_from: date
+    valid_until: date
+    data_version: str
 
 
 def _profile(
@@ -63,6 +69,9 @@ def _profile(
         weekend_low_price=weekend_low,
         polish_holidays_low_price=holiday_low,
         source_url=source_url,
+        valid_from=PROFILE_VALID_FROM,
+        valid_until=PROFILE_VALID_UNTIL,
+        data_version=PROFILE_DATA_VERSION,
     )
 
 
@@ -163,6 +172,16 @@ def get_tariff_profile(operator: str, tariff_type: str) -> TariffProfile | None:
     return _PROFILES.get((operator.strip().upper(), tariff_type.strip()))
 
 
+def profile_is_valid(profile: TariffProfile, value: date) -> bool:
+    """Return whether a versioned price profile covers ``value``.
+
+    Automatic profiles deliberately fail closed outside this interval.  A new
+    annual data set can therefore be added without changing optimizer logic,
+    while an old price table can never silently be used in a later year.
+    """
+    return profile.valid_from <= value <= profile.valid_until
+
+
 def _in_window(minute: int, start: int, end: int) -> bool:
     if start < end:
         return start <= minute < end
@@ -250,6 +269,10 @@ def profile_summary(
         "tariff_operator_name": profile.operator_name,
         "tariff_supplier_assumption": profile.supplier_name,
         "tariff_profile_year": PROFILE_YEAR,
+        "tariff_profile_data_version": profile.data_version,
+        "tariff_profile_valid_from": profile.valid_from.isoformat(),
+        "tariff_profile_valid_until": profile.valid_until.isoformat(),
+        "tariff_profile_valid_now": profile_is_valid(profile, now.date()),
         "tariff_profile_supported": True,
         "tariff_profile_season": "summer" if _summer(now.date()) else "winter",
         "tariff_profile_low_windows": fmt(low_windows),

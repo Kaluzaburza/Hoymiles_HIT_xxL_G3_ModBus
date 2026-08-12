@@ -11,7 +11,13 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "custom_components" / "hoymiles_hit_modbus"))
 
-from rcm_optimizer import RCMOptimizerInput, optimize_rcm  # noqa: E402
+from rcm_optimizer import (  # noqa: E402
+    RCMOptimizerInput,
+    RCMRiskWindowInput,
+    optimize_rcm,
+    select_rcm_load_profile,
+    select_rcm_pv_profile,
+)
 
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -57,6 +63,107 @@ def settings(**overrides) -> RCMOptimizerInput:
 
 
 def main() -> None:
+    weekday = tuple(0.1 + index / 1000.0 for index in range(48))
+    weekend = tuple(0.2 + index / 1000.0 for index in range(48))
+    selected_weekday = select_rcm_load_profile(
+        weekend=False,
+        average_profile=None,
+        weekday_profile=weekday,
+        weekend_profile=weekend,
+        average_daily_kwh=10.0,
+    )
+    selected_weekend = select_rcm_load_profile(
+        weekend=True,
+        average_profile=None,
+        weekday_profile=weekday,
+        weekend_profile=weekend,
+        average_daily_kwh=10.0,
+    )
+    assert selected_weekday.source == "weekday_48_slot"
+    assert selected_weekday.slot_kwh == weekday
+    assert selected_weekend.source == "weekend_48_slot"
+    assert selected_weekend.slot_kwh == weekend
+    flat_load = select_rcm_load_profile(
+        weekend=False,
+        average_profile=None,
+        weekday_profile=None,
+        weekend_profile=None,
+        average_daily_kwh=9.6,
+    )
+    assert flat_load.source == "flat_daily_fallback"
+    assert round(sum(flat_load.slot_kwh), 3) == 9.6
+    malformed_load = select_rcm_load_profile(
+        weekend=False,
+        average_profile="not-a-profile",
+        weekday_profile=None,
+        weekend_profile=None,
+        average_daily_kwh="not-a-number",
+    )
+    assert malformed_load.source == "flat_daily_fallback"
+    assert malformed_load.selected_total_kwh == 0.0
+
+    detailed_p90 = select_rcm_pv_profile(
+        forecast_total_kwh=4.0,
+        forecast_p90_total_kwh=6.0,
+        detailed_p50_by_slot={24: 0.8, 25: 2.2},
+        detailed_p90_by_slot={24: 1.0, 25: 3.0},
+        first_slot=24,
+        current_slot_fraction=0.5,
+        risk_slots=(24, 25),
+    )
+    assert detailed_p90.source == "solcast_30m_p90"
+    assert round(sum(detailed_p90.slot_kwh), 3) == 6.0
+    assert detailed_p90.slot_kwh[25] > detailed_p90.slot_kwh[24] * 5
+    assert detailed_p90.confidence == 0.95
+    p50_shape = select_rcm_pv_profile(
+        forecast_total_kwh=4.0,
+        forecast_p90_total_kwh=5.0,
+        detailed_p50_by_slot={24: 1.0, 25: 3.0},
+        detailed_p90_by_slot={},
+        first_slot=24,
+        risk_slots=(24, 25),
+    )
+    assert p50_shape.source == "solcast_30m_p50_shape_p90_total"
+    assert round(sum(p50_shape.slot_kwh), 3) == 5.0
+    partial_p90 = select_rcm_pv_profile(
+        forecast_total_kwh=4.0,
+        forecast_p90_total_kwh=5.0,
+        detailed_p50_by_slot={24: 1.0, 25: 3.0},
+        detailed_p90_by_slot={24: 1.0},
+        first_slot=24,
+        risk_slots=(24, 25),
+    )
+    assert partial_p90.source == "solcast_30m_p50_shape_p90_total"
+    partial_all = select_rcm_pv_profile(
+        forecast_total_kwh=4.0,
+        forecast_p90_total_kwh=5.0,
+        detailed_p50_by_slot={24: 1.0},
+        detailed_p90_by_slot={24: 1.0},
+        first_slot=24,
+        risk_slots=(24, 25),
+    )
+    assert partial_all.source == "solcast_p90_total_shaped_fallback"
+    shaped_fallback = select_rcm_pv_profile(
+        forecast_total_kwh=4.0,
+        forecast_p90_total_kwh=None,
+        detailed_p50_by_slot=None,
+        detailed_p90_by_slot=None,
+        first_slot=10,
+    )
+    assert shaped_fallback.source == "solcast_total_shaped_fallback"
+    assert shaped_fallback.confidence == 0.4
+    assert round(sum(shaped_fallback.slot_kwh), 3) == 4.0
+    malformed_pv = select_rcm_pv_profile(
+        forecast_total_kwh="not-a-number",
+        forecast_p90_total_kwh="not-a-number",
+        detailed_p50_by_slot={"bad": "bad"},
+        detailed_p90_by_slot=None,
+        first_slot="bad",
+        current_slot_fraction="bad",
+        risk_slots=("bad", 99),
+    )
+    assert malformed_pv.selected_total_kwh == 0.0
+
     learning = optimize_rcm(settings(history_days=0))
     assert learning.status_code == "learning"
     assert learning.action == "restore"
@@ -183,6 +290,95 @@ def main() -> None:
     assert zero_export.pre_discharge_power_kw == 0.0
     assert not zero_export.pre_discharge_ready
 
+    minimum_floor = optimize_rcm(
+        settings(
+            now=settings().now.replace(hour=11, minute=0),
+            battery_soc_percent=90.0,
+            expected_risk_surplus_kwh=3.0,
+            expected_natural_headroom_kwh=0.0,
+            expected_pre_risk_surplus_kwh=2.0,
+            minutes_to_risk=60,
+            risk_window_forecasts=(
+                RCMRiskWindowInput(
+                    start_minute=12 * 60,
+                    end_minute=13 * 60,
+                    peak_voltage_v=253.4,
+                    day_offset=0,
+                    expected_pv_kwh=4.0,
+                    expected_load_kwh=1.0,
+                    expected_surplus_kwh=3.0,
+                    natural_headroom_before_kwh=0.0,
+                ),
+            ),
+        )
+    )
+    assert minimum_floor.unavoidable_minimum_charge_kwh == 0.95
+    assert minimum_floor.required_headroom_kwh == 3.8
+    assert minimum_floor.risk_window_plans[0].required_headroom_kwh == 3.8
+    assert minimum_floor.planned_grid_discharge_kwh == 1.7
+
+    exact_minimum_floor = optimize_rcm(
+        settings(
+            now=settings().now.replace(hour=8, minute=0),
+            battery_soc_percent=90.0,
+            expected_risk_surplus_kwh=3.0,
+            expected_pre_risk_surplus_kwh=20.0,
+            expected_unavoidable_charge_input_kwh=0.25,
+            minutes_to_risk=240,
+            risk_window_forecasts=(
+                RCMRiskWindowInput(720, 780, 253.0, 0, 4.0, 1.0, 3.0, 0.0),
+            ),
+        )
+    )
+    assert exact_minimum_floor.unavoidable_minimum_charge_kwh == 0.237
+    assert exact_minimum_floor.required_headroom_kwh == 3.087
+
+    two_windows = optimize_rcm(
+        settings(
+            now=settings().now.replace(hour=9, minute=0),
+            battery_soc_percent=90.0,
+            expected_risk_surplus_kwh=4.0,
+            expected_natural_headroom_kwh=0.0,
+            expected_pre_risk_surplus_kwh=0.0,
+            minutes_to_risk=120,
+            risk_window_forecasts=(
+                RCMRiskWindowInput(660, 720, 252.0, 0, 3.0, 1.0, 2.0, 0.0),
+                RCMRiskWindowInput(780, 840, 253.0, 0, 3.0, 1.0, 2.0, 0.5),
+            ),
+        )
+    )
+    assert len(two_windows.risk_window_plans) == 2
+    assert two_windows.risk_window_plans[0].cumulative_headroom_shortfall_kwh == 0.0
+    assert two_windows.risk_window_plans[1].projected_headroom_before_kwh == 0.7
+    assert two_windows.risk_window_plans[1].cumulative_headroom_shortfall_kwh == 1.2
+    assert two_windows.required_headroom_kwh == 3.3
+    assert two_windows.planned_grid_discharge_kwh == 1.2
+
+    replenished_between_windows = optimize_rcm(
+        settings(
+            battery_soc_percent=95.0,
+            expected_risk_surplus_kwh=4.0,
+            expected_natural_headroom_kwh=0.0,
+            risk_window_forecasts=(
+                RCMRiskWindowInput(660, 720, 252.0, 0, 3.0, 1.0, 2.0, 0.0),
+                RCMRiskWindowInput(780, 840, 253.0, 0, 3.0, 1.0, 2.0, 2.5),
+            ),
+        )
+    )
+    assert replenished_between_windows.required_headroom_kwh == 1.9
+    assert replenished_between_windows.headroom_shortfall_kwh == 0.85
+    assert replenished_between_windows.planned_grid_discharge_kwh == 0.85
+
+    night = optimize_rcm(
+        settings(
+            now=settings().now.replace(hour=2),
+            pv_power_kw=0.0,
+            load_power_kw=0.8,
+            grid_export_power_kw=0.0,
+        )
+    )
+    assert night.estimated_safe_export_power_kw is None
+
     for result in (
         learning,
         headroom,
@@ -193,10 +389,28 @@ def main() -> None:
         full_battery,
         protected_floor,
         zero_export,
+        minimum_floor,
+        exact_minimum_floor,
+        two_windows,
+        replenished_between_windows,
+        night,
     ):
         assert 10.0 <= result.recommended_charge_limit_percent <= 100.0
         assert result.recommended_charge_power_kw <= result.bms_charge_power_limit_kw + 1e-6
         assert 0.0 <= result.recommended_export_limit_percent <= 100.0
+
+    sensor_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "rcm_sensor.py"
+    ).read_text(encoding="utf-8")
+    for attribute in (
+        "pv_profile_source",
+        "pv_profile_confidence_percent",
+        "load_profile_mode",
+        "risk_window_details",
+        "unavoidable_charge_before_risk_kwh",
+        "estimated_safe_export_power_kw",
+    ):
+        assert f'"{attribute}"' in sensor_source
 
     print("RCEm optimizer: safety, headroom and BMS-limit scenarios passed")
 
