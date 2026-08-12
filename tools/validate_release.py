@@ -1019,6 +1019,7 @@ def main() -> int:
     )
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme_pl = (ROOT / "README.pl.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     github_release_notes = (
         ROOT / "docs" / "releases" / f"v{manifest['version']}.md"
@@ -1067,8 +1068,9 @@ def main() -> int:
         )
     require(
         "docs/QUICK_START.md" in readme
+        and "docs/QUICK_START.md" in readme_pl
         and (ROOT / "docs" / "QUICK_START.md").is_file(),
-        "README does not expose the beginner quick-start guide",
+        "English and Polish READMEs must expose the beginner quick-start guide",
     )
     require(
         "## User update steps / Kroki po aktualizacji" in github_release_notes
@@ -1076,21 +1078,52 @@ def main() -> int:
         and "2064/2064" in github_release_notes,
         "GitHub Release notes are incomplete for HACS users",
     )
-    for documentation_marker in (
-        "Nie tylko pokazuje. Myśli.",
-        "Local EMS for Home Assistant",
-        "/releases/latest",
-        "More than Modbus monitoring",
-        "Safety boundary / Granica bezpieczeństwa",
-        "Tariff-aware grid charging",
-        "RCEm 253 V+ voltage management",
-        "LiFePO4 storage balancing",
-        "docs/AUTOMATION_TEST_REPORT.md",
+    require(
+        "[English](README.md) · [Polski](README.pl.md)" in readme
+        and "[English](README.md) · [Polski](README.pl.md)" in readme_pl,
+        "README language switch is missing or inconsistent",
+    )
+    for documentation_text, language, documentation_markers in (
+        (
+            readme,
+            "English",
+            (
+                "/releases/latest",
+                "## Compatibility and requirements",
+                "## Safety",
+                "### RCE market-price optimization",
+                "### Tariff-aware grid charging",
+                "### Experimental RCEm 253 V+ voltage management",
+                "### LiFePO4 battery balancing",
+                "## Parallel inverter systems",
+                "docs/AUTOMATION_TEST_REPORT.md",
+            ),
+        ),
+        (
+            readme_pl,
+            "Polish",
+            (
+                "/releases/latest",
+                "## Zgodność i wymagania",
+                "## Bezpieczeństwo",
+                "### Optymalizacja cen RCE",
+                "### Automatyczne ładowanie taryfowe",
+                "### Eksperymentalne zarządzanie napięciem RCEm 253 V+",
+                "### Wyrównywanie baterii LiFePO4",
+                "## Instalacje z falownikami połączonymi równolegle",
+                "docs/AUTOMATION_TEST_REPORT.md",
+            ),
+        ),
     ):
-        require(
-            documentation_marker in readme,
-            f"README is missing release documentation: {documentation_marker}",
-        )
+        for documentation_marker in documentation_markers:
+            require(
+                documentation_marker in documentation_text,
+                f"{language} README is missing documentation: {documentation_marker}",
+            )
+    require(
+        "README.pl.md" in readme and len(readme_pl.split()) >= len(readme.split()) * 0.8,
+        "Polish README is not a complete edition of the English documentation",
+    )
 
     esphome_entry_files = [
         ROOT / "hoymiles-inverter.yaml",
