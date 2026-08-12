@@ -4,6 +4,55 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-08-12
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.5.1**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.5.1**.
+2. **Home Assistant:** restart Home Assistant once so it loads the new
+   integration metadata. The EMS package and frontend logic are unchanged. If
+   updating from a release older than 1.5.0 and **Installation status / Repairs**
+   requests another restart, validate the configuration and perform that second
+   restart.
+   **PL:** uruchom Home Assistant ponownie jeden raz, aby wczytał nowe metadane
+   integracji. Pakiet EMS i logika interfejsu nie uległy zmianie. Jeżeli
+   aktualizujesz wersję starszą niż 1.5.0, a **Stan instalacji / Naprawy** poprosi
+   o kolejny restart, sprawdź konfigurację i wykonaj ten drugi restart.
+3. **ESP32 / ESPHome:** no firmware rebuild is required. The compatible ESPHome
+   package remains **v1.4.4**.
+   **PL:** nie trzeba ponownie kompilować ani wgrywać ESP32. Zgodny pakiet
+   ESPHome pozostaje w wersji **v1.4.4**.
+4. **Verification / Weryfikacja:** open the repository page from HACS and use
+   the language switch to review the complete English or Polish documentation.
+   Confirm **Installation status / Stan instalacji = Ready / Gotowe**.
+   **PL:** otwórz stronę repozytorium z HACS i użyj przełącznika języka, aby
+   przeczytać pełną dokumentację angielską albo polską. Sprawdź, czy
+   **Stan instalacji = Gotowe**.
+
+### Changed
+
+- Rebuilt the repository front page as concise, product-quality documentation
+  with a clear path from compatibility and safety to installation and use.
+- Split the documentation into complete, equivalent English (`README.md`) and
+  Polish (`README.pl.md`) editions with a visible language switch.
+- Rewrote both languages for natural grammar and consistent terminology,
+  including household load, three-phase imbalance and Modbus function 16
+  (`0x10`).
+- Corrected the architecture diagram so HACS is shown as the installer and update
+  manager rather than as part of the runtime data path.
+- Preserved complete wiring, HACS, ESPHome, EMS, parallel-system, update,
+  diagnostics and safety guidance in both languages.
+
+### Polski
+
+- Polska dokumentacja nie jest już skróconym dodatkiem na końcu angielskiego
+  README. Otrzymała pełną, równorzędną wersję obejmującą wymagania, instalację,
+  aktualizacje, wszystkie tryby EMS, systemy równoległe i diagnostykę.
+- Usunięto kalki językowe, mieszanie polskiego z angielskim oraz niejasne hasła
+  marketingowe. Ujednolicono terminologię techniczną i kolejność instrukcji.
+
 ## [1.5.0] - 2026-08-12
 
 ### User update steps / Kroki po aktualizacji
