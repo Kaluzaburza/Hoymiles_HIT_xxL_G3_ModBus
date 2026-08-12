@@ -466,7 +466,26 @@ def assert_automation_interlocks() -> None:
         "input_datetime.hoymiles_tariff_latched_slot_end",
         "states.input_boolean.hoymiles_tariff_charge_active",
         "'current_slot_end'",
-        'for: "00:00:15"',
+        'for: "00:00:45"',
+        "input_datetime.hoymiles_rce_latched_slot_end",
+        "binary_sensor.hoymiles_ems_execution_ready",
+        "binary_sensor.hoymiles_rce_control_data_ready",
+        "binary_sensor.hoymiles_tariff_control_data_ready",
+        "binary_sensor.hoymiles_ems_export_allowed",
+        "id: hoymiles_automatic_ems_control_failsafe",
+        "states.sensor.hoymiles_hit_esp_uptime",
+        "last_reported",
+        "esp_age <= 180",
+        "liveness_source: sensor.hoymiles_hit_esp_uptime",
+        "price_age <= 300",
+        "plan_age <= 300",
+        "source_age <= 1200",
+        "input_text.hoymiles_ems_last_push_fingerprint",
+        "as_timestamp(now()) - last >= 300",
+        "end - as_timestamp(now()) >= 300",
+        "Falownik nie potwierdził limitu ładowania",
+        "Falownik nie potwierdził nowego limitu ładowania",
+        "Falownik nie potwierdził celu SOC",
     )
     for marker in required_markers:
         assert marker in source, f"Missing automation interlock marker: {marker}"
@@ -477,6 +496,77 @@ def assert_automation_interlocks() -> None:
     assert transient_stop not in source, (
         "Tariff charging still stops immediately when the live plan flickers"
     )
+    assert (
+        "is_state('binary_sensor.hoymiles_ems_export_allowed', 'on')" in source
+    ), "RCE control does not enforce the zero-export/GCF guard"
+    assert (
+        "is_state('select.hoymiles_hit_ems_mode', 'grid_discharge') }}"
+        in source
+    ), "RCE command acknowledgement is not based on the actual EMS readback"
+
+
+def assert_tariff_startup_contracts() -> None:
+    """Protect late-Solcast startup and fail-closed tariff readiness."""
+
+    scheduler = (
+        ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
+    ).read_text(encoding="utf-8")
+    ready_block = scheduler.split(
+        "unique_id: hoymiles_tariff_control_data_ready",
+        1,
+    )[1].split("attributes:", 1)[0]
+    valid_statuses = {
+        "ready",
+        "insufficient_cheap_window",
+        "no_charge_needed",
+        "no_discount_window",
+        "shortage_in_low_period",
+        "no_cheap_window",
+    }
+    blocked_statuses = {
+        "missing_data",
+        "optimizer_error",
+        "unsupported_profile",
+        "expired_profile",
+    }
+    for status in valid_statuses:
+        assert f"'{status}'" in ready_block, (
+            f"Valid tariff status {status} incorrectly blocks data readiness"
+        )
+    for status in blocked_statuses:
+        assert f"'{status}'" not in ready_block, (
+            f"Unsafe tariff status {status} incorrectly enables data readiness"
+        )
+
+    sensor_source = (
+        ROOT
+        / "custom_components"
+        / "hoymiles_hit_modbus"
+        / "tariff_sensor.py"
+    ).read_text(encoding="utf-8")
+    retry_block = sensor_source.split(
+        "def _async_input_changed",
+        1,
+    )[1].split("def _async_debounced_recalculate", 1)[0]
+    assert "not self._forecast_retry_pending" in retry_block
+    assert "self._forecast_accuracy_source_available()" in retry_block
+    assert "self._forecast_retry_pending = True" in retry_block
+    retry_method = sensor_source.split(
+        "async def _async_retry_initial_forecast_accuracy",
+        1,
+    )[1].split("def _recalculate_and_write", 1)[0]
+    assert "finally:" in retry_method
+    assert "self._forecast_retry_pending = False" in retry_method
+
+    for attribute in (
+        "forecast_day_3_kwh",
+        "forecast_day_3_raw_kwh",
+    ):
+        day_3_block = sensor_source.split(f'"{attribute}": (', 1)[1][:220]
+        assert "if day_3_state is not None" in day_3_block
+        assert "else None" in day_3_block, (
+            f"Missing Day 3 must remain unknown for {attribute}, not 0 kWh"
+        )
 
 
 def main() -> None:
@@ -495,6 +585,7 @@ def main() -> None:
     rcm_count, rcm_statuses = run_rcm_matrix(exhaustive=exhaustive)
     random_count = run_randomized_boundary_sweep(samples=120 if exhaustive else 40)
     assert_automation_interlocks()
+    assert_tariff_startup_contracts()
     total = rce_count + tariff_count + rcm_count + random_count
     profile = "exhaustive" if exhaustive else "quick"
     print(f"Automation matrix ({profile}): {total} scenarios passed")

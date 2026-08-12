@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
 import logging
@@ -27,8 +28,23 @@ from .rcm_history import (
     VoltageHistorySummary,
     summarize_voltage_history,
 )
-from .rcm_optimizer import RCMOptimizerInput, optimize_rcm
-from .rce_sensor import _select_number, _state_number
+from .rcm_optimizer import (
+    RCMOptimizerInput,
+    RCMRiskWindowInput,
+    optimize_rcm,
+    select_rcm_load_profile,
+    select_rcm_pv_profile,
+)
+from .rce_optimizer import floor_half_hour
+from .rce_sensor import (
+    TODAY_FORECAST_CANDIDATES,
+    TOMORROW_FORECAST_CANDIDATES,
+    _detailed_pv_map,
+    _first_numeric_state,
+    _select_number,
+    _state_number,
+    _state_text,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +61,10 @@ WATCHED_RCM_ENTITIES = {
     "sensor.hoymiles_hit_maximum_discharge_current",
     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
     "sensor.hoymiles_hit_rce_optimized_plan",
+    "input_text.hoymiles_solcast_forecast_today_entity",
+    "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+    *TODAY_FORECAST_CANDIDATES,
+    *TOMORROW_FORECAST_CANDIDATES,
     "number.hoymiles_hit_self_use_soc",
     "number.hoymiles_hit_battery_max_charge_power",
     "number.hoymiles_hit_maximum_export_power_limit",
@@ -59,6 +79,28 @@ WATCHED_RCM_ENTITIES = {
     "input_boolean.hoymiles_rcm_export_control_enabled",
     "input_boolean.hoymiles_rcm_export_control_active",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class RCMEnergyForecast:
+    """Selected energy profiles and balances for the next risk horizon."""
+
+    surplus_kwh: float
+    horizon: str
+    selected_forecast_kwh: float
+    selected_forecast_p90_kwh: float | None
+    expected_load_kwh: float
+    natural_headroom_kwh: float
+    pre_risk_surplus_kwh: float
+    unavoidable_charge_input_kwh: float
+    minutes_to_risk: int | None
+    risk_day_offset: int
+    forecast_entity_id: str
+    forecast_profile_source: str
+    forecast_profile_confidence: float
+    load_profile_source: str
+    load_profile_confidence: float
+    window_forecasts: tuple[RCMRiskWindowInput, ...]
 
 STATUS_TEXT = {
     "pl": {
@@ -262,38 +304,40 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
 
     def _expected_risk_surplus_kwh(
         self,
-    ) -> tuple[float, str, float, float, float, int | None, int]:
-        """Estimate risk surplus and natural battery use before that risk.
-
-        The return value contains the PV surplus in the next relevant risk
-        window, its horizon and forecast, the expected load during the risk,
-        natural battery discharge before the risk, minutes until the risk and
-        a day offset (0=today, 1=tomorrow, -1=no known risk window).
-        """
+        system_power_kw: float,
+    ) -> RCMEnergyForecast:
+        """Estimate each risk window from Solcast and weekday/weekend LOAD."""
+        missing = RCMEnergyForecast(
+            surplus_kwh=0.0,
+            horizon="missing",
+            selected_forecast_kwh=0.0,
+            selected_forecast_p90_kwh=None,
+            expected_load_kwh=0.0,
+            natural_headroom_kwh=0.0,
+            pre_risk_surplus_kwh=0.0,
+            unavoidable_charge_input_kwh=0.0,
+            minutes_to_risk=None,
+            risk_day_offset=-1,
+            forecast_entity_id="",
+            forecast_profile_source="missing",
+            forecast_profile_confidence=0.0,
+            load_profile_source="missing",
+            load_profile_confidence=0.0,
+            window_forecasts=(),
+        )
         rce = self.hass.states.get("sensor.hoymiles_hit_rce_optimized_plan")
         if rce is None:
-            return 0.0, "missing", 0.0, 0.0, 0.0, None, -1
+            return missing
         remaining = rce.attributes.get("forecast_remaining_today_kwh")
         tomorrow = rce.attributes.get("forecast_tomorrow_kwh")
-        profile = rce.attributes.get("recorder_load_profile_30m_kwh")
         try:
             forecast_today = max(float(remaining or 0.0), 0.0)
             forecast_tomorrow = max(float(tomorrow or 0.0), 0.0)
         except (TypeError, ValueError):
-            return 0.0, "missing", 0.0, 0.0, 0.0, None, -1
-        if not isinstance(profile, (list, tuple)) or len(profile) != 48:
-            average_daily = rce.attributes.get("selected_average_daily_load_kwh", 0.0)
-            try:
-                load_profile = [max(float(average_daily), 0.0) / 48.0] * 48
-            except (TypeError, ValueError):
-                load_profile = [0.0] * 48
-        else:
-            try:
-                load_profile = [max(float(value), 0.0) for value in profile]
-            except (TypeError, ValueError):
-                load_profile = [0.0] * 48
+            return missing
 
-        now = dt_util.now().astimezone(ZoneInfo(self.hass.config.time_zone))
+        timezone = ZoneInfo(self.hass.config.time_zone)
+        now = dt_util.now().astimezone(timezone)
         minute = now.hour * 60 + now.minute
         current_slot = now.hour * 2 + now.minute // 30
         pending_today = sorted(
@@ -327,81 +371,235 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
             first_risk_start = 0
             minutes_to_risk = None
             selected_windows = []
-
-        # Without detailed interval attributes here, distribute the selected
-        # Solcast total over the daylight still belonging to this horizon.
-        weights = [0.0] * 48
-        for slot in range(max(12, first_slot), 42):
-            distance = abs(slot - 27) / 15.0
-            weights[slot] = max(1.0 - distance * distance, 0.0)
-        if risk_day_offset == 0 and 0 <= current_slot < 48:
-            # ``forecast_remaining_today_kwh`` starts at the current instant,
-            # therefore the first half-hour slot must contain only its
-            # unelapsed fraction.
-            weights[current_slot] *= (30 - now.minute % 30) / 30.0
-        total_weight = sum(weights) or 1.0
-        pv_per_day = [forecast * weight / total_weight for weight in weights]
-        risk_overlap_minutes = [0] * 48
-        horizon_start_minute = minute if risk_day_offset == 0 else 0
-        for start, end, _peak in selected_windows:
-            for slot in range(max(start // 30, first_slot), min((end + 29) // 30, 48)):
-                slot_start = slot * 30
-                slot_end = slot_start + 30
-                overlap = max(
-                    min(end, slot_end)
-                    - max(start, horizon_start_minute, slot_start),
-                    0,
-                )
-                risk_overlap_minutes[slot] = min(
-                    risk_overlap_minutes[slot] + overlap,
-                    30,
-                )
-        surplus = 0.0
-        risk_load = 0.0
-        for slot, overlap_minutes in enumerate(risk_overlap_minutes):
-            if overlap_minutes <= 0:
-                continue
-            slot_start = slot * 30
-            slot_end = slot_start + 30
-            available_minutes = slot_end - max(horizon_start_minute, slot_start)
-            pv_energy = (
-                pv_per_day[slot]
-                * overlap_minutes
-                / max(available_minutes, 1)
+        # With no learned window we still expose tomorrow's diagnostic profile,
+        # matching the selected forecast sensor instead of labelling it today.
+        target_date = now.date() + timedelta(
+            days=0 if risk_day_offset == 0 else 1
+        )
+        weekend = target_date.weekday() >= 5
+        try:
+            average_daily = max(
+                float(rce.attributes.get("selected_average_daily_load_kwh", 0.0)),
+                0.0,
             )
-            load_energy = load_profile[slot] * overlap_minutes / 30.0
-            surplus += max(pv_energy - load_energy, 0.0)
-            risk_load += load_energy
-        natural_headroom = 0.0
-        if risk_day_offset == 0 and first_risk_start > minute:
-            # In Self-Use only the part of LOAD not supplied by PV discharges
-            # the battery.  This energy creates headroom naturally and must be
-            # subtracted before any deliberate Grid Discharge is planned.
-            pre_risk_end_slot = min((first_risk_start + 29) // 30, 48)
-            for slot in range(current_slot, pre_risk_end_slot):
+        except (TypeError, ValueError):
+            average_daily = 0.0
+        load_selection = select_rcm_load_profile(
+            weekend=weekend,
+            average_profile=rce.attributes.get("recorder_load_profile_30m_kwh"),
+            weekday_profile=rce.attributes.get(
+                "recorder_load_weekday_profile_30m_kwh"
+            ),
+            weekend_profile=rce.attributes.get(
+                "recorder_load_weekend_profile_30m_kwh"
+            ),
+            average_daily_kwh=average_daily,
+        )
+
+        p90_key = (
+            "forecast_today_p90_kwh"
+            if risk_day_offset == 0
+            else "forecast_tomorrow_p90_kwh"
+        )
+        raw_key = (
+            "forecast_today_raw_kwh"
+            if risk_day_offset == 0
+            else "forecast_tomorrow_raw_kwh"
+        )
+        try:
+            p90_raw = float(rce.attributes[p90_key])
+            expected_raw = float(rce.attributes[raw_key])
+            selected_p90 = (
+                forecast
+                * min(
+                    max(max(p90_raw, expected_raw) / expected_raw, 1.0),
+                    2.5,
+                )
+                if expected_raw > 0
+                else None
+            )
+        except (KeyError, TypeError, ValueError):
+            selected_p90 = None
+
+        configured_entity = _state_text(
+            self.hass,
+            "input_text.hoymiles_solcast_forecast_today_entity"
+            if risk_day_offset == 0
+            else "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+        )
+        forecast_entity, forecast_state = _first_numeric_state(
+            self.hass,
+            TODAY_FORECAST_CANDIDATES
+            if risk_day_offset == 0
+            else TOMORROW_FORECAST_CANDIDATES,
+            configured_entity,
+        )
+        now_slot = (
+            floor_half_hour(now)
+            if risk_day_offset == 0
+            else datetime.combine(target_date, datetime.min.time(), tzinfo=timezone)
+        )
+        p50_map = _detailed_pv_map(
+            forecast_state,
+            target_date,
+            forecast,
+            timezone,
+            now_slot,
+            percentile="p50",
+        )
+        p90_map = (
+            _detailed_pv_map(
+                forecast_state,
+                target_date,
+                selected_p90,
+                timezone,
+                now_slot,
+                percentile="p90",
+            )
+            if selected_p90 is not None
+            else {}
+        )
+        p50_by_slot = {
+            start.hour * 2 + start.minute // 30: energy
+            for start, energy in p50_map.items()
+        }
+        p90_by_slot = {
+            start.hour * 2 + start.minute // 30: energy
+            for start, energy in p90_map.items()
+        }
+        risk_slots = tuple(
+            sorted(
+                {
+                    slot
+                    for start, end, _peak in selected_windows
+                    for slot in range(start // 30, min((end + 29) // 30, 48))
+                }
+            )
+        )
+        pv_selection = select_rcm_pv_profile(
+            forecast_total_kwh=forecast,
+            forecast_p90_total_kwh=selected_p90,
+            detailed_p50_by_slot=p50_by_slot,
+            detailed_p90_by_slot=p90_by_slot,
+            first_slot=first_slot,
+            current_slot_fraction=(
+                (30 - now.minute % 30) / 30.0
+                if risk_day_offset == 0
+                else 1.0
+            ),
+            risk_slots=risk_slots,
+        )
+        horizon_start_minute = minute if risk_day_offset == 0 else 0
+        minimum_charge_floor_kw = max(system_power_kw, 0.0) * 0.10
+
+        def energy_balance(
+            start_minute: int,
+            end_minute: int,
+        ) -> tuple[float, float, float, float, float]:
+            pv_energy = 0.0
+            load_energy = 0.0
+            surplus_energy = 0.0
+            deficit_energy = 0.0
+            minimum_charge_input = 0.0
+            for slot in range(
+                max(start_minute // 30, first_slot),
+                min((end_minute + 29) // 30, 48),
+            ):
                 slot_start = slot * 30
                 slot_end = slot_start + 30
-                overlap_start = max(minute, slot_start)
-                overlap_end = min(first_risk_start, slot_end)
+                available_start = max(horizon_start_minute, slot_start)
+                overlap_start = max(start_minute, available_start)
+                overlap_end = min(end_minute, slot_end)
                 overlap_minutes = max(overlap_end - overlap_start, 0)
                 if overlap_minutes <= 0:
                     continue
-                load_energy = load_profile[slot] * overlap_minutes / 30.0
-                available_minutes = slot_end - max(minute, slot_start)
-                pv_energy = (
-                    pv_per_day[slot]
+                available_minutes = max(slot_end - available_start, 1)
+                slot_pv = (
+                    pv_selection.slot_kwh[slot]
                     * overlap_minutes
-                    / max(available_minutes, 1)
+                    / available_minutes
                 )
-                natural_headroom += max(load_energy - pv_energy, 0.0)
-        return (
-            surplus,
-            horizon,
-            forecast,
-            risk_load,
-            natural_headroom,
-            minutes_to_risk,
-            risk_day_offset,
+                slot_load = (
+                    load_selection.slot_kwh[slot]
+                    * overlap_minutes
+                    / 30.0
+                )
+                pv_energy += slot_pv
+                load_energy += slot_load
+                surplus_energy += max(slot_pv - slot_load, 0.0)
+                deficit_energy += max(slot_load - slot_pv, 0.0)
+                minimum_charge_input += min(
+                    max(slot_pv - slot_load, 0.0),
+                    minimum_charge_floor_kw * overlap_minutes / 60.0,
+                )
+            return (
+                pv_energy,
+                load_energy,
+                surplus_energy,
+                deficit_energy,
+                minimum_charge_input,
+            )
+
+        window_forecasts: list[RCMRiskWindowInput] = []
+        for start, end, peak in selected_windows:
+            window_start = max(start, horizon_start_minute)
+            (
+                pv_energy,
+                load_energy,
+                surplus_energy,
+                _deficit,
+                _minimum_charge,
+            ) = energy_balance(
+                window_start,
+                end,
+            )
+            (
+                _pre_pv,
+                _pre_load,
+                _pre_surplus,
+                natural_before,
+                _pre_minimum_charge,
+            ) = energy_balance(
+                horizon_start_minute,
+                max(start, horizon_start_minute),
+            )
+            window_forecasts.append(
+                RCMRiskWindowInput(
+                    start_minute=start,
+                    end_minute=end,
+                    peak_voltage_v=peak,
+                    day_offset=risk_day_offset,
+                    expected_pv_kwh=pv_energy,
+                    expected_load_kwh=load_energy,
+                    expected_surplus_kwh=surplus_energy,
+                    natural_headroom_before_kwh=natural_before,
+                )
+            )
+        first_balance = energy_balance(
+            horizon_start_minute,
+            max(first_risk_start, horizon_start_minute),
+        )
+        return RCMEnergyForecast(
+            surplus_kwh=sum(item.expected_surplus_kwh for item in window_forecasts),
+            horizon=horizon,
+            selected_forecast_kwh=forecast,
+            selected_forecast_p90_kwh=selected_p90,
+            expected_load_kwh=sum(item.expected_load_kwh for item in window_forecasts),
+            natural_headroom_kwh=(
+                window_forecasts[0].natural_headroom_before_kwh
+                if window_forecasts
+                else 0.0
+            ),
+            pre_risk_surplus_kwh=first_balance[2],
+            unavoidable_charge_input_kwh=first_balance[4],
+            minutes_to_risk=minutes_to_risk,
+            risk_day_offset=risk_day_offset,
+            forecast_entity_id=forecast_entity,
+            forecast_profile_source=pv_selection.source,
+            forecast_profile_confidence=pv_selection.confidence,
+            load_profile_source=load_selection.source,
+            load_profile_confidence=load_selection.confidence,
+            window_forecasts=tuple(window_forecasts),
         )
 
     def _recalculate(self) -> None:
@@ -477,17 +675,8 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
             )
             if saved_limit is None or saved_limit < 10.0:
                 saved_limit = required["number.hoymiles_hit_battery_max_charge_power"]
-            (
-                expected_risk_surplus,
-                risk_surplus_horizon,
-                selected_forecast_kwh,
-                expected_risk_load_kwh,
-                expected_natural_headroom_kwh,
-                minutes_to_risk,
-                risk_day_offset,
-            ) = (
-                self._expected_risk_surplus_kwh()
-            )
+            system_power_kw = rated_power * inverter_count
+            energy_forecast = self._expected_risk_surplus_kwh(system_power_kw)
             rce_plan = self.hass.states.get(
                 "sensor.hoymiles_hit_rce_optimized_plan"
             )
@@ -536,11 +725,13 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                     reserve_soc_percent=required["number.hoymiles_hit_self_use_soc"],
                     safety_margin_soc_percent=required["input_number.hoymiles_rcm_soc_safety_margin"],
                     protected_minimum_soc_percent=protected_minimum_soc,
-                    expected_risk_surplus_kwh=expected_risk_surplus,
-                    expected_natural_headroom_kwh=expected_natural_headroom_kwh,
-                    minutes_to_risk=minutes_to_risk,
-                    risk_day_offset=risk_day_offset,
-                    system_power_kw=rated_power * inverter_count,
+                    expected_risk_surplus_kwh=energy_forecast.surplus_kwh,
+                    expected_natural_headroom_kwh=(
+                        energy_forecast.natural_headroom_kwh
+                    ),
+                    minutes_to_risk=energy_forecast.minutes_to_risk,
+                    risk_day_offset=energy_forecast.risk_day_offset,
+                    system_power_kw=system_power_kw,
                     battery_voltage_v=_state_number(self.hass, "sensor.hoymiles_hit_battery_voltage_bms"),
                     bms_max_charge_current_a=_state_number(self.hass, "sensor.hoymiles_hit_maximum_charge_current"),
                     bms_max_discharge_current_a=_state_number(
@@ -556,8 +747,40 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                         "input_number.hoymiles_rcm_export_cap_percent"
                     ],
                     charge_efficiency_percent=required["input_number.hoymiles_rcm_charge_efficiency"],
+                    expected_pre_risk_surplus_kwh=(
+                        energy_forecast.pre_risk_surplus_kwh
+                    ),
+                    risk_window_forecasts=energy_forecast.window_forecasts,
+                    expected_unavoidable_charge_input_kwh=(
+                        energy_forecast.unavoidable_charge_input_kwh
+                    ),
                 )
             )
+            risk_window_details = [
+                {
+                    "start": (
+                        f"{item.start_minute // 60:02d}:"
+                        f"{item.start_minute % 60:02d}"
+                    ),
+                    "end": (
+                        f"{item.end_minute // 60:02d}:"
+                        f"{item.end_minute % 60:02d}"
+                    ),
+                    "peak_voltage_v": item.peak_voltage_v,
+                    "day_offset": item.day_offset,
+                    "expected_pv_kwh": item.expected_pv_kwh,
+                    "expected_load_kwh": item.expected_load_kwh,
+                    "expected_surplus_kwh": item.expected_surplus_kwh,
+                    "required_headroom_kwh": item.required_headroom_kwh,
+                    "projected_headroom_before_kwh": (
+                        item.projected_headroom_before_kwh
+                    ),
+                    "cumulative_headroom_shortfall_kwh": (
+                        item.cumulative_headroom_shortfall_kwh
+                    ),
+                }
+                for item in result.risk_window_plans
+            ]
             self._attributes = {
                 "status_code": result.status_code,
                 "missing_entities": [],
@@ -570,7 +793,19 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 "maximum_voltage_v": result.maximum_voltage_v,
                 "filtered_voltage_v": round(filtered, 2),
                 "rolling_10m_voltage_v": round(rolling_10m, 2),
-                "historical_p90_voltage_v": round(historical_p90, 2),
+                "historical_p90_voltage_v": (
+                    round(historical_p90, 3)
+                    if self._history.history_days > 0 and historical_p90 > 0
+                    else None
+                ),
+                "historical_p90_available": (
+                    self._history.history_days > 0 and historical_p90 > 0
+                ),
+                "historical_p90_slot_index": current_slot,
+                "historical_p90_slot_start": (
+                    f"{current_slot // 4:02d}:{(current_slot % 4) * 15:02d}"
+                ),
+                "historical_p90_source": "recorder_15m_four_day_profile",
                 "voltage_risk_score_percent": result.voltage_risk_score,
                 "risk_window_active": result.risk_window_active,
                 "next_risk_start": _minutes_text(result.next_risk_start_minute),
@@ -579,25 +814,73 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 "history_samples": self._history.sample_count,
                 "history_daily_peak_v": self._history.daily_peak_v,
                 "history_profile_median_v": list(self._history.profile_median_v),
-                "history_profile_p90_v": list(self._history.profile_p90_v),
+                "history_profile_p90_v": [
+                    round(value, 3) if value > 0 else None
+                    for value in self._history.profile_p90_v
+                ],
                 "reserve_soc_percent": result.reserve_soc_percent,
                 "protected_minimum_soc_percent": result.protected_minimum_soc_percent,
                 "required_headroom_kwh": result.required_headroom_kwh,
                 "available_headroom_kwh": result.available_headroom_kwh,
                 "headroom_shortfall_kwh": result.headroom_shortfall_kwh,
                 "expected_natural_headroom_kwh": result.expected_natural_headroom_kwh,
+                "unavoidable_minimum_charge_kwh": (
+                    result.unavoidable_minimum_charge_kwh
+                ),
+                "unavoidable_charge_before_risk_kwh": (
+                    result.unavoidable_minimum_charge_kwh
+                ),
                 "planned_grid_discharge_kwh": result.planned_grid_discharge_kwh,
                 "pre_discharge_target_soc_percent": result.pre_discharge_target_soc_percent,
                 "pre_discharge_power_kw": result.pre_discharge_power_kw,
                 "pre_discharge_power_percent": result.pre_discharge_power_percent,
                 "pre_discharge_ready": result.pre_discharge_ready,
-                "minutes_to_risk": minutes_to_risk,
-                "risk_day_offset": risk_day_offset,
+                "minutes_to_risk": energy_forecast.minutes_to_risk,
+                "risk_day_offset": energy_forecast.risk_day_offset,
                 "target_soc_before_risk_percent": result.target_soc_before_risk_percent,
-                "expected_risk_surplus_kwh": round(expected_risk_surplus, 2),
-                "risk_surplus_horizon": risk_surplus_horizon,
-                "selected_forecast_kwh": round(selected_forecast_kwh, 2),
-                "expected_risk_load_kwh": round(expected_risk_load_kwh, 2),
+                "expected_risk_surplus_kwh": round(
+                    energy_forecast.surplus_kwh,
+                    3,
+                ),
+                "risk_surplus_horizon": energy_forecast.horizon,
+                "selected_forecast_kwh": round(
+                    energy_forecast.selected_forecast_kwh,
+                    3,
+                ),
+                "selected_forecast_p90_kwh": (
+                    round(energy_forecast.selected_forecast_p90_kwh, 3)
+                    if energy_forecast.selected_forecast_p90_kwh is not None
+                    else None
+                ),
+                "forecast_entity_id": energy_forecast.forecast_entity_id,
+                "forecast_profile_source": (
+                    energy_forecast.forecast_profile_source
+                ),
+                "pv_profile_source": energy_forecast.forecast_profile_source,
+                "forecast_profile_confidence_percent": round(
+                    energy_forecast.forecast_profile_confidence * 100.0,
+                    1,
+                ),
+                "pv_profile_confidence_percent": round(
+                    energy_forecast.forecast_profile_confidence * 100.0,
+                    1,
+                ),
+                "load_profile_source": energy_forecast.load_profile_source,
+                "load_profile_mode": energy_forecast.load_profile_source,
+                "load_profile_confidence_percent": round(
+                    energy_forecast.load_profile_confidence * 100.0,
+                    1,
+                ),
+                "expected_risk_load_kwh": round(
+                    energy_forecast.expected_load_kwh,
+                    3,
+                ),
+                "expected_pre_risk_surplus_kwh": round(
+                    energy_forecast.pre_risk_surplus_kwh,
+                    3,
+                ),
+                "risk_window_details": risk_window_details,
+                "risk_window_energy_plans": risk_window_details,
                 "pv_surplus_power_kw": result.pv_surplus_power_kw,
                 "bms_charge_power_limit_kw": result.bms_charge_power_limit_kw,
                 "recommended_charge_limit_percent": result.recommended_charge_limit_percent,
@@ -606,6 +889,14 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 "effective_export_cap_percent": result.effective_export_cap_percent,
                 "recommended_export_limit_percent": result.recommended_export_limit_percent,
                 "estimated_safe_export_power_kw": result.estimated_safe_export_power_kw,
+                "estimated_safe_export_available": (
+                    result.estimated_safe_export_power_kw is not None
+                ),
+                "estimated_safe_export_reason": (
+                    "live_pv_surplus"
+                    if result.estimated_safe_export_power_kw is not None
+                    else "not_applicable_no_pv_surplus"
+                ),
                 "battery_limit_saturated": result.saturated,
                 "actuators": [
                     "number.hoymiles_hit_battery_max_charge_power",

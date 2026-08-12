@@ -4,6 +4,84 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-12
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.5.0**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.5.0**.
+2. **Home Assistant:** restart Home Assistant once. The managed EMS package,
+   bilingual Aurora dashboard and frontend cards are synchronized automatically.
+   If **Installation status / Stan instalacji** or **Repairs / Naprawy**
+   requests another restart (most likely after updating from an older release),
+   validate the configuration and perform that second restart.
+   **PL:** uruchom Home Assistant ponownie jeden raz. Zarządzany pakiet EMS,
+   dashboard Aurora PL/EN i karty frontendowe zsynchronizują się automatycznie.
+   Jeżeli następnie **Stan instalacji** albo **Naprawy** poprosi o kolejny
+   restart — szczególnie po aktualizacji ze starszej wersji — sprawdź
+   konfigurację i wykonaj ten drugi restart.
+3. **ESP32 / ESPHome:** no firmware rebuild is required for this update.
+   **PL:** ta aktualizacja nie wymaga ponownej kompilacji ani wgrywania ESP32.
+4. **Verification / Weryfikacja:** verify **Installation status = Ready**, then
+   review the new advanced-data switches before enabling automatic writes.
+   Keep RCEm in observation mode during commissioning.
+   **PL:** sprawdź **Stan instalacji = Gotowe**, następnie przejrzyj nowe
+   przełączniki danych zaawansowanych przed włączeniem automatycznych zapisów.
+   Podczas odbioru pozostaw RCEm w trybie obserwacji.
+
+### Added
+
+- Add conservative whole-SOC-step planning and explicit day-three terminal
+  reserve diagnostics to the rolling RCE optimizer.
+- Extend tariff planning with a rolling horizon, explicit degraded-horizon
+  status and learned effective Grid Charge power readiness.
+- Use interval PV forecasts and weekday/weekend LOAD profiles in RCEm when
+  available, with per-risk-window surplus/headroom diagnostics and a safe
+  fallback model.
+- Add advanced-data mode to RCEm and reorganize RCE/tariff/RCEm views around
+  the decision, user benefit and next action.
+- Add a documented safety and functional programme-mapping matrix for technical
+  acceptance reports without claiming subsidy eligibility or formal equipment
+  certification.
+
+### Changed
+
+- Show the **net** RCE optimization benefit after battery-wear cost in the
+  primary finance card; retain gross revenue uplift in expert diagnostics.
+- Convert a day-three AC shortfall to the required DC battery reserve and value
+  it at avoided import cost, preventing a low-price sale followed by a more
+  expensive grid purchase.
+- Show the conservative PV/load values actually used by tariff planning on the
+  basic view instead of unrelated raw Solcast and short-window values.
+- Preserve extrema in the Aurora 24-hour chart when reducing Recorder data;
+  avoid curve interpolation that could visually overshoot measured power.
+- Move controller ownership, raw model inputs, confidence bands, physical
+  limits and long safety explanations behind explicit expert-mode switches.
+
+### Safety
+
+- Retain single-owner EMS arbitration, stale-data fail-closed gates, BMS/GCF/
+  parallel-system limits, idempotent writes with read-back acknowledgement,
+  minimum dwell/latching and safe Self-Use fallback.
+- RCEm continues to start in observation mode and never changes grid-code
+  profiles, protection thresholds, Q(U), P(U), power factor or unbalance.
+
+### Polski
+
+- RCE planuje sprzedaż konserwatywnie do pełnych kroków SOC, rozróżnia wynik
+  netto od wzrostu przychodu brutto i wyjaśnia rezerwę dnia trzeciego.
+- Tanie ładowanie pokazuje wartości faktycznie użyte w obliczeniach, stan
+  kalibracji mocy Grid Charge i jawnie sygnalizuje skrócony horyzont zastępczy.
+- RCEm wykorzystuje — jeśli są dostępne — półgodzinny profil Solcast oraz
+  osobne profile LOAD dni roboczych i weekendów; szczegóły każdego okna ryzyka
+  są dostępne w trybie eksperckim.
+- Podstawowe widoki pokazują decyzję, plan i korzyść. Surowe dane diagnostyczne
+  są nadal dostępne, ale nie utrudniają codziennej obsługi.
+- Dodano matrycę funkcji EMS, zabezpieczeń i gotowości do odbioru technicznego.
+  Dokument jasno oddziela testowalne funkcje projektu od formalnej certyfikacji
+  falownika, magazynu i kompletnej instalacji.
+
 ## [1.4.8] - 2026-08-10
 
 ### User update steps / Kroki po aktualizacji

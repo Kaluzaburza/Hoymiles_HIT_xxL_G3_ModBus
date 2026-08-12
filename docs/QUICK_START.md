@@ -46,6 +46,11 @@ check is complete:
    is enabled. RCE additionally needs current PSE price data.
 5. Leave RCEm in **observation-only** mode until its voltage history and proposed
    actions have been reviewed on the target site.
+6. Open each **Advanced data** switch once, verify controller ownership, data
+   age/model source and physical limits, then download the diagnostic ZIP as a
+   supporting diagnostic attachment to the site-specific acceptance protocol.
+   The ZIP is not an official acceptance protocol. For a formal process, use
+   the [safety and audit matrix](SAFETY_AND_COMPLIANCE.md).
 
 The integration interlocks automatic owners, but correct physical limits and
 credible source data must be confirmed by the installer or user.
@@ -110,6 +115,11 @@ zakończenia krótkiej kontroli:
    zależnego od prognozy. RCE wymaga również aktualnych cen PSE.
 5. Pozostaw RCEm w trybie **tylko obserwacja**, dopóki nie sprawdzisz historii
    napięć i proponowanych działań na docelowej instalacji.
+6. Otwórz kolejno przełączniki **Dane zaawansowane**, sprawdź właściciela
+   sterowania, świeżość/źródło modelu oraz limity fizyczne, a następnie pobierz
+   diagnostyczny ZIP jako pomocniczy załącznik do protokołu odbioru konkretnej
+   instalacji. ZIP nie jest urzędowym protokołem. Przy formalnym odbiorze
+   wykorzystaj [matrycę bezpieczeństwa i audytu](SAFETY_AND_COMPLIANCE.md).
 
 Integracja blokuje konflikt właścicieli EMS, ale poprawne limity fizyczne i
 wiarygodność danych wejściowych musi potwierdzić instalator albo użytkownik.

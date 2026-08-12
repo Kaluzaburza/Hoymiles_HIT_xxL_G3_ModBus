@@ -9,119 +9,73 @@
       "badges": [],
       "cards": [
         {
-          "type": "custom:hoymiles-responsive-glance-card",
-          "columns": 3,
-          "minimum_width": 120,
-          "show_name": true,
-          "show_state": true,
-          "state_color": true,
-          "entities": [
-            {
-              "entity": "sensor.hoymiles_solcast_forecast_today",
-              "name": "PV forecast (Solcast)"
-            },
-            {
-              "entity": "sensor.hoymiles_solcast_forecast_remaining_today",
-              "name": "PV remaining (Solcast)"
-            },
-            {
-              "entity": "sensor.hoymiles_load_average_4_days",
-              "name": "Avg. daily home use"
-            }
-          ]
+          "type": "custom:hoymiles-aurora-energy-card",
+          "pv_entity": "sensor.hoymiles_hit_overview_pv_total_power",
+          "load_entity": "sensor.hoymiles_actual_load_power",
+          "grid_entity": "sensor.hoymiles_hit_overview_grid_total_active_power",
+          "battery_entity": "sensor.hoymiles_hit_overview_battery_power",
+          "battery_soc_entity": "sensor.hoymiles_hit_overview_battery_soc",
+          "inverter_entity": "sensor.hoymiles_hit_overview_inverter_active_power",
+          "ems_mode_entity": "select.hoymiles_hit_ems_mode",
+          "forecast_today_entity": "sensor.hoymiles_solcast_forecast_today",
+          "forecast_remaining_entity": "sensor.hoymiles_solcast_forecast_remaining_today",
+          "average_load_entity": "sensor.hoymiles_load_average_4_days",
+          "pv_today_entity": "sensor.hoymiles_hit_pv_total_energy_today",
+          "pv_to_load_today_entity": "sensor.hoymiles_hit_pv_to_load_energy_today",
+          "pv_to_battery_today_entity": "sensor.hoymiles_hit_pv_to_battery_energy_today",
+          "pv_to_grid_today_entity": "sensor.hoymiles_hit_pv_to_grid_energy_today",
+          "grid_import_today_entity": "sensor.hoymiles_hit_grid_energy_buy_today",
+          "grid_to_load_today_entity": "sensor.hoymiles_rce_grid_to_load_today",
+          "grid_to_battery_today_entity": "sensor.hoymiles_grid_to_battery_today",
+          "inverter_image": "/local/hoymiles-inverter.png"
         },
         {
-          "type": "custom:hoymiles-responsive-glance-card",
-          "title": "Current power flow",
-          "columns": 7,
-          "minimum_width": 104,
-          "show_name": true,
-          "show_state": true,
-          "state_color": true,
-          "entities": [
+          "type": "custom:hoymiles-aurora-status-card",
+          "setup_entity": "sensor.hoymiles_hit_setup_status",
+          "system_entity": "sensor.hoymiles_hit_overview_system_work_status",
+          "inverter_entity": "sensor.hoymiles_hit_inverter_work_status",
+          "meter_entity": "sensor.hoymiles_hit_meter_link_status",
+          "battery_entity": "sensor.hoymiles_hit_battery_link_status",
+          "parallel_entity": "sensor.hoymiles_hit_parallel_ems_control_status",
+          "alarm_entities": [
             {
-              "entity": "sensor.hoymiles_hit_overview_pv_total_power",
-              "name": "PV"
+              "entity": "sensor.hoymiles_hit_sw_fault",
+              "name": "SW Fault"
             },
             {
-              "entity": "sensor.hoymiles_actual_load_power",
-              "name": "Load"
+              "entity": "sensor.hoymiles_hit_hw_fault",
+              "name": "HW Fault"
             },
             {
-              "entity": "sensor.hoymiles_hit_overview_grid_total_active_power",
-              "name": "Grid"
+              "entity": "sensor.hoymiles_hit_battery_fault_code_bms",
+              "name": "Battery fault (BMS)"
             },
             {
-              "entity": "sensor.hoymiles_hit_overview_battery_power",
-              "name": "Battery"
+              "entity": "sensor.hoymiles_hit_overview_battery_faults",
+              "name": "Battery faults"
             },
             {
-              "entity": "sensor.hoymiles_hit_battery_current_inverter",
-              "name": "Battery (A)"
+              "entity": "sensor.hoymiles_hit_overview_dsp_power_faults",
+              "name": "DSP power faults"
             },
             {
-              "entity": "sensor.hoymiles_hit_battery_1_voltage",
-              "name": "Battery (V)"
+              "entity": "sensor.hoymiles_hit_dsp_safety_faults",
+              "name": "DSP Safety Faults"
             },
             {
-              "entity": "sensor.hoymiles_hit_overview_battery_soc",
-              "name": "SOC"
+              "entity": "sensor.hoymiles_hit_arm_communication_faults",
+              "name": "ARM Communication Faults"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_arm_peripheral_faults",
+              "name": "ARM Peripheral Faults"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_arm_system_faults",
+              "name": "ARM System Faults"
             }
-          ]
-        },
-        {
-          "type": "custom:hoymiles-responsive-stack-card",
-          "minimum_width": 280,
-          "cards": [
-            {
-              "type": "custom:hoymiles-zebra-entities-card",
-              "title": "Grid — voltages and frequency",
-              "show_header_toggle": false,
-              "state_color": true,
-              "entities": [
-                {
-                  "entity": "sensor.hoymiles_hit_grid_voltage_l1",
-                  "name": "L1 voltage"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_grid_voltage_l2",
-                  "name": "L2 voltage"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_grid_voltage_l3",
-                  "name": "L3 voltage"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_inverter_grid_frequency",
-                  "name": "Frequency"
-                }
-              ]
-            },
-            {
-              "type": "custom:hoymiles-zebra-entities-card",
-              "title": "Loads — power",
-              "show_header_toggle": false,
-              "state_color": true,
-              "entities": [
-                {
-                  "entity": "sensor.hoymiles_hit_load_power_l1n",
-                  "name": "Load power L1"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_load_power_l2n",
-                  "name": "Load power L2"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_load_power_l3n",
-                  "name": "Load power L3"
-                },
-                {
-                  "entity": "sensor.hoymiles_actual_load_power",
-                  "name": "Loads — total power"
-                }
-              ]
-            }
-          ]
+          ],
+          "details_path": "stany-alarmy"
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
@@ -159,335 +113,48 @@
           ]
         },
         {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "Protection parameters and temperatures",
-          "show_header_toggle": false,
-          "state_color": true,
-          "view_layout": {
-            "position": "sidebar"
-          },
-          "entities": [
-            {
-              "entity": "sensor.hoymiles_hit_inv_ths_temp",
-              "name": "Inverter heatsink temperature"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_bat_ths_temp",
-              "name": "Battery-stage heatsink temperature"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_cav_temp",
-              "name": "Inverter internal temperature (CAV)"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_pe_voltage",
-              "name": "PP voltage"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_iso_resistor",
-              "name": "Insulation resistance"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_residual_current",
-              "name": "Residual current"
-            }
-          ]
-        },
-        {
-          "type": "custom:hoymiles-power-flow-card",
-          "cardstyle": "lite",
-          "wide": true,
-          "show_solar": true,
-          "show_battery": true,
-          "show_grid": true,
-          "decimal_places": 2,
-          "dynamic_line_width": true,
-          "min_line_width": 1,
-          "max_line_width": 4,
-          "inverter": {
-            "modern": true,
-            "autarky": "no",
-            "auto_scale": true
-          },
-          "inverter_image": "/local/hoymiles-inverter.png",
-          "battery": {
-            "energy": "sensor.hoymiles_hit_battery_capacity",
-            "shutdown_soc": 10,
-            "colour": "#00BCD4",
-            "charge_colour": "#00BCD4",
-            "animation_speed": 6,
-            "max_power": 10000,
-            "show_absolute": true,
-            "dynamic_colour": false,
-            "animate": true
-          },
-          "solar": {
-            "mppts": 1,
-            "pv1_name": "PV",
-            "colour": "#4CAF50",
-            "animation_speed": 6,
-            "max_power": 10000,
-            "dynamic_colour": true
-          },
-          "load": {
-            "essential_name": "Odbiory",
-            "show_aux": false,
-            "colour": "#00BCD4",
-            "animation_speed": 6,
-            "max_power": 10000,
-            "dynamic_colour": true
-          },
-          "grid": {
-            "grid_name": "Grid",
-            "show_nonessential": false,
-            "show_absolute": true,
-            "animation_speed": 6,
-            "max_power": 10000,
-            "dynamic_colour": true,
-            "invert_grid": true
-          },
-          "entities": {
-            "inverter_power_175": "sensor.hoymiles_hit_overview_inverter_active_power",
-            "grid_power_169": "sensor.hoymiles_hit_overview_grid_total_active_power",
-            "grid_ct_power_172": "sensor.hoymiles_hit_overview_grid_total_active_power",
-            "battery_soc_184": "sensor.hoymiles_hit_overview_battery_soc",
-            "battery_power_190": "sensor.hoymiles_hit_overview_battery_power",
-            "battery_current_191": "sensor.hoymiles_hit_battery_current_inverter",
-            "battery_voltage_183": "sensor.hoymiles_hit_battery_1_voltage",
-            "essential_power": "sensor.hoymiles_actual_load_power",
-            "pv1_power_186": "sensor.hoymiles_hit_overview_pv_total_power"
-          }
-        },
-        {
-          "type": "vertical-stack",
-          "cards": [
-            {
-              "type": "glance",
-              "title": "Daily summary — energia z PV",
-              "columns": 1,
-              "show_name": true,
-              "show_state": true,
-              "state_color": true,
-              "entities": [
-                {
-                  "entity": "sensor.hoymiles_hit_pv_total_energy_today",
-                  "name": "Generated today"
-                }
-              ]
-            },
-            {
-              "type": "glance",
-              "columns": 3,
-              "show_name": true,
-              "show_state": true,
-              "state_color": true,
-              "entities": [
-                {
-                  "entity": "sensor.hoymiles_hit_pv_to_load_energy_today",
-                  "name": "To home"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_pv_to_battery_energy_today",
-                  "name": "To battery"
-                },
-                {
-                  "entity": "sensor.hoymiles_hit_pv_to_grid_energy_today",
-                  "name": "To grid"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "glance",
-          "title": "Grid import — today",
-          "columns": 3,
-          "show_name": true,
-          "show_state": true,
-          "state_color": true,
-          "entities": [
-            {
-              "entity": "sensor.hoymiles_hit_grid_energy_buy_today",
-              "name": "Total"
-            },
-            {
-              "entity": "sensor.hoymiles_rce_grid_to_load_today",
-              "name": "To loads"
-            },
-            {
-              "entity": "sensor.hoymiles_grid_to_battery_today",
-              "name": "To battery"
-            }
-          ]
-        },
-        {
-          "type": "history-graph",
-          "title": "Power — last 24 hours [W]",
+          "type": "custom:hoymiles-aurora-history-card",
+          "title": "Power — last 24 hours",
           "hours_to_show": 24,
-          "show_names": true,
-          "fit_y_data": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_hit_overview_pv_total_power",
               "name": "PV",
-              "color": "#00E676"
+              "color": "#2DE083"
             },
             {
               "entity": "sensor.hoymiles_actual_load_power",
               "name": "Load",
-              "color": "#FF1744"
+              "color": "#FF5D73"
             },
             {
               "entity": "sensor.hoymiles_hit_overview_grid_total_active_power",
               "name": "Grid",
-              "color": "#FFD600"
+              "color": "#FFC857"
             },
             {
               "entity": "sensor.hoymiles_hit_overview_battery_power",
               "name": "Battery",
-              "color": "#00B0FF"
+              "color": "#3EA6FF"
             }
           ]
         },
         {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "System and connectivity",
-          "show_header_toggle": false,
-          "state_color": true,
+          "type": "custom:hoymiles-aurora-frame-card",
+          "accent": "cyan",
           "view_layout": {
             "position": "sidebar"
           },
-          "entities": [
-            {
-              "entity": "sensor.hoymiles_hit_inverter_work_status",
-              "name": "Inverter Work Status",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_overview_system_work_status",
-              "name": "System operating state",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_meter_link_status",
-              "name": "Meter link",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_pv_link_status",
-              "name": "PV link",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_battery_link_status",
-              "name": "Battery link",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_battery_work_status_bms",
-              "name": "Battery Work Status (BMS)",
-              "tap_action": {
-                "action": "more-info"
-              }
-            }
-          ]
-        },
-        {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "Alarms — quick view",
-          "show_header_toggle": false,
-          "state_color": true,
-          "view_layout": {
-            "position": "sidebar"
-          },
-          "entities": [
-            {
-              "entity": "sensor.hoymiles_hit_sw_fault",
-              "name": "SW Fault",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_hw_fault",
-              "name": "HW Fault",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_battery_fault_code_bms",
-              "name": "Battery fault (BMS)",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_overview_battery_faults",
-              "name": "Battery faults",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_overview_dsp_power_faults",
-              "name": "DSP power faults",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_dsp_safety_faults",
-              "name": "DSP Safety Faults",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_arm_communication_faults",
-              "name": "ARM Communication Faults",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_arm_peripheral_faults",
-              "name": "ARM Peripheral Faults",
-              "tap_action": {
-                "action": "more-info"
-              }
-            },
-            {
-              "entity": "sensor.hoymiles_hit_arm_system_faults",
-              "name": "ARM System Faults",
-              "tap_action": {
-                "action": "more-info"
-              }
-            }
-          ]
-        },
-        {
-          "type": "markdown",
-          "title": "☕ Support project development",
-          "view_layout": {
-            "position": "sidebar"
-          },
-          "content": "This independent project is tested on real installations.\nYour support helps improve safe automation\nfor EMS/RCE, test more inverter configurations, and create better\ndocumentation.\n\nIf the integration has saved you time or helps you use\nyour energy more effectively, you can support its continued development:\n\n[**☕ Support the author**](https://buycoffee.to/kaluzaaa)"
+          "card": {
+            "type": "markdown",
+            "title": "☕ Support project development",
+            "content": "This independent project is tested on real installations.\nYour support helps improve safe automation\nfor EMS/RCE, test more inverter configurations, and create better\ndocumentation.\n\nIf the integration has saved you time or helps you use\nyour energy more effectively, you can support its continued development:\n\n[**☕ Support the author**](https://buycoffee.to/kaluzaaa)"
+          }
         }
       ]
     },
     {
-      "title": "EMS automation",
+      "title": "RCE and Results",
       "path": "automatyka-ems",
       "icon": "mdi:calendar-clock",
       "type": "sidebar",
@@ -499,14 +166,6 @@
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
-            {
-              "entity": "sensor.hoymiles_ems_control_owner",
-              "name": "Current controller"
-            },
-            {
-              "entity": "binary_sensor.hoymiles_ems_control_conflict",
-              "name": "Control conflict"
-            },
             {
               "entity": "input_boolean.hoymiles_rce_discharge_enabled",
               "name": "Enable automatic discharge using RCE prices"
@@ -538,31 +197,44 @@
             {
               "entity": "input_datetime.hoymiles_sale_block_end",
               "name": "Lockout end"
+            },
+            {
+              "entity": "input_boolean.hoymiles_rce_advanced_view",
+              "name": "Advanced data (expert mode)"
             }
           ]
         },
         {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "RCE — advanced configuration",
-          "show_header_toggle": false,
-          "state_color": true,
+          "type": "conditional",
           "view_layout": {
             "position": "sidebar"
           },
-          "entities": [
+          "conditions": [
             {
-              "entity": "input_text.hoymiles_solcast_forecast_today_entity",
-              "name": "Custom Solcast entity — today"
-            },
-            {
-              "entity": "input_text.hoymiles_solcast_forecast_tomorrow_entity",
-              "name": "Custom Solcast entity — tomorrow"
-            },
-            {
-              "entity": "input_number.hoymiles_rce_fallback_daily_load",
-              "name": "Daily consumption before history is available"
+              "entity": "input_boolean.hoymiles_rce_advanced_view",
+              "state": "on"
             }
-          ]
+          ],
+          "card": {
+            "type": "custom:hoymiles-zebra-entities-card",
+            "title": "RCE — advanced configuration",
+            "show_header_toggle": false,
+            "state_color": true,
+            "entities": [
+              {
+                "entity": "input_text.hoymiles_solcast_forecast_today_entity",
+                "name": "Custom Solcast entity — today"
+              },
+              {
+                "entity": "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+                "name": "Custom Solcast entity — tomorrow"
+              },
+              {
+                "entity": "input_number.hoymiles_rce_fallback_daily_load",
+                "name": "Daily consumption before history is available"
+              }
+            ]
+          }
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
@@ -579,14 +251,6 @@
               "name": "Optimizer decision"
             },
             {
-              "entity": "sensor.hoymiles_rce_current_price",
-              "name": "Current RCE price"
-            },
-            {
-              "entity": "sensor.hoymiles_rce_automatic_price_floor",
-              "name": "Plan price floor"
-            },
-            {
               "entity": "sensor.hoymiles_rce_dynamic_minimum_soc",
               "name": "Protected minimum SOC"
             },
@@ -601,14 +265,6 @@
             {
               "entity": "sensor.hoymiles_rce_ending_battery_soc",
               "name": "SOC at the end of the horizon"
-            },
-            {
-              "entity": "sensor.hoymiles_rce_optimization_gain",
-              "name": "Optimization benefit"
-            },
-            {
-              "entity": "sensor.hoymiles_rce_realized_revenue_today",
-              "name": "Revenue realized today"
             }
           ]
         },
@@ -643,6 +299,13 @@
         {
           "type": "markdown",
           "title": "Required forecast source",
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "input_boolean.hoymiles_rce_advanced_view",
+              "state": "on"
+            }
+          ],
           "view_layout": {
             "position": "sidebar"
           },
@@ -651,7 +314,7 @@
             "sensor.hoymiles_rce_reserve_status",
             "sensor.hoymiles_rce_dynamic_minimum_soc"
           ],
-          "content": "The automation requires the external integration\n**Solcast PV Forecast** by **BJReplay**:\n[installation and configuration](https://github.com/BJReplay/ha-solcast-solar).\n\n**Forecast Today** and **Forecast Tomorrow** are required.\nThe entities are detected automatically in Polish and English HA;\ncustom entity ids can be entered above.\n\nThe optimizer simulates the balance every 30 minutes from now through tonight,\nthe whole next day and the following night until **90 minutes after sunrise**.\nIt first excludes the Self-Use outage reserve, the safety\ncorrection, and the full forecast home consumption through\nthe end of the nearest protected night from export. Forecast PV before sunset does not\nreduce this night reserve. Only the remaining energy is assigned\ndo the most valuable available RCE slots today or tomorrow.\n\nThe export price is not configured manually. The optimizer compares\nthe full financial result of every available slot in the horizon,\nselects the highest prices and includes natural PV export. An earlier\ndischarge is used only when it increases revenue or creates\nbattery headroom before a later surplus would be sold more cheaply.\n\nSystem power is calculated as **one inverter's rated power × the automatically\ndetected inverter count × the configured discharge percentage**.\nUntil at least 24 hours of history is collected, the configured fallback\ndaily consumption above is used. The optimizer then uses the available\nhistory and gradually builds a complete four-day average;\nthe actual history coverage is shown in the status card.\n\nThe Self-Use reserve setting is not changed. This energy remains available\nbelow the normal threshold only during a grid outage."
+          "content": "The automation requires the external integration\n**Solcast PV Forecast** by **BJReplay**:\n[installation and configuration](https://github.com/BJReplay/ha-solcast-solar).\n\n**Forecast Today** and **Forecast Tomorrow** are required.\nIf Solcast provides **Forecast Day 3**, the integration uses it\nautomatically to value energy worth retaining after the end of the\n48-hour market horizon. Its absence does not block operation. Entities are\ndetected automatically in Polish and English HA; for\ncustom names, the Today and Tomorrow entities can be entered above.\n\nThe optimizer simulates the balance every 30 minutes from now through tonight,\nthe whole next day and the following night until **90 minutes after sunrise**.\nIt first excludes the Self-Use outage reserve, the safety\ncorrection, and the full forecast home consumption through\nthe end of the nearest protected night from export. Forecast PV before sunset does not\nreduce this night reserve. Only the remaining energy is assigned\ndo the most valuable available RCE slots today or tomorrow.\n\nThe export price is not configured manually. The optimizer compares\nthe full financial result of every available slot in the horizon,\nselects the highest prices and includes natural PV export, battery\nwear cost, and the value of energy retained for the following day.\nAn earlier discharge is used only when it increases the net result\nor creates battery headroom before a later surplus would be sold\nmore cheaply.\n\nSystem power is calculated as **one inverter's rated power × the automatically\ndetected inverter count × the configured discharge percentage**.\nUntil at least 24 hours of history is collected, the configured fallback\ndaily consumption entered above. The algorithm then learns from up to\n28 complete days, gives recent days more weight, rejects\nisolated spikes, and builds separate 48 half-hour profiles\nfor weekdays and weekends. The latest four days remain a fast\nfallback after a fresh installation. Actual coverage and the selected\nmodel are shown in diagnostics.\n\nThe reserve is conservatively derived from Solcast **P10/P50/P90**\nbands and forecast error measured on previous days. During\nthe day, correction compares forecast with actual production but does not\nreduce home protection based on a short post-sunrise sample.\n\nThe Self-Use reserve setting is not changed. This energy remains available\nbelow the normal threshold only during a grid outage."
         },
         {
           "type": "markdown",
@@ -664,14 +327,85 @@
             "input_datetime.hoymiles_sale_block_start",
             "input_datetime.hoymiles_sale_block_end"
           ],
-          "content": "{% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}\n{% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'planned_duration_minutes') | int(0) %}\n{% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}\n{% set export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'expected_export_kwh') | float(0) %}\n{% set battery_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                                   'planned_battery_export_kwh')\n                                   | float(0) %}\n{% set pv_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                              'natural_pv_export_kwh') | float(0) %}\n{% set baseline_export = states(\n     'sensor.hoymiles_rce_self_use_baseline_export') | float(0) %}\n{% set battery_revenue = state_attr(\n     'sensor.hoymiles_rce_discharge_plan',\n     'planned_battery_revenue_pln') | float(0) %}\n{% set pv_revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                               'natural_pv_revenue_pln') | float(0) %}\n{% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'estimated_revenue_pln') | float(0) %}\n{% set price_floor = states(\n     'sensor.hoymiles_rce_automatic_price_floor') %}\n{% set gain = states('sensor.hoymiles_rce_optimization_gain') %}\n{% set preview = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'plan_is_preview') %}\n{% set scope = state_attr('sensor.hoymiles_rce_discharge_plan',\n                          'planning_scope') %}\n**Horizon:** {{ dates }}<br>\n**Price-data scope:** {{ 'today and tomorrow'\n   if scope == 'today_and_tomorrow'\n   else 'today only — tomorrow will be added automatically' }}<br>\n**Plan mode:** {{ 'preview — automatic discharge is disabled'\n   if preview else 'active' }}<br>\n**Automatic plan price floor:** {{ price_floor\n   if price_floor not in ['unknown', 'unavailable'] else 'no export planned' }}\n{{ 'PLN/kWh' if price_floor not in ['unknown', 'unavailable'] else '' }}<br>\n**Optimization gain:** {{ gain\n   if gain not in ['unknown', 'unavailable'] else '0' }} PLN<br>\n**Most profitable periods selected by the optimizer:**<br>\n{{ periods or 'No data available to build a plan.' }}\n\n**Total plan:** {{ minutes // 60 }} h\n{{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}\n30-minute blocks)<br>\n**Planned controlled export from now:** {{ battery_export | round(2) }}\nkWh → {{ battery_revenue | round(2) }} PLN<br>\n**Forecast surplus if Self-Use remains active:**\n{{ baseline_export | round(2) }} kWh<br>\n**Unavoidable PV surplus remaining after optimization:**\n{{ pv_export | round(2) }}\nkWh → {{ pv_revenue | round(2) }} PLN<br>\n**Total future export from now:** {{ export | round(2) }} kWh<br>\n**Total future estimated revenue:** {{ revenue | round(2) }} PLN\n\nFuture-plan values do not include energy sold earlier\ntoday. Realized export is split above into\nRCE-controlled sales and natural surplus exported in Self-Use.\n\nThe automation returns to **Self-Use** after the selected\nslot ends, the minimum SOC is reached, or the\nswitch is disabled. The export lockout excludes the configured hours."
+          "content": "{% set plan = states.sensor.hoymiles_hit_rce_optimized_plan %}\n{% if plan is not none %}\n{% set periods = state_attr('sensor.hoymiles_rce_discharge_plan', 'periods') %}\n{% set minutes = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'planned_duration_minutes') | int(0) %}\n{% set dates = state_attr('sensor.hoymiles_rce_discharge_plan', 'data_dates') %}\n{% set export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                           'expected_export_kwh') | float(0) %}\n{% set battery_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                                   'planned_battery_export_kwh')\n                                   | float(0) %}\n{% set pv_export = state_attr('sensor.hoymiles_rce_discharge_plan',\n                              'natural_pv_export_kwh') | float(0) %}\n{% set baseline_export = states(\n     'sensor.hoymiles_rce_self_use_baseline_export') | float(0) %}\n{% set battery_revenue = state_attr(\n     'sensor.hoymiles_rce_discharge_plan',\n     'planned_battery_revenue_pln') | float(0) %}\n{% set pv_revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                               'natural_pv_revenue_pln') | float(0) %}\n{% set revenue = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'estimated_revenue_pln') | float(0) %}\n{% set price_floor = states(\n     'sensor.hoymiles_rce_automatic_price_floor') %}\n{% set gain = plan.attributes.net_optimization_gain_pln\n   | default(0) | float(0) %}\n{% set preview = state_attr('sensor.hoymiles_rce_discharge_plan',\n                            'plan_is_preview') %}\n{% set scope = state_attr('sensor.hoymiles_rce_discharge_plan',\n                          'planning_scope') %}\n**Horizon:** {{ dates }}<br>\n**Price-data scope:** {{ 'today and tomorrow'\n   if scope == 'today_and_tomorrow'\n   else 'today only — tomorrow will be added automatically' }}<br>\n**Plan mode:** {{ 'preview — automatic discharge is disabled'\n   if preview else 'active' }}<br>\n**Automatic plan price floor:** {{ price_floor\n   if price_floor not in ['unknown', 'unavailable'] else 'no export planned' }}\n{{ 'PLN/kWh' if price_floor not in ['unknown', 'unavailable'] else '' }}<br>\n**Net optimization benefit:** {{ gain | round(2) }} PLN<br>\n**Most profitable periods selected by the optimizer:**<br>\n{{ periods or 'No data available to build a plan.' }}\n\n**Total plan:** {{ minutes // 60 }} h\n{{ minutes % 60 }} min ({{ states('sensor.hoymiles_rce_discharge_plan') }}\n30-minute blocks)<br>\n**Planned controlled export from now:** {{ battery_export | round(2) }}\nkWh → {{ battery_revenue | round(2) }} PLN<br>\n**Forecast surplus if Self-Use remains active:**\n{{ baseline_export | round(2) }} kWh<br>\n**Unavoidable PV surplus remaining after optimization:**\n{{ pv_export | round(2) }}\nkWh → {{ pv_revenue | round(2) }} PLN<br>\n**Total future export from now:** {{ export | round(2) }} kWh<br>\n**Total future estimated revenue:** {{ revenue | round(2) }} PLN\n\n{% if is_state('input_boolean.hoymiles_rce_advanced_view', 'on') %}\n---\n**Data quality:** {{ plan.attributes.data_quality_score | default(0) }}/100\n({{ plan.attributes.data_quality_level | default('not assessed') }}){% set issues =\nplan.attributes.data_quality_issues | default([], true) %}{% if issues %}\n· issues: {{ issues | join(', ') }}{% endif %}<br>\n**Today forecast P10 / P50 / P90:**\n{{ plan.attributes.forecast_today_p10_kwh | default('—', true) }} /\n{{ plan.attributes.forecast_today_kwh | default('—', true) }} /\n{{ plan.attributes.forecast_today_p90_kwh | default('—', true) }} kWh<br>\n**Tomorrow forecast P10 / P50 / P90:**\n{{ plan.attributes.forecast_tomorrow_p10_kwh | default('—', true) }} /\n{{ plan.attributes.forecast_tomorrow_kwh | default('—', true) }} /\n{{ plan.attributes.forecast_tomorrow_p90_kwh | default('—', true) }} kWh<br>\n**Forecast confidence / conservative-case share:**\n{{ plan.attributes.forecast_confidence_percent | default(0) }}% /\n{{ ((plan.attributes.forecast_uncertainty_risk_weight | default(0))\n    * 100) | round(0) }}%<br>\n**Load model:** {{ plan.attributes.load_profile_mode\n   | default('fallback mode') }} ·\n{{ plan.attributes.recorder_load_history_days | default(0) }} history days<br>\n**Physical plan power:** requested\n{{ plan.attributes.requested_export_power_kw | default(0) }} kW · available\n{{ plan.attributes.maximum_export_power_kw | default(0) }} kW · limit source:\n{{ plan.attributes.physical_limit_source | default('none') }}<br>\n**GCF:** {{ 'enabled' if plan.attributes.gcf_enabled | default(false)\n   else 'disabled' }} · limit\n{{ plan.attributes.gcf_export_limit_percent | default('—', true) }}%<br>\n**Planned battery wear cost:**\n{{ plan.attributes.battery_wear_cost_pln | default(0) }} PLN ·\n**net benefit:** {{ plan.attributes.net_optimization_gain_pln\n   | default(0) }} PLN<br>\n**Gross revenue increase before battery wear cost:**\n{{ plan.attributes.gross_optimization_gain_pln\n   | default(plan.attributes.optimization_gain_pln | default(0)) }} PLN<br>\n**Additional reserve after the horizon (day-three deficit):**\n{{ plan.attributes.terminal_energy_target_kwh | default(0) }} kWh ·\n{{ plan.attributes.terminal_energy_target_reason\n   | default('reason unavailable') }} · value\n{{ plan.attributes.terminal_energy_value_pln | default(0) }} PLN\n{% endif %}\n\nFuture-plan values do not include energy sold earlier\ntoday. Realized export is split above into\nRCE-controlled sales and natural surplus exported in Self-Use.\n\nThe automation returns to **Self-Use** after the selected\nslot ends, the minimum SOC is reached, or the\nswitch is disabled. The export lockout excludes the configured hours.\n{% endif %}"
+        },
+        {
+          "type": "custom:hoymiles-aurora-finance-card"
+        },
+        {
+          "type": "custom:hoymiles-responsive-stack-card",
+          "minimum_width": 320,
+          "gap": 12,
+          "cards": [
+            {
+              "type": "custom:hoymiles-aurora-frame-card",
+              "accent": "pv",
+              "card": {
+                "type": "statistics-graph",
+                "title": "Revenue — last 30 days",
+                "chart_type": "bar",
+                "period": "day",
+                "days_to_show": 30,
+                "hide_legend": true,
+                "fit_y_data": true,
+                "stat_types": [
+                  "change"
+                ],
+                "entities": [
+                  {
+                    "entity": "sensor.hoymiles_rce_revenue_total",
+                    "name": "Revenue",
+                    "color": "#2DE083"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "custom:hoymiles-aurora-frame-card",
+              "accent": "grid",
+              "card": {
+                "type": "statistics-graph",
+                "title": "Export — last 30 days",
+                "chart_type": "bar",
+                "period": "day",
+                "days_to_show": 30,
+                "hide_legend": true,
+                "fit_y_data": true,
+                "stat_types": [
+                  "change"
+                ],
+                "entities": [
+                  {
+                    "entity": "sensor.hoymiles_rce_grid_export_energy_total",
+                    "name": "Energy to grid",
+                    "color": "#FFC857"
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "RCE — details and diagnostics",
           "show_header_toggle": false,
           "state_color": true,
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "input_boolean.hoymiles_rce_advanced_view",
+              "state": "on"
+            }
+          ],
           "entities": [
+            {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Current controller"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Control conflict"
+            },
             {
               "entity": "sensor.hoymiles_rce_status",
               "name": "Automation status"
@@ -679,6 +413,18 @@
             {
               "entity": "sensor.hoymiles_hit_rce_optimized_plan",
               "name": "Optimizer status"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_rce_control_data_ready",
+              "name": "Data and control ready"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_export_allowed",
+              "name": "Physical export permitted"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_execution_ready",
+              "name": "Inverter ready for EMS writes"
             },
             {
               "entity": "sensor.hoymiles_rce_current_price",
@@ -718,19 +464,19 @@
             },
             {
               "entity": "sensor.hoymiles_load_average_4_days",
-              "name": "Average daily LOAD"
+              "name": "Adaptive daily load consumption"
             },
             {
               "entity": "sensor.hoymiles_load_history_coverage",
-              "name": "Collected daily-load history"
+              "name": "Load history coverage"
             },
             {
               "entity": "sensor.hoymiles_night_load_average_4_days",
-              "name": "Average protected-window consumption"
+              "name": "Adaptive protected-night consumption"
             },
             {
               "entity": "sensor.hoymiles_night_load_history_coverage",
-              "name": "Collected night-load history"
+              "name": "Night-load history coverage"
             },
             {
               "entity": "sensor.hoymiles_actual_load_energy_today",
@@ -829,108 +575,6 @@
               "name": "Total realized revenue today"
             }
           ]
-        },
-        {
-          "type": "markdown",
-          "view_layout": {
-            "position": "sidebar"
-          },
-          "content": "## Daily EMS schedules\nEach schedule runs every day while its switch is enabled. When the configured duration ends, the inverter returns to Self-Use.\nDo not schedule charging and discharging at the same time. Turning a schedule off prevents subsequent starts."
-        },
-        {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "Grid discharge",
-          "show_header_toggle": false,
-          "state_color": true,
-          "entities": [
-            {
-              "entity": "input_boolean.hoymiles_discharge_schedule_enabled",
-              "name": "Enable daily schedule"
-            },
-            {
-              "entity": "input_datetime.hoymiles_discharge_start",
-              "name": "Start time"
-            },
-            {
-              "entity": "input_number.hoymiles_discharge_duration",
-              "name": "Duration"
-            },
-            {
-              "entity": "number.hoymiles_hit_force_discharge_soc",
-              "name": "Minimum SOC — grid discharge"
-            },
-            {
-              "entity": "number.hoymiles_hit_maximum_discharge_power",
-              "name": "Max. grid discharge power"
-            },
-            {
-              "entity": "timer.hoymiles_discharge",
-              "name": "Current cycle remaining time"
-            },
-            {
-              "entity": "script.hoymiles_start_grid_discharge",
-              "name": "Start grid discharge now"
-            }
-          ]
-        },
-        {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "Grid charge",
-          "show_header_toggle": false,
-          "state_color": true,
-          "entities": [
-            {
-              "entity": "input_boolean.hoymiles_charge_schedule_enabled",
-              "name": "Enable daily schedule"
-            },
-            {
-              "entity": "input_datetime.hoymiles_charge_start",
-              "name": "Start time"
-            },
-            {
-              "entity": "input_number.hoymiles_charge_duration",
-              "name": "Duration"
-            },
-            {
-              "entity": "number.hoymiles_hit_force_charge_soc",
-              "name": "Target SOC — grid charge"
-            },
-            {
-              "entity": "number.hoymiles_hit_maximum_charge_power",
-              "name": "Max. grid charge power"
-            },
-            {
-              "entity": "timer.hoymiles_charge",
-              "name": "Current cycle remaining time"
-            },
-            {
-              "entity": "script.hoymiles_start_grid_charge",
-              "name": "Start grid charge now"
-            }
-          ]
-        },
-        {
-          "type": "custom:hoymiles-zebra-entities-card",
-          "title": "EMS control and stop",
-          "show_header_toggle": false,
-          "state_color": true,
-          "view_layout": {
-            "position": "sidebar"
-          },
-          "entities": [
-            {
-              "entity": "select.hoymiles_hit_ems_mode",
-              "name": "Operating mode"
-            },
-            {
-              "entity": "number.hoymiles_hit_self_use_soc",
-              "name": "SOC reserve — Self-Use"
-            },
-            {
-              "entity": "script.hoymiles_stop_scheduled_cycle",
-              "name": "Stop and return to Self-Use"
-            }
-          ]
         }
       ]
     },
@@ -943,18 +587,10 @@
       "cards": [
         {
           "type": "custom:hoymiles-zebra-entities-card",
-          "title": "Automatic tariff charging — settings",
+          "title": "Low-cost charging — settings",
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
-            {
-              "entity": "sensor.hoymiles_ems_control_owner",
-              "name": "Current controller"
-            },
-            {
-              "entity": "binary_sensor.hoymiles_ems_control_conflict",
-              "name": "Control conflict"
-            },
             {
               "entity": "input_boolean.hoymiles_tariff_charge_enabled",
               "name": "Enable automatic grid top-up"
@@ -982,6 +618,10 @@
             {
               "entity": "input_number.hoymiles_tariff_soc_safety_margin",
               "name": "Additional SOC reserve"
+            },
+            {
+              "entity": "input_boolean.hoymiles_tariff_advanced_view",
+              "name": "Advanced data (expert mode)"
             }
           ]
         },
@@ -989,7 +629,7 @@
           "type": "markdown",
           "title": "Selected profile — overview",
           "entity_id": "sensor.hoymiles_hit_tariff_charge_plan",
-          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% set operator = states('input_select.hoymiles_tariff_operator') %}\n{% set group = states('input_select.hoymiles_tariff_type') %}\n{% if plan.attributes.tariff_profile_expired | default(false) %}\n⚠️ **The tariff profile has expired. Automatic charging is blocked.**\nUpdate the integration or select **Manual** with current prices.\n\n{% endif %}\n{% if operator == 'Manual' %}\n**Manual mode · {{ group }}**\n\nTime periods and total marginal prices are taken from the manual fields below.\n{% elif plan.attributes.tariff_profile_supported | default(false) %}\n**{{ plan.attributes.tariff_operator_name }} · {{ group }}**<br>\nAssumed supplier: **{{ plan.attributes.tariff_supplier_assumption }}**<br>\nPrice list: **{{ plan.attributes.tariff_profile_year }}** · season:\n**{{ 'summer' if plan.attributes.tariff_profile_season == 'summer'\n   else 'winter' }}**<br>\nCurrent period: **{{ plan.attributes.tariff_profile_current_zone }}** ·\n**{{ plan.attributes.tariff_profile_current_price }} PLN/kWh**<br>\nLow-cost hours: **{{ plan.attributes.tariff_profile_low_windows }}**<br>\n{% if group == 'G13' %}\nMedium period: **{{ plan.attributes.tariff_profile_medium_windows }}**<br>\n{% endif %}\nWeekend in low-cost period:\n**{{ 'yes' if plan.attributes.tariff_profile_weekend_low else 'no' }}** ·\npublic holidays: **{{ 'yes' if plan.attributes.tariff_profile_holiday_low else 'no' }}**\n\n| Period | Indicative price |\n|---|---:|\n| G11 (comparison) | {{ plan.attributes.tariff_profile_g11_price }} PLN/kWh |\n| Low-cost | {{ plan.attributes.tariff_profile_low_price }} PLN/kWh |\n{% if group == 'G13' %}| Medium | {{ plan.attributes.tariff_profile_medium_price }} PLN/kWh |\n{% endif %}| Peak | {{ plan.attributes.tariff_profile_peak_price }} PLN/kWh |\n\n[Official DSO tariffs]({{ plan.attributes.tariff_profile_source_url }})\n{% else %}\n⚠️ Profile **{{ operator }} · {{ group }}** is not supported.\nAutomatic charging will remain blocked. Select another group\nor the **Manual** profile.\n{% endif %}\n\nPrices include energy from the regional incumbent supplier and variable\ngross distribution charges. Fixed fees are excluded. With another\nsupplier, select **Manual** and enter prices from your own bill."
+          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% if plan is not none %}\n{% set operator = states('input_select.hoymiles_tariff_operator') %}\n{% set group = states('input_select.hoymiles_tariff_type') %}\n{% if plan.attributes.tariff_profile_expired | default(false) %}\n⚠️ **The tariff profile has expired. Automatic charging is blocked.**\nUpdate the integration or select **Manual** with current prices.\n\n{% endif %}\n{% if operator == 'Manual' %}\n**Manual mode · {{ group }}**\n\nTime periods and total marginal prices are taken from the manual fields below.\n{% elif plan.attributes.tariff_profile_supported | default(false) %}\n**{{ plan.attributes.tariff_operator_name }} · {{ group }}**<br>\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\nAssumed supplier: **{{ plan.attributes.tariff_supplier_assumption }}**<br>\nPrice list: **{{ plan.attributes.tariff_profile_year }}** · season:\n**{{ 'summer' if plan.attributes.tariff_profile_season == 'summer'\n   else 'winter' }}**<br>\n{% endif %}\nCurrent period: **{{ plan.attributes.tariff_profile_current_zone }}** ·\n**{{ plan.attributes.tariff_profile_current_price }} PLN/kWh**<br>\nLow-cost hours: **{{ plan.attributes.tariff_profile_low_windows }}**<br>\n{% if group == 'G13' %}\nMedium period: **{{ plan.attributes.tariff_profile_medium_windows }}**<br>\n{% endif %}\nWeekend in low-cost period:\n**{{ 'yes' if plan.attributes.tariff_profile_weekend_low else 'no' }}** ·\npublic holidays: **{{ 'yes' if plan.attributes.tariff_profile_holiday_low else 'no' }}**\n\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\n| Period | Indicative price |\n|---|---:|\n| G11 (comparison) | {{ plan.attributes.tariff_profile_g11_price }} PLN/kWh |\n| Low-cost | {{ plan.attributes.tariff_profile_low_price }} PLN/kWh |\n{% if group == 'G13' %}| Medium | {{ plan.attributes.tariff_profile_medium_price }} PLN/kWh |\n{% endif %}| Peak | {{ plan.attributes.tariff_profile_peak_price }} PLN/kWh |\n\n[Official DSO tariffs]({{ plan.attributes.tariff_profile_source_url }})\n{% endif %}\n{% else %}\n⚠️ Profile **{{ operator }} · {{ group }}** is not supported.\nAutomatic charging will remain blocked. Select another group\nor the **Manual** profile.\n{% endif %}\n\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\nPrices include energy from the regional incumbent supplier and variable\ngross distribution charges. Fixed fees are excluded. With another\nsupplier, select **Manual** and enter prices from your own bill.\n{% endif %}\n{% endif %}"
         },
         {
           "type": "conditional",
@@ -1058,17 +698,13 @@
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
-          "title": "Battery plan and safety",
+          "title": "What the automation will do",
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
             {
               "entity": "sensor.hoymiles_tariff_charge_status",
               "name": "Automation status"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_tariff_charge_plan",
-              "name": "Optimizer status"
             },
             {
               "entity": "sensor.hoymiles_tariff_current_zone",
@@ -1095,26 +731,6 @@
               "name": "Forecast savings versus G11"
             },
             {
-              "entity": "sensor.hoymiles_load_average_4_days",
-              "name": "Average daily load consumption"
-            },
-            {
-              "entity": "sensor.hoymiles_night_load_average_4_days",
-              "name": "Average night consumption"
-            },
-            {
-              "entity": "sensor.hoymiles_solcast_forecast_remaining_today",
-              "name": "Remaining PV forecast today"
-            },
-            {
-              "entity": "sensor.hoymiles_solcast_forecast_tomorrow",
-              "name": "PV forecast tomorrow"
-            },
-            {
-              "entity": "sensor.hoymiles_hit_battery_capacity",
-              "name": "Battery capacity used in calculations"
-            },
-            {
               "entity": "sensor.hoymiles_hit_overview_battery_soc",
               "name": "Current battery SOC"
             }
@@ -1122,9 +738,68 @@
         },
         {
           "type": "markdown",
+          "title": "Why this plan?",
+          "entity_id": "sensor.hoymiles_hit_tariff_charge_plan",
+          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% if plan is not none %}\nThe automation bases its decision on **conservative values used by the model**,\nnot on the raw forecast displayed by Solcast.\n\n**PV remaining today:**\n{{ plan.attributes.model_input_forecast_remaining_today_kwh\n   | default(plan.attributes.forecast_remaining_today_kwh\n   | default('—', true)) }} kWh<br>\n**PV tomorrow:**\n{{ plan.attributes.model_input_forecast_tomorrow_kwh\n   | default(plan.attributes.forecast_tomorrow_kwh\n   | default('—', true)) }} kWh<br>\n**Conservative daily home consumption:**\n{{ plan.attributes.model_input_average_daily_load_kwh\n   | default(plan.attributes.robust_average_daily_load_kwh\n   | default(plan.attributes.average_daily_load_kwh\n   | default('—', true))) }} kWh<br>\n**Average night consumption:**\n{{ plan.attributes.model_input_average_night_load_kwh\n   | default(plan.attributes.average_night_load_kwh\n   | default('—', true)) }} kWh<br>\n**Battery reserve:** {{ plan.attributes.reserve_soc_percent\n   | default(0) }}% SOC<br>\n**Forecast SOC at the end of the plan:**\n{{ plan.attributes.ending_battery_soc_percent | default(0) }}%\n\n{% if plan.attributes.planning_horizon_limited | default(false) %}\n⚠️ The horizon is temporarily limited because the day-three forecast\nis unavailable or stale. The plan retains an additional safety margin.\n{% endif %}\n{% endif %}"
+        },
+        {
+          "type": "conditional",
+          "conditions": [
+            {
+              "entity": "input_boolean.hoymiles_tariff_advanced_view",
+              "state": "on"
+            }
+          ],
+          "card": {
+            "type": "custom:hoymiles-zebra-entities-card",
+            "title": "Low-cost charging — diagnostics",
+            "show_header_toggle": false,
+            "state_color": true,
+            "entities": [
+              {
+                "entity": "sensor.hoymiles_ems_control_owner",
+                "name": "Current controller"
+              },
+              {
+                "entity": "binary_sensor.hoymiles_ems_control_conflict",
+                "name": "Control conflict"
+              },
+              {
+                "entity": "sensor.hoymiles_hit_tariff_charge_plan",
+                "name": "Optimizer status"
+              },
+              {
+                "entity": "binary_sensor.hoymiles_tariff_control_data_ready",
+                "name": "Data and control ready"
+              },
+              {
+                "entity": "binary_sensor.hoymiles_ems_execution_ready",
+                "name": "Inverter ready for EMS writes"
+              },
+              {
+                "entity": "binary_sensor.hoymiles_tariff_planned_charge_slot",
+                "name": "Current slot selected for charging"
+              },
+              {
+                "entity": "sensor.hoymiles_hit_battery_capacity",
+                "name": "Battery capacity used in calculations"
+              },
+              {
+                "entity": "sensor.hoymiles_load_history_coverage",
+                "name": "Load history coverage"
+              },
+              {
+                "entity": "sensor.hoymiles_night_load_history_coverage",
+                "name": "Night-load history coverage"
+              }
+            ]
+          }
+        },
+        {
+          "type": "markdown",
           "title": "Low-cost top-up plan",
           "entity_id": "sensor.hoymiles_hit_tariff_charge_plan",
-          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% set slots = plan.attributes.planned_slots | default([], true) %}\n{% set status = plan.attributes.status_code | default('missing_data', true) %}\n{% set missing = plan.attributes.missing_entities | default([], true) %}\n**Plan mode:** {{ 'active' if is_state(\n   'input_boolean.hoymiles_tariff_charge_enabled', 'on')\n   else 'preview — automatic charging is disabled' }}<br>\n**Result:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>\n**Shortage without top-up:**\n{{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>\n**Remaining shortage after plan:**\n{{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>\n**Total grid import:** {{ plan.attributes.planned_grid_import_kwh\n   | default(0) }} kWh<br>\n**Direct grid → home:**\n{{ plan.attributes.planned_direct_load_kwh | default(0) }} kWh<br>\n**Stored in the battery after losses:**\n{{ plan.attributes.planned_stored_energy_kwh | default(0) }} kWh<br>\n**Plan cost:** {{ plan.attributes.planned_cost_pln | default(0) }} PLN<br>\n**Cost without optimization in this tariff:**\n{{ plan.attributes.baseline_grid_cost_pln | default(0) }} PLN<br>\n**Cost after optimization in this tariff:**\n{{ plan.attributes.optimized_grid_cost_pln | default(0) }} PLN<br>\n**Savings from shifting grid consumption:**\n{{ plan.attributes.automation_savings_pln | default(0) }} PLN<br>\n**Same import in G11:**\n{{ plan.attributes.g11_reference_cost_pln | default(0) }} PLN<br>\n**Estimated savings versus G11:**\n{{ plan.attributes.estimated_savings_pln | default(0) }} PLN<br>\n**Load model:**\n{{ plan.attributes.load_profile_mode | default('flat_day_night_fallback') }}<br>\n**Planning reserve:**\n{{ plan.attributes.self_use_reserve_soc_percent | default(0) }}% Self-Use +\n{{ plan.attributes.safety_margin_soc_percentage_points | default(0) }} p.p. =\n**{{ plan.attributes.reserve_soc_percent | default(0) }}%**<br>\n**Historical PV forecast correction:**\n{{ (plan.attributes.forecast_accuracy_factor | default(0.9) * 100) | round(1) }}%\n({{ plan.attributes.forecast_accuracy_history_days | default(0) }} history days)<br>\n**Effective forecast correction for today:**\n{{ (plan.attributes.forecast_today_effective_factor\n    | default(plan.attributes.forecast_accuracy_factor | default(0.9))\n    * 100) | round(1) }}%<br>\n{% set expected = plan.attributes.forecast_live_expected_elapsed_kwh %}\n{% if expected is number %}\n**Live production check:** forecast through now {{ expected }} kWh ·\nactual {{ plan.attributes.forecast_live_actual_elapsed_kwh | default(0) }} kWh ·\ncorrection confidence {{ (plan.attributes.forecast_live_confidence\n   | default(0) * 100) | round(0) }}%<br>\n{% endif %}\n**Forecast SOC at the end of the horizon:**\n{{ plan.attributes.ending_battery_soc_percent | default(0) }}%\n\n{% if missing %}\n⚠️ **Required data missing:** {{ missing | join(', ') }}\n{% endif %}\n\n**Selected slots:**\n{% if slots %}\n{% for slot in slots %}\n{% set action_name = {\n   'grid_support': 'grid → home; battery preserved',\n   'battery_charge': 'battery charging',\n   'grid_support_and_charge': 'home supply + battery charging'\n   }.get(slot.action, 'charging') %}\n- {{ slot.date }} {{ slot.start }}–{{ slot.end }} ·\n  {{ slot.grid_import_kwh }} kWh · {{ slot.price }} PLN/kWh ·\n  **{{ action_name }}** · target {{ slot.target_soc_percent }}% SOC\n{% endfor %}\n{% else %}\n- No top-up is planned.\n{% endif %}"
+          "content": "{% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}\n{% if plan is not none %}\n{% set slots = plan.attributes.planned_slots | default([], true) %}\n{% set status = plan.attributes.status_code | default('missing_data', true) %}\n{% set missing = plan.attributes.missing_entities | default([], true) %}\n**Plan mode:** {{ 'active' if is_state(\n   'input_boolean.hoymiles_tariff_charge_enabled', 'on')\n   else 'preview — automatic charging is disabled' }}<br>\n**Result:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>\n**Shortage without top-up:**\n{{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>\n**Remaining shortage after plan:**\n{{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>\n**Total grid import:** {{ plan.attributes.planned_grid_import_kwh\n   | default(0) }} kWh<br>\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\n**Direct grid → home:**\n{{ plan.attributes.planned_direct_load_kwh | default(0) }} kWh<br>\n**Stored in the battery after losses:**\n{{ plan.attributes.planned_stored_energy_kwh | default(0) }} kWh<br>\n{% endif %}\n**Plan cost:** {{ plan.attributes.planned_cost_pln | default(0) }} PLN<br>\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\n**Cost without optimization in this tariff:**\n{{ plan.attributes.baseline_grid_cost_pln | default(0) }} PLN<br>\n**Cost after optimization in this tariff:**\n{{ plan.attributes.optimized_grid_cost_pln | default(0) }} PLN<br>\n**Savings from shifting grid consumption:**\n{{ plan.attributes.automation_savings_pln | default(0) }} PLN<br>\n**Same import in G11:**\n{{ plan.attributes.g11_reference_cost_pln | default(0) }} PLN<br>\n{% endif %}\n**Estimated savings versus G11:**\n{{ plan.attributes.estimated_savings_pln | default(0) }} PLN<br>\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\n**Load model:**\n{{ plan.attributes.load_profile_mode | default('flat_day_night_fallback') }}<br>\n**Planning reserve:**\n{{ plan.attributes.self_use_reserve_soc_percent | default(0) }}% Self-Use +\n{{ plan.attributes.safety_margin_soc_percentage_points | default(0) }} p.p. =\n**{{ plan.attributes.reserve_soc_percent | default(0) }}%**<br>\n**Historical PV forecast correction:**\n{{ (plan.attributes.forecast_accuracy_factor | default(0.9) * 100) | round(1) }}%\n({{ plan.attributes.forecast_accuracy_history_days | default(0) }} history days)<br>\n**Effective forecast correction for today:**\n{{ (plan.attributes.forecast_today_effective_factor\n    | default(plan.attributes.forecast_accuracy_factor | default(0.9))\n    * 100) | round(1) }}%<br>\n{% set expected = plan.attributes.forecast_live_expected_elapsed_kwh %}\n{% if expected is number %}\n**Live production check:** forecast through now {{ expected }} kWh ·\nactual {{ plan.attributes.forecast_live_actual_elapsed_kwh | default(0) }} kWh ·\ncorrection confidence {{ (plan.attributes.forecast_live_confidence\n   | default(0) * 100) | round(0) }}%<br>\n{% endif %}\n**Simulation horizon:** {{ plan.attributes.planning_horizon_days\n   | default(2) }} days, until\n{{ plan.attributes.planning_horizon_end | default('—', true) }}<br>\n**Tomorrow forecast P10 / P50 / P90:**\n{{ plan.attributes.forecast_tomorrow_p10_kwh | default('—', true) }} /\n{{ plan.attributes.forecast_tomorrow_kwh | default('—', true) }} /\n{{ plan.attributes.forecast_tomorrow_p90_kwh | default('—', true) }} kWh<br>\n**Day 3 forecast:** {{ plan.attributes.forecast_day_3_kwh\n   | default('unavailable — safe fallback reserve', true) }}\n{{ 'kWh' if plan.attributes.forecast_day_3_kwh is number else '' }}<br>\n**Grid Charge power budget:** requested\n{{ plan.attributes.requested_charge_power_kw | default(0) }} kW · effective\n{{ plan.attributes.effective_charge_power_kw | default(0) }} kW ·\nsource {{ plan.attributes.effective_charge_power_source\n   | default('ustawienie') }}<br>\n**Actual power learning:**\n{{ plan.attributes.effective_charge_power_feedback_samples | default(0) }} samples ·\nfactor {{ ((plan.attributes.effective_charge_power_factor\n   | default(1)) * 100) | round(0) }}% ·\n{{ 'model calibrated' if plan.attributes.charge_power_feedback_ready\n   | default(false) else 'collecting samples — configured limit is used' }}<br>\n**Terminal uncertainty reserve:**\n{{ plan.attributes.terminal_reserve_soc_percent | default(0) }}% SOC ·\nmargin {{ plan.attributes.terminal_uncertainty_margin_kwh\n   | default(0) }} kWh<br>\n**Planned battery wear cost:**\n{{ plan.attributes.planned_battery_wear_cost_pln | default(0) }} PLN<br>\n**Decision stability:** {{ plan.attributes.plan_stable_for_minutes\n   | default(0) }} min without a material change<br>\n{% endif %}\n**Forecast SOC at the end of the horizon:**\n{{ plan.attributes.ending_battery_soc_percent | default(0) }}%\n\n{% if missing %}\n{% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}\n⚠️ **Required data missing:** {{ missing | join(', ') }}\n{% else %}\n⚠️ **Some data required for the complete plan is missing.** Open advanced data\nto view diagnostic details.\n{% endif %}\n{% endif %}\n\n**Selected slots:**\n{% if slots %}\n{% for slot in slots %}\n{% set action_name = {\n   'grid_support': 'grid → home; battery preserved',\n   'battery_charge': 'battery charging',\n   'grid_support_and_charge': 'home supply + battery charging'\n   }.get(slot.action, 'charging') %}\n- {{ slot.date }} {{ slot.start }}–{{ slot.end }} ·\n  {{ slot.grid_import_kwh }} kWh · {{ slot.price }} PLN/kWh ·\n  **{{ action_name }}** · target {{ slot.target_soc_percent }}% SOC\n{% endfor %}\n{% else %}\n- No top-up is planned.\n{% endif %}\n{% endif %}"
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
@@ -1160,25 +835,6 @@
         },
         {
           "type": "statistics-graph",
-          "title": "Low-cost charging energy — last 30 days",
-          "chart_type": "bar",
-          "period": "day",
-          "days_to_show": 30,
-          "hide_legend": true,
-          "fit_y_data": true,
-          "stat_types": [
-            "change"
-          ],
-          "entities": [
-            {
-              "entity": "sensor.hoymiles_tariff_grid_charge_energy_total",
-              "name": "Grid energy [kWh]",
-              "color": "#00B0FF"
-            }
-          ]
-        },
-        {
-          "type": "statistics-graph",
           "title": "Tariff savings — last 30 days",
           "chart_type": "bar",
           "period": "day",
@@ -1197,9 +853,35 @@
           ]
         },
         {
+          "type": "statistics-graph",
+          "title": "Low-cost charging energy — last 30 days",
+          "chart_type": "bar",
+          "period": "day",
+          "days_to_show": 30,
+          "hide_legend": true,
+          "fit_y_data": true,
+          "stat_types": [
+            "change"
+          ],
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_tariff_grid_charge_energy_total",
+              "name": "Grid energy [kWh]",
+              "color": "#00B0FF"
+            }
+          ]
+        },
+        {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "Advanced settings",
           "show_header_toggle": false,
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "input_boolean.hoymiles_tariff_advanced_view",
+              "state": "on"
+            }
+          ],
           "view_layout": {
             "position": "sidebar"
           },
@@ -1240,11 +922,23 @@
         },
         {
           "type": "markdown",
-          "title": "How tariff automation works",
+          "title": "How low-cost charging works",
+          "content": "The automation forecasts home consumption and PV production, then checks\nwhether energy will last until the next low-cost period. If not,\nit selects the cheapest available slots and charges only as much as\nis actually needed. It protects the configured SOC reserve, accounts for losses,\nand never runs together with RCE or another EMS automation."
+        },
+        {
+          "type": "markdown",
+          "title": "How tariff automation works — details",
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "input_boolean.hoymiles_tariff_advanced_view",
+              "state": "on"
+            }
+          ],
           "view_layout": {
             "position": "sidebar"
           },
-          "content": "The automation uses the same **Solcast PV Forecast** and\nactual home-load history as RCE. Every 30 minutes it simulates\nthe balance through tomorrow. In **Grid Charge** mode, the configured\npower is a shared AC input limit: the inverter first supplies the\ncurrent home load and uses only the remaining power to charge the\nbattery to its target SOC. If the goal is only to preserve battery\nenergy for later expensive hours, the automation freezes the current\nSOC and uses the grid for the home load — it does not try to charge\nthe battery above that level.\n\nThe planning reserve is always calculated from the current emergency\n**Self-Use threshold plus the additional SOC margin**. There is no fixed 27% value.\nIf the battery remains below that threshold, the automation restores only\nthe missing energy in a low-price period unless PV restores it earlier.\n\nAfter collecting a reliable amount of daytime production, the automation compares\nactual energy with the Solcast curve. Sustained underproduction, such as a disabled\nPV string, lowers only today's forecast and lets the plan be corrected\nbefore the next low-price window. Small samples just after sunrise are\nignored.\n\nIn winter, with low PV production and high demand, the plan can hold\nthe battery during the low-price period and additionally charge it for\nthe following expensive hours. Total system power, maximum SOC and\nseparate BMS charge and discharge limits together with both conversion\nlosses are included in the calculation.\n\nRCE and tariff charging are currently separate. Enabling one\nautomation disables the other. Manual EMS schedules take priority.\n\nThe **PGE, TAURON, ENEA, ENERGA and STOEN** profiles automatically select\ntime periods, weekends, Polish public holidays and — where required —\nthe summer or winter season. Indicative prices use the 2026 tariffs\nof the regional incumbent supplier and selected DSO.\n\nA user with a different supplier selects **Manual** and enters the total\nvariable price per kWh from their bill: energy, variable distribution,\nquality, RES and cogeneration charges. Fixed charges are excluded\nbecause they do not depend on the charging time.\n\n[URE offer comparison](https://maszwybor.ure.gov.pl/or/cenki/122,Cenowy-Energetyczny-Kalkulator-Internetowy-CENKI.html)\n· [DSO tariffs and time periods](https://www.ure.gov.pl/pl/energia-elektryczna/ceny-wskazniki/7852,Taryfy-opublikowane-w-2026-r.html)"
+          "content": "The automation uses the same **Solcast PV Forecast** and\nactual home-load history as RCE. Every 30 minutes it simulates\nthe balance through tomorrow, and after automatically detecting Forecast Day 3 —\nalso the following day. In **Grid Charge**, the configured\npower is a shared AC input limit: the inverter first supplies the\ncurrent home load and uses only the remaining power to charge the\nbattery to its target SOC. If the goal is only to preserve battery\nenergy for later expensive hours, the automation freezes the current\nSOC and uses the grid for the home load — it does not try to charge\nthe battery above that level.\n\nThe planning reserve is always calculated from the current emergency\n**Self-Use threshold plus the additional SOC margin**. There is no fixed 27% value.\nIf the battery remains below that threshold, the automation restores only\nthe missing energy in a low-price period unless PV restores it earlier.\n\nAfter collecting a reliable amount of daytime production, the automation compares\nactual energy with the Solcast curve. Sustained underproduction, such as a disabled\nPV string, lowers only today's forecast and lets the plan be corrected\nbefore the next low-price window. Small samples just after sunrise are\nignored.\n\nIn winter, with low PV production and high demand, the plan can hold\nthe battery during the low-price period and additionally charge it for\nthe following expensive hours. Total system power, maximum SOC and\nseparate BMS charge/discharge limits and conversion losses are included in\nthe calculation. A marginal energy shift is rejected when\nthe price spread does not cover losses and the automatically assumed\nbattery wear cost.\n\nThe load model uses up to 28 complete days, gives greater weight to\nrecent observations, and separates weekday and\nweekend profiles. The plan uses P10/P50/P90 uncertainty bands, retains\na terminal reserve, and does not react to every small forecast\nchange. During real Grid Charge it also measures delivered power;\nafter several reliable samples it corrects future lead times,\nwithout learning from ramp-up or charge taper near 100% SOC.\n\nRCE and tariff charging are currently separate. Enabling one\nautomation disables the other. Manual EMS schedules take priority.\n\nThe **PGE, TAURON, ENEA, ENERGA and STOEN** profiles automatically select\ntime periods, weekends, Polish public holidays and — where required —\nthe summer or winter season. Indicative prices use the 2026 tariffs\nof the regional incumbent supplier and selected DSO.\n\nA user with a different supplier selects **Manual** and enters the total\nvariable price per kWh from their bill: energy, variable distribution,\nquality, RES and cogeneration charges. Fixed charges are excluded\nbecause they do not depend on the charging time.\n\n[URE offer comparison](https://maszwybor.ure.gov.pl/or/cenki/122,Cenowy-Energetyczny-Kalkulator-Internetowy-CENKI.html)\n· [DSO tariffs and time periods](https://www.ure.gov.pl/pl/energia-elektryczna/ceny-wskazniki/7852,Taryfy-opublikowane-w-2026-r.html)"
         }
       ]
     },
@@ -1261,14 +955,6 @@
           "show_header_toggle": false,
           "state_color": true,
           "entities": [
-            {
-              "entity": "sensor.hoymiles_ems_control_owner",
-              "name": "Current controller"
-            },
-            {
-              "entity": "binary_sensor.hoymiles_ems_control_conflict",
-              "name": "Control conflict"
-            },
             {
               "entity": "input_boolean.hoymiles_rcm_enabled",
               "name": "Enable voltage-aware export protection"
@@ -1290,10 +976,6 @@
               "name": "Automation status"
             },
             {
-              "entity": "sensor.hoymiles_hit_rcm_voltage_plan",
-              "name": "Voltage planner status"
-            },
-            {
               "entity": "input_select.hoymiles_rce_inverter_rated_power",
               "name": "Rated power of one inverter"
             },
@@ -1304,8 +986,48 @@
             {
               "entity": "input_number.hoymiles_rcm_soc_safety_margin",
               "name": "Additional SOC reserve"
+            },
+            {
+              "entity": "input_boolean.hoymiles_rcm_advanced_view",
+              "name": "Advanced data (expert mode)"
             }
           ]
+        },
+        {
+          "type": "conditional",
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "conditions": [
+            {
+              "entity": "input_boolean.hoymiles_rcm_advanced_view",
+              "state": "on"
+            }
+          ],
+          "card": {
+            "type": "custom:hoymiles-zebra-entities-card",
+            "title": "RCEm — control readiness and diagnostics",
+            "show_header_toggle": false,
+            "state_color": true,
+            "entities": [
+              {
+                "entity": "sensor.hoymiles_ems_control_owner",
+                "name": "Current controller"
+              },
+              {
+                "entity": "binary_sensor.hoymiles_ems_control_conflict",
+                "name": "Control conflict"
+              },
+              {
+                "entity": "sensor.hoymiles_hit_rcm_voltage_plan",
+                "name": "Voltage planner status"
+              },
+              {
+                "entity": "binary_sensor.hoymiles_ems_execution_ready",
+                "name": "Inverter ready for EMS writes"
+              }
+            ]
+          }
         },
         {
           "type": "custom:hoymiles-responsive-glance-card",
@@ -1374,15 +1096,22 @@
         },
         {
           "type": "markdown",
-          "title": "Export protection plan",
+          "title": "RCEm — decision and export-protection plan",
           "entity_id": "sensor.hoymiles_hit_rcm_voltage_plan",
-          "content": "{% set plan = states.sensor.hoymiles_hit_rcm_voltage_plan %}\n{% set windows = plan.attributes.risk_windows | default([], true) %}\n{% set planned = plan.attributes.planned_grid_discharge_kwh\n   | default(0) | float(0) %}\n{% set horizon = plan.attributes.risk_surplus_horizon\n   | default('missing') %}\n{% set horizon_labels = {\n  'today': 'today', 'tomorrow': 'tomorrow', 'none': 'none',\n  'missing': 'data unavailable' } %}\n**Mode:** {{ 'observation — no inverter writes'\n   if is_state('input_boolean.hoymiles_rcm_shadow_mode', 'on')\n   else 'active control of the global battery charging power' }}<br>\n**Result:** {{ states('sensor.hoymiles_hit_rcm_voltage_plan') }}<br>\n**Current action:** {{ plan.attributes.action | default('none') }}<br>\n**Highest voltage:**\n{{ plan.attributes.maximum_voltage_v | default(0) }} V<br>\n**10-minute average:**\n{{ plan.attributes.rolling_10m_voltage_v | default(0) }} V<br>\n**Voltage risk:**\n{{ plan.attributes.voltage_risk_score_percent | default(0) }}%<br>\n**History:** {{ plan.attributes.history_days | default(0) }} days ·\n{{ plan.attributes.history_samples | default(0) }} samples<br>\n**Forecast used for the next window:**\n{{ plan.attributes.selected_forecast_kwh | default(0) }} kWh ·\n{{ horizon_labels.get(horizon, horizon) }}<br>\n**Home demand during the risk window:**\n{{ plan.attributes.expected_risk_load_kwh | default(0) }} kWh<br>\n**Expected PV surplus during the risk window:**\n{{ plan.attributes.expected_risk_surplus_kwh | default(0) }} kWh<br>\n**Protected minimum SOC for the home and outage reserve:**\n{{ plan.attributes.protected_minimum_soc_percent | default(0) }}%<br>\n**Battery headroom required for the peak:**\n{{ plan.attributes.required_headroom_kwh | default(0) }} kWh<br>\n**Available battery headroom:**\n{{ plan.attributes.available_headroom_kwh | default(0) }} kWh<br>\n**Missing battery headroom:**\n{{ plan.attributes.headroom_shortfall_kwh | default(0) }} kWh<br>\n**Expected natural discharge to the home before the peak:**\n{{ plan.attributes.expected_natural_headroom_kwh | default(0) }} kWh<br>\n{% if planned > 0.1 %}\n**Planned morning discharge to the grid:**\n{{ planned | round(2) }} kWh<br>\n**Target SOC after morning discharge:**\n{{ plan.attributes.pre_discharge_target_soc_percent | default(0) }}%<br>\n**Automatically selected discharge power:**\n{{ plan.attributes.pre_discharge_power_kw | default(0) }} kW ·\n{{ plan.attributes.pre_discharge_power_percent | default(0) }}%<br>\n**Time until today's risk window:**\n{% set minutes = plan.attributes.minutes_to_risk %}\n{{ ((minutes | int(0)) // 60) ~ ' h ' ~ ((minutes | int(0)) % 60) ~ ' min'\n   if minutes is number else 'no risk window today' }}<br>\n{% else %}\n**Morning discharge:** is not required or there is no\nrisk window today.<br>\n{% endif %}\n**Target maximum SOC before the peak:**\n{{ plan.attributes.target_soc_before_risk_percent | default(0) }}%<br>\n**Recommended global charging limit:**\n{{ plan.attributes.recommended_charge_limit_percent | default(0) }}% ·\n{{ plan.attributes.recommended_charge_power_kw | default(0) }} kW<br>\n**Effective hard export cap:**\n{{ plan.attributes.effective_export_cap_percent | default(0) }}%<br>\n**Recommended current export limit:**\n{{ plan.attributes.recommended_export_limit_percent | default(0) }}%<br>\n**Estimated safe export power:**\n{{ plan.attributes.estimated_safe_export_power_kw | default(0) }} kW\n\n**Repeated risk windows from the previous four days:**\n{% if windows %}\n{% for window in windows %}\n- {{ window }}\n{% endfor %}\n{% else %}\n- No repeated high-voltage window has been detected yet.\n{% endif %}"
+          "content": "{% set plan = states.sensor.hoymiles_hit_rcm_voltage_plan %}\n{% if plan is not none %}\n{% set windows = plan.attributes.risk_windows | default([], true) %}\n{% set window_details = plan.attributes.risk_window_details\n   | default([], true) %}\n{% set planned = plan.attributes.planned_grid_discharge_kwh\n   | default(0) | float(0) %}\n{% set horizon = plan.attributes.risk_surplus_horizon\n   | default('missing') %}\n{% set horizon_labels = {\n  'today': 'today', 'tomorrow': 'tomorrow', 'none': 'none',\n  'missing': 'data unavailable' } %}\n**Mode:** {{ 'observation — no inverter writes'\n   if is_state('input_boolean.hoymiles_rcm_shadow_mode', 'on')\n   else 'active control of the global battery charging power' }}<br>\n**Result:** {{ states('sensor.hoymiles_hit_rcm_voltage_plan') }}<br>\n**Current action:** {{ plan.attributes.action | default('none') }}<br>\n**Highest voltage:**\n{{ plan.attributes.maximum_voltage_v | default(0) }} V<br>\n**10-minute average:**\n{{ plan.attributes.rolling_10m_voltage_v | default(0) }} V<br>\n**Voltage risk:**\n{{ plan.attributes.voltage_risk_score_percent | default(0) }}%<br>\n**Next predicted risk window:**\n{{ plan.attributes.next_risk_start | default('none') }}<br>\n**Forecast used for the next window:**\n{{ plan.attributes.selected_forecast_kwh | default(0) }} kWh ·\n{{ horizon_labels.get(horizon, horizon) }}<br>\n**Expected PV surplus during the risk window:**\n{{ plan.attributes.expected_risk_surplus_kwh | default(0) }} kWh<br>\n**Protected minimum SOC for the home and outage reserve:**\n{{ plan.attributes.protected_minimum_soc_percent | default(0) }}%<br>\n**Battery headroom required for the peak:**\n{{ plan.attributes.required_headroom_kwh | default(0) }} kWh<br>\n**Available battery headroom:**\n{{ plan.attributes.available_headroom_kwh | default(0) }} kWh<br>\n**Missing battery headroom:**\n{{ plan.attributes.headroom_shortfall_kwh | default(0) }} kWh<br>\n{% if planned > 0.1 %}\n**Planned morning discharge to the grid:**\n{{ planned | round(2) }} kWh<br>\n**Target SOC after morning discharge:**\n{{ plan.attributes.pre_discharge_target_soc_percent | default(0) }}%<br>\n**Automatically selected discharge power:**\n{{ plan.attributes.pre_discharge_power_kw | default(0) }} kW ·\n{{ plan.attributes.pre_discharge_power_percent | default(0) }}%<br>\n**Time until today's risk window:**\n{% set minutes = plan.attributes.minutes_to_risk %}\n{{ ((minutes | int(0)) // 60) ~ ' h ' ~ ((minutes | int(0)) % 60) ~ ' min'\n   if minutes is number else 'no risk window today' }}<br>\n{% else %}\n**Morning discharge:** is not required or there is no\nrisk window today.<br>\n{% endif %}\n**Target maximum SOC before the peak:**\n{{ plan.attributes.target_soc_before_risk_percent | default(0) }}%<br>\n**Recommended global charging limit:**\n{{ plan.attributes.recommended_charge_limit_percent | default(0) }}% ·\n{{ plan.attributes.recommended_charge_power_kw | default(0) }} kW<br>\n**Recommended current export limit:**\n{{ plan.attributes.recommended_export_limit_percent | default(0) }}%<br>\n**Estimated safe export power:**\n{{ plan.attributes.estimated_safe_export_power_kw\n   if plan.attributes.estimated_safe_export_power_kw is number\n   else '— (no production or export)' }}\n{{ 'kW' if plan.attributes.estimated_safe_export_power_kw is number else '' }}\n\n{% if is_state('input_boolean.hoymiles_rcm_advanced_view', 'on') %}\n---\n**History:** {{ plan.attributes.history_days | default(0) }} days ·\n{{ plan.attributes.history_samples | default(0) }} samples<br>\n**Voltage P90 for the current quarter-hour:**\n{{ plan.attributes.historical_p90_voltage_v | default(0) }} V<br>\n**PV profile source:**\n{{ plan.attributes.pv_profile_source | default('fallback profile') }} ·\nconfidence {{ plan.attributes.pv_profile_confidence_percent\n   | default(0) }}%<br>\n**Load profile:**\n{{ plan.attributes.load_profile_mode | default('fallback profile') }}<br>\n**Home demand during the risk window:**\n{{ plan.attributes.expected_risk_load_kwh | default(0) }} kWh<br>\n**Natural headroom from supplying the home before the peak:**\n{{ plan.attributes.expected_natural_headroom_kwh | default(0) }} kWh<br>\n**Unavoidable charging before the risk peak:**\n{{ plan.attributes.unavoidable_charge_before_risk_kwh | default(0) }} kWh<br>\n**Effective hard export cap:**\n{{ plan.attributes.effective_export_cap_percent | default(0) }}%<br>\n**Repeated risk windows from the previous four days:**\n{% if window_details %}\n{% for window in window_details %}\n- {{ window.start | default('—') }}–{{ window.end | default('—') }} ·\n  surplus {{ window.expected_surplus_kwh | default(0) }} kWh ·\n  required headroom {{ window.required_headroom_kwh | default(0) }} kWh\n{% endfor %}\n{% elif windows %}\n{% for window in windows %}\n- {{ window }}\n{% endfor %}\n{% else %}\n- No repeated high-voltage window has been detected yet.\n{% endif %}\n{% endif %}\n{% endif %}"
         },
         {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "Controller — current values",
           "show_header_toggle": false,
           "state_color": true,
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "input_boolean.hoymiles_rcm_advanced_view",
+              "state": "on"
+            }
+          ],
           "entities": [
             {
               "entity": "binary_sensor.hoymiles_rcem_risk_window_active",
@@ -1445,6 +1174,13 @@
         {
           "type": "markdown",
           "title": "Safety rules",
+          "visibility": [
+            {
+              "condition": "state",
+              "entity": "input_boolean.hoymiles_rcm_advanced_view",
+              "state": "on"
+            }
+          ],
           "view_layout": {
             "position": "sidebar"
           },
@@ -1453,10 +1189,11 @@
       ]
     },
     {
-      "title": "Profits",
+      "title": "Sales results — archive",
       "path": "zyski",
       "icon": "mdi:cash-multiple",
       "type": "sidebar",
+      "subview": true,
       "badges": [],
       "cards": [
         {
@@ -2763,6 +2500,7 @@
       "title": "Falownik",
       "path": "falownik",
       "icon": "mdi:current-ac",
+      "subview": true,
       "badges": [],
       "cards": [
         {
@@ -2847,6 +2585,7 @@
       "title": "GEN",
       "path": "generator",
       "icon": "mdi:engine",
+      "subview": true,
       "badges": [],
       "cards": [
         {
@@ -3248,6 +2987,116 @@
           ]
         },
         {
+          "type": "custom:hoymiles-aurora-frame-card",
+          "accent": "ems",
+          "card": {
+            "type": "markdown",
+            "content": "## Daily EMS schedules\nEach schedule runs every day while its switch is enabled. When the configured duration ends, the inverter returns to Self-Use. Do not schedule charging and discharging at the same time."
+          }
+        },
+        {
+          "type": "custom:hoymiles-responsive-stack-card",
+          "minimum_width": 300,
+          "gap": 12,
+          "cards": [
+            {
+              "type": "custom:hoymiles-zebra-entities-card",
+              "title": "Grid discharge",
+              "show_header_toggle": false,
+              "state_color": true,
+              "entities": [
+                {
+                  "entity": "input_boolean.hoymiles_discharge_schedule_enabled",
+                  "name": "Enable daily schedule"
+                },
+                {
+                  "entity": "input_datetime.hoymiles_discharge_start",
+                  "name": "Start time"
+                },
+                {
+                  "entity": "input_number.hoymiles_discharge_duration",
+                  "name": "Duration"
+                },
+                {
+                  "entity": "number.hoymiles_hit_force_discharge_soc",
+                  "name": "Minimum SOC — grid discharge"
+                },
+                {
+                  "entity": "number.hoymiles_hit_maximum_discharge_power",
+                  "name": "Max. grid discharge power"
+                },
+                {
+                  "entity": "timer.hoymiles_discharge",
+                  "name": "Current cycle remaining time"
+                },
+                {
+                  "entity": "script.hoymiles_start_grid_discharge",
+                  "name": "Start grid discharge now"
+                }
+              ]
+            },
+            {
+              "type": "custom:hoymiles-zebra-entities-card",
+              "title": "Grid charge",
+              "show_header_toggle": false,
+              "state_color": true,
+              "entities": [
+                {
+                  "entity": "input_boolean.hoymiles_charge_schedule_enabled",
+                  "name": "Enable daily schedule"
+                },
+                {
+                  "entity": "input_datetime.hoymiles_charge_start",
+                  "name": "Start time"
+                },
+                {
+                  "entity": "input_number.hoymiles_charge_duration",
+                  "name": "Duration"
+                },
+                {
+                  "entity": "number.hoymiles_hit_force_charge_soc",
+                  "name": "Target SOC — grid charge"
+                },
+                {
+                  "entity": "number.hoymiles_hit_maximum_charge_power",
+                  "name": "Max. grid charge power"
+                },
+                {
+                  "entity": "timer.hoymiles_charge",
+                  "name": "Current cycle remaining time"
+                },
+                {
+                  "entity": "script.hoymiles_start_grid_charge",
+                  "name": "Start grid charge now"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "custom:hoymiles-zebra-entities-card",
+          "title": "Schedule control and stop",
+          "show_header_toggle": false,
+          "state_color": true,
+          "view_layout": {
+            "position": "sidebar"
+          },
+          "entities": [
+            {
+              "entity": "select.hoymiles_hit_ems_mode",
+              "name": "Operating mode"
+            },
+            {
+              "entity": "number.hoymiles_hit_self_use_soc",
+              "name": "SOC reserve — Self-Use"
+            },
+            {
+              "entity": "script.hoymiles_stop_scheduled_cycle",
+              "name": "Stop and return to Self-Use"
+            }
+          ]
+        },
+        {
           "type": "custom:hoymiles-zebra-entities-card",
           "title": "Control systemem",
           "show_header_toggle": false,
@@ -3298,6 +3147,7 @@
       "title": "Stany i alarmy",
       "path": "stany-alarmy",
       "icon": "mdi:alert-circle-outline",
+      "subview": true,
       "badges": [],
       "cards": [
         {
@@ -3491,6 +3341,98 @@
             {
               "entity": "sensor.hoymiles_hit_overview_battery_soc",
               "name": "Overview Battery SOC"
+            }
+          ]
+        },
+        {
+          "type": "custom:hoymiles-zebra-entities-card",
+          "title": "Inverter — DC bus",
+          "show_header_toggle": false,
+          "state_color": true,
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_bus_voltage",
+              "name": "Voltage magistrali DC"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_battery_1_voltage",
+              "name": "Battery 1 Voltage"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_battery_current_inverter",
+              "name": "Battery Current (Inverter)"
+            }
+          ]
+        },
+        {
+          "type": "custom:hoymiles-zebra-entities-card",
+          "title": "Inverter — AC phases",
+          "show_header_toggle": false,
+          "state_color": true,
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_inverter_voltage_l1",
+              "name": "L1 voltage"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_voltage_l2",
+              "name": "L2 voltage"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_voltage_l3",
+              "name": "L3 voltage"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_current_l1",
+              "name": "L1 current"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_current_l2",
+              "name": "L2 current"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_current_l3",
+              "name": "L3 current"
+            }
+          ]
+        },
+        {
+          "type": "custom:hoymiles-zebra-entities-card",
+          "title": "Inverter — AC power",
+          "show_header_toggle": false,
+          "state_color": true,
+          "entities": [
+            {
+              "entity": "sensor.hoymiles_hit_inverter_active_power",
+              "name": "Total active power"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_active_power_l1",
+              "name": "Active power L1"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_active_power_l2",
+              "name": "Active power L2"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_active_power_l3",
+              "name": "Active power L3"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_reactive_power",
+              "name": "Total reactive power"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_reactive_power_l1",
+              "name": "Reactive power L1"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_reactive_power_l2",
+              "name": "Reactive power L2"
+            },
+            {
+              "entity": "sensor.hoymiles_hit_inverter_reactive_power_l3",
+              "name": "Reactive power L3"
             }
           ]
         },
