@@ -1,10 +1,10 @@
 # Automation simulation and safety report
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.2 RC5 full offline
+Last completed offline baseline in this report: **v1.5.2 RC6 full offline
 validation**
-Current documentation target: **v1.5.2 RC5 — exact-SHA CI, local redeployment
-and both-installation live re-audit pending**
+Current documentation target: **v1.5.2 RC6 frontend-startup hotfix — code,
+review and offline validation complete; exact-SHA CI and live re-audit pending**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -22,10 +22,15 @@ availability gate incorrectly covered every sensor. RC4 scoped that gate only
 to the two derived parallel-power proxies, passed exact-SHA CI and restored the
 proxies in the local installation. That live run then exposed an independent
 PSE interval-end P1: `dtime_utc` marks the end of a quarter, not its start. RC5
-fixes the UTC mapping and passes full offline validation; exact-SHA RC5 CI,
-exact-candidate local redeployment and both-installation live re-audit remain
-pending. The later v1.5.0 section is retained only as an explicitly archived
-live baseline.
+fixed the UTC mapping, passed full offline validation and exact-SHA CI, and was
+deployed to the local and parallel test installations. Its parser and backend
+fail-closed state were correct live. The parallel dashboard then exposed a
+separate frontend P1: a transient `404` from the integration's `static-r2` route
+was retained by the reverse proxy/browser, so Lovelace timed out waiting for the
+dashboard strategy after restart. RC6 is the startup hotfix target; its code,
+independent review and full offline gate passed with P0=0/P1=0. Exact-SHA CI
+and live gates remain pending. The later v1.5.0
+section is retained only as an explicitly archived live baseline.
 
 ## Representative systems
 
@@ -141,7 +146,7 @@ separately below.
   native entity evidence, rejects ambiguous or contradictory candidates, and
   prevents a second integration entry for the resolved child.
 
-## v1.5.2 RC4 live finding and RC5 target — 2026-08-13
+## v1.5.2 RC5 live frontend finding and RC6 target — 2026-08-13
 
 - RCE optimizer: **68/68** deterministic scenarios passed, including the
   independent small-horizon oracle, padded 48-hour regressions, the exact live
@@ -186,13 +191,49 @@ separately below.
   firmware/readback contract, executor/startup offload, source-device rebind
   **6/6**, quick **488/488**, exhaustive **2064/2064**, RCE **68/68**, RCE
   history **3/3**, tariff, RCEm, frontend and dynamic power-balance suites.
+- RC5 passed exact-SHA push and workflow-dispatch CI and was deployed to both
+  test installations. Its PSE interval-end mapping and backend fail-closed
+  safety state were correct live.
+- The parallel dashboard exposed an independent frontend P1. Lovelace requested
+  `/api/hoymiles_hit_modbus/static-r2/hoymiles-rce-chart-card.js?v=1.5.2.15`
+  before the custom route was ready, received a transient `404`, and continued
+  receiving that cached response after restart. It then hit the five-second
+  timeout while waiting for
+  `ll-strategy-dashboard-hoymiles-hit-xxl-g3`.
+- The RC6 target uses one canonical full module at
+  `/local/hoymiles-rce-chart-card.js?v=1.5.2.16`. Before publishing the URL, the
+  installer atomically materializes the card, bootstrap, PL/EN dashboard JSON
+  and image. Storage mode is reconciled through Lovelace's live resource
+  collection, while runtime installation does not directly mutate
+  `.storage/lovelace.*`. A fresh installation without `config/www` copies the
+  files, defers publication and raises a restart Repair. An already-open browser
+  session requires a hard refresh after restart.
 
-The earlier deterministic, packaging, firmware and RC4 CI evidence remains
-valid. It does not constitute RC5 acceptance because local RC4 testing found
-the independent PSE P1 above. Exact-SHA RC5 CI, exact-candidate local
-redeployment, deployment to the second test installation and the live re-audit
-are separate acceptance gates and remain pending. No live RC5 GO is claimed
-here.
+The earlier deterministic, packaging, firmware and RC5 backend evidence remains
+valid, but it does not constitute RC6 frontend acceptance. RC6 code completion
+and review, full offline validation, exact-SHA CI, exact-candidate local
+redeployment and both-installation live frontend re-audit are separate gates and
+remain pending. No live RC6 GO is claimed here.
+
+## RC6 frontend startup contract — offline PASS, live pending
+
+RC6 acceptance must demonstrate all of the following; listing these targets is
+not evidence that they have passed:
+
+- one canonical full, versioned `/local` module registers the dashboard strategy
+  before Lovelace's five-second deadline, and loading it again is idempotent;
+- the card, bootstrap, both localized dashboard JSON files and image exist under
+  `config/www` before the resource URL is published;
+- storage-mode migration uses Home Assistant's live Lovelace resource collection
+  and preserves user dashboards and `.storage/lovelace.*` files from direct
+  runtime mutation;
+- a fresh installation with no pre-existing `config/www` remains restart-gated,
+  creates the localized Repair and succeeds after the required restart;
+- optional asset `OSError` and live-resource failure are fail-soft: integration
+  setup completes, no incomplete module is published, and Repair is created;
+- YAML-mode loading remains supported; and
+- after restart and hard refresh, the version-16 resource returns successfully,
+  the dashboard renders, and the browser console contains no strategy timeout.
 
 ## Archived v1.5.0 live candidate acceptance — 2026-08-12
 

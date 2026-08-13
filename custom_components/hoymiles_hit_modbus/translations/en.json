@@ -29,6 +29,14 @@
     "ems_package_restart_required": {
       "title": "EMS package update requires another restart",
       "description": "The integration updated the managed EMS package after Home Assistant had loaded its configuration. Validate the configuration and restart Home Assistant once more. If this message remains after the restart, back up your custom changes, run `hoymiles_hit_modbus.install_assets` with `overwrite: true`, and restart Home Assistant again."
+    },
+    "frontend_assets_restart_required": {
+      "title": "Dashboard assets require a restart",
+      "description": "The integration created the `www` directory and copied its managed dashboard assets. Restart Home Assistant so they are safely exposed under `/local` before the dashboard loads."
+    },
+    "frontend_assets_install_failed": {
+      "title": "Dashboard assets could not be installed",
+      "description": "The optional dashboard and EMS assets could not be installed, but Hoymiles device entities remain available. Check free disk space and permissions, then run `hoymiles_hit_modbus.install_assets` with `overwrite: true` and restart Home Assistant."
     }
   },
   "services": {

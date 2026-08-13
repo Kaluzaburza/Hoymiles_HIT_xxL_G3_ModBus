@@ -2781,7 +2781,27 @@ def static_translations(language: str) -> dict:
                         "`overwrite: true`, a następnie uruchom Home Assistant "
                         "ponownie."
                     ),
-                }
+                },
+                "frontend_assets_restart_required": {
+                    "title": "Zasoby dashboardu wymagajÄ… restartu",
+                    "description": (
+                        "Integracja utworzyĹ‚a katalog `www` i skopiowaĹ‚a "
+                        "zarzÄ…dzane zasoby dashboardu. Uruchom Home Assistant "
+                        "ponownie, aby bezpiecznie udostÄ™pniÄ‡ je pod `/local` "
+                        "przed zaĹ‚adowaniem dashboardu."
+                    ),
+                },
+                "frontend_assets_install_failed": {
+                    "title": "Nie udało się zainstalować zasobów dashboardu",
+                    "description": (
+                        "Nie udało się zainstalować opcjonalnych zasobów "
+                        "dashboardu i EMS, ale encje urządzenia Hoymiles "
+                        "pozostają dostępne. Sprawdź wolne miejsce i "
+                        "uprawnienia, następnie uruchom "
+                        "`hoymiles_hit_modbus.install_assets` z "
+                        "`overwrite: true` i uruchom Home Assistant ponownie."
+                    ),
+                },
             },
             "services": {
                 "install_assets": {
@@ -2853,7 +2873,25 @@ def static_translations(language: str) -> dict:
                     "changes, run `hoymiles_hit_modbus.install_assets` with "
                     "`overwrite: true`, and restart Home Assistant again."
                 ),
-            }
+            },
+            "frontend_assets_restart_required": {
+                "title": "Dashboard assets require a restart",
+                "description": (
+                    "The integration created the `www` directory and copied its "
+                    "managed dashboard assets. Restart Home Assistant so they are "
+                    "safely exposed under `/local` before the dashboard loads."
+                ),
+            },
+            "frontend_assets_install_failed": {
+                "title": "Dashboard assets could not be installed",
+                "description": (
+                    "The optional dashboard and EMS assets could not be "
+                    "installed, but Hoymiles device entities remain available. "
+                    "Check free disk space and permissions, then run "
+                    "`hoymiles_hit_modbus.install_assets` with "
+                    "`overwrite: true` and restart Home Assistant."
+                ),
+            },
         },
         "services": {
             "install_assets": {

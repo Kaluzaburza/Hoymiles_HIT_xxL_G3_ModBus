@@ -29,6 +29,14 @@
     "ems_package_restart_required": {
       "title": "Aktualizacja pakietu EMS wymaga ponownego uruchomienia",
       "description": "Integracja zaktualizowała zarządzany pakiet EMS po wczytaniu konfiguracji. Sprawdź konfigurację i uruchom Home Assistant ponownie jeszcze raz. Jeśli komunikat pozostaje po restarcie, wykonaj kopię własnych zmian i użyj akcji `hoymiles_hit_modbus.install_assets` z opcją `overwrite: true`, a następnie uruchom Home Assistant ponownie."
+    },
+    "frontend_assets_restart_required": {
+      "title": "Zasoby dashboardu wymagajÄ… restartu",
+      "description": "Integracja utworzyĹ‚a katalog `www` i skopiowaĹ‚a zarzÄ…dzane zasoby dashboardu. Uruchom Home Assistant ponownie, aby bezpiecznie udostÄ™pniÄ‡ je pod `/local` przed zaĹ‚adowaniem dashboardu."
+    },
+    "frontend_assets_install_failed": {
+      "title": "Nie udało się zainstalować zasobów dashboardu",
+      "description": "Nie udało się zainstalować opcjonalnych zasobów dashboardu i EMS, ale encje urządzenia Hoymiles pozostają dostępne. Sprawdź wolne miejsce i uprawnienia, następnie uruchom `hoymiles_hit_modbus.install_assets` z `overwrite: true` i uruchom Home Assistant ponownie."
     }
   },
   "services": {

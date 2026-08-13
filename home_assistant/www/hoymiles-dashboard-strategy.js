@@ -4,10 +4,7 @@
   const scriptUrl = document.currentScript?.src;
   const assetBase = scriptUrl
     ? new URL(".", scriptUrl)
-    : new URL(
-        "/api/hoymiles_hit_modbus/static-r2/",
-        window.location.origin
-      );
+    : new URL("/local/", window.location.origin);
 
   class HoymilesHitDashboardBootstrapStrategy extends HTMLElement {
     static noEditor = true;

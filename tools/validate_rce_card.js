@@ -14,7 +14,7 @@ if (!source.includes("import.meta.url")) {
 const executableSource = source.replaceAll(
   "import.meta.url",
   JSON.stringify(
-    "https://homeassistant.example/api/hoymiles_hit_modbus/static-r2/hoymiles-rce-chart-card.js",
+    "https://homeassistant.example/local/hoymiles-rce-chart-card.js",
   ),
 );
 const registry = new Map();
@@ -77,7 +77,9 @@ const context = {
   Intl,
   URL,
   fetch: async (url, options) => {
-    const match = String(url).match(/dashboard_hoymiles_(pl|en)\.json$/);
+    const match = String(url).match(
+      /^https:\/\/homeassistant\.example\/local\/dashboard_hoymiles_(pl|en)\.json$/,
+    );
     if (!match) {
       throw new Error(`Unexpected dashboard request: ${url}`);
     }
@@ -129,6 +131,9 @@ vm.runInNewContext(executableSource, context, {
 });
 
 const customCardCount = context.window.customCards?.length ?? 0;
+const canonicalStrategy = registry.get(
+  "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
+);
 vm.runInNewContext(
   executableSource,
   {
@@ -140,6 +145,12 @@ vm.runInNewContext(
 );
 if ((context.window.customCards?.length ?? 0) !== customCardCount) {
   throw new Error("Loading the frontend module twice duplicated card metadata");
+}
+if (
+  !canonicalStrategy ||
+  registry.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3") !== canonicalStrategy
+) {
+  throw new Error("Duplicate module loading replaced the canonical dashboard strategy");
 }
 
 const Card = registry.get("hoymiles-rce-chart-card");
@@ -784,9 +795,7 @@ for (const [label, expectedAccent] of [
 }
 console.log("Runtime Aurora decorator: recursion, hoisting and idempotence OK");
 
-const Strategy = registry.get(
-  "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
-);
+const Strategy = canonicalStrategy;
 if (!Strategy) {
   throw new Error("The Hoymiles dashboard strategy was not registered");
 }

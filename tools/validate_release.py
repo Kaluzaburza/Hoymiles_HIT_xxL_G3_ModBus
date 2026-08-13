@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import asyncio
 import hashlib
 import importlib.util
 import json
@@ -45,15 +47,33 @@ def load_localization_module():
 def load_assets_module():
     """Load the asset installer with a minimal Home Assistant type stub."""
     homeassistant = types.ModuleType("homeassistant")
+    components = types.ModuleType("homeassistant.components")
+    lovelace = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    ha_const = types.ModuleType("homeassistant.const")
     core = types.ModuleType("homeassistant.core")
     helpers = types.ModuleType("homeassistant.helpers")
     storage = types.ModuleType("homeassistant.helpers.storage")
     core.HomeAssistant = object
+    lovelace_const.CONF_RESOURCE_TYPE_WS = "res_type"
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    ha_const.CONF_ID = "id"
+    ha_const.CONF_TYPE = "type"
+    ha_const.CONF_URL = "url"
     storage.Store = object
+    homeassistant.components = components
+    components.lovelace = lovelace
+    lovelace.const = lovelace_const
+    homeassistant.const = ha_const
     homeassistant.core = core
     homeassistant.helpers = helpers
     helpers.storage = storage
     sys.modules.setdefault("homeassistant", homeassistant)
+    sys.modules.setdefault("homeassistant.components", components)
+    sys.modules.setdefault("homeassistant.components.lovelace", lovelace)
+    sys.modules.setdefault("homeassistant.components.lovelace.const", lovelace_const)
+    sys.modules.setdefault("homeassistant.const", ha_const)
     sys.modules.setdefault("homeassistant.core", core)
     sys.modules.setdefault("homeassistant.helpers", helpers)
     sys.modules.setdefault("homeassistant.helpers.storage", storage)
@@ -92,10 +112,16 @@ def validate_fresh_asset_install() -> None:
         package_path = (
             config_path / "packages" / "hoymiles_ems_scheduler.yaml"
         )
+        frontend_local_ready = (config_path / "www").is_dir()
         polish_written = assets._copy_assets(config_path, "pl-PL", False)
         require(
-            len(polish_written) == 4,
-            "Fresh Polish installation did not copy all four assets",
+            len(polish_written) == 7,
+            "Fresh Polish installation did not copy all seven assets",
+        )
+        require(
+            (config_path / "www").is_dir()
+            and not frontend_local_ready,
+            "Fresh-no-www setup must remain restart-gated after copying assets",
         )
         require(
             dashboard_path.read_text(encoding="utf-8")
@@ -104,6 +130,12 @@ def validate_fresh_asset_install() -> None:
             ),
             "Fresh Polish installation copied the wrong dashboard",
         )
+        for filename in assets.LOCAL_FRONTEND_ASSETS:
+            require(
+                (config_path / "www" / filename).read_bytes()
+                == (RESOURCES / "www" / filename).read_bytes(),
+                f"Fresh installation copied the wrong /local asset: {filename}",
+            )
         require(
             assets._copy_assets(config_path, "pl-PL", False) == [],
             "Asset installer overwrites user files without explicit permission",
@@ -169,8 +201,8 @@ script:
 
         english_written = assets._copy_assets(config_path, "en-GB", True)
         require(
-            len(english_written) == 4,
-            "English overwrite installation did not copy all four assets",
+            len(english_written) == 7,
+            "English overwrite installation did not copy all seven assets",
         )
         require(
             (config_path / "dashboard_hoymiles.yaml").read_text(
@@ -215,51 +247,72 @@ script:
             "A user-modified dashboard was overwritten",
         )
 
-    with tempfile.TemporaryDirectory(prefix="hoymiles_storage_fresh_") as tmp:
-        config_path = Path(tmp)
-        storage_path = config_path / ".storage"
-        storage_path.mkdir()
-        resources_path = storage_path / "lovelace_resources"
+    class FakeResourceCollection:
+        """Exercise the same live collection contract as Lovelace websocket."""
 
-        migrated = assets._sync_lovelace_storage(config_path)
-        require(
-            migrated == [resources_path] and resources_path.is_file(),
-            "Fresh storage setup did not create the Lovelace resource store",
+        def __init__(self, items: list[dict]) -> None:
+            self.data = {item["id"]: dict(item) for item in items}
+            self.loaded = False
+
+        async def async_get_info(self) -> dict[str, int]:
+            self.loaded = True
+            return {"resources": len(self.data)}
+
+        def async_items(self) -> list[dict]:
+            require(self.loaded, "Resource items were read before lazy loading")
+            return list(self.data.values())
+
+        async def async_update_item(self, item_id: str, updates: dict) -> dict:
+            require(self.loaded, "Resource was updated before lazy loading")
+            normalized = dict(updates)
+            if "res_type" in normalized:
+                normalized["type"] = normalized.pop("res_type")
+            self.data[item_id].update(normalized)
+            return self.data[item_id]
+
+        async def async_create_item(self, data: dict) -> dict:
+            require(self.loaded, "Resource was created before lazy loading")
+            item = dict(data)
+            if "res_type" in item:
+                item["type"] = item.pop("res_type")
+            item["id"] = "generated-hoymiles-resource"
+            self.data[item["id"]] = item
+            return item
+
+    def fake_hass(
+        collection: FakeResourceCollection,
+        mode: str = "storage",
+    ) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            data={
+                "lovelace": types.SimpleNamespace(
+                    resource_mode=mode,
+                    resources=collection,
+                )
+            }
         )
-        fresh_resources = json.loads(
-            resources_path.read_text(encoding="utf-8")
-        )
-        require(
-            fresh_resources == {
-                "version": 1,
-                "minor_version": 1,
-                "key": "lovelace_resources",
-                "data": {
-                    "items": [
-                        {
-                            "id": hashlib.sha256(
-                                f"{assets.DOMAIN}:frontend".encode()
-                            ).hexdigest()[:32],
-                            "url": assets.FRONTEND_RESOURCE_URL,
-                            "type": "module",
-                        }
-                    ]
-                },
-            },
-            "Fresh storage setup created an invalid Lovelace resource store",
-        )
-        require(
-            not resources_path.with_name(
-                f"{resources_path.name}.pre-{assets.VERSION}.bak"
-            ).exists(),
-            "Fresh storage setup created a backup without a source file",
-        )
-        fresh_text = resources_path.read_text(encoding="utf-8")
-        require(
-            assets._sync_lovelace_storage(config_path) == []
-            and resources_path.read_text(encoding="utf-8") == fresh_text,
-            "Fresh storage setup is not idempotent",
-        )
+
+    fresh_collection = FakeResourceCollection([])
+    fresh_hass = fake_hass(fresh_collection)
+    require(
+        asyncio.run(assets._async_sync_lovelace_resource(fresh_hass)),
+        "Fresh storage setup did not create the live Lovelace resource",
+    )
+    require(
+        fresh_collection.async_items()
+        == [
+            {
+                "id": "generated-hoymiles-resource",
+                "url": assets.FRONTEND_RESOURCE_URL,
+                "type": "module",
+            }
+        ],
+        "Fresh setup created an invalid live Lovelace resource",
+    )
+    require(
+        not asyncio.run(assets._async_sync_lovelace_resource(fresh_hass)),
+        "Live Lovelace resource setup is not idempotent",
+    )
 
     with tempfile.TemporaryDirectory(prefix="hoymiles_storage_upgrade_") as tmp:
         config_path = Path(tmp)
@@ -274,7 +327,10 @@ script:
                 "items": [
                     {
                         "id": "legacy-hoymiles-resource",
-                        "url": "/local/hoymiles-rce-chart-card.js?v=old",
+                        "url": (
+                            "/api/hoymiles_hit_modbus/static-r2/"
+                            "hoymiles-rce-chart-card.js?v=1.5.2.15"
+                        ),
                         "type": "module",
                     },
                     {
@@ -360,7 +416,7 @@ script:
 
         migrated = assets._sync_lovelace_storage(config_path)
         require(
-            migrated == [resources_path, dashboard_path],
+            migrated == [dashboard_path],
             "Storage-mode dashboard migration changed unexpected files",
         )
         migrated_dashboard = json.loads(
@@ -397,9 +453,17 @@ script:
             == "Energia pobrana z sieci — diagnostycznie",
             "Storage-mode RCE LOAD rows were not migrated safely",
         )
-        migrated_resources = json.loads(
-            resources_path.read_text(encoding="utf-8")
-        )["data"]["items"]
+        require(
+            json.loads(resources_path.read_text(encoding="utf-8"))
+            == resources_payload,
+            "Dashboard migration edited Lovelace resources behind HA's live collection",
+        )
+        collection = FakeResourceCollection(resources_payload["data"]["items"])
+        require(
+            asyncio.run(assets._async_sync_lovelace_resource(fake_hass(collection))),
+            "Legacy integration-static resource was not migrated live",
+        )
+        migrated_resources = collection.async_items()
         require(
             migrated_resources[0]["url"] == assets.FRONTEND_RESOURCE_URL
             and migrated_resources[0]["type"] == "module"
@@ -407,13 +471,16 @@ script:
             "Managed Lovelace resource was not cache-busted safely",
         )
         require(
+            not asyncio.run(
+                assets._async_sync_lovelace_resource(fake_hass(collection))
+            ),
+            "Migrated live Lovelace resource is not idempotent",
+        )
+        require(
             dashboard_path.with_name(
                 f"{dashboard_path.name}.pre-{assets.VERSION}.bak"
-            ).is_file()
-            and resources_path.with_name(
-                f"{resources_path.name}.pre-{assets.VERSION}.bak"
             ).is_file(),
-            "Storage migration did not create rollback backups",
+            "Dashboard storage migration did not create a rollback backup",
         )
         require(
             unrelated_path.read_text(encoding="utf-8") == unrelated_text,
@@ -423,6 +490,179 @@ script:
             assets._sync_lovelace_storage(config_path) == [],
             "Storage-mode migration is not idempotent",
         )
+
+    require(
+        assets.FRONTEND_RESOURCE_URL.startswith(
+            "/local/hoymiles-rce-chart-card.js?v="
+        )
+        and assets.FRONTEND_BOOTSTRAP_URL.startswith(
+            "/local/hoymiles-dashboard-strategy.js?v="
+        ),
+        "Frontend entry points must use Home Assistant's always-available /local route",
+    )
+
+
+def validate_frontend_asset_failure_isolation(init_source: str) -> None:
+    """Prove optional asset failures cannot disable integration-wide setup."""
+    source_tree = ast.parse(init_source)
+    selected = [
+        node
+        for node in source_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_async_prepare_frontend_assets", "async_setup"}
+    ]
+    require(
+        {node.name for node in selected}
+        == {"_async_prepare_frontend_assets", "async_setup"},
+        "Frontend failure-isolation functions are missing",
+    )
+    executable = ast.Module(
+        body=[
+            ast.ImportFrom(
+                module="__future__",
+                names=[ast.alias(name="annotations")],
+                level=0,
+            ),
+            *selected,
+        ],
+        type_ignores=[],
+    )
+    ast.fix_missing_locations(executable)
+
+    class FakeIssueRegistry:
+        def __init__(self) -> None:
+            self.created: list[tuple] = []
+            self.deleted: list[tuple] = []
+
+        def async_create_issue(self, *args, **kwargs) -> None:
+            self.created.append((args, kwargs))
+
+        def async_delete_issue(self, *args, **kwargs) -> None:
+            self.deleted.append((args, kwargs))
+
+        class IssueSeverity:
+            WARNING = "warning"
+
+    class FakeLogger:
+        def exception(self, *args, **kwargs) -> None:
+            return None
+
+        def info(self, *args, **kwargs) -> None:
+            return None
+
+    class FakeHttp:
+        def __init__(self) -> None:
+            self.static_paths: list = []
+            self.views: list = []
+
+        async def async_register_static_paths(self, paths) -> None:
+            self.static_paths.extend(paths)
+
+        def register_view(self, view) -> None:
+            self.views.append(view)
+
+    class FakeServices:
+        def __init__(self) -> None:
+            self.registrations: list[tuple] = []
+
+        def async_register(self, *args, **kwargs) -> None:
+            self.registrations.append((args, kwargs))
+
+    class FakeHass:
+        def __init__(self, config_dir: Path) -> None:
+            self.config = types.SimpleNamespace(
+                config_dir=str(config_dir),
+                language="en",
+            )
+            self.data: dict = {}
+            self.http = FakeHttp()
+            self.services = FakeServices()
+
+        async def async_add_executor_job(self, target, *args):
+            return target(*args)
+
+    issues = FakeIssueRegistry()
+    module_globals = {
+        "Path": Path,
+        "HomeAssistant": object,
+        "ServiceCall": object,
+        "_LOGGER": FakeLogger(),
+        "ir": issues,
+        "DOMAIN": "hoymiles_hit_modbus",
+        "EMS_PACKAGE_DOCS_URL": "https://example.invalid/docs",
+        "FRONTEND_ASSETS_RESTART_ISSUE_ID": "frontend_restart",
+        "FRONTEND_ASSETS_INSTALL_FAILED_ISSUE_ID": "frontend_failed",
+        "STATIC_URL": "/api/hoymiles/static-r2",
+        "RESOURCE_ROOT": Path("resources"),
+        "FRONTEND_MODULE_URL": "/local/card.js?v=test",
+        "ATTR_OVERWRITE": "overwrite",
+        "SERVICE_INSTALL_ASSETS": "install_assets",
+        "INSTALL_ASSETS_SCHEMA": object(),
+        "StaticPathConfig": lambda *args, **kwargs: (args, kwargs),
+        "HoymilesSupportBundleView": lambda: object(),
+    }
+    exec(compile(executable, "<frontend-startup-contract>", "exec"), module_globals)
+
+    async def exercise_failure(error: Exception) -> None:
+        async def failing_install(*args, **kwargs):
+            raise error
+
+        module_globals["async_install_assets"] = failing_install
+        with tempfile.TemporaryDirectory(prefix="hoymiles_asset_failure_") as tmp:
+            hass = FakeHass(Path(tmp))
+            result = await module_globals["_async_prepare_frontend_assets"](hass)
+        require(
+            result == ([], False, False),
+            f"Optional asset error was not isolated: {type(error).__name__}",
+        )
+        require(
+            any(
+                args[2] == "frontend_failed"
+                for args, _kwargs in issues.created
+            ),
+            "Optional asset failure did not create a Repair issue",
+        )
+
+    asyncio.run(exercise_failure(OSError("disk full")))
+    asyncio.run(exercise_failure(RuntimeError("live resource failed")))
+
+    async def setup_failure_tuple(_hass):
+        return [], False, False
+
+    extra_urls: list[str] = []
+    module_globals["_async_prepare_frontend_assets"] = setup_failure_tuple
+    module_globals["add_extra_js_url"] = (
+        lambda _hass, url: extra_urls.append(url)
+    )
+    module_globals["async_install_assets"] = lambda *args, **kwargs: None
+    with tempfile.TemporaryDirectory(prefix="hoymiles_setup_failure_") as tmp:
+        failed_hass = FakeHass(Path(tmp))
+        require(
+            asyncio.run(module_globals["async_setup"](failed_hass, {})) is True,
+            "Asset failure disabled integration-wide setup",
+        )
+    require(
+        len(failed_hass.http.static_paths) == 1
+        and len(failed_hass.http.views) == 1
+        and len(failed_hass.services.registrations) == 1
+        and not extra_urls,
+        "Asset failure did not preserve setup or published an unsafe module",
+    )
+
+    async def setup_success_tuple(_hass):
+        return [Path("asset")], True, True
+
+    module_globals["_async_prepare_frontend_assets"] = setup_success_tuple
+    with tempfile.TemporaryDirectory(prefix="hoymiles_setup_success_") as tmp:
+        success_hass = FakeHass(Path(tmp))
+        require(
+            asyncio.run(module_globals["async_setup"](success_hass, {})) is True,
+            "Successful frontend setup did not complete",
+        )
+    require(
+        extra_urls == ["/local/card.js?v=test"],
+        "Successful frontend setup did not publish exactly one canonical module",
+    )
 
 
 def png_dimensions(path: Path) -> tuple[int, int]:
@@ -567,9 +807,39 @@ def main() -> int:
         and "?v={VERSION}" in assets_source,
         "Dashboard strategy module is not registered with versioned cache busting",
     )
+    setup_body = init_source.split(
+        "async def async_setup(hass: HomeAssistant, config: dict) -> bool:", 1
+    )[1].split("async def async_setup_entry", 1)[0]
+    require(
+        setup_body.index("await _async_prepare_frontend_assets")
+        < setup_body.index("add_extra_js_url"),
+        "Local frontend assets must be prepared before their URL is published",
+    )
+    require(
+        "Availability is restart-gated" in setup_body
+        and "frontend_assets_ready and frontend_local_ready" in setup_body
+        and setup_body.count("add_extra_js_url(hass,") == 1
+        and "FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL" in init_source
+        and "FRONTEND_BOOTSTRAP_URL" not in init_source,
+        "Restart-gated /local startup or canonical frontend loader is missing",
+    )
     require(
         "frontend" in manifest.get("dependencies", []),
         "Frontend dependency is required for automatic strategy registration",
+    )
+    require(
+        "lovelace" in manifest.get("dependencies", [])
+        and "_async_sync_lovelace_resource" in assets_source
+        and "async_update_item" in assets_source
+        and "async_create_item" in assets_source,
+        "Managed resource migration must use Lovelace's live storage collection",
+    )
+    require(
+        "_sync_lovelace_storage" not in init_source
+        and "_sync_lovelace_storage" not in assets_source.split(
+            "async def async_install_assets", 1
+        )[1],
+        "Runtime asset install must not mutate .storage/lovelace.* behind HA",
     )
     require(
         "_async_default_source_device_id" in config_flow_source
@@ -727,6 +997,8 @@ def main() -> int:
     require(
         "ll-strategy-dashboard-hoymiles-hit-xxl-g3" in bootstrap_source
         and "document.currentScript" in bootstrap_source
+        and 'new URL("/local/", window.location.origin)' in bootstrap_source
+        and "/api/hoymiles_hit_modbus/static-r2/" not in bootstrap_source
         and "import.meta" not in bootstrap_source,
         "Classic dashboard bootstrap is missing or uses ES-module-only syntax",
     )
@@ -1705,6 +1977,7 @@ def main() -> int:
         "Polish parallel EMS state localization failed",
     )
     validate_fresh_asset_install()
+    validate_frontend_asset_failure_isolation(init_source)
 
     for image_name in (
         "icon.png",

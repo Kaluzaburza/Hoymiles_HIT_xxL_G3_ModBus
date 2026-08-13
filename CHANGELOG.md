@@ -11,14 +11,19 @@ All notable changes to this project are documented in this file.
 1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.5.2**.
    **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
    wersji **1.5.2**.
-2. **Home Assistant:** restart Home Assistant once. The managed EMS package,
-   bilingual dashboard and frontend assets are synchronized automatically. If
-   **Installation status / Repairs** asks for another restart, validate the
-   configuration first and then perform it.
-   **PL:** uruchom Home Assistant ponownie jeden raz. Zarządzany pakiet EMS,
-   dashboard PL/EN i zasoby interfejsu zsynchronizują się automatycznie. Jeżeli
-   **Stan instalacji / Naprawy** poprosi o kolejny restart, najpierw sprawdź
-   konfigurację, a następnie wykonaj ten restart.
+2. **Home Assistant:** restart Home Assistant after the HACS update. The managed
+   EMS package, bilingual dashboard and frontend assets are synchronized
+   automatically. A fresh installation that has just created `config/www`
+   raises **Dashboard assets require a restart**; validate the configuration
+   and restart once more. After the final restart, hard-refresh any dashboard
+   tab that was already open so it loads frontend revision 16.
+   **PL:** po aktualizacji HACS uruchom Home Assistant ponownie. Zarządzany
+   pakiet EMS, dashboard PL/EN i zasoby interfejsu zsynchronizują się
+   automatycznie. Pierwsza instalacja, która właśnie utworzyła `config/www`,
+   zgłosi Naprawę **Zasoby dashboardu wymagają restartu**; sprawdź konfigurację
+   i wykonaj jeszcze jeden restart. Po ostatnim restarcie wykonaj twarde
+   odświeżenie każdej wcześniej otwartej karty dashboardu, aby wczytała rewizję
+   frontendową 16.
 3. **ESP32 / ESPHome:** rebuild and upload are **required** because v1.5.2
    changes the runtime system-power balance and adds independent FC03 actuator
    mirrors and topology guards in `packages/overview.yaml`,
@@ -89,9 +94,20 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
-- Allow a fresh installation to create `.storage/lovelace_resources` when the
-  file does not exist. The migration backs up only an existing regular file and
-  remains idempotent when it runs again.
+- Prevent a transient, reverse-proxy/browser-cached `404` from the integration's
+  former `static-r2` API route from leaving the dashboard strategy unregistered
+  after restart. RC6 publishes one canonical full module from the versioned
+  `/local/hoymiles-rce-chart-card.js?v=1.5.2.16` URL.
+- Materialize the card, bootstrap, Polish and English dashboard JSON, and image
+  atomically under `config/www` before publishing the module URL. Storage mode
+  resources are reconciled through Lovelace's live resource collection; runtime
+  installation never edits `.storage/lovelace.*` directly. If `config/www` did
+  not exist when frontend started, publication is deferred and a localized
+  restart Repair is raised.
+- Keep Home Assistant device entities available if optional dashboard/EMS asset
+  installation fails (for example because the disk is full). The integration
+  reports a Repair issue and leaves the explicit install action available for a
+  controlled retry instead of failing integration-wide setup.
 - Recover stable proxy bindings when Home Assistant 2026.8 splits a legacy
   composite device into a new ESPHome-owned child. The integration preserves
   the original source anchor and rebinds only to one uniquely verified
@@ -125,16 +141,17 @@ All notable changes to this project are documented in this file.
 
 ### Release-candidate status
 
-- RC4 passed exact-SHA push and workflow-dispatch CI, including the exhaustive
-  matrix, and was deployed locally. Stable physical EMS readbacks and ordinary
-  proxies were live, but the local PSE payload exposed that `dtime_utc` is the
-  quarter **end**. The old interpretation safely blocked RCE as incomplete but
-  made the engine unusable. RC5 fixes that mapping. Its full offline validation
-  now passes: RCE **68/68**, history **3/3**, quick **488/488**, exhaustive
-  **2064/2064**, tariff, RCEm, firmware/readback, executor, startup, rebind
-  **6/6**, power-balance and frontend contracts. Exact-SHA RC5 CI, local
-  redeployment and both-installation live re-audit remain pending; this
-  changelog does not claim a live GO.
+- RC5 passed full offline validation and exact-SHA push plus workflow-dispatch
+  CI, then was deployed to the local and parallel test installations. The RCE
+  interval-end parser and backend safety state were correct live. The parallel
+  dashboard exposed a separate frontend P1: an early request to the custom
+  `static-r2` route returned a transient `404`, that response remained cached,
+  and Lovelace timed out waiting for
+  `ll-strategy-dashboard-hoymiles-hit-xxl-g3` after restart.
+- RC6 is the frontend-startup hotfix candidate described above. Code completion,
+  independent review and the full offline gate passed with P0=0/P1=0. Exact-SHA
+  CI, local redeployment and both installations' live frontend re-audit remain
+  **pending**. This changelog does not claim a live GO for RC6.
 
 ### Polski
 
@@ -155,9 +172,16 @@ All notable changes to this project are documented in this file.
   przy wyładowaniu integracji. Każde zapytanie ma limit 50 000 raportów dla
   jednej encji źródłowej plus jeden wiersz kontrolny oraz limit czasu 15 sekund;
   przekroczenie budżetu pozostawia planer w stanie fail-closed.
-- Pierwsza instalacja może poprawnie utworzyć brakujący plik
-  `.storage/lovelace_resources`; kopia bezpieczeństwa powstaje tylko dla
-  istniejącego zwykłego pliku, a ponowna synchronizacja nie wprowadza zmian.
+- RC6 usuwa wyścig startowy interfejsu, w którym przejściowe `404` z dawnej
+  trasy API `static-r2` było zapamiętywane przez reverse proxy lub przeglądarkę,
+  a Lovelace po restarcie nie doczekał się rejestracji strategii dashboardu.
+  Ładowany jest jeden pełny moduł spod wersjonowanego adresu
+  `/local/hoymiles-rce-chart-card.js?v=1.5.2.16`.
+- Karta, bootstrap, dashboard JSON po polsku i angielsku oraz obraz są kopiowane
+  atomowo do `config/www` przed publikacją modułu. Zasób trybu storage jest
+  uzgadniany przez aktywną kolekcję Lovelace; instalator w czasie działania nie
+  zmienia bezpośrednio `.storage/lovelace.*`. Gdy `config/www` nie istniał przy
+  starcie frontendu, publikacja czeka do restartu, a integracja zgłasza Naprawę.
 - Po podziale starszego urządzenia złożonego przez Home Assistant 2026.8
   integracja odzyskuje stabilne powiązania encji proxy. Zachowuje pierwotny
   identyfikator źródłowy i przełącza się wyłącznie na jednego jednoznacznie
@@ -172,8 +196,13 @@ All notable changes to this project are documented in this file.
 - Dane live PSE potwierdziły, że `dtime_utc` oznacza koniec kwadransa, a nie jego
   początek. RC5 odejmuje 15 minut na osi UTC, sprawdza `period_utc` oraz
   `business_date` i poprawnie odtwarza 48 półgodzin zwykłej doby, 46 wiosennej
-  oraz 50 jesiennej doby DST. Pełna walidacja offline RC5 przechodzi, ale CI
-  dokładnego SHA i ponowne testy live pozostają wymagane.
+  oraz 50 jesiennej doby DST. RC5 przeszedł pełną walidację offline, CI
+  dokładnego SHA oraz wdrożenie na obu instalacjach; parser i bezpieczny stan
+  backendu działały poprawnie live.
+- Wdrożenie RC5 ujawniło niezależny P1 frontendu opisany powyżej. Kod RC6,
+  niezależny przegląd oraz pełna walidacja offline przeszły bez P0/P1. Nadal
+  oczekują CI dokładnego SHA, ponowne wdrożenie lokalne i audyt live obu
+  instalacji. Nie ma jeszcze zgody GO dla RC6.
 
 ## [1.5.1] - 2026-08-12
 

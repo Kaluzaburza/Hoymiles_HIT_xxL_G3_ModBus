@@ -9,6 +9,7 @@
     "esphome",
     "frontend",
     "http",
+    "lovelace",
     "recorder"
   ],
   "documentation": "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus",
