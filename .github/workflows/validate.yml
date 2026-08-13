@@ -69,6 +69,8 @@ jobs:
         run: python tools/test_optimizer_executor_contract.py
       - name: Test optimizer non-blocking startup contract
         run: python tools/test_optimizer_startup_contract.py
+      - name: Test source-device registry rebind contract
+        run: python tools/test_source_device_rebind.py
       - name: Run exhaustive pre-release automation matrix
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: python tools/test_automation_matrix.py --exhaustive

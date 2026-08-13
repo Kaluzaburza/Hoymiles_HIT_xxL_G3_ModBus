@@ -14,7 +14,12 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.recorder import get_instance as get_recorder_instance
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_SOURCE_DEVICE_ID, DOMAIN, VERSION
+from .const import (
+    CONF_RESOLVED_SOURCE_DEVICE_ID,
+    CONF_SOURCE_DEVICE_ID,
+    DOMAIN,
+    VERSION,
+)
 from .diagnostic_redaction import REDACTED, sanitize_diagnostic_value
 from .models import RuntimeData
 
@@ -22,7 +27,11 @@ from .models import RuntimeData
 REPORT_SCHEMA_VERSION = 1
 HISTORY_HOURS = 24
 MAX_HISTORY_EVENTS_PER_ENTITY = 500
-ENTRY_REDACT_KEYS = {CONF_SOURCE_DEVICE_ID, "unique_id"}
+ENTRY_REDACT_KEYS = {
+    CONF_RESOLVED_SOURCE_DEVICE_ID,
+    CONF_SOURCE_DEVICE_ID,
+    "unique_id",
+}
 SNAPSHOT_DOMAINS = {
     "automation",
     "binary_sensor",

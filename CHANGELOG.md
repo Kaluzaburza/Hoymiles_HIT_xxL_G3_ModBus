@@ -90,6 +90,11 @@ All notable changes to this project are documented in this file.
 - Allow a fresh installation to create `.storage/lovelace_resources` when the
   file does not exist. The migration backs up only an existing regular file and
   remains idempotent when it runs again.
+- Recover stable proxy bindings when Home Assistant 2026.8 splits a legacy
+  composite device into a new ESPHome-owned child. The integration preserves
+  the original source anchor and rebinds only to one uniquely verified
+  successor; ambiguous or mismatched candidates fail closed, and the config
+  flow blocks a duplicate entry for the resolved child.
 
 ### Safety
 
@@ -128,6 +133,11 @@ All notable changes to this project are documented in this file.
 - Pierwsza instalacja może poprawnie utworzyć brakujący plik
   `.storage/lovelace_resources`; kopia bezpieczeństwa powstaje tylko dla
   istniejącego zwykłego pliku, a ponowna synchronizacja nie wprowadza zmian.
+- Po podziale starszego urządzenia złożonego przez Home Assistant 2026.8
+  integracja odzyskuje stabilne powiązania encji proxy. Zachowuje pierwotny
+  identyfikator źródłowy i przełącza się wyłącznie na jednego jednoznacznie
+  zweryfikowanego następcę ESPHome; kandydaci niejednoznaczni lub niezgodni są
+  bezpiecznie odrzucani, a kreator blokuje drugi wpis dla rozwiązanego urządzenia.
 
 ## [1.5.1] - 2026-08-12
 

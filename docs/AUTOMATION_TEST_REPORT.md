@@ -1,8 +1,10 @@
 # Automation simulation and safety report
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
-Last fully validated offline release candidate in this report: **v1.5.2**
-Current documentation target: **v1.5.2 — live acceptance pending**
+Last completed offline baseline in this report: **v1.5.2 RC2 plus the RC3
+source-device rebind contract**
+Current documentation target: **v1.5.2 RC3 — exact-SHA CI and live re-audit
+pending**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -10,10 +12,13 @@ RCEm 253 V+ voltage management. The tests do not write to a real inverter.
 They verify arithmetic, state transitions, interlocks and fail-safe behaviour
 before field acceptance on each installation.
 
-The v1.5.2 deterministic, packaging and firmware checks below were completed
-on 2026-08-13. They do not replace field acceptance: deployment to the two test
-installations and post-deployment observations remain pending. The later
-v1.5.0 section is retained only as an explicitly archived live baseline.
+The v1.5.2 RC2 deterministic, packaging and firmware checks below were
+completed on 2026-08-13. Its local Home Assistant 2026.8 deployment then
+exposed a P1 source-device split that left stable proxy entities unavailable.
+RC3 adds a fail-closed source-device rebind and its dedicated **6/6** contract
+passes offline. GitHub CI, deployment to both test installations and the live
+re-audit for the exact RC3 commit remain pending. The later v1.5.0 section is
+retained only as an explicitly archived live baseline.
 
 ## Representative systems
 
@@ -120,8 +125,12 @@ separately below.
   latched to the required charging window. This prevents rapid mode chatter.
 - Notification debounce and fingerprints suppress repeated phone alerts while
   preserving a genuinely different stable state.
+- The Home Assistant 2026.8 source-device contract preserves the configured
+  composite anchor, accepts only one ESPHome-owned successor with matching
+  native entity evidence, rejects ambiguous or contradictory candidates, and
+  prevents a second integration entry for the resolved child.
 
-## v1.5.2 completed offline gate — 2026-08-13
+## v1.5.2 offline baseline and RC3 rebind contract — 2026-08-13
 
 - RCE optimizer: **63/63** deterministic scenarios passed, including the
   independent small-horizon oracle and padded 48-hour regression cases.
@@ -129,17 +138,25 @@ separately below.
   cross-system scenarios passed.
 - Tariff, RCEm, history reconstruction, policy-neutral energy/LOAD/power
   helpers, diagnostics, executor offload and the frontend card all passed.
+- The 110-slot solver wall-clock regression uses a sub-second **0.75 s** ceiling
+  with shared-runner headroom, while event-loop executor offload remains an
+  independent contract. This RC3 adjustment changes only the test threshold,
+  not the production optimizer algorithm.
 - The physical FC03 actuator-readback and ownership contract passed; generated
   Polish and English assets were deterministic and `validate_release.py`
   reported **291** localized entities with no structural or localization error.
 - ESPHome **2026.7.1** accepted the complete local fixture and compiled it with
   ESP-IDF **5.5.5**. The resulting application used 43.3% RAM and 52.9% flash.
-- An independent final read-only audit found no open P0/P1 issue in the frozen
-  source, generated packages or firmware configuration.
+- A read-only audit found no open P0/P1 before RC2 deployment, but the local
+  Home Assistant 2026.8 run then exposed the composite-device P1 described
+  above. The RC3 rebind contract passes **6/6** offline: unique successor,
+  revalidated previous successor, ambiguous-candidate rejection, unchanged
+  live source, duplicate-entry rejection and invalid linkage rejection.
 
-These are offline results. HACS Action, Hassfest, deployment to both test
-installations and live observation are separate acceptance gates and must be
-recorded against the exact release-candidate commit.
+These are offline results. HACS Action, Hassfest, all remaining GitHub CI,
+deployment to both test installations and the live re-audit are separate
+acceptance gates and remain pending for the exact RC3 commit. No live RC3 pass
+is claimed here.
 
 ## Archived v1.5.0 live candidate acceptance — 2026-08-12
 

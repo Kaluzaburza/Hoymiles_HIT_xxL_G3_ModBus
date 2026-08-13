@@ -11,7 +11,16 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import selector
 
 from .catalog import async_match_entities, matched_source_count
-from .const import CONF_COPY_ASSETS, CONF_SOURCE_DEVICE_ID, DOMAIN
+from .const import (
+    CONF_COPY_ASSETS,
+    CONF_RESOLVED_SOURCE_DEVICE_ID,
+    CONF_SOURCE_DEVICE_ID,
+    DOMAIN,
+)
+from .source_device import (
+    configured_source_device_ids,
+    linked_config_entry_ids,
+)
 
 
 class HoymilesHitModbusConfigFlow(
@@ -22,12 +31,17 @@ class HoymilesHitModbusConfigFlow(
 
     VERSION = 1
 
+    def _configured_source_device_ids(self) -> set[str]:
+        """Return configured source anchors and verified split successors."""
+        return configured_source_device_ids(
+            self.hass.config_entries.async_entries(DOMAIN),
+            CONF_SOURCE_DEVICE_ID,
+            CONF_RESOLVED_SOURCE_DEVICE_ID,
+        )
+
     async def _async_default_source_device_id(self) -> str | None:
         """Return the only unconfigured compatible ESPHome device, if unique."""
-        configured = {
-            entry.data.get(CONF_SOURCE_DEVICE_ID)
-            for entry in self.hass.config_entries.async_entries(DOMAIN)
-        }
+        configured = self._configured_source_device_ids()
         device_registry = dr.async_get(self.hass)
         candidates: list[str] = []
         for device in device_registry.devices.values():
@@ -35,7 +49,7 @@ class HoymilesHitModbusConfigFlow(
                 continue
             config_entries = (
                 self.hass.config_entries.async_get_entry(entry_id)
-                for entry_id in device.config_entries
+                for entry_id in linked_config_entry_ids(device)
             )
             if not any(
                 config_entry is not None and config_entry.domain == "esphome"
@@ -57,6 +71,8 @@ class HoymilesHitModbusConfigFlow(
         errors: dict[str, str] = {}
         if user_input is not None:
             source_device_id = user_input[CONF_SOURCE_DEVICE_ID]
+            if source_device_id in self._configured_source_device_ids():
+                return self.async_abort(reason="already_configured")
             source_device, matched = await async_match_entities(
                 self.hass,
                 source_device_id,

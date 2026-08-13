@@ -76,6 +76,7 @@ unchanged, retain and document the last compatible ESPHome tag.
    python tools/test_firmware_readback_contract.py
    python tools/test_optimizer_executor_contract.py
    python tools/test_optimizer_startup_contract.py
+   python tools/test_source_device_rebind.py
    python tools/test_automation_matrix.py --exhaustive
    node tools/validate_rce_card.js
    ```

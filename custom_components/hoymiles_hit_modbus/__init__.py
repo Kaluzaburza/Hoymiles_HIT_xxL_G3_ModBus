@@ -25,6 +25,7 @@ from .assets import (
 from .catalog import async_match_entities, matched_source_count
 from .const import (
     ATTR_OVERWRITE,
+    CONF_RESOLVED_SOURCE_DEVICE_ID,
     CONF_SOURCE_DEVICE_ID,
     DOMAIN,
     EMS_PACKAGE_SENTINEL,
@@ -35,6 +36,10 @@ from .const import (
     VERSION,
 )
 from .models import RuntimeData
+from .source_device import (
+    async_resolve_source_device,
+    persist_resolved_source_entry,
+)
 from .support_http import HoymilesSupportBundleView
 
 
@@ -257,10 +262,40 @@ async def async_setup_entry(
 ) -> bool:
     """Set up a localized Hoymiles device from an ESPHome device."""
     source_device_id = entry.data[CONF_SOURCE_DEVICE_ID]
-    source_device, matched = await async_match_entities(hass, source_device_id)
+    resolution = await async_resolve_source_device(
+        hass,
+        source_device_id,
+        async_match_entities,
+        entry.data.get(CONF_RESOLVED_SOURCE_DEVICE_ID),
+    )
+    source_device = resolution.source_device
+    matched = resolution.matched
     if source_device is None:
-        _LOGGER.error("ESPHome source device %s no longer exists", source_device_id)
+        _LOGGER.error(
+            "ESPHome source device %s is not live and has no unambiguous "
+            "compatible successor (exact: %s, compatible: %s)",
+            source_device_id,
+            resolution.exact_successor_count,
+            resolution.compatible_successor_count,
+        )
         return False
+
+    if resolution.rebound:
+        resolved_device_id = resolution.resolved_device_id
+        # Preserve source_device_id as the stable composite anchor. A future
+        # split successor continues to point to that old id, not necessarily to
+        # the currently resolved child id.
+        persist_resolved_source_entry(
+            hass,
+            entry,
+            resolution,
+            CONF_RESOLVED_SOURCE_DEVICE_ID,
+        )
+        _LOGGER.info(
+            "Rebound ESPHome source device %s to verified split successor %s",
+            source_device_id,
+            resolved_device_id,
+        )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = RuntimeData(
         source_device=source_device,
