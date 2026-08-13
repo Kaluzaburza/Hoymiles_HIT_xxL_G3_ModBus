@@ -138,10 +138,11 @@ separately below.
   cross-system scenarios passed.
 - Tariff, RCEm, history reconstruction, policy-neutral energy/LOAD/power
   helpers, diagnostics, executor offload and the frontend card all passed.
-- The 110-slot solver wall-clock regression uses a sub-second **0.75 s** ceiling
-  with shared-runner headroom, while event-loop executor offload remains an
-  independent contract. This RC3 adjustment changes only the test threshold,
-  not the production optimizer algorithm.
+- The heavy 96/110-slot solver wall-clock regressions use a **1.0 s**
+  shared-runner ceiling, while the small horizon-clamp fixture retains its
+  tighter **0.5 s** guard and event-loop executor offload remains an independent
+  contract. This RC3 adjustment changes only test thresholds, not the
+  production optimizer algorithm.
 - The physical FC03 actuator-readback and ownership contract passed; generated
   Polish and English assets were deterministic and `validate_release.py`
   reported **291** localized entities with no structural or localization error.
