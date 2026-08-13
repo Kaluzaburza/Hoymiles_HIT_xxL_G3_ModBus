@@ -95,6 +95,11 @@ All notable changes to this project are documented in this file.
   the original source anchor and rebinds only to one uniquely verified
   successor; ambiguous or mismatched candidates fail closed, and the config
   flow blocks a duplicate entry for the resolved child.
+- Scope the parallel-topology availability gate to the two derived overview
+  power proxies. A local RC3 deployment showed live native physical EMS
+  readbacks but unavailable ordinary stable sensor proxies because the gate
+  had incorrectly covered every sensor; RC4 restores ordinary proxies to the
+  availability of their native ESPHome sources.
 
 ### Safety
 
@@ -110,6 +115,14 @@ All notable changes to this project are documented in this file.
   shadow analytics remain available.
 - The live RCEm 253 V emergency path remains independent of forecast/history,
   but predictive RCEm discharge remains disabled in shadow mode.
+
+### Release-candidate status
+
+- Full RC4 offline validation passes, including the firmware/readback,
+  executor, rebind **6/6**, quick **488/488**, exhaustive **2064/2064**, RCE
+  **63/63**, tariff, RCEm and dynamic power-balance contracts. Exact-candidate
+  CI, local redeployment and both-installation live re-audit remain pending;
+  this changelog does not claim a live GO.
 
 ### Polski
 
@@ -138,6 +151,14 @@ All notable changes to this project are documented in this file.
   identyfikator źródłowy i przełącza się wyłącznie na jednego jednoznacznie
   zweryfikowanego następcę ESPHome; kandydaci niejednoznaczni lub niezgodni są
   bezpiecznie odrzucani, a kreator blokuje drugi wpis dla rozwiązanego urządzenia.
+- Lokalny test RC3 potwierdził działające natywne odczyty fizyczne EMS, ale
+  zwykłe stabilne sensory proxy pozostawały niedostępne, ponieważ bramka
+  topologii równoległej błędnie obejmowała wszystkie sensory. RC4 ogranicza ją
+  do dwóch wyliczanych encji mocy podglądu. Pełna walidacja offline RC4
+  przechodzi, w tym kontrakty firmware/readback, executor, rebind **6/6**,
+  macierze **488/488** i **2064/2064**, RCE **63/63**, taryfa, RCEm oraz
+  dynamiczny bilans mocy. CI dokładnego kandydata, ponowne wdrożenie lokalne i
+  audyt live obu instalacji nadal są wymagane; nie ma jeszcze zgody GO.
 
 ## [1.5.1] - 2026-08-12
 

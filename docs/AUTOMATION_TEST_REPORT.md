@@ -1,10 +1,10 @@
 # Automation simulation and safety report
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.2 RC2 plus the RC3
-source-device rebind contract**
-Current documentation target: **v1.5.2 RC3 — exact-SHA CI and live re-audit
-pending**
+Last completed offline baseline in this report: **v1.5.2 RC4 full offline
+validation**
+Current documentation target: **v1.5.2 RC4 — exact-SHA CI, local redeployment
+and both-installation live re-audit pending**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -13,12 +13,16 @@ They verify arithmetic, state transitions, interlocks and fail-safe behaviour
 before field acceptance on each installation.
 
 The v1.5.2 RC2 deterministic, packaging and firmware checks below were
-completed on 2026-08-13. Its local Home Assistant 2026.8 deployment then
-exposed a P1 source-device split that left stable proxy entities unavailable.
-RC3 adds a fail-closed source-device rebind and its dedicated **6/6** contract
-passes offline. GitHub CI, deployment to both test installations and the live
-re-audit for the exact RC3 commit remain pending. The later v1.5.0 section is
-retained only as an explicitly archived live baseline.
+completed on 2026-08-13. Its local Home Assistant 2026.8 deployment exposed a
+P1 source-device split. RC3 added the fail-closed rebind, passed its dedicated
+**6/6** contract and exact-SHA GitHub gates, and was deployed locally. The
+rebind persisted and native physical EMS readbacks were live, but ordinary
+stable sensor proxies remained unavailable because a parallel-topology
+availability gate incorrectly covered every sensor. RC4 scopes that gate only
+to the two derived parallel-power proxies. Full RC4 offline validation passes;
+exact-SHA CI, exact-candidate local redeployment and both-installation live
+re-audit remain pending. The later v1.5.0 section is retained only as an
+explicitly archived live baseline.
 
 ## Representative systems
 
@@ -130,7 +134,7 @@ separately below.
   native entity evidence, rejects ambiguous or contradictory candidates, and
   prevents a second integration entry for the resolved child.
 
-## v1.5.2 offline baseline and RC3 rebind contract — 2026-08-13
+## v1.5.2 RC3 baseline, local finding and RC4 target — 2026-08-13
 
 - RCE optimizer: **63/63** deterministic scenarios passed, including the
   independent small-horizon oracle and padded 48-hour regression cases.
@@ -153,11 +157,25 @@ separately below.
   above. The RC3 rebind contract passes **6/6** offline: unique successor,
   revalidated previous successor, ambiguous-candidate rejection, unchanged
   live source, duplicate-entry rejection and invalid linkage rejection.
+- RC3 subsequently passed its exact-SHA GitHub project checks, HACS Action,
+  Hassfest and the exhaustive matrix. On local deployment the verified
+  successor was persisted and native ESPHome physical EMS readbacks reported
+  live values, confirming that the rebind itself worked.
+- The same local deployment exposed a new P1: `HoymilesSensor.available`
+  applied the parallel-topology readiness gate to every ordinary sensor proxy.
+  Stable physical EMS readback proxies therefore remained unavailable despite
+  their live native sources. RC4 limits this gate to `PARALLEL_POWER_TARGETS`;
+  its dynamic ordinary-proxy regression passes.
+- Full RC4 offline validation passes: `validate_release.py`, the physical
+  firmware/readback contract, executor offload, source-device rebind **6/6**,
+  quick **488/488**, exhaustive **2064/2064**, RCE **63/63**, tariff, RCEm and
+  the dynamic power-balance suite.
 
-These are offline results. HACS Action, Hassfest, all remaining GitHub CI,
-deployment to both test installations and the live re-audit are separate
-acceptance gates and remain pending for the exact RC3 commit. No live RC3 pass
-is claimed here.
+The earlier deterministic, packaging, firmware and RC3 CI evidence remains
+valid. It does not constitute a live RC3 pass because local acceptance found
+the P1 above. Exact-SHA RC4 CI, exact-candidate local redeployment, deployment
+to the second test installation and the live re-audit are separate acceptance
+gates and remain pending. No live GO is claimed here.
 
 ## Archived v1.5.0 live candidate acceptance — 2026-08-12
 

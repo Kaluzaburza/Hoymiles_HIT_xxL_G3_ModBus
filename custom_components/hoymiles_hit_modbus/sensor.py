@@ -323,7 +323,9 @@ class HoymilesSensor(HoymilesProxyEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Expose only a complete, fresh balance for an identified Master."""
+        """Mirror ordinary sources; fail closed for parallel power balances."""
+        if self._catalog["translation_key"] not in PARALLEL_POWER_TARGETS:
+            return super().available
         if not self._parallel_topology_known:
             return False
         if self._parallel_master_declared:

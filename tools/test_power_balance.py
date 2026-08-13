@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +27,125 @@ def load_power_balance_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def load_sensor_behavior_class(sensor_source: str, power_balance):
+    """Execute the production availability/value methods with lightweight HA stubs."""
+
+    class FakeEntity:
+        pass
+
+    class FakeProxyEntity(FakeEntity):
+        @property
+        def source_state(self):
+            return self._source_state
+
+        @property
+        def available(self) -> bool:
+            source = self.source_state
+            return source is not None and source.state not in {
+                "unknown",
+                "unavailable",
+            }
+
+    class FakeSensorEntity(FakeEntity):
+        pass
+
+    tree = ast.parse(sensor_source)
+    sensor_class = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "HoymilesSensor"
+    )
+    behavior_methods = {"available", "_mirrored_native_value", "native_value"}
+    sensor_class.body = [
+        node
+        for node in sensor_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in behavior_methods
+    ]
+    require(
+        {
+            node.name
+            for node in sensor_class.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        == behavior_methods,
+        "Cannot isolate HoymilesSensor behavior methods",
+    )
+    ast.fix_missing_locations(sensor_class)
+    namespace = {
+        "Any": object,
+        "HoymilesProxyEntity": FakeProxyEntity,
+        "SensorEntity": FakeSensorEntity,
+        "PARALLEL_POWER_TARGETS": power_balance.PARALLEL_POWER_TARGETS,
+        "localized_text_state": lambda value, _language: value,
+        "select_overview_power": power_balance.select_overview_power,
+    }
+    exec(
+        compile(
+            ast.Module(body=[sensor_class], type_ignores=[]),
+            str(COMPONENT / "sensor.py"),
+            "exec",
+        ),
+        namespace,
+    )
+    sensor_type = namespace["HoymilesSensor"]
+    require(
+        sensor_type.__mro__[1] is FakeProxyEntity,
+        "Behavior harness does not preserve proxy-first MRO",
+    )
+    return sensor_type
+
+
+def assert_sensor_proxy_behavior(sensor_source: str, power_balance) -> None:
+    """Exercise ordinary proxy mirroring and parallel-target fail-closed behavior."""
+    sensor_type = load_sensor_behavior_class(sensor_source, power_balance)
+
+    ordinary = sensor_type.__new__(sensor_type)
+    ordinary._catalog = {
+        "translation_key": "ems_mode_readback_code",
+        "source_component": "sensor",
+    }
+    ordinary._source_state = SimpleNamespace(state="0.0")
+    require(
+        ordinary.available is True and ordinary.native_value == 0.0,
+        "An ordinary EMS readback without topology is not mirrored",
+    )
+    ordinary._source_state = SimpleNamespace(state="unavailable")
+    require(
+        ordinary.available is False and ordinary.native_value is None,
+        "An unavailable ordinary source is exposed by its proxy",
+    )
+
+    target = sensor_type.__new__(sensor_type)
+    target._catalog = {
+        "translation_key": power_balance.OVERVIEW_BATTERY_POWER,
+        "source_component": "sensor",
+    }
+    target._source_state = SimpleNamespace(state="2500")
+    target._parallel_topology_known = False
+    target._parallel_source_state = lambda _key: SimpleNamespace(state="unknown")
+    target._parallel_power_value = lambda: None
+    require(
+        target.available is False and target.native_value is None,
+        "Unknown topology does not fail closed for a parallel power target",
+    )
+
+    target._parallel_topology_known = True
+    target._parallel_master_declared = True
+    target._is_parallel_master = True
+    target._parallel_source_state = lambda _key: SimpleNamespace(state="1")
+    require(
+        target.available is False and target.native_value is None,
+        "An incomplete Master balance exposes the wrapped native target",
+    )
+
+    target._parallel_power_value = lambda: 33_856.0
+    require(
+        target.available is True and target.native_value == 33_856.0,
+        "A complete Master balance is not exposed by the target proxy",
+    )
 
 
 def main() -> None:
@@ -204,6 +325,7 @@ def main() -> None:
         "The inverter proxy must not depend on or subscribe to PV",
     )
     sensor_source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+    assert_sensor_proxy_behavior(sensor_source, power_balance)
     require(
         "from .energy_data import numeric_state_sample" in sensor_source
         and "max_age_seconds=120.0" in sensor_source
