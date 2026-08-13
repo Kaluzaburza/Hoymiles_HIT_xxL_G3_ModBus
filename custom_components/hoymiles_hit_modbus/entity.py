@@ -6,10 +6,20 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, EntityCategory
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    EventStateReportedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_state_report_event,
+)
 
 from .const import DOMAIN, NAME
 from .models import MatchedEntity, RuntimeData
@@ -111,6 +121,18 @@ class HoymilesProxyEntity(Entity):
                 self._async_source_state_changed,
             )
         )
+        # Since HA 2024.3 an unchanged, freshly reported value emits
+        # EVENT_STATE_REPORTED instead of EVENT_STATE_CHANGED.  Forward both
+        # event classes so the localized proxy's ``last_reported`` remains a
+        # faithful source timestamp rather than the time of the last value
+        # change.  This is essential for fail-closed FC03 freshness gates.
+        self.async_on_remove(
+            async_track_state_report_event(
+                self.hass,
+                [self._source_entity_id],
+                self._async_source_state_reported,
+            )
+        )
 
     @callback
     def _async_source_state_changed(
@@ -118,4 +140,12 @@ class HoymilesProxyEntity(Entity):
         event: Event[EventStateChangedData],
     ) -> None:
         """Forward source state changes immediately."""
+        self.async_write_ha_state()
+
+    @callback
+    def _async_source_state_reported(
+        self,
+        event: Event[EventStateReportedData],
+    ) -> None:
+        """Forward unchanged source reports to preserve freshness evidence."""
         self.async_write_ha_state()

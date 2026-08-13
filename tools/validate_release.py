@@ -441,6 +441,19 @@ def main() -> int:
         f'VERSION = "{manifest["version"]}"' in const_source,
         "const.py VERSION does not match manifest.json",
     )
+    require(
+        "async_track_state_report_event" in entity_source
+        and "EventStateReportedData" in entity_source
+        and "_async_source_state_reported" in entity_source,
+        "Proxy entities must forward unchanged source reports for signed freshness",
+    )
+    firmware_core_source = (ROOT / "packages" / "core.yaml").read_text(
+        encoding="utf-8"
+    )
+    require(
+        f'version: "{manifest["version"]}"' in firmware_core_source,
+        "ESPHome project version in packages/core.yaml does not match manifest.json",
+    )
     ems_package_version_match = re.search(
         r'^EMS_PACKAGE_VERSION = "([^"]+)"$', const_source, re.MULTILINE
     )
@@ -787,14 +800,20 @@ def main() -> int:
     rce_optimizer_source = (
         COMPONENT / "rce_optimizer.py"
     ).read_text(encoding="utf-8")
+    rce_test_source = (ROOT / "tools" / "test_rce_optimizer.py").read_text(
+        encoding="utf-8"
+    )
     require(
-        (
-            "exports[candidate.start] = low" in rce_optimizer_source
-            or "trial[candidate.start] = low" in rce_optimizer_source
-            or "exports = best_trial" in rce_optimizer_source
-        )
-        and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source,
-        "RCE optimizer can still invalidate feasible plans by rounding upward",
+        "def _solve_joint_horizon_exports(" in rce_optimizer_source
+        and "def maximum_feasible(" in rce_optimizer_source
+        and 'solver_method: str = "joint_horizon_bounded_active_set"'
+        in rce_optimizer_source
+        and "optimality_verified: bool = False" in rce_optimizer_source
+        and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source
+        and "test_solver_matches_independent_random_oracle"
+        in rce_test_source
+        and "test_real_horizon_solver_runtime_is_bounded" in rce_test_source,
+        "RCE optimizer lacks the bounded joint-horizon/oracle safety contract",
     )
     require(
         "minimum_price_pln_kwh" not in rce_optimizer_source
@@ -934,7 +953,7 @@ def main() -> int:
             "state_attr('sun.sun', 'next_rising')",
             "state_attr('sun.sun', 'next_setting')",
             "sensor.hoymiles_hit_battery_capacity",
-            "number.hoymiles_hit_self_use_soc",
+            "sensor.hoymiles_hit_ems_self_use_soc_readback",
             "sensor.hoymiles_hit_rce_optimized_plan",
             "sensor.hoymiles_rce_dynamic_minimum_soc",
             "sensor.hoymiles_rce_effective_minimum_soc",
@@ -1146,8 +1165,9 @@ def main() -> int:
             f"Public ESPHome entry point has no remote package: {entry_file.name}",
         )
         require(
-            "ref: v1.4.4" in entry_text,
-            f"ESPHome entry point is not pinned to v1.4.4: {entry_file.name}",
+            f"ref: v{manifest['version']}" in entry_text,
+            "ESPHome entry point is not pinned to the release version: "
+            f"{entry_file.name}",
         )
         require(
             "dashboard_import:" in entry_text
@@ -1180,8 +1200,10 @@ def main() -> int:
         "address: 6049",
         'name: "Parallel Topology"',
         'name: "Parallel EMS Control Status"',
+        'name: "Parallel Topology Readback Generation"',
+        'name: "EMS Verified Hardware Readback Supported"',
         "count < 2 || count > 10",
-        "Gotowe - Master steruje siecią równoległą",
+        "Zablokowane - brak FC03 dla każdego Slave",
     ):
         require(
             marker in parallel_source,
@@ -1190,18 +1212,129 @@ def main() -> int:
     for marker in (
         "machine_type == 2",
         "machine_count < 2 || machine_count > 10",
-        "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E",
-        "id(modbus_1).send_raw(payload);",
-        "poza kolejką ModbusController oczekującą na odpowiedź",
+        'name: "EMS Control Readback Generation"',
+        'name: "GCF Control Readback Generation"',
+        'name: "Battery Charge Power Readback Generation"',
+        "id(ems_verified_hardware_readback_supported).state",
+        "Master nie pozwala potwierdzić FC03 na każdym Slave",
     ):
         require(
             marker in settings_source,
             f"Parallel EMS safety marker missing: {marker}",
         )
     require(
+        "send_raw(payload)" not in settings_source
+        and "0x00, 0x10, 0x10, 0xCC" not in settings_source,
+        "Unacknowledged parallel EMS broadcast must remain disabled",
+    )
+    require(
         "hoymiles_modbus_slave_" not in parallel_source
         and "hoymiles_modbus_slave_" not in settings_source,
         "External Modbus must not poll or write internal parallel Slave addresses",
+    )
+
+    overview_source = (ROOT / "packages" / "overview.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    def esphome_sensor_block(source: str, sensor_id: str) -> str:
+        """Return one ESPHome sensor block for structural assertions."""
+        marker = f"    id: {sensor_id}\n"
+        start = source.index(marker)
+        end = source.find("\n  - platform:", start)
+        return source[start:] if end == -1 else source[start:end]
+
+    overview_ids = (
+        "pv_total_power_30001",
+        "inv_active_power_30007",
+        "battery_power_30009",
+        "grid_total_active_power_30011",
+        "load_active_power_30015",
+        "battery_soc_30020",
+    )
+    for overview_id in overview_ids:
+        overview_block = esphome_sensor_block(overview_source, overview_id)
+        require(
+            "update_interval: never" in overview_block
+            and "force_update: true" in overview_block
+            and "lambda:" not in overview_block,
+            f"{overview_id} must be published only by physical FC03 callbacks",
+        )
+
+    pv_source = (ROOT / "packages" / "pv.yaml").read_text(encoding="utf-8")
+    load_source = (ROOT / "packages" / "backup_load.yaml").read_text(
+        encoding="utf-8"
+    )
+    grid_source = (ROOT / "packages" / "meters.yaml").read_text(
+        encoding="utf-8"
+    )
+    battery_source = (ROOT / "packages" / "battery.yaml").read_text(
+        encoding="utf-8"
+    )
+    physical_publications = {
+        "pv_total_power_30001": (overview_source, pv_source),
+        "inv_active_power_30007": (overview_source, load_source),
+        "battery_power_30009": (overview_source, load_source),
+        "grid_total_active_power_30011": (overview_source, grid_source),
+        "load_active_power_30015": (overview_source, load_source),
+        "battery_soc_30020": (overview_source, battery_source),
+    }
+    for overview_id, sources in physical_publications.items():
+        marker = f"id({overview_id}).publish_state("
+        require(
+            all(marker in source for source in sources),
+            f"{overview_id} lacks one single/Master physical publication path",
+        )
+
+    require(
+        "bat_total_power_8546" not in load_source,
+        "Parallel overview power must not use the signed 16-bit register 2162",
+    )
+    for marker in (
+        "id(pv_total_power_8528)",
+        "id(grid_total_active_power_1814)",
+        "static_cast<uint32_t>(now_ms - grid_ms) <= 30000U",
+        "static_cast<uint32_t>(now_ms - pv_ms) <= 30000U",
+    ):
+        require(
+            marker in load_source,
+            f"Parallel event-driven balance is missing input/coherence: {marker}",
+        )
+    require(
+        "const float inverter_power =" in load_source
+        and "x + id(grid_total_active_power_1814).state" in load_source,
+        "Parallel inverter overview must equal LOAD plus grid export",
+    )
+    require(
+        "inverter_power - id(pv_total_power_8528).state" in load_source,
+        "Parallel battery overview must equal LOAD plus grid export minus PV",
+    )
+    require(
+        "65 535 W" in overview_source
+        and "nie pozwala wykryć zawinięcia do zera" in overview_source,
+        "Parallel overview must document the U_WORD range limitation",
+    )
+
+    pv_system_block = esphome_sensor_block(
+        pv_source,
+        "pv_total_power_8528",
+    )
+    load_system_block = esphome_sensor_block(
+        load_source,
+        "load_power_total_8553",
+    )
+    grid_system_block = esphome_sensor_block(
+        grid_source,
+        "grid_total_active_power_1814",
+    )
+    require(
+        "address: 2150" in pv_system_block
+        and "value_type: U_WORD" in pv_system_block
+        and "address: 2169" in load_system_block
+        and "value_type: U_WORD" in load_system_block
+        and "address: 1814" in grid_system_block
+        and "value_type: S_DWORD" in grid_system_block,
+        "Parallel overview balance input widths no longer match the documented map",
     )
 
     for asset in required_assets[:4]:
@@ -1450,7 +1583,7 @@ def main() -> int:
         "battery_max_discharge_power_307",
     ):
         register_offset = settings_source.index(f"id: {register_id}")
-        register_block = settings_source[register_offset : register_offset + 650]
+        register_block = settings_source[register_offset : register_offset + 1300]
         require(
             "lambda: return x * 0.1f;" in register_block
             and "return safe * 10.0f;" in register_block,
@@ -1513,9 +1646,9 @@ def main() -> int:
     )
     require(
         localization.localized_text_state(
-            "Gotowe - Master steruje siecią równoległą", "en"
+            "Gotowe - sterowanie bezpośrednie", "en"
         )
-        == "Ready - Master controls the parallel network",
+        == "Ready - direct control",
         "English parallel EMS state localization failed",
     )
     require(

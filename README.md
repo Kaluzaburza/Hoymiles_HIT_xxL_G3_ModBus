@@ -34,15 +34,16 @@ mobile screens.
 |---|---|
 | Local monitoring | PV1–PV4, household load, grid, battery, BMS, GEN, inverter state, alarms, temperatures, energy totals, and parallel-system totals |
 | Inverter control | Self-Use, Off-Grid, Grid Charge, Grid Discharge, charge and discharge limits, SOC targets, schedules, and explicit export control |
-| RCE optimization | Selects the highest-value permitted 30-minute export intervals while protecting household demand and the backup reserve |
-| Tariff charging | Plans charging in cheaper tariff periods when forecast PV and stored energy will not cover later demand |
-| Experimental RCEm 253 V+ | Detects recurring high-voltage periods, plans battery headroom, and can regulate charging or export without changing grid-protection settings |
+| RCE optimization | Uses a revenue-first, bounded joint-horizon plan for permitted 30-minute export intervals while protecting the operating reserve |
+| Tariff charging | Moves necessary grid charging into cheaper tariff periods while protecting a hard household reserve, including winter-load risk |
+| Experimental RCEm 253 V+ | Detects recurring high-voltage periods and models battery headroom; its public-test default is read-only shadow mode |
 | Battery service | Schedules LiFePO4 balancing cycles, prioritizes PV, completes charging from the grid when needed, and holds full SOC for a configured period |
 | Diagnostics | Installation status, control conflicts, input freshness, command acknowledgment, privacy-filtered ZIP reports, and detailed optimizer data |
 
 Only one automatic module may write EMS settings at a time. Mutual-exclusion
-rules prevent RCE, tariff charging, RCEm, battery balancing, and manual
-schedules from issuing conflicting commands.
+rules prevent RCE, tariff charging, active RCEm control, battery balancing, and
+manual schedules from issuing conflicting commands. RCEm shadow analytics may
+run beside another controller because shadow mode performs no writes.
 
 ## Compatibility and requirements
 
@@ -80,8 +81,8 @@ ESPHome downloads the versioned register packages directly from GitHub.
 ```
 
 The Home Assistant integration creates stable, localized proxy entities from
-the native ESPHome device. It listens for Home Assistant state changes and does
-not add another Modbus polling cycle.
+the native ESPHome device. It forwards both changed states and unchanged fresh
+reports, without adding another Modbus polling cycle.
 
 ## Safety
 
@@ -278,50 +279,68 @@ integration registers its versioned frontend module automatically.
 ### Operating rules shared by every mode
 
 - Automatic control is optional and disabled until configured by the user.
-- RCE, tariff charging, and RCEm are mutually exclusive.
+- RCE, tariff charging, and write-capable RCEm control are mutually exclusive.
+  RCEm shadow analytics may remain enabled because they perform no writes.
 - A LiFePO4 balancing cycle temporarily has higher priority than other plans.
-- Missing or stale critical data block automatic writes and, when necessary,
-  trigger a controlled return to Self-Use.
-- Battery and inverter limits, parallel-system readiness, export lockouts, and
-  the Generation Control Function (GCF) limit are checked before execution.
-- Commands are rate-limited, latched where necessary, and confirmed by reading
-  the resulting inverter state where that feedback is available. Broadcast
-  writes are checked through subsequent state reads rather than a Modbus reply.
+- Every source has a signed age. Missing, stale, or future-dated critical data
+  block automatic writes and, when necessary, trigger a controlled return to
+  Self-Use. A reported zero capability is treated as a real zero limit, never
+  as unlimited power.
+- Shared, policy-neutral helpers sanitize LOAD history and derive parallel
+  system power from the 32-bit PV/Grid/LOAD balance. Each planner still keeps
+  its own objective, reserve model, and simulation.
+- Battery, inverter, shared AC and export budgets, parallel-system readiness,
+  export lockouts, natural PV export, household load, and the Generation
+  Control Function (GCF) limit are checked without double-counting capacity.
+- EMS ownership is claimed before a write. Commands are rate-limited, latched
+  where necessary, and ownership is released only after a newer, independent
+  FC03 register read confirms the requested values and neutral mode. An
+  optimistic Home Assistant/ESPHome command echo is never accepted as hardware
+  acknowledgement. If physical feedback is missing or disagrees, restoration
+  is retried and another controller cannot take over.
 - The integration does not automate the three-phase imbalance setting.
 
 ### RCE market-price optimization
 
-The RCE planner evaluates all available 30-minute PSE price intervals for today
-and tomorrow. It calculates household and backup reserves, forecast PV,
-expected natural export, battery capacity, conversion losses, BMS and inverter
-power limits, parallel-system power, and configured export lockout periods. It
-then assigns available energy to the highest-value permitted intervals.
+RCE has one purpose: maximize expected net sale revenue within the permitted
+30-minute PSE price horizon. Its bounded joint-horizon planner evaluates the
+slots together instead of making an isolated greedy choice. It models energy
+available now, PV energy only when it can physically arrive, natural export,
+conversion losses, battery capacity, BMS and inverter power, shared AC/export
+budgets, GCF and configured export lockouts.
 
-The reserve is rounded conservatively to a full inverter SOC step and is
-enforced in every planned export interval. When a fresh third-day forecast is
-available, a projected household-energy shortfall adds a terminal reserve. The
-model values that stored energy against the avoided grid purchase, which helps
-prevent selling it cheaply and buying it back later at a higher price.
+The operating reserve is rounded conservatively to a full inverter SOC step
+and enforced in every planned export interval. LOAD and Day 3 data remain
+visible as diagnostics, but Day 3 does not create a terminal objective that can
+silently turn the sale optimizer into a tariff or household-cost optimizer.
+The implementation is a bounded active-set heuristic, not an exact solver. An
+independent oracle checks small constructed horizons and has found only small
+observed gaps in the covered cases; this is regression evidence, not proof of
+a formal or global optimum for the full mixed-constraint problem.
 
 The dashboard separates projected and measured results, controlled battery
 export, natural PV surplus, and unclassified historical export. It reports
-additional gross revenue and estimated net optimization benefit after
-accounting for battery wear and the terminal value of stored energy. These figures are estimates, not a supplier
-invoice or a guarantee of savings.
+gross sale revenue and an estimated net benefit after modeled battery wear.
+These figures are estimates, not a supplier invoice, settlement statement, or
+guarantee of profit.
 
 ### Tariff-aware grid charging
 
-The tariff planner simulates household demand, PV generation, and battery SOC
-in 30-minute steps. Fresh third-day Solcast data extends the simulated horizon
-to at least 48 hours. If those data are missing or stale, the known shorter
-horizon is reported and the remaining period is protected by a conservative
-reserve based on zero PV and average household demand.
+Tariff charging has a different objective from RCE: buy only the energy the
+house is expected to need, and shift that purchase into the lowest-cost
+available tariff periods. It simulates household demand, PV generation, and
+battery SOC in 30-minute steps. The winter model uses a conservative high-load
+profile and a hard Self-Use household reserve. Fresh third-day Solcast data can
+extend the simulated horizon to at least 48 hours. If that tail is missing or
+stale, the shorter known horizon is reported and the unknown period is
+protected with zero PV and conservative household demand.
 
-The calculation includes the backup reserve, BMS limits, conversion losses,
-and the shared Grid Charge power limit, which supplies the house before the
-remaining power reaches the battery. The planner can learn the effective
-battery charging rate from confirmed sessions and starts early enough to store
-the required energy before a more expensive tariff period.
+The calculation includes BMS charge limits, conversion losses, shared AC power,
+and the Grid Charge limit, which supplies the house before the remaining power
+reaches the battery. It suppresses uneconomic micro-cycles, can learn effective
+battery charging power from confirmed sessions, and starts early enough to
+store the required energy before a more expensive tariff period. It does not
+optimize export revenue.
 
 Bundled profiles cover G11, G12, G12w, and G13 where offered by PGE, TAURON,
 ENEA, ENERGA, and STOEN. They include seasons, weekends, and Polish public
@@ -332,22 +351,28 @@ for another product or supplier.
 
 ### Experimental RCEm 253 V+ voltage management
 
-RCEm analyzes phase-voltage history from the previous four days together with
-live L1/L2/L3 voltage, the rolling 10-minute voltage average, interval Solcast
-profiles, weekday or weekend household demand, and available battery capacity.
-It creates an independent headroom plan for every detected risk period.
+RCEm has a third, independent objective: preserve usable battery headroom around
+recurring high-voltage and PV-surplus risk. It analyzes the previous four days
+of phase-voltage history together with live L1/L2/L3 voltage, the rolling
+10-minute average, interval Solcast profiles, weekday/weekend household demand,
+and available battery capacity. High-PV/low-LOAD conditions size headroom;
+low-PV/high-LOAD stress and a chronological energy balance protect household
+energy. RCEm does not inherit the RCE operating floor.
 
-The controller can increase battery charging as voltage rises. Optional morning
-discharge can create only the battery headroom needed without crossing the
-protected household reserve. Optional export regulation never exceeds the lower
-of the current inverter setting and the user-defined cap.
+Outside shadow mode, the controller can increase battery charging as voltage
+rises. Optional morning discharge can create only the useful headroom needed
+before a later risk window, without crossing its household safety reserve.
+Optional export regulation never exceeds the lower of the physically available
+export budget, the current inverter setting, and the user-defined cap.
 
-RCEm starts in **observation-only mode** and performs no writes until the user
-explicitly disables that mode. It does not disable certified protection,
-change protection thresholds, enable GCF, or alter three-phase imbalance. The
-feature has extensive simulation coverage but remains experimental and requires
-validation and commissioning on the actual installation. It is not intended to
-bypass applicable grid-code or distribution-system-operator voltage limits.
+RCEm starts in **observation-only (shadow) mode**. In this mode it calculates
+plans and diagnostics but performs no inverter writes, so it can collect public
+test evidence alongside RCE or tariff control. Do not disable shadow mode during
+the v1.5.2 public test. RCEm does not disable certified protection, change
+protection thresholds, enable GCF, or alter three-phase imbalance. It remains
+experimental and requires separate field validation and commissioning before
+write-capable use. It is not intended to bypass applicable grid-code or
+distribution-system-operator voltage limits.
 
 ### LiFePO4 battery balancing
 
@@ -366,12 +391,16 @@ distinguishes a single inverter, Master, and Slave automatically. No manual
 inverter-count setting is required.
 
 Connect the ESP32 Modbus converter to the **Master** using the external RS485
-bus documented for the installation. When a Master is detected, EMS writes use
-one Modbus function 16 (`0x10`) broadcast to address `0`, allowing the complete
-register block `4300–4306` to reach the Master and Slaves on the shared
-`RS485_2` bus. Broadcast writes do not expect a response. Commands are blocked
-if the connected unit reports the Slave role or if the Master reports an
-invalid device count.
+bus documented for the installation. Monitoring, forecasting, and RCEm shadow
+analytics remain available for a detected parallel system.
+
+For the v1.5.2 public test, protected EMS writes are enabled only for a verified
+single-inverter topology. The Master's external port cannot provide an
+independent FC03 confirmation from every Slave after a broadcast, so RCE,
+tariff, manual-schedule, balancing, and write-capable RCEm commands fail closed
+on Master/Slave installations. The dashboard reports this limitation
+explicitly. Do not disable the readback gate. Parallel write support will
+return only after per-node acknowledgement can be proved on supported hardware.
 
 The Aurora dashboard automatically uses the manufacturer's system-wide power
 registers for PV, battery, household load, and grid power. The addresses listed

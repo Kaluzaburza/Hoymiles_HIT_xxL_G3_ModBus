@@ -1,5 +1,18 @@
 # Szybki podgląd najważniejszych wartości
 
+globals:
+  # Local monotonic timestamps are updated exclusively by successful FC03
+  # callbacks. They prevent a derived Master balance from combining a fresh
+  # LOAD sample with a PV/GRID value cached before a partial Modbus outage.
+  - id: overview_master_pv_last_readback_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: overview_master_grid_last_readback_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+
 sensor:
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
@@ -13,6 +26,23 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: U_DWORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            // Publish the public overview state only after this FC03 source
+            // really answered.  A 1 s template timer would otherwise make an
+            // old cached Modbus value look fresh forever in Home Assistant.
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) != 1) {
+              id(pv_total_power_30001).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
@@ -52,6 +82,20 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: S_DWORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) != 1) {
+              id(inv_active_power_30007).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
@@ -65,6 +109,20 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: S_DWORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) != 1) {
+              id(battery_power_30009).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
@@ -78,6 +136,20 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: S_DWORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) != 1) {
+              id(grid_total_active_power_30011).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
@@ -104,6 +176,20 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: S_DWORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) != 1) {
+              id(load_active_power_30015).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
@@ -131,11 +217,28 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     value_type: U_WORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) != 1) {
+              id(battery_soc_30020).publish_state(x);
+            }
 
   # Encje poniżej zachowują dotychczasowe nazwy i identyfikatory Home
   # Assistant. Dla pojedynczego falownika publikują szybki blok 30001.
   # W trybie równoległym korzystają z wartości całego systemu udostępnianych
-  # przez Mastera w blokach energii i licznika.
+  # przez Mastera w blokach energii i licznika. Rejestry systemowe PV (2150)
+  # i LOAD (2169) są typu U_WORD, więc ich zakres kończy się na 65 535 W.
+  # Układy przekraczające ten zakres wymagają potwierdzonego systemowego
+  # źródła 32-bitowego; sam U_WORD nie pozwala wykryć zawinięcia do zera.
   - platform: template
     name: "Overview PV Total Power"
     id: pv_total_power_30001
@@ -144,15 +247,10 @@ sensor:
     state_class: measurement
     icon: mdi:flash
     accuracy_decimals: 0
-    update_interval: 1s
-    lambda: |-
-      if (!id(pv_total_power_master_30001).has_state()) return {};
-      if (!id(machines_type_6048).has_state() ||
-          std::lround(id(machines_type_6048).state) != 1) {
-        return id(pv_total_power_master_30001).state;
-      }
-      if (!id(pv_total_power_8528).has_state()) return {};
-      return id(pv_total_power_8528).state;
+    # This sensor is event-driven by the selected physical FC03 source below.
+    # Its HA timestamp therefore describes a real poll, not a cached republish.
+    update_interval: never
+    force_update: true
 
   - platform: template
     name: "Overview Inverter Active Power"
@@ -162,16 +260,8 @@ sensor:
     state_class: measurement
     icon: mdi:flash
     accuracy_decimals: 0
-    update_interval: 1s
-    lambda: |-
-      if (!id(inv_active_power_master_30007).has_state()) return {};
-      if (!id(machines_type_6048).has_state() ||
-          std::lround(id(machines_type_6048).state) != 1) {
-        return id(inv_active_power_master_30007).state;
-      }
-      if (!id(pv_total_power_8528).has_state() ||
-          !id(bat_total_power_8546).has_state()) return {};
-      return id(pv_total_power_8528).state + id(bat_total_power_8546).state;
+    update_interval: never
+    force_update: true
 
   - platform: template
     name: "Overview Battery Power"
@@ -181,15 +271,8 @@ sensor:
     state_class: measurement
     icon: mdi:flash
     accuracy_decimals: 0
-    update_interval: 1s
-    lambda: |-
-      if (!id(battery_power_master_30009).has_state()) return {};
-      if (!id(machines_type_6048).has_state() ||
-          std::lround(id(machines_type_6048).state) != 1) {
-        return id(battery_power_master_30009).state;
-      }
-      if (!id(bat_total_power_8546).has_state()) return {};
-      return id(bat_total_power_8546).state;
+    update_interval: never
+    force_update: true
 
   - platform: template
     name: "Overview Grid Total Active Power"
@@ -199,15 +282,8 @@ sensor:
     state_class: measurement
     icon: mdi:flash
     accuracy_decimals: 0
-    update_interval: 1s
-    lambda: |-
-      if (!id(grid_total_active_power_master_30011).has_state()) return {};
-      if (!id(machines_type_6048).has_state() ||
-          std::lround(id(machines_type_6048).state) != 1) {
-        return id(grid_total_active_power_master_30011).state;
-      }
-      if (!id(grid_total_active_power_1814).has_state()) return {};
-      return id(grid_total_active_power_1814).state;
+    update_interval: never
+    force_update: true
 
   - platform: template
     name: "Overview Load Active Power"
@@ -217,15 +293,8 @@ sensor:
     state_class: measurement
     icon: mdi:flash
     accuracy_decimals: 0
-    update_interval: 1s
-    lambda: |-
-      if (!id(load_active_power_master_30015).has_state()) return {};
-      if (!id(machines_type_6048).has_state() ||
-          std::lround(id(machines_type_6048).state) != 1) {
-        return id(load_active_power_master_30015).state;
-      }
-      if (!id(load_power_total_8553).has_state()) return {};
-      return id(load_power_total_8553).state;
+    update_interval: never
+    force_update: true
 
   - platform: template
     name: "Overview Battery SOC"
@@ -234,12 +303,5 @@ sensor:
     device_class: battery
     state_class: measurement
     accuracy_decimals: 0
-    update_interval: 1s
-    lambda: |-
-      if (!id(battery_soc_master_30020).has_state()) return {};
-      if (!id(machines_type_6048).has_state() ||
-          std::lround(id(machines_type_6048).state) != 1) {
-        return id(battery_soc_master_30020).state;
-      }
-      if (!id(battery_soc_1909).has_state()) return {};
-      return id(battery_soc_1909).state;
+    update_interval: never
+    force_update: true

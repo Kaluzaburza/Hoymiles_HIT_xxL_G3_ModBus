@@ -35,15 +35,17 @@ dopasowuje się do ekranu komputera i telefonu.
 |---|---|
 | Monitorowanie lokalne | PV1–PV4, zużycie domu, sieć, bateria, BMS, GEN, stan falownika, alarmy, temperatury, liczniki energii i wartości sumaryczne instalacji równoległej |
 | Sterowanie falownikiem | Self-Use, Off-Grid, Grid Charge, Grid Discharge, limity ładowania i rozładowania, docelowy SOC, harmonogramy oraz jawnie włączana regulacja eksportu |
-| Optymalizacja RCE | Wybiera najbardziej opłacalne dozwolone 30-minutowe okna eksportu, chroniąc energię potrzebną domowi i rezerwę awaryjną |
-| Ładowanie taryfowe | Planuje ładowanie w tańszych strefach, gdy prognozowana produkcja PV i energia w baterii nie pokryją późniejszego zapotrzebowania |
-| Eksperymentalny RCEm 253 V+ | Wykrywa powtarzalne okresy wysokiego napięcia, planuje wolne miejsce w baterii i może regulować ładowanie lub eksport bez zmiany zabezpieczeń sieciowych |
+| Optymalizacja RCE | Tworzy ograniczony plan całego horyzontu, którego nadrzędnym celem jest przychód ze sprzedaży w dozwolonych blokach 30-minutowych, przy zachowaniu rezerwy operacyjnej |
+| Ładowanie taryfowe | Przenosi niezbędne ładowanie z sieci do tańszych stref, zachowując twardą rezerwę domu i uwzględniając zimowe ryzyko zużycia |
+| Eksperymentalny RCEm 253 V+ | Wykrywa powtarzalne okresy wysokiego napięcia i modeluje miejsce w baterii; w testach publicznych domyślnie działa tylko obserwacyjnie |
 | Obsługa baterii | Planuje cykle wyrównywania LiFePO4, wykorzystuje najpierw PV, w razie potrzeby kończy ładowanie z sieci i utrzymuje pełny SOC przez ustawiony czas |
 | Diagnostyka | Stan instalacji, konflikty sterowania, aktualność danych, potwierdzanie poleceń odczytem zwrotnym, raporty ZIP z automatycznie zamaskowanymi danymi i szczegółowe dane optymalizatorów |
 
 W danej chwili ustawienia EMS może zapisywać tylko jeden moduł automatyzacji.
 Blokady wzajemne zapobiegają jednoczesnemu wysyłaniu sprzecznych poleceń przez
-RCE, ładowanie taryfowe, RCEm, wyrównywanie baterii i harmonogramy ręczne.
+RCE, ładowanie taryfowe, aktywne sterowanie RCEm, wyrównywanie baterii i
+harmonogramy ręczne. Analityka RCEm może działać obok innego sterownika, ponieważ
+w trybie obserwacji nie wykonuje żadnych zapisów.
 
 ## Zgodność i wymagania
 
@@ -82,8 +84,9 @@ ESPHome pobiera wersjonowane pakiety rejestrów bezpośrednio z GitHuba.
 ```
 
 Integracja tworzy stabilne encje pośredniczące z polskimi i angielskimi nazwami
-na podstawie natywnego urządzenia ESPHome. Reaguje na zmiany stanów w Home
-Assistant i nie dodaje kolejnego cyklu odpytywania Modbus.
+na podstawie natywnego urządzenia ESPHome. Przekazuje zarówno zmiany stanów,
+jak i niezmienione świeże raporty, bez dodawania kolejnego cyklu odpytywania
+Modbus.
 
 ## Bezpieczeństwo
 
@@ -289,57 +292,75 @@ wersjonowany moduł interfejsu.
 
 - Automatyczne sterowanie jest opcjonalne i pozostaje wyłączone do czasu
   skonfigurowania go przez użytkownika.
-- RCE, ładowanie taryfowe i RCEm wzajemnie się wykluczają.
+- RCE, ładowanie taryfowe i aktywne sterowanie RCEm wzajemnie się wykluczają.
+  Analityka RCEm może pozostać włączona w trybie obserwacji, bo nie wykonuje
+  żadnych zapisów.
 - Cykl wyrównywania LiFePO4 ma tymczasowo wyższy priorytet niż pozostałe plany.
-- Brak krytycznych danych lub ich nieaktualność blokuje automatyczne zapisy i w
-  razie potrzeby powoduje kontrolowany powrót do Self-Use.
-- Przed wykonaniem polecenia sprawdzane są limity baterii i falownika, gotowość
-  instalacji równoległej, okna blokady eksportu oraz limit funkcji ograniczania
-  eksportu (Generation Control Function, GCF).
-- Polecenia mają ograniczoną częstotliwość, są podtrzymywane przez wymagany czas
-  i — tam, gdzie dostępna jest informacja zwrotna — potwierdzane odczytem stanu
-  falownika. Zapis rozgłoszeniowy jest sprawdzany przez późniejszy odczyt stanu,
-  a nie przez odpowiedź Modbus.
+- Wiek danych każdego źródła jest liczony ze znakiem. Brak krytycznych danych,
+  ich nieaktualność lub znacznik czasu z przyszłości blokują automatyczne zapisy
+  i w razie potrzeby powodują kontrolowany powrót do Self-Use. Zgłoszona zerowa
+  możliwość jest rzeczywistym limitem równym zero, a nie nieograniczoną mocą.
+- Wspólne, neutralne względem polityki mechanizmy oczyszczają historię LOAD i
+  wyznaczają moc instalacji równoległej z 32-bitowego bilansu PV/Grid/LOAD. Każdy
+  planer zachowuje jednak własny cel, model rezerwy i symulację.
+- Przed wykonaniem polecenia sprawdzane są limity baterii, falownika, wspólnej
+  mocy AC i eksportu, gotowość instalacji równoległej, okna blokady eksportu,
+  naturalny eksport PV, zużycie domu oraz limit funkcji ograniczania eksportu
+  (Generation Control Function, GCF), bez podwójnego liczenia tej samej mocy.
+- Automatyka przejmuje sterowanie EMS przed zapisem. Polecenia mają ograniczoną
+  częstotliwość, są podtrzymywane przez wymagany czas, a właściciel zostaje
+  zwolniony dopiero wtedy, gdy nowszy, niezależny odczyt FC03 potwierdzi wszystkie
+  wymagane rejestry oraz tryb neutralny. Optymistyczne echo stanu Home
+  Assistanta/ESPHome nie jest uznawane za potwierdzenie sprzętu. Gdy fizyczny
+  odczyt nie nadejdzie albo jest inny, przywracanie jest ponawiane i inny
+  sterownik nie może przejąć EMS.
 - Integracja nie steruje ustawieniem asymetrii trójfazowej.
 
 ### Optymalizacja cen RCE
 
-Planer RCE analizuje wszystkie dostępne 30-minutowe bloki cen publikowane przez
-PSE na dziś i jutro. Uwzględnia zapotrzebowanie domu, rezerwę awaryjną,
-prognozowaną produkcję PV, oczekiwany naturalny eksport, pojemność baterii,
-straty konwersji, limity mocy BMS-u i falownika, moc instalacji równoległej oraz
-skonfigurowane okna blokady eksportu. Następnie przydziela dostępną energię do
-najbardziej opłacalnych dozwolonych okresów.
+RCE ma jeden cel: maksymalizować oczekiwany przychód netto ze sprzedaży w
+dostępnym horyzoncie 30-minutowych cen PSE. Ograniczony planer wspólnego
+horyzontu analizuje bloki łącznie, zamiast podejmować osobną zachłanną decyzję
+dla każdego z nich. Modeluje energię dostępną obecnie, energię PV dopiero wtedy,
+gdy może fizycznie dotrzeć, naturalny eksport, straty konwersji, pojemność
+baterii, limity BMS-u i falownika, wspólne budżety mocy AC i eksportu, GCF oraz
+skonfigurowane okna blokady eksportu.
 
-Rezerwa jest zachowawczo zaokrąglana do pełnego kroku SOC falownika i
-kontrolowana w każdym zaplanowanym oknie eksportu. Jeżeli dostępna jest aktualna
-prognoza na trzeci dzień, przewidywany niedobór energii dla domu zwiększa
-rezerwę końcową. Model wycenia zachowaną energię według unikniętego zakupu z
-sieci, co pomaga zapobiec taniej sprzedaży i późniejszemu droższemu odkupieniu
-tej samej energii.
+Rezerwa operacyjna jest zachowawczo zaokrąglana do pełnego kroku SOC falownika i
+kontrolowana w każdym zaplanowanym oknie eksportu. Dane LOAD oraz informacje na
+trzeci dzień pozostają widoczną diagnostyką, ale trzeci dzień nie tworzy celu
+końcowego, który po cichu zmieniałby planer sprzedaży w optymalizator taryfy lub
+kosztów domu. Implementacja jest ograniczoną heurystyką active-set, a nie
+dokładnym solverem. Niezależny test referencyjny (oracle) sprawdza małe,
+skonstruowane horyzonty i w objętych przypadkach wykazał jedynie małe
+zaobserwowane różnice. To potwierdzenie w testach regresyjnych, a nie formalny
+dowód optimum globalnego dla pełnego problemu z mieszanymi ograniczeniami.
 
 Panel osobno pokazuje wyniki prognozowane i zmierzone oraz rozróżnia sterowany
 eksport z baterii, naturalną nadwyżkę PV i eksport historyczny, którego źródła
-nie udało się jednoznacznie sklasyfikować. Pokazuje dodatkowy przychód brutto i
-szacowaną korzyść netto po uwzględnieniu kosztu eksploatacji baterii oraz
-wartości energii pozostającej na końcu planu. Wyniki są szacunkami, a nie
-fakturą sprzedawcy ani gwarancją oszczędności.
+nie udało się jednoznacznie sklasyfikować. Pokazuje przychód brutto ze sprzedaży
+i szacowaną korzyść netto po uwzględnieniu modelowego kosztu eksploatacji
+baterii. Wyniki są szacunkami, a nie fakturą, rozliczeniem sprzedawcy ani
+gwarancją zysku.
 
 ### Automatyczne ładowanie taryfowe
 
-Planer taryfowy symuluje zapotrzebowanie domu, produkcję PV i poziom naładowania
-baterii w krokach 30-minutowych. Aktualne dane Solcast na trzeci dzień wydłużają
-rzeczywisty horyzont symulacji do co najmniej 48 godzin. Jeżeli tych danych
-brakuje lub są nieaktualne, system wyraźnie pokazuje krótszy znany horyzont, a
-pozostały okres zabezpiecza zachowawczą rezerwą opartą na zerowej produkcji PV i
-średnim zużyciu domu.
+Tanie ładowanie ma inny cel niż RCE: kupić tylko energię, której dom będzie
+prawdopodobnie potrzebował, i przenieść ten zakup do najtańszych dostępnych
+stref. Planer symuluje zapotrzebowanie domu, produkcję PV i poziom naładowania
+baterii w krokach 30-minutowych. Model zimowy korzysta z zachowawczego profilu
+wysokiego LOAD i twardej rezerwy domu w Self-Use. Aktualne dane Solcast na trzeci
+dzień mogą wydłużyć horyzont symulacji do co najmniej 48 godzin. Jeżeli tego
+końca horyzontu brakuje lub jest nieaktualny, system pokazuje krótszy znany
+horyzont, a nieznany okres zabezpiecza zerową produkcją PV i zachowawczym
+zużyciem domu.
 
-Obliczenia uwzględniają rezerwę awaryjną, limity BMS-u, straty konwersji i
-wspólny limit mocy Grid Charge. W tym trybie falownik najpierw zasila dom, a
-dopiero pozostałą mocą ładuje baterię. Planer może uczyć się rzeczywistej mocy
-trafiającej do baterii na podstawie potwierdzonych sesji i rozpoczyna ładowanie
-odpowiednio wcześnie, aby zgromadzić wymaganą energię przed rozpoczęciem
-droższej strefy taryfowej.
+Obliczenia uwzględniają limit ładowania BMS-u, straty konwersji, wspólną moc AC i
+limit Grid Charge. W tym trybie falownik najpierw zasila dom, a dopiero pozostałą
+mocą ładuje baterię. Planer odrzuca nieopłacalne mikrocykle, może uczyć się
+rzeczywistej mocy trafiającej do baterii na podstawie potwierdzonych sesji i
+rozpoczyna ładowanie odpowiednio wcześnie, aby zgromadzić wymaganą energię przed
+droższą strefą taryfową. Nie optymalizuje przychodu z eksportu.
 
 Gotowe profile obejmują G11, G12, G12w i G13 tam, gdzie oferują je PGE, TAURON,
 ENEA, ENERGA i STOEN. Uwzględniają sezony, weekendy oraz polskie dni ustawowo
@@ -350,25 +371,31 @@ profilu **Manual**.
 
 ### Eksperymentalne zarządzanie napięciem RCEm 253 V+
 
-RCEm analizuje historię napięć fazowych z poprzednich czterech dni, bieżące
-napięcia L1/L2/L3, 10-minutową średnią napięcia, prognozy Solcast w przedziałach
-czasowych, zużycie domu z rozróżnieniem dni roboczych i weekendów oraz dostępną pojemność
-baterii. Dla każdego wykrytego okresu ryzyka tworzy osobny plan wolnego miejsca
-w magazynie.
+RCEm ma trzeci, niezależny cel: zachować użyteczne miejsce w baterii wokół
+powtarzalnych okresów wysokiego napięcia i ryzyka nadwyżki PV. Analizuje historię
+napięć fazowych z poprzednich czterech dni, bieżące napięcia L1/L2/L3,
+10-minutową średnią napięcia, prognozy Solcast w przedziałach czasowych, zużycie
+domu z rozróżnieniem dni roboczych i weekendów oraz dostępną pojemność baterii.
+Scenariusz wysokiego PV i niskiego LOAD wyznacza potrzebne miejsce, a stres
+niskiego PV i wysokiego LOAD wraz z chronologicznym bilansem energii chronią
+energię domu. RCEm nie dziedziczy rezerwy operacyjnej RCE.
 
-Regulator może zwiększać moc ładowania baterii wraz ze wzrostem napięcia.
-Opcjonalne poranne rozładowanie tworzy tylko potrzebne miejsce bez naruszania
-chronionej rezerwy domu. Opcjonalna regulacja eksportu nie przekracza niższej z
-dwóch wartości: bieżącego ustawienia falownika i limitu użytkownika.
+Poza trybem obserwacji regulator może zwiększać moc ładowania baterii wraz ze
+wzrostem napięcia. Opcjonalne poranne rozładowanie tworzy tylko użyteczne miejsce
+potrzebne przed późniejszym oknem ryzyka, bez naruszania własnej rezerwy
+bezpieczeństwa domu. Opcjonalna regulacja eksportu nie przekracza najniższego z
+fizycznie dostępnego budżetu eksportu, bieżącego ustawienia falownika i limitu
+użytkownika.
 
-RCEm domyślnie uruchamia się w **trybie obserwacji** i nie wykonuje zapisów,
-dopóki użytkownik wyraźnie nie wyłączy tego trybu. Nie wyłącza certyfikowanych
+RCEm domyślnie uruchamia się w **trybie obserwacji (shadow)**. Oblicza wtedy
+plany i diagnostykę, ale nie wykonuje żadnych zapisów do falownika, dlatego może
+zbierać dane testowe obok sterowania RCE lub taryfowego. Podczas publicznych
+testów v1.5.2 nie wyłączaj trybu obserwacji. RCEm nie wyłącza certyfikowanych
 zabezpieczeń, nie zmienia progów ochronnych, nie włącza GCF i nie modyfikuje
-ustawienia asymetrii trójfazowej. Funkcja ma rozbudowane pokrycie testami
-symulacyjnymi, ale pozostaje eksperymentalna i przed włączeniem automatycznego
-sterowania wymaga walidacji oraz uruchomienia próbnego na docelowej instalacji.
-Nie służy do obchodzenia obowiązujących wymagań napięciowych kodeksu sieciowego
-ani operatora systemu dystrybucyjnego.
+ustawienia asymetrii trójfazowej. Pozostaje funkcją eksperymentalną i przed
+użyciem zapisów wymaga osobnej walidacji terenowej oraz uruchomienia próbnego na
+docelowej instalacji. Nie służy do obchodzenia obowiązujących wymagań
+napięciowych kodeksu sieciowego ani operatora systemu dystrybucyjnego.
 
 ### Wyrównywanie baterii LiFePO4
 
@@ -387,12 +414,16 @@ automatycznie rozpoznaje pojedynczy falownik, Master oraz Slave. Użytkownik nie
 musi ręcznie podawać liczby falowników.
 
 Konwerter Modbus ESP32 podłącz do falownika **Master** przez zewnętrzną
-magistralę RS485 przewidzianą dla instalacji. Po wykryciu Mastera ustawienia EMS
-są wysyłane jednym rozgłoszeniowym poleceniem Modbus funkcji 16 (`0x10`) na
-adres `0`, dzięki czemu cały blok `4300–4306` dociera do Mastera i urządzeń Slave
-na wspólnej magistrali `RS485_2`. Zapis rozgłoszeniowy nie oczekuje odpowiedzi.
-Polecenie jest blokowane, gdy podłączone urządzenie zgłasza rolę Slave albo gdy
-Master podaje nieprawidłową liczbę urządzeń.
+magistralę RS485 przewidzianą dla instalacji. Monitorowanie, prognozy i analiza
+RCEm w trybie shadow pozostają dostępne dla wykrytej instalacji równoległej.
+
+W publicznym teście v1.5.2 chronione zapisy EMS są dostępne wyłącznie dla
+zweryfikowanej topologii z jednym falownikiem. Zewnętrzny port Mastera nie daje
+niezależnego potwierdzenia FC03 z każdego Slave po poleceniu rozgłoszeniowym,
+dlatego RCE, tanie ładowanie, harmonogramy ręczne, balansowanie i aktywny RCEm
+blokują zapisy w układzie Master/Slave. Panel pokazuje tę przyczynę wprost. Nie
+wyłączaj bramki odczytu zwrotnego. Sterowanie równoległe wróci dopiero po
+potwierdzeniu odczytu każdego urządzenia na obsługiwanym sprzęcie.
 
 Panel Aurora automatycznie korzysta z systemowych rejestrów mocy producenta dla
 PV, baterii, zużycia domu i sieci. Adresy widoczne w rejestrach topologii są

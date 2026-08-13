@@ -330,6 +330,42 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: U_WORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            // Register 2169 is the system-wide LOAD source on a parallel
+            // Master.  Keep the public overview timestamp tied to this poll.
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) == 1) {
+              const uint32_t now_ms = millis();
+              id(load_active_power_30015).publish_state(x);
+
+              const uint32_t grid_ms =
+                  id(overview_master_grid_last_readback_ms);
+              if (grid_ms != 0 &&
+                  static_cast<uint32_t>(now_ms - grid_ms) <= 30000U &&
+                  id(grid_total_active_power_1814).has_state()) {
+                const float inverter_power =
+                    x + id(grid_total_active_power_1814).state;
+                id(inv_active_power_30007).publish_state(inverter_power);
+
+                const uint32_t pv_ms =
+                    id(overview_master_pv_last_readback_ms);
+                if (pv_ms != 0 &&
+                    static_cast<uint32_t>(now_ms - pv_ms) <= 30000U &&
+                    id(pv_total_power_8528).has_state()) {
+                  id(battery_power_30009).publish_state(
+                      inverter_power - id(pv_total_power_8528).state);
+                }
+              }
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}

@@ -33,7 +33,8 @@ modbus_controller:
     offline_skip_updates: 3
 
   # Krótkie bloki operacyjne używane przez dashboard są odpytywane osobno:
-  # 46-49 (bateria z toru falownika), 62-66 (sieć falownika), 1801-1815
+  # 46-49 (bateria z toru falownika), 62-66 (sieć falownika), 1909 (SOC BMS),
+  # 1801-1815
   # (licznik sieci), 2150, 2162 i 2169-2172 (sumy systemowe) oraz
   # 30001-30020 (przepływ pojedynczego falownika). Pozostałe rejestry
   # diagnostyczne zachowują wolniejszy cykl.

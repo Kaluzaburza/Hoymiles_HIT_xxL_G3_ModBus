@@ -112,8 +112,13 @@ def summarize_voltage_history(
         daily_peak[key] = max(daily_peak.get(key, 0.0), max(values))
         covered_days.add(day)
 
+    # A predictive control window needs independent evidence from at least two
+    # complete local days for that exact quarter-hour.  Overall history_days
+    # alone is insufficient: a single sparse 254 V sample must not acquire the
+    # authority of a repeated daily pattern.  P90 remains a diagnostic of all
+    # available samples, but the median/control profile fails closed to 0 V.
     median_profile = tuple(
-        round(_quantile(values, 0.50), 2) if values else 0.0
+        round(_quantile(values, 0.50), 2) if len(values) >= 2 else 0.0
         for values in per_slot_days
     )
     p90_profile = tuple(

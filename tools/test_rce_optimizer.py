@@ -5,12 +5,17 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta
 import importlib.util
+from itertools import product
+import math
 from pathlib import Path
+import random
 import sys
+import time as monotonic_time
 from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "custom_components" / "hoymiles_hit_modbus"))
 MODULE_PATH = (
     ROOT
     / "custom_components"
@@ -39,6 +44,22 @@ if FORECAST_SPEC is None or FORECAST_SPEC.loader is None:
 FORECAST = importlib.util.module_from_spec(FORECAST_SPEC)
 sys.modules[FORECAST_SPEC.name] = FORECAST
 FORECAST_SPEC.loader.exec_module(FORECAST)
+
+ENERGY_DATA_PATH = (
+    ROOT
+    / "custom_components"
+    / "hoymiles_hit_modbus"
+    / "energy_data.py"
+)
+ENERGY_DATA_SPEC = importlib.util.spec_from_file_location(
+    "hoymiles_energy_data",
+    ENERGY_DATA_PATH,
+)
+if ENERGY_DATA_SPEC is None or ENERGY_DATA_SPEC.loader is None:
+    raise RuntimeError("Cannot load the shared energy-data validator")
+ENERGY_DATA = importlib.util.module_from_spec(ENERGY_DATA_SPEC)
+sys.modules[ENERGY_DATA_SPEC.name] = ENERGY_DATA
+ENERGY_DATA_SPEC.loader.exec_module(ENERGY_DATA)
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 NOW = datetime(2026, 7, 28, 0, 0, tzinfo=WARSAW)
@@ -73,10 +94,179 @@ def base_input(**changes):
         inverter_count=1,
         discharge_power_percent=100.0,
         export_efficiency_percent=100.0,
+        bms_max_discharge_current_a=500.0,
+        bms_max_charge_current_a=500.0,
+        battery_voltage_v=50.0,
+        bms_power_safety_percent=100.0,
+        bms_discharge_data_fresh=True,
+        bms_discharge_data_age_seconds=0.0,
+        bms_discharge_data_available=True,
+        bms_charge_data_fresh=True,
+        bms_charge_data_age_seconds=0.0,
+        bms_charge_data_available=True,
         charge_efficiency_percent=100.0,
         house_discharge_efficiency_percent=100.0,
     )
     return replace(settings, **changes)
+
+
+def _independent_short_simulation(
+    *,
+    starts: list[datetime],
+    settings,
+    load_by_slot: dict[datetime, float],
+    pv_by_slot: dict[datetime, float],
+    exports: dict[datetime, float],
+    floor_kwh: float,
+    reserve_by_slot: dict[datetime, float],
+    prices: dict[datetime, float],
+) -> tuple[bool, float]:
+    """Simulate a tiny oracle case without optimizer helper functions."""
+    capacity = settings.battery_capacity_kwh
+    battery = capacity * settings.battery_soc_percent / 100.0
+    export_efficiency = settings.export_efficiency_percent / 100.0
+    charge_efficiency = settings.charge_efficiency_percent / 100.0
+    house_efficiency = settings.house_discharge_efficiency_percent / 100.0
+    system_power = settings.inverter_power_kw * settings.inverter_count
+    requested_power = (
+        system_power * settings.discharge_power_percent / 100.0
+    )
+    revenue = 0.0
+    exported_dc = 0.0
+    for start in starts:
+        pv = max(pv_by_slot.get(start, 0.0), 0.0)
+        load = max(load_by_slot.get(start, 0.0), 0.0)
+        export = max(exports.get(start, 0.0), 0.0)
+        load_deficit = max(load - pv, 0.0)
+        system_energy = system_power * 0.5
+        export_caps = [
+            max(requested_power * 0.5 - load_deficit, 0.0),
+            max(system_energy - min(load, system_energy), 0.0),
+        ]
+        if settings.bms_discharge_data_fresh:
+            discharge_dc = (
+                max(settings.bms_max_discharge_current_a or 0.0, 0.0)
+                * max(settings.battery_voltage_v or 0.0, 0.0)
+                / 1000.0
+                * settings.bms_power_safety_percent
+                / 100.0
+            )
+            export_caps.append(
+                max(discharge_dc * 0.5 - load_deficit / house_efficiency, 0.0)
+                * export_efficiency
+            )
+        if settings.export_power_cap_kw is not None:
+            export_caps.append(max(settings.export_power_cap_kw, 0.0) * 0.5)
+        if settings.effective_export_power_kw is not None:
+            export_caps.append(
+                max(settings.effective_export_power_kw, 0.0) * 0.5
+            )
+        export_cap = min(export_caps)
+        if export > export_cap + 1e-7:
+            return False, -float("inf")
+        if pv < load:
+            battery -= (load - pv) / house_efficiency
+        battery -= export / export_efficiency
+        charge_input = 0.0
+        if pv >= load:
+            charge_dc_power = (
+                max(settings.bms_max_charge_current_a or 0.0, 0.0)
+                * max(settings.battery_voltage_v or 0.0, 0.0)
+                / 1000.0
+                * settings.bms_power_safety_percent
+                / 100.0
+                if settings.bms_charge_data_fresh
+                and settings.bms_charge_data_available
+                else 0.0
+            )
+            charge_input = min(
+                max(pv - load, 0.0),
+                max(system_energy - min(load, system_energy) - export, 0.0),
+                charge_dc_power * 0.5 / charge_efficiency,
+                max(capacity - battery, 0.0) / charge_efficiency,
+            )
+            battery += charge_input * charge_efficiency
+        if battery < floor_kwh - 1e-7:
+            return False, -float("inf")
+        if export > 1e-9 and battery < reserve_by_slot[start] - 1e-7:
+            return False, -float("inf")
+        unallocated_pv = max(pv - load - charge_input, 0.0)
+        remaining_system = max(
+            system_energy
+            - min(load, system_energy)
+            - export
+            - charge_input,
+            0.0,
+        )
+        grid_caps = [
+            max(cap, 0.0)
+            for cap in (
+                settings.export_power_cap_kw,
+                settings.effective_export_power_kw,
+            )
+            if cap is not None
+        ]
+        remaining_grid = (
+            max(min(grid_caps) * 0.5 - export, 0.0)
+            if grid_caps
+            else remaining_system
+        )
+        natural_export = min(unallocated_pv, remaining_system, remaining_grid)
+        battery = min(battery, capacity)
+        revenue += (export + natural_export) * prices.get(start, 0.0)
+        exported_dc += export / export_efficiency
+    objective = revenue - (
+        exported_dc * settings.battery_wear_cost_pln_kwh
+    )
+    return True, objective
+
+
+def _independent_grid_oracle(
+    *,
+    starts: list[datetime],
+    settings,
+    load_by_slot: dict[datetime, float],
+    conservative_pv: dict[datetime, float],
+    expected_pv: dict[datetime, float],
+    floor_kwh: float,
+    reserve_by_slot: dict[datetime, float],
+    prices: dict[datetime, float],
+) -> tuple[float, dict[datetime, float]]:
+    """Enumerate an independent 0/0.5/1 kWh feasible lower bound."""
+    best_value = -float("inf")
+    best_plan: dict[datetime, float] = {}
+    for actions in product((0.0, 0.5, 1.0), repeat=len(starts)):
+        plan = {
+            start: action
+            for start, action in zip(starts, actions, strict=True)
+            if action > 0.0
+        }
+        safe, _ = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load_by_slot,
+            pv_by_slot=conservative_pv,
+            exports=plan,
+            floor_kwh=floor_kwh,
+            reserve_by_slot=reserve_by_slot,
+            prices=prices,
+        )
+        if not safe:
+            continue
+        expected_safe, value = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load_by_slot,
+            pv_by_slot=expected_pv,
+            exports=plan,
+            floor_kwh=floor_kwh,
+            reserve_by_slot=reserve_by_slot,
+            prices=prices,
+        )
+        if expected_safe and value > best_value:
+            best_value = value
+            best_plan = plan
+    return best_value, best_plan
 
 
 def test_higher_tomorrow_price_wins() -> None:
@@ -144,8 +334,11 @@ def test_upcoming_night_is_reserved_even_before_sunset() -> None:
     assert result.ready
     assert abs(result.base_reserve_energy_kwh - 32.0) < 1e-6
     assert abs(result.protected_night_energy_kwh - 20.0) < 1e-6
-    assert abs(result.protected_home_energy_kwh - 52.0) < 1e-6
-    assert result.minimum_soc_percent == 52
+    # The single 60 kWh PV spike is now credited only up to the physical
+    # 10 kW/30-minute charge bridge.  That exposes another 1.67 kWh of LOAD
+    # which the former unlimited-refill model hid.
+    assert abs(result.protected_home_energy_kwh - 53.6666666667) < 1e-6
+    assert result.minimum_soc_percent == 54
     assert result.ending_battery_kwh >= 32.0 - 1e-6
 
 
@@ -304,6 +497,9 @@ def test_export_and_revenue_totals_expose_their_sources() -> None:
         base_input(
             price_slots=[planned, overflow],
             pv_by_slot_kwh={overflow.start: 10.0},
+            bms_max_charge_current_a=0.0,
+            bms_charge_data_fresh=True,
+            bms_charge_data_available=False,
         )
     )
     assert result.ready
@@ -464,8 +660,8 @@ def test_battery_wear_rejects_gross_but_unprofitable_sale() -> None:
     assert result.net_optimization_gain_pln >= -1e-6
 
 
-def test_day3_terminal_value_retains_energy_for_future_import() -> None:
-    """Weak Day-3 PV gives stored energy an avoided-import value."""
+def test_day3_terminal_value_is_diagnostic_only() -> None:
+    """Day-3 value must not veto a sale-profit-maximizing RCE plan."""
     pv = {
         NOW.replace(hour=12): 5.0,
         NOW.replace(hour=12) + timedelta(days=1): 5.0,
@@ -492,19 +688,24 @@ def test_day3_terminal_value_retains_energy_for_future_import() -> None:
         )
     )
     assert with_day3.terminal_energy_target_kwh == 5.0
-    assert with_day3.planned_export_kwh < without_day3.planned_export_kwh
-    assert with_day3.ending_battery_kwh >= 9.0 - 0.02
+    assert not with_day3.terminal_energy_value_applied_to_objective
+    assert abs(
+        with_day3.planned_export_kwh - without_day3.planned_export_kwh
+    ) < 0.02
+    assert abs(
+        with_day3.ending_battery_kwh - without_day3.ending_battery_kwh
+    ) < 0.02
 
 
-def test_partial_day3_deficit_keeps_energy_below_avoided_import_value() -> None:
-    """Every retained kWh for a real Day-3 deficit has full import value."""
+def test_high_sale_price_is_not_blocked_by_default_terminal_value() -> None:
+    """A 1 PLN/kWh Day-3 diagnostic cannot block profitable RCE export."""
     pv = {
         NOW.replace(hour=12): 10.0,
         NOW.replace(hour=12) + timedelta(days=1): 10.0,
     }
     result = RCE.optimize_rce(
         base_input(
-            price_slots=slots(0, 18, 8, 0.55),
+            price_slots=slots(0, 18, 8, 1.10),
             pv_by_slot_kwh=pv,
             average_daily_load_kwh=10.0,
             day3_pv_forecast_kwh=5.0,
@@ -516,12 +717,13 @@ def test_partial_day3_deficit_keeps_energy_below_avoided_import_value() -> None:
 
     assert result.terminal_energy_target_kwh == 5.0
     assert result.terminal_energy_value_pln_kwh == 1.0
-    assert result.ending_battery_kwh >= 9.0 - 0.02
-    assert result.terminal_energy_value_pln >= 5.0 - 0.02
+    assert not result.terminal_energy_value_applied_to_objective
+    assert result.planned_export_kwh > 9.0
+    assert result.ending_battery_kwh < 5.0
 
 
 def test_terminal_value_boundary_uses_house_discharge_efficiency() -> None:
-    """The sale boundary follows avoided-import value after DC-to-house loss."""
+    """Day-3 diagnostics retain their DC-to-house efficiency conversion."""
     pv = {
         NOW.replace(hour=12): 10.0,
         NOW.replace(hour=12) + timedelta(days=1): 10.0,
@@ -545,9 +747,9 @@ def test_terminal_value_boundary_uses_house_discharge_efficiency() -> None:
 
     assert below.terminal_energy_value_pln_kwh == 0.8
     assert below.terminal_energy_target_kwh == 6.25
-    assert below.ending_battery_kwh >= 10.25 - 0.02
-    assert below.terminal_energy_value_pln >= 5.0 - 0.02
-    assert above.ending_battery_kwh < below.ending_battery_kwh - 6.1
+    assert not below.terminal_energy_value_applied_to_objective
+    assert abs(above.planned_export_kwh - below.planned_export_kwh) < 0.02
+    assert abs(above.ending_battery_kwh - below.ending_battery_kwh) < 0.02
 
 
 def test_terminal_reserve_reports_day3_availability_and_reason() -> None:
@@ -622,7 +824,7 @@ def test_whole_soc_control_reserve_does_not_overstate_export() -> None:
 
 
 def test_gross_and_net_optimization_gain_are_unambiguous() -> None:
-    """Legacy gain stays gross while net gain explicitly subtracts wear."""
+    """Legacy gain stays gross while net gain subtracts only battery wear."""
     result = RCE.optimize_rce(
         base_input(
             price_slots=slots(0, 18, 4, 1.0),
@@ -639,9 +841,9 @@ def test_gross_and_net_optimization_gain_are_unambiguous() -> None:
         - (
             result.gross_optimization_gain_pln
             - result.battery_wear_cost_pln
-            + result.terminal_energy_value_delta_pln
         )
     ) < 1e-6
+    assert not result.terminal_energy_value_applied_to_objective
 
 
 def test_sensor_exposes_terminal_and_gain_contract() -> None:
@@ -660,8 +862,26 @@ def test_sensor_exposes_terminal_and_gain_contract() -> None:
         '"gross_optimization_gain_pln"',
         '"net_optimization_gain_pln"',
         '"terminal_energy_value_delta_pln"',
+        '"terminal_energy_value_applied_to_objective"',
+        '"current_slot_end"',
+        '"current_run_end"',
+        '"current_slot_start_eligible"',
+        '"current_slot_suppression_reason"',
+        '"current_required_minimum_soc_percent"',
+        '"critical_zero_pv_guard_active"',
+        '"load_risk_buffer_kwh"',
+        '"load_risk_mode"',
+        '"solver_method"',
+        '"optimality_verified"',
+        '"solver_runtime_ms"',
+        '"bms_discharge_data_fresh"',
+        '"bms_discharge_data_age_seconds"',
+        '"bms_discharge_data_available"',
     ):
         assert attribute in sensor_source
+    assert "from .energy_data import numeric_state_sample, state_age_seconds" in sensor_source
+    assert "sample = numeric_state_sample(" in sensor_source
+    assert "return age / 60.0 if age is not None else None" in sensor_source
 
 
 def test_shared_forecast_model_is_conservative_and_robust() -> None:
@@ -713,6 +933,1810 @@ def test_house_energy_model_applies_charge_and_discharge_losses() -> None:
     assert abs(ending - 7.5) < 1e-6
 
 
+def test_load_and_grid_share_the_same_bms_discharge_budget() -> None:
+    """House LOAD must reduce the BMS power left for grid export."""
+    profile = [0.0] * 48
+    profile[36] = 2.0  # 18:00-18:30 household energy
+    candidate = RCE.PriceSlot(NOW.replace(hour=18), 2.0)
+    result = RCE.optimize_rce(
+        base_input(
+            price_slots=[candidate],
+            battery_capacity_kwh=100.0,
+            outage_reserve_soc_percent=0.0,
+            average_daily_load_kwh=2.0,
+            average_night_load_kwh=0.0,
+            weekday_load_profile_30m_kwh=tuple(profile),
+            weekend_load_profile_30m_kwh=tuple(profile),
+            bms_max_discharge_current_a=100.0,
+            battery_voltage_v=50.0,
+            bms_power_safety_percent=100.0,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert abs(result.maximum_export_power_kw - 5.0) < 1e-6
+    assert result.planned_export_kwh <= 0.5 + 0.02
+    assert result.planned_export_kwh + 2.0 <= 2.5 + 0.02
+
+
+def test_current_slot_uses_only_real_remaining_fraction_and_live_power() -> None:
+    """At 18:20 a 5 kW export cannot be planned as a full 30-minute block."""
+    now = NOW.replace(hour=18, minute=20)
+    result = RCE.optimize_rce(
+        base_input(
+            now=now,
+            price_slots=[RCE.PriceSlot(now.replace(minute=0), 2.0)],
+            battery_capacity_kwh=100.0,
+            outage_reserve_soc_percent=0.0,
+            discharge_power_percent=50.0,
+            current_load_power_kw=0.0,
+            current_pv_power_kw=0.0,
+            current_battery_soc_fresh=True,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert abs(result.current_slot_fraction - 1.0 / 3.0) < 1e-9
+    assert abs(result.current_slot_remaining_minutes - 10.0) < 1e-9
+    assert result.current_slot_planned_export_kwh <= 5.0 / 6.0 + 0.01
+    assert result.current_slot_start_eligible
+    assert result.current_slot_suppression_reason == "eligible"
+    assert result.current_slot_load_source == "live"
+    assert result.current_slot_pv_source == "live"
+
+
+def test_partial_slot_plan_exposes_energy_bounded_execution_power() -> None:
+    """Scheduler power must reproduce partial kWh, including live LOAD."""
+    now = NOW.replace(hour=18, minute=10)
+    result = RCE.optimize_rce(
+        base_input(
+            now=now,
+            price_slots=[RCE.PriceSlot(now.replace(minute=0), 2.0)],
+            battery_capacity_kwh=10.0,
+            battery_soc_percent=30.0,
+            dynamic_reserve_enabled=False,
+            manual_minimum_soc_percent=20.0,
+            outage_reserve_soc_percent=0.0,
+            inverter_power_kw=10.0,
+            inverter_count=1,
+            current_load_power_kw=1.0,
+            current_pv_power_kw=0.0,
+            current_battery_soc_fresh=True,
+            charge_efficiency_percent=100.0,
+            house_discharge_efficiency_percent=100.0,
+            export_efficiency_percent=100.0,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    hours = result.current_slot_remaining_minutes / 60.0
+    assert result.current_slot_start_eligible
+    assert 0.65 < result.current_slot_planned_export_kwh < 0.68
+    assert abs(
+        result.current_slot_execution_export_power_kw * hours
+        - result.current_slot_planned_export_kwh
+    ) < 1e-6
+    assert abs(result.current_slot_execution_discharge_power_kw - 3.0) < 0.02
+    assert abs(result.current_slot_execution_power_percent - 30.0) < 0.2
+    delivered_export = max(
+        result.current_slot_execution_discharge_power_kw
+        - max(
+            result.current_slot_load_kwh - result.current_slot_pv_kwh,
+            0.0,
+        )
+        / hours,
+        0.0,
+    ) * hours
+    assert delivered_export <= result.current_slot_planned_export_kwh + 1e-6
+
+
+def test_current_slot_start_fails_closed_without_fresh_live_inputs() -> None:
+    """A preview may exist, but scheduler readiness must fail closed."""
+    now = NOW.replace(hour=18, minute=10)
+    result = RCE.optimize_rce(
+        base_input(
+            now=now,
+            price_slots=[RCE.PriceSlot(now.replace(minute=0), 2.0)],
+            battery_capacity_kwh=100.0,
+            outage_reserve_soc_percent=0.0,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert result.current_slot_planned_export_kwh > 0.0
+    assert not result.current_slot_start_eligible
+    assert result.current_slot_suppression_reason == "live_data_missing"
+
+
+def test_bms_discharge_limit_fails_closed_on_invalid_freshness() -> None:
+    """Missing, stale, future and exact-zero BMS limits cannot start RCE."""
+    now = NOW.replace(hour=18, minute=5)
+
+    def calculate(**changes):
+        return RCE.optimize_rce(
+            base_input(
+                now=now,
+                price_slots=[RCE.PriceSlot(now.replace(minute=0), 2.0)],
+                battery_capacity_kwh=100.0,
+                outage_reserve_soc_percent=0.0,
+                current_load_power_kw=0.0,
+                current_pv_power_kw=0.0,
+                current_battery_soc_fresh=True,
+                battery_wear_cost_pln_kwh=0.0,
+                **changes,
+            )
+        )
+
+    missing = calculate(
+        bms_max_discharge_current_a=None,
+        battery_voltage_v=None,
+        bms_discharge_data_fresh=False,
+        bms_discharge_data_age_seconds=None,
+        bms_discharge_data_available=False,
+    )
+    stale = calculate(
+        bms_max_discharge_current_a=None,
+        battery_voltage_v=None,
+        bms_discharge_data_fresh=False,
+        bms_discharge_data_age_seconds=300.001,
+        bms_discharge_data_available=False,
+    )
+    future = calculate(
+        bms_max_discharge_current_a=None,
+        battery_voltage_v=None,
+        bms_discharge_data_fresh=False,
+        bms_discharge_data_age_seconds=-5.001,
+        bms_discharge_data_available=False,
+    )
+    exact_zero = calculate(
+        bms_max_discharge_current_a=0.0,
+        battery_voltage_v=50.0,
+        bms_discharge_data_fresh=True,
+        bms_discharge_data_age_seconds=0.0,
+        bms_discharge_data_available=False,
+    )
+    for result in (missing, stale, future, exact_zero):
+        assert not result.current_slot_start_eligible
+        assert result.bms_discharge_power_limit_kw == 0.0
+        assert result.maximum_export_power_kw == 0.0
+        assert not result.planned_exports
+    assert missing.current_slot_suppression_reason == (
+        "bms_discharge_data_unavailable"
+    )
+    assert stale.current_slot_suppression_reason == "bms_discharge_data_stale"
+    assert future.current_slot_suppression_reason == "bms_discharge_data_stale"
+    assert exact_zero.current_slot_suppression_reason == (
+        "bms_discharge_limit_zero"
+    )
+    assert exact_zero.bms_discharge_data_fresh
+    assert not exact_zero.bms_discharge_data_available
+
+    fresh = calculate(
+        bms_max_discharge_current_a=100.0,
+        battery_voltage_v=50.0,
+        bms_power_safety_percent=100.0,
+        bms_discharge_data_fresh=True,
+        bms_discharge_data_age_seconds=300.0,
+        bms_discharge_data_available=True,
+    )
+    future_boundary = calculate(
+        bms_max_discharge_current_a=100.0,
+        battery_voltage_v=50.0,
+        bms_power_safety_percent=100.0,
+        bms_discharge_data_fresh=True,
+        bms_discharge_data_age_seconds=-5.0,
+        bms_discharge_data_available=True,
+    )
+    for result in (fresh, future_boundary):
+        assert result.bms_discharge_data_fresh
+        assert result.bms_discharge_data_available
+        assert result.bms_discharge_power_limit_kw == 5.0
+        assert result.current_slot_start_eligible
+        assert result.current_slot_suppression_reason == "eligible"
+
+
+def test_bms_charge_limit_fails_closed_and_caps_future_refill() -> None:
+    """Only a fresh positive BMS charge limit may finance later export."""
+    now = NOW.replace(hour=12, minute=0)
+    sale = RCE.PriceSlot(now + timedelta(minutes=30), 2.0)
+    pv = {now: 10.0}
+
+    def calculate(**changes):
+        return RCE.optimize_rce(
+            base_input(
+                now=now,
+                price_slots=[sale],
+                pv_by_slot_kwh=pv,
+                conservative_pv_by_slot_kwh=pv,
+                battery_capacity_kwh=10.0,
+                battery_soc_percent=20.0,
+                dynamic_reserve_enabled=False,
+                manual_minimum_soc_percent=20.0,
+                outage_reserve_soc_percent=0.0,
+                inverter_power_kw=10.0,
+                battery_voltage_v=50.0,
+                bms_power_safety_percent=100.0,
+                charge_efficiency_percent=100.0,
+                export_efficiency_percent=100.0,
+                battery_wear_cost_pln_kwh=0.0,
+                **changes,
+            )
+        )
+
+    limited = calculate(
+        bms_max_charge_current_a=10.0,
+        bms_charge_data_fresh=True,
+        bms_charge_data_age_seconds=300.0,
+        bms_charge_data_available=True,
+    )
+    assert abs(limited.bms_charge_power_limit_kw - 0.5) < 1e-9
+    assert 0.24 < limited.planned_export_kwh < 0.26
+
+    cases = (
+        calculate(
+            bms_max_charge_current_a=None,
+            bms_charge_data_fresh=False,
+            bms_charge_data_age_seconds=None,
+            bms_charge_data_available=False,
+        ),
+        calculate(
+            bms_max_charge_current_a=10.0,
+            bms_charge_data_fresh=False,
+            bms_charge_data_age_seconds=300.001,
+            bms_charge_data_available=False,
+        ),
+        calculate(
+            bms_max_charge_current_a=10.0,
+            bms_charge_data_fresh=False,
+            bms_charge_data_age_seconds=-5.001,
+            bms_charge_data_available=False,
+        ),
+        calculate(
+            bms_max_charge_current_a=0.0,
+            bms_charge_data_fresh=True,
+            bms_charge_data_age_seconds=0.0,
+            bms_charge_data_available=False,
+        ),
+    )
+    for result in cases:
+        assert result.bms_charge_power_limit_kw == 0.0
+        assert not result.bms_charge_data_available
+        assert result.planned_export_kwh == 0.0
+
+    future_boundary = calculate(
+        bms_max_charge_current_a=10.0,
+        bms_charge_data_fresh=True,
+        bms_charge_data_age_seconds=-5.0,
+        bms_charge_data_available=True,
+    )
+    assert future_boundary.bms_charge_data_fresh
+    assert future_boundary.bms_charge_data_available
+    assert abs(future_boundary.bms_charge_power_limit_kw - 0.5) < 1e-9
+    assert 0.24 < future_boundary.planned_export_kwh < 0.26
+
+
+def test_pv_charge_and_both_export_paths_share_one_ac_bridge() -> None:
+    """LOAD, charging, natural export and controlled export cannot overlap."""
+    start = NOW.replace(hour=12)
+    settings = base_input(
+        now=start,
+        battery_capacity_kwh=10.0,
+        battery_soc_percent=50.0,
+        inverter_power_kw=2.0,
+        inverter_count=1,
+        bms_max_charge_current_a=10.0,
+        battery_voltage_v=50.0,
+        bms_power_safety_percent=100.0,
+        charge_efficiency_percent=100.0,
+        export_efficiency_percent=100.0,
+    )
+    safe, ending, natural = RCE._simulate(
+        [start],
+        settings,
+        {start: 0.2},
+        {start: 0.3},
+        0.0,
+        {start: 0.0},
+        {start: 3.0},
+        {start: 1.0},
+    )
+    assert safe
+    # One half-hour supplies exactly 1.0 kWh of AC conversion:
+    # 0.2 LOAD + 0.25 battery charge + 0.3 controlled + 0.25 natural.
+    assert abs(ending - 4.95) < 1e-9
+    assert abs(natural[start] - 0.25) < 1e-9
+    assert abs(0.2 + 0.25 + 0.3 + natural[start] - 1.0) < 1e-9
+
+
+def test_signed_age_contract_is_shared_with_rce_sensor() -> None:
+    """RCE uses the common -5..300 s BMS rule and signed SOC freshness."""
+    assert ENERGY_DATA.numeric_sample_is_fresh(50.0, -5.0, 300.0)
+    assert ENERGY_DATA.numeric_sample_is_fresh(50.0, 300.0, 300.0)
+    assert not ENERGY_DATA.numeric_sample_is_fresh(50.0, -5.001, 300.0)
+    assert not ENERGY_DATA.numeric_sample_is_fresh(50.0, 300.001, 300.0)
+    sensor_source = (
+        ROOT
+        / "custom_components"
+        / "hoymiles_hit_modbus"
+        / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    assert 'max_age_seconds=300.0' in sensor_source
+    assert '"bms_discharge_data_fresh"' in sensor_source
+    assert '"bms_discharge_data_age_seconds"' in sensor_source
+    assert '"bms_discharge_data_available"' in sensor_source
+    assert 'sensor.hoymiles_hit_maximum_charge_current' in sensor_source
+    assert '"bms_charge_data_fresh"' in sensor_source
+    assert '"bms_charge_data_age_seconds"' in sensor_source
+    assert '"bms_charge_data_available"' in sensor_source
+    assert '"bms_charge_power_limit_kw"' in sensor_source
+    assert 'metadata["current_price_pln_kwh"]' in sensor_source
+    assert "slot.start.astimezone(dt_util.UTC) == current_slot_utc" in sensor_source
+    assert "current_battery_soc_fresh=_age_minutes_is_fresh(" in sensor_source
+    assert '"soc_data_fresh": battery_soc_sample.fresh' in sensor_source
+    assert '"soc_data_age_seconds"' in sensor_source
+    assert '"forecast_remaining_today_data_fresh"' in sensor_source
+    assert '"forecast_minus_actual_fallback"' in sensor_source
+    for marker in (
+        "def _complete_rce_half_hours_for_local_date(",
+        "actual == expected",
+        "today_rows_complete",
+        "tomorrow_rows_structurally_complete",
+        '"rce_today_expected_half_hours"',
+        '"rce_tomorrow_expected_half_hours"',
+        '"gcf_execution_data_fresh"',
+        '"Generation Control Function"',
+        "gcf_limit_sample = numeric_state_sample(",
+    ):
+        assert marker in sensor_source, f"RCE day completeness lacks {marker}"
+    assert "_MIN_COMPLETE_RCE_DAY_PERIODS" not in sensor_source
+
+
+def test_current_run_end_covers_the_whole_consecutive_export_window() -> None:
+    """The scheduler latch must cover adjacent planned half-hour slots."""
+    now = NOW.replace(hour=18, minute=5)
+    result = RCE.optimize_rce(
+        base_input(
+            now=now,
+            price_slots=[
+                RCE.PriceSlot(now.replace(minute=0), 2.0),
+                RCE.PriceSlot(now.replace(minute=30), 2.0),
+            ],
+            battery_capacity_kwh=100.0,
+            outage_reserve_soc_percent=0.0,
+            current_load_power_kw=0.0,
+            current_pv_power_kw=0.0,
+            current_battery_soc_fresh=True,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert len(result.planned_exports) == 2
+    assert result.current_slot_end == now.replace(minute=30)
+    assert result.current_run_end == now.replace(hour=19, minute=0)
+    assert result.current_run_end > result.current_slot_end
+
+
+def test_current_run_end_steps_across_autumn_dst_in_utc() -> None:
+    """A repeated 02:xx hour must extend, not collapse, the accepted run."""
+    utc = ZoneInfo("UTC")
+    now = datetime(2026, 10, 25, 1, 40, tzinfo=WARSAW)
+    first = now.replace(minute=30).astimezone(utc)
+    price_slots = [
+        RCE.PriceSlot(
+            (first + timedelta(minutes=30 * index)).astimezone(WARSAW),
+            2.0,
+        )
+        for index in range(6)
+    ]
+    result = RCE.optimize_rce(
+        base_input(
+            now=now,
+            price_slots=price_slots,
+            battery_capacity_kwh=100.0,
+            outage_reserve_soc_percent=0.0,
+            current_load_power_kw=0.0,
+            current_pv_power_kw=0.0,
+            current_battery_soc_fresh=True,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert len(result.planned_exports) == 6
+    assert result.current_run_end is not None
+    assert result.current_run_end == datetime(
+        2026, 10, 25, 3, 30, tzinfo=WARSAW
+    )
+    assert (
+        result.current_run_end.astimezone(utc) - first
+    ) == timedelta(hours=3)
+
+
+def test_p90_load_is_an_alternative_scenario_not_double_counted() -> None:
+    """Tariff P90 remains diagnostic and cannot suppress RCE revenue."""
+    price = slots(0, 18, 8, 2.0)
+    expected = RCE.optimize_rce(
+        base_input(
+            price_slots=price,
+            battery_capacity_kwh=100.0,
+            average_daily_load_kwh=20.0,
+            average_night_load_kwh=8.0,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    conservative = RCE.optimize_rce(
+        base_input(
+            price_slots=price,
+            battery_capacity_kwh=100.0,
+            average_daily_load_kwh=20.0,
+            average_night_load_kwh=8.0,
+            conservative_daily_load_kwh=27.0,
+            conservative_night_load_kwh=10.8,
+            load_history_days=28,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert conservative.load_risk_multiplier == 1.35
+    assert conservative.load_risk_buffer_kwh > 0.0
+    assert conservative.load_risk_mode == "diagnostic_only"
+    assert abs(
+        conservative.planned_export_kwh - expected.planned_export_kwh
+    ) < 0.02
+    assert abs(
+        conservative.protected_home_energy_kwh
+        - expected.protected_home_energy_kwh
+    ) < 1e-6
+
+
+def test_meter_scale_high_pv_forecast_stays_revenue_first() -> None:
+    """The live-scale 230 kWh site keeps its exact hard reserve and export."""
+    now = NOW.replace(hour=8)
+    market = [
+        RCE.PriceSlot(
+            now.replace(hour=16) + timedelta(minutes=30 * index),
+            1.20 if index < 4 else 0.75,
+        )
+        for index in range(32)
+    ]
+    pv: dict[datetime, float] = {}
+    for day_offset, energy in ((0, 100.0), (1, 67.0)):
+        day_start = now.replace(hour=10) + timedelta(days=day_offset)
+        for index in range(12):
+            pv[day_start + timedelta(minutes=30 * index)] = energy / 12.0
+    result = RCE.optimize_rce(
+        base_input(
+            now=now,
+            price_slots=market,
+            pv_by_slot_kwh=pv,
+            conservative_pv_by_slot_kwh=pv,
+            battery_capacity_kwh=230.0,
+            battery_soc_percent=58.0,
+            outage_reserve_soc_percent=11.5,
+            safety_margin_soc_percent=2.0,
+            average_daily_load_kwh=37.4,
+            average_night_load_kwh=11.4,
+            conservative_daily_load_kwh=50.49,
+            conservative_night_load_kwh=15.39,
+            load_history_days=28,
+            inverter_power_kw=10.0,
+            inverter_count=2,
+            discharge_power_percent=100.0,
+            export_efficiency_percent=95.0,
+            critical_zero_pv_guard=True,
+            critical_zero_pv_guard_reason="p10_missing",
+            avoided_import_price_pln_kwh=1.0,
+            day3_pv_forecast_kwh=0.0,
+            battery_wear_cost_pln_kwh=0.08,
+        )
+    )
+    assert result.ready
+    assert not result.critical_zero_pv_guard_active
+    assert result.critical_zero_pv_guard_reason == "risk_not_energy_critical"
+    assert result.load_risk_mode == "diagnostic_only"
+    assert abs(result.base_reserve_energy_kwh - 31.05) < 1e-6
+    assert abs(result.protected_night_energy_kwh - 11.4) < 1e-6
+    assert result.minimum_soc_percent == 19
+    assert abs(result.control_reserve_energy_kwh - 43.7) < 1e-6
+    assert not result.terminal_energy_value_applied_to_objective
+    assert result.planned_export_kwh > 100.0
+    assert result.automatic_price_floor_pln_kwh == 0.75
+
+
+def test_critical_zero_pv_guard_blocks_optimistic_missing_p10() -> None:
+    """Missing/high-risk P10 must not finance export from an optimistic P50."""
+    noon = NOW.replace(hour=12)
+    result = RCE.optimize_rce(
+        base_input(
+            now=NOW.replace(hour=8),
+            price_slots=slots(0, 18, 4, 2.0),
+            battery_soc_percent=20.0,
+            average_daily_load_kwh=8.0,
+            average_night_load_kwh=4.0,
+            pv_by_slot_kwh={noon: 20.0},
+            critical_zero_pv_guard=True,
+            critical_zero_pv_guard_reason="p10_missing",
+        )
+    )
+    assert result.critical_zero_pv_guard_active
+    assert result.critical_zero_pv_guard_reason == "p10_missing"
+    assert result.critical_zero_pv_guarded_kwh >= 19.9
+    assert result.critical_zero_pv_guard_until is not None
+    assert not result.ready
+    assert not result.planned_exports
+
+
+def test_joint_solver_beats_greedy_headroom_counterexample() -> None:
+    """Joint exports move a later capped PV spill from -1.00 to 1.40."""
+    start = NOW.replace(hour=12)
+    market = [
+        RCE.PriceSlot(start + timedelta(minutes=30 * index), price)
+        for index, price in enumerate((1.40, 1.40, 1.40, -1.00))
+    ]
+    pv = {
+        slot.start: energy
+        for slot, energy in zip(market, (1.0, 2.0, 2.0, 2.0), strict=True)
+    }
+    result = RCE.optimize_rce(
+        base_input(
+            now=start,
+            price_slots=market,
+            pv_by_slot_kwh=pv,
+            conservative_pv_by_slot_kwh=pv,
+            battery_capacity_kwh=4.0,
+            battery_soc_percent=25.0,
+            dynamic_reserve_enabled=False,
+            manual_minimum_soc_percent=0.0,
+            outage_reserve_soc_percent=0.0,
+            inverter_power_kw=2.0,
+            battery_wear_cost_pln_kwh=0.08,
+        )
+    )
+    # With the shared 1 kWh AC bridge, exporting in the first and third slots
+    # frees enough headroom to avoid the later negative-price natural export.
+    assert result.planned_export_kwh > 1.99
+    assert result.natural_export_kwh < 0.01
+    assert abs(result.net_objective_pln - 2.64) < 0.02
+    assert result.net_optimization_gain_pln > 3.63
+
+
+def test_seven_slot_middle_price_threshold_is_retained() -> None:
+    """A profitable 0.80 band must survive between 1.40 and negative prices."""
+    start = NOW.replace(hour=10)
+    starts = [start + timedelta(minutes=30 * index) for index in range(7)]
+    price_values = (0.8, 0.8, -1.0, 1.4, 0.5, -0.4, -0.4)
+    conservative_values = (1.5, 0.5, 0.0, 1.5, 2.0, 0.5, 2.0)
+    expected_values = (1.5, 1.0, 1.0, 1.5, 2.0, 1.0, 2.0)
+    load_values = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+    prices = dict(zip(starts, price_values, strict=True))
+    conservative_pv = dict(zip(starts, conservative_values, strict=True))
+    expected_pv = dict(zip(starts, expected_values, strict=True))
+    load = dict(zip(starts, load_values, strict=True))
+    settings = base_input(
+        now=start,
+        battery_capacity_kwh=3.0,
+        battery_soc_percent=50.0,
+        dynamic_reserve_enabled=False,
+        manual_minimum_soc_percent=0.0,
+        outage_reserve_soc_percent=0.0,
+        inverter_power_kw=2.0,
+        battery_wear_cost_pln_kwh=0.08,
+    )
+    reserve = {slot: 0.0 for slot in starts}
+    _, baseline_end, baseline_natural = RCE._simulate(
+        starts,
+        settings,
+        load,
+        {},
+        0.0,
+        reserve,
+        expected_pv,
+    )
+    baseline_objective = RCE._economic_objective(
+        exports={},
+        natural_exports=baseline_natural,
+        price_by_start=prices,
+        ending_battery_kwh=baseline_end,
+        floor_kwh=0.0,
+        export_efficiency=1.0,
+        battery_wear_cost_pln_kwh=0.08,
+        terminal_energy_target_kwh=0.0,
+        terminal_energy_value_pln_kwh=0.0,
+    )[0]
+    plan = RCE._solve_joint_horizon_exports(
+        starts=starts,
+        settings=settings,
+        candidates=[
+            (RCE.PriceSlot(slot, prices[slot]), slot) for slot in starts
+        ],
+        load_by_slot=load,
+        floor_kwh=0.0,
+        export_reserve_by_slot=reserve,
+        conservative_pv=conservative_pv,
+        expected_pv=expected_pv,
+        slot_fractions={slot: 1.0 for slot in starts},
+        price_by_start=prices,
+        baseline_objective=baseline_objective,
+        export_efficiency=1.0,
+        terminal_energy_target=0.0,
+        terminal_unit_value=0.0,
+    )
+    safe, value = _independent_short_simulation(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        pv_by_slot=conservative_pv,
+        exports=plan,
+        floor_kwh=0.0,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    expected_safe, expected_value = _independent_short_simulation(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        pv_by_slot=expected_pv,
+        exports=plan,
+        floor_kwh=0.0,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    assert safe and expected_safe
+    oracle_value, _ = _independent_grid_oracle(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        conservative_pv=conservative_pv,
+        expected_pv=expected_pv,
+        floor_kwh=0.0,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    assert abs(baseline_objective - 1.0) < 1e-9
+    assert expected_value >= oracle_value - 0.02, (
+        expected_value,
+        oracle_value,
+        plan,
+    )
+    assert 0.8 in {prices[slot] for slot in plan}
+
+
+def test_large_candidate_set_drains_the_complete_available_budget() -> None:
+    """Eleven slots must not strand energy at a coarse bisection boundary."""
+    start = NOW.replace(hour=12)
+    market = [
+        RCE.PriceSlot(
+            start + timedelta(minutes=30 * index),
+            2.0 - index * 0.05,
+        )
+        for index in range(11)
+    ]
+    result = RCE.optimize_rce(
+        base_input(
+            now=start,
+            price_slots=market,
+            battery_capacity_kwh=100.0,
+            battery_soc_percent=43.0,
+            dynamic_reserve_enabled=False,
+            manual_minimum_soc_percent=20.0,
+            outage_reserve_soc_percent=0.0,
+            inverter_power_kw=100.0,
+            discharge_power_percent=100.0,
+            bms_max_discharge_current_a=5_000.0,
+            battery_voltage_v=50.0,
+            bms_power_safety_percent=100.0,
+            battery_wear_cost_pln_kwh=0.0,
+        )
+    )
+    assert result.ready
+    assert abs(result.available_energy_now_kwh - 23.0) < 1e-9
+    assert abs(result.planned_export_kwh - 23.0) < 0.011
+    assert abs(result.planned_revenue_pln - 46.0) < 0.022
+    assert len(result.planned_exports) == 1
+    assert result.planned_exports[0].start == market[0].start
+
+
+def test_neutral_slots_do_not_disable_partial_headroom_refinement() -> None:
+    """Adding negative-price rows cannot force a below-wear full discharge."""
+    start = NOW.replace(hour=12)
+    all_market = [
+        RCE.PriceSlot(
+            start + timedelta(minutes=30 * index),
+            0.05 if index == 0 else -1.0,
+        )
+        for index in range(11)
+    ]
+    pv = {all_market[4].start: 2.0}
+
+    def calculate(market):
+        return RCE.optimize_rce(
+            base_input(
+                now=start,
+                price_slots=market,
+                pv_by_slot_kwh=pv,
+                conservative_pv_by_slot_kwh=pv,
+                battery_capacity_kwh=20.0,
+                battery_soc_percent=100.0,
+                dynamic_reserve_enabled=False,
+                manual_minimum_soc_percent=0.0,
+                outage_reserve_soc_percent=0.0,
+                inverter_power_kw=10.0,
+                inverter_count=1,
+                charge_efficiency_percent=100.0,
+                export_efficiency_percent=100.0,
+                battery_wear_cost_pln_kwh=0.08,
+            )
+        )
+
+    short = calculate([all_market[0], all_market[4]])
+    long = calculate(all_market)
+    assert 1.98 < short.planned_export_kwh < 2.03
+    assert abs(long.planned_export_kwh - short.planned_export_kwh) < 0.03
+    assert abs(long.net_optimization_gain_pln - 1.94) < 0.03
+    assert abs(
+        long.net_optimization_gain_pln - short.net_optimization_gain_pln
+    ) < 0.03
+
+
+def test_solver_matches_independent_random_oracle() -> None:
+    """120 random 4--7 slot plans match an independent exhaustive oracle."""
+    rng = random.Random(20260813)
+    worst_absolute_gap = 0.0
+    worst_relative_gap = 0.0
+    absolute_gaps: list[float] = []
+    for case_index in range(120):
+        slot_count = 4 + case_index % 4
+        start = NOW.replace(hour=10) + timedelta(days=case_index)
+        starts = [start + timedelta(minutes=30 * index) for index in range(slot_count)]
+        prices = {
+            slot: rng.choice((-0.40, 0.10, 0.80, 1.40))
+            for slot in starts
+        }
+        conservative_pv = {
+            slot: rng.choice((0.0, 0.5, 1.0, 1.5))
+            for slot in starts
+        }
+        expected_pv = {
+            slot: conservative_pv[slot] + rng.choice((0.0, 0.5))
+            for slot in starts
+        }
+        load = {
+            slot: rng.choice((0.0, 0.5))
+            for slot in starts
+        }
+        settings = base_input(
+            now=start,
+            battery_capacity_kwh=4.0,
+            battery_soc_percent=rng.choice((37.5, 50.0, 62.5)),
+            dynamic_reserve_enabled=False,
+            manual_minimum_soc_percent=12.5,
+            outage_reserve_soc_percent=0.0,
+            inverter_power_kw=2.0,
+            battery_wear_cost_pln_kwh=0.08,
+            charge_efficiency_percent=100.0,
+            house_discharge_efficiency_percent=100.0,
+            price_slots=[
+                RCE.PriceSlot(slot, prices[slot]) for slot in starts
+            ],
+        )
+        floor = 0.5
+        reserve = {slot: floor for slot in starts}
+        oracle_value, _ = _independent_grid_oracle(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load,
+            conservative_pv=conservative_pv,
+            expected_pv=expected_pv,
+            floor_kwh=floor,
+            reserve_by_slot=reserve,
+            prices=prices,
+        )
+        _, baseline_end, baseline_natural = RCE._simulate(
+            starts,
+            settings,
+            load,
+            {},
+            floor,
+            reserve,
+            expected_pv,
+        )
+        baseline_objective = RCE._economic_objective(
+            exports={},
+            natural_exports=baseline_natural,
+            price_by_start=prices,
+            ending_battery_kwh=baseline_end,
+            floor_kwh=floor,
+            export_efficiency=1.0,
+            battery_wear_cost_pln_kwh=0.08,
+            terminal_energy_target_kwh=0.0,
+            terminal_energy_value_pln_kwh=0.0,
+        )[0]
+        plan = RCE._solve_joint_horizon_exports(
+            starts=starts,
+            settings=settings,
+            candidates=[
+                (RCE.PriceSlot(slot, prices[slot]), slot) for slot in starts
+            ],
+            load_by_slot=load,
+            floor_kwh=floor,
+            export_reserve_by_slot=reserve,
+            conservative_pv=conservative_pv,
+            expected_pv=expected_pv,
+            slot_fractions={slot: 1.0 for slot in starts},
+            price_by_start=prices,
+            baseline_objective=baseline_objective,
+            export_efficiency=1.0,
+            terminal_energy_target=0.0,
+            terminal_unit_value=0.0,
+        )
+        conservative_safe, _ = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load,
+            pv_by_slot=conservative_pv,
+            exports=plan,
+            floor_kwh=floor,
+            reserve_by_slot=reserve,
+            prices=prices,
+        )
+        expected_safe, solver_value = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load,
+            pv_by_slot=expected_pv,
+            exports=plan,
+            floor_kwh=floor,
+            reserve_by_slot=reserve,
+            prices=prices,
+        )
+        assert conservative_safe and expected_safe
+        # The independent exhaustive grid is a certified feasible lower bound;
+        # the continuous bounded solver is allowed to improve between grid
+        # points.  Only actual suboptimality counts as a gap.
+        absolute_gap = max(oracle_value - solver_value, 0.0)
+        absolute_gaps.append(absolute_gap)
+        relative_gap = absolute_gap / max(abs(oracle_value), 1.0)
+        worst_absolute_gap = max(worst_absolute_gap, absolute_gap)
+        worst_relative_gap = max(worst_relative_gap, relative_gap)
+        assert absolute_gap < 0.025, (
+            case_index,
+            solver_value,
+            oracle_value,
+            plan,
+        )
+    assert worst_absolute_gap < 0.025, worst_absolute_gap
+    assert worst_relative_gap < 0.003, (
+        worst_absolute_gap,
+        worst_relative_gap,
+    )
+    median_gap = sorted(absolute_gaps)[len(absolute_gaps) // 2]
+    assert median_gap < 0.001
+
+
+def test_missing_quarter_is_not_paired_with_the_next_half_hour() -> None:
+    """A missing 00:30 row drops that block instead of shifting all pairs."""
+    rows = [
+        {"business_date": "2026-07-28", "period": clock, "rce_pln": value}
+        for clock, value in (
+            ("00:00", 100.0),
+            ("00:15", 200.0),
+            ("00:45", 900.0),
+            ("01:00", 300.0),
+            ("01:15", 500.0),
+        )
+    ]
+    parsed = RCE.parse_rce_rows(
+        rows,
+        WARSAW,
+        block_enabled=False,
+        block_start_minute=0,
+        block_end_minute=0,
+    )
+    assert [item.start.strftime("%H:%M") for item in parsed] == ["00:00", "01:00"]
+    assert abs(parsed[0].price_pln_kwh - 0.15) < 1e-12
+    assert abs(parsed[1].price_pln_kwh - 0.4) < 1e-12
+
+
+def test_rce_row_parser_is_independent_of_payload_order() -> None:
+    """Forward, reversed and shuffled OData rows produce identical slots."""
+    rows = [
+        {
+            "business_date": "2026-07-28",
+            "period": f"{hour:02d}:{minute:02d}",
+            "rce_pln": 100.0 + hour * 100.0 + minute,
+        }
+        for hour in range(2)
+        for minute in (0, 15, 30, 45)
+    ]
+
+    def parsed(payload):
+        return [
+            (
+                item.start.astimezone(ZoneInfo("UTC")),
+                item.price_pln_kwh,
+            )
+            for item in RCE.parse_rce_rows(
+                payload,
+                WARSAW,
+                block_enabled=False,
+                block_start_minute=0,
+                block_end_minute=0,
+            )
+        ]
+
+    forward = parsed(rows)
+    reversed_rows = parsed(list(reversed(rows)))
+    shuffled_rows = list(rows)
+    random.Random(42).shuffle(shuffled_rows)
+    shuffled = parsed(shuffled_rows)
+    swapped_rows = list(rows)
+    swapped_rows[1], swapped_rows[2] = swapped_rows[2], swapped_rows[1]
+    swapped = parsed(swapped_rows)
+    assert len(forward) == 4
+    assert reversed_rows == forward
+    assert shuffled == forward
+    assert swapped == forward
+
+
+def test_autumn_duplicate_rows_split_folds_deterministically() -> None:
+    """Ambiguous local-only folds retain both instants at the safe price."""
+    rows = []
+    for repeat, base in (("a", 100.0), ("b", 500.0)):
+        rows.extend(
+            {
+                "business_date": "2026-10-25",
+                "period": f"02:{minute:02d}",
+                "rce_pln": base + minute,
+                "source_id": repeat,
+            }
+            for minute in (0, 15, 30, 45)
+        )
+
+    def parsed(payload):
+        return [
+            (
+                item.start.astimezone(ZoneInfo("UTC")),
+                item.price_pln_kwh,
+            )
+            for item in RCE.parse_rce_rows(
+                payload,
+                WARSAW,
+                block_enabled=False,
+                block_start_minute=0,
+                block_end_minute=0,
+            )
+        ]
+
+    forward = parsed(rows)
+    reversed_rows = parsed(list(reversed(rows)))
+    shuffled_rows = list(rows)
+    random.Random(99).shuffle(shuffled_rows)
+    assert len(forward) == 4
+    assert forward == reversed_rows == parsed(shuffled_rows)
+    absolute = [start for start, _ in forward]
+    assert absolute == sorted(absolute)
+    assert len(set(absolute)) == 4
+    # Which real fold owns 100 vs 500 cannot be recovered without dtime_utc.
+    # Both real half-hours therefore use the lower pair, independently of how
+    # the source happened to order the two physical folds.
+    assert [round(price, 6) for _, price in forward] == [
+        0.1075,
+        0.1375,
+        0.1075,
+        0.1375,
+    ]
+
+
+def test_local_only_dst_fold_prices_cannot_be_swapped_into_false_profit() -> None:
+    """Swapped real-fold provenance has the same conservative fallback."""
+    def payload(first_base: float, second_base: float) -> list[dict[str, object]]:
+        return [
+            {
+                "business_date": "2026-10-25",
+                "period": f"02:{minute:02d}",
+                "rce_pln": base + minute,
+                "source_id": source,
+            }
+            for source, base in (("first", first_base), ("second", second_base))
+            for minute in (0, 15, 30, 45)
+        ]
+
+    def parsed(rows: list[dict[str, object]]) -> list[tuple[datetime, float]]:
+        return [
+            (item.start.astimezone(ZoneInfo("UTC")), item.price_pln_kwh)
+            for item in RCE.parse_rce_rows(
+                rows,
+                WARSAW,
+                block_enabled=False,
+                block_start_minute=0,
+                block_end_minute=0,
+            )
+        ]
+
+    low_then_high = parsed(payload(100.0, 10_000.0))
+    high_then_low = parsed(payload(10_000.0, 100.0))
+    assert low_then_high == high_then_low
+    assert len(low_then_high) == 4
+    assert max(price for _, price in low_then_high) < 0.15
+
+    # One local record per ambiguous wall-clock quarter cannot identify a
+    # fold, so the incomplete hour is discarded instead of guessing.
+    incomplete = payload(100.0, 10_000.0)[::2]
+    assert parsed(incomplete) == []
+
+
+def test_pse_absolute_utc_preserves_price_to_dst_fold_relationship() -> None:
+    """dtime_utc, not payload or price order, assigns repeated-hour prices."""
+    utc = ZoneInfo("UTC")
+    rows = []
+    # Fold 0 deliberately has the larger price.  The wall-time fallback's
+    # stable content sort would assign the smaller price first, so this proves
+    # that the official absolute timestamp is authoritative.
+    for fold_start, base_price in (
+        (datetime(2026, 10, 25, 0, 0, tzinfo=utc), 900.0),
+        (datetime(2026, 10, 25, 1, 0, tzinfo=utc), 100.0),
+    ):
+        for minute in (0, 15, 30, 45):
+            instant = fold_start + timedelta(minutes=minute)
+            rows.append(
+                {
+                    "business_date": "2026-10-25",
+                    "period": instant.astimezone(WARSAW).strftime("%H:%M"),
+                    "period_utc": instant.strftime("%H:%M"),
+                    "dtime_utc": instant.isoformat().replace("+00:00", "Z"),
+                    "rce_pln": base_price + minute,
+                }
+            )
+
+    def parsed(payload):
+        return [
+            (
+                item.start.astimezone(utc),
+                item.price_pln_kwh,
+            )
+            for item in RCE.parse_rce_rows(
+                payload,
+                WARSAW,
+                block_enabled=False,
+                block_start_minute=0,
+                block_end_minute=0,
+            )
+        ]
+
+    expected = parsed(rows)
+    shuffled = list(rows)
+    random.Random(253).shuffle(shuffled)
+    assert expected == parsed(list(reversed(rows))) == parsed(shuffled)
+    assert len(expected) == 4
+    assert expected[0][1] > 0.9 and expected[1][1] > 0.9
+    assert expected[2][1] < 0.2 and expected[3][1] < 0.2
+    assert [start for start, _ in expected] == sorted(
+        start for start, _ in expected
+    )
+
+
+def test_conflicting_absolute_duplicate_uses_conservative_price_end_to_end() -> None:
+    """One UTC quarter cannot manufacture a high-price export signal."""
+    first_quarter_utc = NOW.astimezone(ZoneInfo("UTC"))
+    second_quarter_utc = first_quarter_utc + timedelta(minutes=15)
+    rows = [
+        {
+            "dtime_utc": first_quarter_utc.isoformat(),
+            "rce_pln": 10_000.0,
+            "source": "inflated_duplicate",
+        },
+        {
+            "dtime_utc": first_quarter_utc.isoformat(),
+            "rce_pln": 900.0,
+            "source": "conservative_duplicate",
+        },
+        {
+            "dtime_utc": second_quarter_utc.isoformat(),
+            "rce_pln": 900.0,
+        },
+    ]
+    parsed = RCE.parse_rce_rows(
+        rows,
+        WARSAW,
+        block_enabled=False,
+        block_start_minute=0,
+        block_end_minute=0,
+    )
+    reversed_parsed = RCE.parse_rce_rows(
+        reversed(rows),
+        WARSAW,
+        block_enabled=False,
+        block_start_minute=0,
+        block_end_minute=0,
+    )
+    assert parsed == reversed_parsed
+    assert len(parsed) == 1
+    assert abs(parsed[0].price_pln_kwh - 0.9) < 1e-9
+
+    result = RCE.optimize_rce(base_input(price_slots=parsed))
+    assert result.planned_exports
+    assert all(
+        abs(item.price_pln_kwh - 0.9) < 1e-9
+        for item in result.planned_exports
+    )
+
+    # The post-parser UTC deduplicator also keeps the stricter block flag.
+    normalized = RCE._supported_price_slots(
+        base_input(
+            price_slots=[
+                RCE.PriceSlot(NOW, 1.0, blocked=False),
+                RCE.PriceSlot(NOW, 0.9, blocked=True),
+            ]
+        )
+    )
+    assert len(normalized) == 1
+    assert normalized[0].blocked
+    assert abs(normalized[0].price_pln_kwh - 0.9) < 1e-9
+
+
+def test_scheduler_requests_absolute_ordered_pse_rows() -> None:
+    """Every shipped scheduler asks PSE for UTC fields in UTC order."""
+    scheduler_paths = (
+        ROOT
+        / "custom_components"
+        / "hoymiles_hit_modbus"
+        / "resources"
+        / "home_assistant"
+        / "en"
+        / "hoymiles_ems_scheduler.yaml",
+        ROOT
+        / "custom_components"
+        / "hoymiles_hit_modbus"
+        / "resources"
+        / "home_assistant"
+        / "pl"
+        / "hoymiles_ems_scheduler.yaml",
+        ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml",
+    )
+    for path in scheduler_paths:
+        source = path.read_text(encoding="utf-8")
+        assert source.count("%2Cdtime_utc%2Cperiod_utc") == 2
+        assert source.count("%24orderby=dtime_utc%20asc") == 2
+
+
+def test_real_horizon_solver_runtime_is_bounded() -> None:
+    """A 110-slot market horizon must not block an HA update for seconds."""
+    start = NOW.replace(hour=0)
+    market = [
+        RCE.PriceSlot(
+            start + timedelta(minutes=30 * index),
+            (0.15, 0.38, 0.72, 1.18, 0.55)[index % 5],
+        )
+        for index in range(110)
+    ]
+    pv = {
+        slot.start: (
+            5.0
+            if 10 <= slot.start.astimezone(WARSAW).hour < 16
+            else 0.0
+        )
+        for slot in market
+    }
+    settings = base_input(
+        now=start,
+        price_slots=market,
+        pv_by_slot_kwh=pv,
+        conservative_pv_by_slot_kwh=pv,
+        battery_capacity_kwh=230.0,
+        battery_soc_percent=58.0,
+        outage_reserve_soc_percent=11.5,
+        safety_margin_soc_percent=2.0,
+        average_daily_load_kwh=37.4,
+        average_night_load_kwh=11.4,
+        inverter_power_kw=10.0,
+        inverter_count=2,
+        battery_wear_cost_pln_kwh=0.08,
+    )
+    started = monotonic_time.perf_counter()
+    result = RCE.optimize_rce(settings)
+    elapsed = monotonic_time.perf_counter() - started
+    assert result.ready
+    assert result.planned_exports
+    # Generous CI guard; the reference Windows run is reported separately and
+    # is expected to remain far below this ceiling.
+    assert elapsed < 0.5, elapsed
+    assert result.solver_runtime_ms < 500.0
+    assert result.solver_method == "joint_horizon_bounded_active_set"
+    assert not result.optimality_verified
+
+
+def test_medium_horizon_pair_swap_crosses_pv_headroom_valley() -> None:
+    """An 8-slot plan may require removing and adding exports together."""
+    starts = [
+        NOW.replace(hour=10) + timedelta(minutes=30 * index)
+        for index in range(8)
+    ]
+    price_values = (0.8, 0.8, 0.8, 0.8, 0.8, -0.4, 1.4, 0.8)
+    pv_values = (1.5, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0)
+    load_values = (0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0)
+    prices = dict(zip(starts, price_values, strict=True))
+    pv = dict(zip(starts, pv_values, strict=True))
+    load = dict(zip(starts, load_values, strict=True))
+    settings = base_input(
+        now=starts[0],
+        price_slots=[RCE.PriceSlot(start, prices[start]) for start in starts],
+        battery_capacity_kwh=4.0,
+        battery_soc_percent=62.5,
+        dynamic_reserve_enabled=False,
+        manual_minimum_soc_percent=12.5,
+        outage_reserve_soc_percent=0.0,
+        inverter_power_kw=2.0,
+        battery_wear_cost_pln_kwh=0.08,
+        charge_efficiency_percent=100.0,
+        house_discharge_efficiency_percent=100.0,
+    )
+    floor = 0.5
+    reserve = {start: floor for start in starts}
+    oracle_value, _ = _independent_grid_oracle(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        conservative_pv=pv,
+        expected_pv=pv,
+        floor_kwh=floor,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    _, baseline_end, baseline_natural = RCE._simulate(
+        starts,
+        settings,
+        load,
+        {},
+        floor,
+        reserve,
+        pv,
+    )
+    baseline_objective = RCE._economic_objective(
+        exports={},
+        natural_exports=baseline_natural,
+        price_by_start=prices,
+        ending_battery_kwh=baseline_end,
+        floor_kwh=floor,
+        export_efficiency=1.0,
+        battery_wear_cost_pln_kwh=0.08,
+        terminal_energy_target_kwh=0.0,
+        terminal_energy_value_pln_kwh=0.0,
+    )[0]
+    started = monotonic_time.perf_counter()
+    plan = RCE._solve_joint_horizon_exports(
+        starts=starts,
+        settings=settings,
+        candidates=[
+            (RCE.PriceSlot(start, prices[start]), start) for start in starts
+        ],
+        load_by_slot=load,
+        floor_kwh=floor,
+        export_reserve_by_slot=reserve,
+        conservative_pv=pv,
+        expected_pv=pv,
+        slot_fractions={start: 1.0 for start in starts},
+        price_by_start=prices,
+        baseline_objective=baseline_objective,
+        export_efficiency=1.0,
+        terminal_energy_target=0.0,
+        terminal_unit_value=0.0,
+    )
+    elapsed = monotonic_time.perf_counter() - started
+    safe, ending, natural = RCE._simulate(
+        starts,
+        settings,
+        load,
+        plan,
+        floor,
+        reserve,
+        pv,
+    )
+    solver_value = RCE._economic_objective(
+        exports=plan,
+        natural_exports=natural,
+        price_by_start=prices,
+        ending_battery_kwh=ending,
+        floor_kwh=floor,
+        export_efficiency=1.0,
+        battery_wear_cost_pln_kwh=0.08,
+        terminal_energy_target_kwh=0.0,
+        terminal_energy_value_pln_kwh=0.0,
+    )[0]
+    assert safe
+    assert abs(oracle_value - 3.12) < 1e-9
+    assert solver_value >= oracle_value - 0.02, (solver_value, oracle_value)
+    assert elapsed < 1.0, elapsed
+
+
+def test_irrelevant_padding_keeps_pair_refinement_on_relevant_slots() -> None:
+    """Negative, zero or below-wear rows cannot hide the 8-slot exchange."""
+    starts = [
+        NOW.replace(hour=0) + timedelta(minutes=30 * index)
+        for index in range(96)
+    ]
+    price_values = (0.8, 0.8, 0.8, 0.8, 0.8, -0.4, 1.4, 0.8)
+    pv_values = (1.5, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0)
+    load_values = (0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0)
+    pv = {
+        start: pv_values[index]
+        for index, start in enumerate(starts[: len(pv_values)])
+    }
+    load = {
+        start: load_values[index]
+        for index, start in enumerate(starts[: len(load_values)])
+    }
+    floor = 0.5
+    reserve = {start: floor for start in starts}
+    for padding_price in (-1.0, 0.0, 0.02):
+        prices = {
+            start: (
+                price_values[index]
+                if index < len(price_values)
+                else padding_price
+            )
+            for index, start in enumerate(starts)
+        }
+        settings = base_input(
+            now=starts[0],
+            price_slots=[
+                RCE.PriceSlot(start, prices[start]) for start in starts
+            ],
+            battery_capacity_kwh=4.0,
+            battery_soc_percent=62.5,
+            dynamic_reserve_enabled=False,
+            manual_minimum_soc_percent=12.5,
+            outage_reserve_soc_percent=0.0,
+            inverter_power_kw=2.0,
+            battery_wear_cost_pln_kwh=0.08,
+            charge_efficiency_percent=100.0,
+            house_discharge_efficiency_percent=100.0,
+        )
+        _, baseline_end, baseline_natural = RCE._simulate(
+            starts,
+            settings,
+            load,
+            {},
+            floor,
+            reserve,
+            pv,
+        )
+        baseline_objective = RCE._economic_objective(
+            exports={},
+            natural_exports=baseline_natural,
+            price_by_start=prices,
+            ending_battery_kwh=baseline_end,
+            floor_kwh=floor,
+            export_efficiency=1.0,
+            battery_wear_cost_pln_kwh=0.08,
+            terminal_energy_target_kwh=0.0,
+            terminal_energy_value_pln_kwh=0.0,
+        )[0]
+        started = monotonic_time.perf_counter()
+        plan = RCE._solve_joint_horizon_exports(
+            starts=starts,
+            settings=settings,
+            candidates=[
+                (RCE.PriceSlot(start, prices[start]), start)
+                for start in starts
+            ],
+            load_by_slot=load,
+            floor_kwh=floor,
+            export_reserve_by_slot=reserve,
+            conservative_pv=pv,
+            expected_pv=pv,
+            slot_fractions={start: 1.0 for start in starts},
+            price_by_start=prices,
+            baseline_objective=baseline_objective,
+            export_efficiency=1.0,
+            terminal_energy_target=0.0,
+            terminal_unit_value=0.0,
+        )
+        elapsed = monotonic_time.perf_counter() - started
+        safe, ending, natural = RCE._simulate(
+            starts,
+            settings,
+            load,
+            plan,
+            floor,
+            reserve,
+            pv,
+        )
+        solver_value = RCE._economic_objective(
+            exports=plan,
+            natural_exports=natural,
+            price_by_start=prices,
+            ending_battery_kwh=ending,
+            floor_kwh=floor,
+            export_efficiency=1.0,
+            battery_wear_cost_pln_kwh=0.08,
+            terminal_energy_target_kwh=0.0,
+            terminal_energy_value_pln_kwh=0.0,
+        )[0]
+        assert safe
+        assert solver_value >= 3.12 - 1e-9, (
+            padding_price,
+            solver_value,
+            plan,
+        )
+        assert elapsed < 0.5, (padding_price, elapsed)
+
+
+def _solve_padded_fuzz_fixture(
+    *,
+    prices_first_eight: tuple[float, ...],
+    conservative_pv_first_eight: tuple[float, ...],
+    expected_pv_first_eight: tuple[float, ...],
+    load_first_eight: tuple[float, ...],
+    padding_price: float,
+    initial_soc_percent: float,
+) -> tuple[float, dict[datetime, float], float, object, list[datetime]]:
+    """Solve one deterministic eight-slot fuzz case in a 96-row payload."""
+    starts = [
+        NOW.replace(hour=0) + timedelta(minutes=30 * index)
+        for index in range(96)
+    ]
+    prices = {
+        start: (
+            prices_first_eight[index]
+            if index < len(prices_first_eight)
+            else padding_price
+        )
+        for index, start in enumerate(starts)
+    }
+    conservative_pv = {
+        start: conservative_pv_first_eight[index]
+        for index, start in enumerate(starts[:8])
+    }
+    expected_pv = {
+        start: expected_pv_first_eight[index]
+        for index, start in enumerate(starts[:8])
+    }
+    load = {
+        start: load_first_eight[index]
+        for index, start in enumerate(starts[:8])
+    }
+    settings = base_input(
+        now=starts[0],
+        price_slots=[RCE.PriceSlot(start, prices[start]) for start in starts],
+        battery_capacity_kwh=4.0,
+        battery_soc_percent=initial_soc_percent,
+        dynamic_reserve_enabled=False,
+        manual_minimum_soc_percent=12.5,
+        outage_reserve_soc_percent=0.0,
+        inverter_power_kw=2.0,
+        battery_wear_cost_pln_kwh=0.08,
+        charge_efficiency_percent=100.0,
+        house_discharge_efficiency_percent=100.0,
+    )
+    floor = 0.5
+    reserve = {start: floor for start in starts}
+    _, baseline_end, baseline_natural = RCE._simulate(
+        starts,
+        settings,
+        load,
+        {},
+        floor,
+        reserve,
+        expected_pv,
+    )
+    baseline_objective = RCE._economic_objective(
+        exports={},
+        natural_exports=baseline_natural,
+        price_by_start=prices,
+        ending_battery_kwh=baseline_end,
+        floor_kwh=floor,
+        export_efficiency=1.0,
+        battery_wear_cost_pln_kwh=0.08,
+        terminal_energy_target_kwh=0.0,
+        terminal_energy_value_pln_kwh=0.0,
+    )[0]
+    started = monotonic_time.perf_counter()
+    plan = RCE._solve_joint_horizon_exports(
+        starts=starts,
+        settings=settings,
+        candidates=[
+            (RCE.PriceSlot(start, prices[start]), start) for start in starts
+        ],
+        load_by_slot=load,
+        floor_kwh=floor,
+        export_reserve_by_slot=reserve,
+        conservative_pv=conservative_pv,
+        expected_pv=expected_pv,
+        slot_fractions={start: 1.0 for start in starts},
+        price_by_start=prices,
+        baseline_objective=baseline_objective,
+        export_efficiency=1.0,
+        terminal_energy_target=0.0,
+        terminal_unit_value=0.0,
+    )
+    elapsed = monotonic_time.perf_counter() - started
+    conservative_safe, _ = _independent_short_simulation(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        pv_by_slot=conservative_pv,
+        exports=plan,
+        floor_kwh=floor,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    conservative_baseline_safe, _ = _independent_short_simulation(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        pv_by_slot=conservative_pv,
+        exports={},
+        floor_kwh=floor,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    expected_safe, solver_value = _independent_short_simulation(
+        starts=starts,
+        settings=settings,
+        load_by_slot=load,
+        pv_by_slot=expected_pv,
+        exports=plan,
+        floor_kwh=floor,
+        reserve_by_slot=reserve,
+        prices=prices,
+    )
+    # A forecast can describe an unavoidable reserve shortage even with no
+    # controllable export.  The fail-safe result is then the empty plan; no
+    # export schedule can repair that exogenous deficit.
+    assert conservative_safe or (not conservative_baseline_safe and not plan)
+    assert expected_safe
+    return solver_value, plan, elapsed, settings, starts
+
+
+def test_padded_fuzz_case_4_rejects_expected_value_destroying_exports() -> None:
+    """Above-wear padding cannot hide the independent feasible lower bound."""
+    prices = (-0.4, -0.4, 0.1, 0.8, -0.4, 1.4, 0.8, 0.8)
+    conservative_pv = (1.5, 1.0, 1.5, 0.5, 1.5, 1.0, 0.5, 1.5)
+    expected_pv = (1.5, 1.5, 1.5, 1.0, 1.5, 1.5, 1.0, 2.0)
+    load = (0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0)
+    for padding_price in (0.081, 0.09, 0.10):
+        solver_value, plan, elapsed, settings, starts = (
+            _solve_padded_fuzz_fixture(
+                prices_first_eight=prices,
+                conservative_pv_first_eight=conservative_pv,
+                expected_pv_first_eight=expected_pv,
+                load_first_eight=load,
+                padding_price=padding_price,
+                initial_soc_percent=62.5,
+            )
+        )
+        oracle_plan = {starts[3]: 1.0}
+        load_by_slot = dict(zip(starts[:8], load, strict=True))
+        reserve_by_slot = {start: 0.5 for start in starts}
+        price_by_slot = {
+            start: prices[index] if index < 8 else padding_price
+            for index, start in enumerate(starts)
+        }
+        conservative_safe, _ = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load_by_slot,
+            pv_by_slot=dict(zip(starts[:8], conservative_pv, strict=True)),
+            exports=oracle_plan,
+            floor_kwh=0.5,
+            reserve_by_slot=reserve_by_slot,
+            prices=price_by_slot,
+        )
+        expected_safe, oracle_value = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load_by_slot,
+            pv_by_slot=dict(zip(starts[:8], expected_pv, strict=True)),
+            exports=oracle_plan,
+            floor_kwh=0.5,
+            reserve_by_slot=reserve_by_slot,
+            prices=price_by_slot,
+        )
+        assert conservative_safe and expected_safe, padding_price
+        assert abs(oracle_value - 3.77) < 1e-9, padding_price
+        assert solver_value >= oracle_value - 1e-9, (
+            padding_price,
+            solver_value,
+            plan,
+        )
+        # Optimizer work is executor-offloaded.  This heavy 96-row regression
+        # uses a CI-stable wall guard; the dedicated real-horizon benchmark
+        # retains the tighter 0.5-second runtime and result-attribute checks.
+        assert elapsed < 0.75, (padding_price, elapsed)
+
+
+def test_padded_fuzz_case_35_crosses_three_coordinate_valley() -> None:
+    """Profitable padding cannot conceal a multi-coordinate PV valley."""
+    prices = (-0.4, -0.4, 0.8, 1.4, 0.1, 1.4, 0.1, 0.8)
+    conservative_pv = (1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.5)
+    expected_pv = (1.0, 1.5, 1.5, 1.0, 1.0, 0.5, 1.5, 0.5)
+    load = (0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5)
+    for padding_price in (0.081, 0.09, 0.10):
+        solver_value, plan, elapsed, settings, starts = (
+            _solve_padded_fuzz_fixture(
+                prices_first_eight=prices,
+                conservative_pv_first_eight=conservative_pv,
+                expected_pv_first_eight=expected_pv,
+                load_first_eight=load,
+                padding_price=padding_price,
+                initial_soc_percent=50.0,
+            )
+        )
+        oracle_plan = {
+            starts[5]: 1.0,
+            starts[6]: 1.0,
+            starts[7]: 0.5,
+        }
+        load_by_slot = dict(zip(starts[:8], load, strict=True))
+        reserve_by_slot = {start: 0.5 for start in starts}
+        price_by_slot = {
+            start: prices[index] if index < 8 else padding_price
+            for index, start in enumerate(starts)
+        }
+        conservative_safe, _ = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load_by_slot,
+            pv_by_slot=dict(zip(starts[:8], conservative_pv, strict=True)),
+            exports=oracle_plan,
+            floor_kwh=0.5,
+            reserve_by_slot=reserve_by_slot,
+            prices=price_by_slot,
+        )
+        expected_safe, oracle_value = _independent_short_simulation(
+            starts=starts,
+            settings=settings,
+            load_by_slot=load_by_slot,
+            pv_by_slot=dict(zip(starts[:8], expected_pv, strict=True)),
+            exports=oracle_plan,
+            floor_kwh=0.5,
+            reserve_by_slot=reserve_by_slot,
+            prices=price_by_slot,
+        )
+        assert conservative_safe and expected_safe, padding_price
+        assert abs(oracle_value - 3.60) < 1e-9, padding_price
+        assert solver_value >= oracle_value - 1e-9, (
+            padding_price,
+            solver_value,
+            plan,
+        )
+        assert elapsed < 0.75, (padding_price, elapsed)
+
+
+def test_additional_padded_long_horizon_fuzz_has_bounded_gap() -> None:
+    """The audited 40-case 96-row fuzz stays close to a grid oracle."""
+    rng = random.Random(20260813)
+    absolute_gaps: list[float] = []
+    relative_gaps: list[float] = []
+    for case_index in range(40):
+        prices = tuple(
+            rng.choice((-0.4, 0.1, 0.8, 1.4)) for _ in range(8)
+        )
+        conservative_pv = tuple(
+            rng.choice((0.0, 0.5, 1.0, 1.5)) for _ in range(8)
+        )
+        expected_pv = tuple(
+            value + rng.choice((0.0, 0.5)) for value in conservative_pv
+        )
+        load = tuple(rng.choice((0.0, 0.5)) for _ in range(8))
+        initial_soc = rng.choice((37.5, 50.0, 62.5))
+        padding_price = (0.081, 0.09, 0.10)[case_index % 3]
+
+        solver_value, plan, elapsed, settings, all_starts = (
+            _solve_padded_fuzz_fixture(
+                prices_first_eight=prices,
+                conservative_pv_first_eight=conservative_pv,
+                expected_pv_first_eight=expected_pv,
+                load_first_eight=load,
+                padding_price=padding_price,
+                initial_soc_percent=initial_soc,
+            )
+        )
+        starts = all_starts[:8]
+        oracle_value, _ = _independent_grid_oracle(
+            starts=starts,
+            settings=settings,
+            load_by_slot=dict(zip(starts, load, strict=True)),
+            conservative_pv=dict(zip(starts, conservative_pv, strict=True)),
+            expected_pv=dict(zip(starts, expected_pv, strict=True)),
+            floor_kwh=0.5,
+            reserve_by_slot={start: 0.5 for start in starts},
+            prices=dict(zip(starts, prices, strict=True)),
+        )
+        assert elapsed < 0.75, (case_index, elapsed, plan)
+        if not math.isfinite(oracle_value):
+            # Case 10 has an exogenous conservative reserve shortage even for
+            # the empty plan; the helper above verifies that the solver does
+            # not schedule any controllable export in that state.
+            continue
+        gap = max(oracle_value - solver_value, 0.0)
+        absolute_gaps.append(gap)
+        relative_gaps.append(gap / max(abs(oracle_value), 1.0))
+
+    # This is a feasible lower bound on a 0/0.5/1 kWh grid, not a claim of
+    # global optimality.  Of 39 cases with any feasible grid point, the
+    # continuous solver beats or matches it in 38; case 12 trails by only
+    # 0.0045 PLN (0.1661%).  Case 10 is the unavoidable shortage above.
+    assert len(absolute_gaps) == 39
+    assert max(absolute_gaps) <= 0.004501, max(absolute_gaps)
+    assert max(relative_gaps) <= 0.001661, max(relative_gaps)
+    assert sorted(absolute_gaps)[len(absolute_gaps) // 2] < 1e-9
+
+
+def test_far_future_and_duplicate_prices_cannot_expand_horizon() -> None:
+    """Only today/tomorrow, one conservative value per UTC slot, is used."""
+    current = RCE.PriceSlot(NOW, 1.0)
+    duplicate = RCE.PriceSlot(NOW, 0.2)
+    far_future = RCE.PriceSlot(NOW + timedelta(days=3650), 1000.0)
+    settings = base_input(
+        price_slots=[far_future, current, duplicate],
+        battery_capacity_kwh=20.0,
+        battery_soc_percent=100.0,
+    )
+    started = monotonic_time.perf_counter()
+    result = RCE.optimize_rce(settings)
+    elapsed = monotonic_time.perf_counter() - started
+    assert result.ready
+    assert result.planned_exports
+    assert all(
+        item.start.date() <= NOW.date() + timedelta(days=1)
+        for item in result.planned_exports
+    )
+    assert all(abs(item.price_pln_kwh - 0.2) < 1e-9 for item in result.planned_exports)
+    assert elapsed < 0.5, elapsed
+
+
+def test_dst_rows_are_resolved_on_absolute_utc_timeline() -> None:
+    """Spring gaps disappear and both autumn 02:xx folds remain distinct."""
+    def row(day: str, clock: str) -> dict[str, object]:
+        return {"business_date": day, "period": clock, "rce_pln": 1000.0}
+
+    spring_rows = [
+        row("2026-03-29", f"{hour:02d}:{minute:02d}")
+        for hour in range(4)
+        for minute in (0, 15, 30, 45)
+    ]
+    spring = RCE.parse_rce_rows(
+        spring_rows,
+        WARSAW,
+        block_enabled=False,
+        block_start_minute=0,
+        block_end_minute=0,
+    )
+    assert len(spring) == 6
+    assert len({item.start.astimezone(ZoneInfo("UTC")) for item in spring}) == 6
+
+    autumn_rows = [
+        *[
+            row("2026-10-25", f"{hour:02d}:{minute:02d}")
+            for hour in range(2)
+            for minute in (0, 15, 30, 45)
+        ],
+        *[row("2026-10-25", f"02:{minute:02d}") for minute in (0, 15, 30, 45)],
+        *[row("2026-10-25", f"02:{minute:02d}") for minute in (0, 15, 30, 45)],
+        *[row("2026-10-25", f"03:{minute:02d}") for minute in (0, 15, 30, 45)],
+    ]
+    autumn = RCE.parse_rce_rows(
+        autumn_rows,
+        WARSAW,
+        block_enabled=False,
+        block_start_minute=0,
+        block_end_minute=0,
+    )
+    absolute = [item.start.astimezone(ZoneInfo("UTC")) for item in autumn]
+    assert len(autumn) == 10
+    assert len(set(absolute)) == 10
+    assert absolute == sorted(absolute)
+
+
+def test_self_use_reserve_uses_fresh_physical_readback() -> None:
+    sensor_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    assert '"sensor.hoymiles_hit_ems_self_use_soc_readback"' in sensor_source
+    assert '"number.hoymiles_hit_self_use_soc"' not in sensor_source
+    assert '"self_use_soc_data_fresh"' in sensor_source
+    assert '"self_use_soc_age_seconds"' in sensor_source
+    assert "minimum=10.0,\n            maximum=100.0" in sensor_source
+    assert "minimum=0.0,\n            maximum=100.0" in sensor_source
+    assert '"soc_data_fresh": battery_soc_sample.fresh' in sensor_source
+    assert '"inverter_count_data_fresh"' in sensor_source
+    assert '"inverter_count_age_seconds"' in sensor_source
+    assert "inverter_count_raw or 1.0" not in sensor_source
+
+
 def main() -> None:
     """Run without pytest so the release validator has no extra dependency."""
     tests = [
@@ -736,8 +2760,8 @@ def main() -> None:
         test_effective_power_input_caps_slot_energy,
         test_gcf_caps_natural_pv_export_per_slot,
         test_battery_wear_rejects_gross_but_unprofitable_sale,
-        test_day3_terminal_value_retains_energy_for_future_import,
-        test_partial_day3_deficit_keeps_energy_below_avoided_import_value,
+        test_day3_terminal_value_is_diagnostic_only,
+        test_high_sale_price_is_not_blocked_by_default_terminal_value,
         test_terminal_value_boundary_uses_house_discharge_efficiency,
         test_terminal_reserve_reports_day3_availability_and_reason,
         test_whole_soc_control_reserve_does_not_overstate_export,
@@ -745,6 +2769,40 @@ def main() -> None:
         test_sensor_exposes_terminal_and_gain_contract,
         test_shared_forecast_model_is_conservative_and_robust,
         test_house_energy_model_applies_charge_and_discharge_losses,
+        test_load_and_grid_share_the_same_bms_discharge_budget,
+        test_current_slot_uses_only_real_remaining_fraction_and_live_power,
+        test_partial_slot_plan_exposes_energy_bounded_execution_power,
+        test_current_slot_start_fails_closed_without_fresh_live_inputs,
+        test_bms_discharge_limit_fails_closed_on_invalid_freshness,
+        test_bms_charge_limit_fails_closed_and_caps_future_refill,
+        test_pv_charge_and_both_export_paths_share_one_ac_bridge,
+        test_signed_age_contract_is_shared_with_rce_sensor,
+        test_current_run_end_covers_the_whole_consecutive_export_window,
+        test_current_run_end_steps_across_autumn_dst_in_utc,
+        test_p90_load_is_an_alternative_scenario_not_double_counted,
+        test_meter_scale_high_pv_forecast_stays_revenue_first,
+        test_critical_zero_pv_guard_blocks_optimistic_missing_p10,
+        test_joint_solver_beats_greedy_headroom_counterexample,
+        test_seven_slot_middle_price_threshold_is_retained,
+        test_large_candidate_set_drains_the_complete_available_budget,
+        test_neutral_slots_do_not_disable_partial_headroom_refinement,
+        test_solver_matches_independent_random_oracle,
+        test_missing_quarter_is_not_paired_with_the_next_half_hour,
+        test_rce_row_parser_is_independent_of_payload_order,
+        test_autumn_duplicate_rows_split_folds_deterministically,
+        test_local_only_dst_fold_prices_cannot_be_swapped_into_false_profit,
+        test_pse_absolute_utc_preserves_price_to_dst_fold_relationship,
+        test_conflicting_absolute_duplicate_uses_conservative_price_end_to_end,
+        test_scheduler_requests_absolute_ordered_pse_rows,
+        test_real_horizon_solver_runtime_is_bounded,
+        test_medium_horizon_pair_swap_crosses_pv_headroom_valley,
+        test_irrelevant_padding_keeps_pair_refinement_on_relevant_slots,
+        test_padded_fuzz_case_4_rejects_expected_value_destroying_exports,
+        test_padded_fuzz_case_35_crosses_three_coordinate_valley,
+        test_additional_padded_long_horizon_fuzz_has_bounded_gap,
+        test_far_future_and_duplicate_prices_cannot_expand_horizon,
+        test_dst_rows_are_resolved_on_absolute_utc_timeline,
+        test_self_use_reserve_uses_fresh_physical_readback,
     ]
     for test in tests:
         test()

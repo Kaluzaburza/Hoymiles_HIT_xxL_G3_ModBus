@@ -689,6 +689,12 @@
       "overview_battery_soc": {
         "name": "Podgląd stanu naładowania baterii"
       },
+      "parallel_topology_readback_generation": {
+        "name": "Generacja odczytu topologii równoległej"
+      },
+      "ems_verified_hardware_readback_supported": {
+        "name": "Obsługa potwierdzonego odczytu sprzętowego EMS"
+      },
       "machines_type": {
         "name": "Rola urządzenia w sieci równoległej"
       },
@@ -945,6 +951,45 @@
       },
       "pv_total_power_energy_block": {
         "name": "PV łącznie moc (energia Block)"
+      },
+      "ems_control_readback_generation": {
+        "name": "Generacja odczytu sterowania EMS"
+      },
+      "gcf_control_readback_generation": {
+        "name": "Generacja odczytu sterowania GCF"
+      },
+      "battery_charge_power_readback_generation": {
+        "name": "Generacja odczytu mocy ładowania baterii"
+      },
+      "ems_mode_readback_code": {
+        "name": "Kod odczytanego trybu EMS"
+      },
+      "ems_self_use_soc_readback": {
+        "name": "Odczyt rezerwy SOC autokonsumpcji EMS"
+      },
+      "ems_backup_soc_readback": {
+        "name": "Odczyt rezerwy SOC Backup EMS"
+      },
+      "ems_force_charge_soc_readback": {
+        "name": "Odczyt docelowego SOC ładowania EMS"
+      },
+      "gcf_enable_readback_code": {
+        "name": "Kod odczytanego stanu GCF"
+      },
+      "gcf_maximum_export_power_readback": {
+        "name": "Odczyt maksymalnego limitu eksportu GCF"
+      },
+      "battery_max_charge_power_readback": {
+        "name": "Odczyt maksymalnej mocy ładowania baterii"
+      },
+      "ems_maximum_charge_power_readback": {
+        "name": "Odczyt maksymalnej mocy ładowania EMS"
+      },
+      "ems_force_discharge_soc_readback": {
+        "name": "Odczyt minimalnego SOC rozładowania EMS"
+      },
+      "ems_maximum_discharge_power_readback": {
+        "name": "Odczyt maksymalnej mocy rozładowania EMS"
       },
       "inverter_work_status": {
         "name": "Stan pracy falownika",

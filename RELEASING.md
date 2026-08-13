@@ -70,6 +70,11 @@ unchanged, retain and document the last compatible ESPHome tag.
    python tools/test_tariff_optimizer.py
    python tools/test_rcm_history.py
    python tools/test_rcm_optimizer.py
+   python tools/test_energy_data.py
+   python tools/test_load_model.py
+   python tools/test_power_balance.py
+   python tools/test_firmware_readback_contract.py
+   python tools/test_optimizer_executor_contract.py
    python tools/test_automation_matrix.py --exhaustive
    node tools/validate_rce_card.js
    ```

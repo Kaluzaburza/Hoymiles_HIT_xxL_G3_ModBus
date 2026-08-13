@@ -4,6 +4,111 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-08-13
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.5.2**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.5.2**.
+2. **Home Assistant:** restart Home Assistant once. The managed EMS package,
+   bilingual dashboard and frontend assets are synchronized automatically. If
+   **Installation status / Repairs** asks for another restart, validate the
+   configuration first and then perform it.
+   **PL:** uruchom Home Assistant ponownie jeden raz. Zarządzany pakiet EMS,
+   dashboard PL/EN i zasoby interfejsu zsynchronizują się automatycznie. Jeżeli
+   **Stan instalacji / Naprawy** poprosi o kolejny restart, najpierw sprawdź
+   konfigurację, a następnie wykonaj ten restart.
+3. **ESP32 / ESPHome:** rebuild and upload are **required** because v1.5.2
+   changes the runtime system-power balance and adds independent FC03 actuator
+   mirrors and topology guards in `packages/overview.yaml`,
+   `packages/settings.yaml` and `packages/parallel_network.yaml`.
+   Refresh the top-level ESPHome file pinned to **v1.5.2**, validate, compile,
+   and upload it to the ESP32. HACS does **not** flash ESP32 firmware.
+   **PL:** ponowna kompilacja i wgranie są **wymagane**, ponieważ v1.5.2
+   zmienia runtime bilansu mocy systemu oraz dodaje niezależne lustra FC03 i
+   zabezpieczenia topologii w `packages/overview.yaml`, `packages/settings.yaml`
+   i `packages/parallel_network.yaml`. Odśwież
+   główny plik ESPHome przypięty do **v1.5.2**, sprawdź go, skompiluj i wgraj
+   na ESP32. HACS **nie** wgrywa firmware ESP32.
+4. **Verification / Weryfikacja:** keep **RCEm in observation (shadow) mode**.
+   Verify the RCE and tariff plans, fresh-data diagnostics and one complete
+   start/stop cycle before enabling automatic RCE or tariff writes.
+   **PL:** pozostaw **RCEm w trybie obserwacji (shadow)**. Przed włączeniem
+   automatycznych zapisów RCE albo taryfy sprawdź plan, diagnostykę świeżości
+   danych oraz jeden pełny cykl start/stop.
+5. **Parallel Master/Slave:** monitoring and RCEm shadow analytics remain
+   available, but protected EMS writes fail closed in v1.5.2 because every
+   Slave cannot yet provide an independently verified post-write FC03 readback.
+   **PL:** monitoring i analiza RCEm shadow pozostają dostępne, lecz chronione
+   zapisy EMS są w v1.5.2 blokowane w układzie Master/Slave do czasu niezależnego
+   potwierdzania FC03 z każdego urządzenia.
+
+### Added
+
+- Add policy-neutral freshness, LOAD-profile sanitation and parallel power
+  balance helpers shared by all planners without merging their objectives.
+- Add signed source ages, BMS availability, plan provenance and explicit
+  start/continue eligibility diagnostics for fail-closed commissioning.
+- Add a bounded joint-horizon RCE active-set heuristic with an independent
+  small-horizon oracle test. Regression cases cover known failures of the former
+  greedy planner, while the engine and UI explicitly do not claim exact or
+  mathematical global optimality for the full mixed-constraint problem.
+- Add winter tariff simulations and regression cases for cold-load profiles,
+  missing Day 3, failed PV strings, DST and restricted BMS power.
+
+### Changed
+
+- Keep three independent policies: **RCE maximizes net sale revenue**, tariff
+  charging shifts necessary household energy into low-cost periods, and
+  experimental **RCEm creates usable PV headroom and regulates high voltage**.
+- Make RCE parsing independent of PSE payload order and use absolute
+  `dtime_utc` across repeated DST hours. The current price now comes from the
+  same parsed plan as scheduling and revenue accounting.
+- Apply current-slot duration, energy-arrival timing, natural export, shared
+  inverter/BMS/AC/export budgets, signed freshness, monotonic protected SOC and
+  positively acknowledged EMS ownership to RCE. Day 3 remains diagnostic and
+  is not a terminal sales objective.
+- Make tariff charging reject micro-cycles, stale/future forecasts and stale
+  BMS/SOC inputs; preserve hard Self-Use reserve and model winter LOAD risk
+  separately from RCE sale policy.
+- Decouple RCEm from the RCE operational floor. RCEm now uses high-PV/low-LOAD
+  risk for headroom, low-PV/high-LOAD stress only as a safety constraint, and
+  chronological pre-risk energy balance with BMS/register quantization limits.
+- Permit RCEm shadow analytics alongside RCE or tariff control, while active
+  controller handover waits for a positive neutral-mode readback.
+- Derive parallel inverter and battery power from 32-bit system PV/Grid/LOAD
+  balance instead of the wrapping 16-bit battery register.
+
+### Safety
+
+- Missing, stale, future-dated or exact-zero control capabilities now fail
+  closed instead of being interpreted as unlimited power.
+- Actuator ownership is retained after a failed or unavailable readback so the
+  scheduler retries restoration instead of leaving orphan Grid Charge or Grid
+  Discharge modes.
+- Treat only a newer physical FC03 generation with matching read-only register
+  mirrors as acknowledgement; optimistic command echoes never release an owner.
+- Fail closed on protected EMS writes in Master/Slave systems until every node
+  can provide independently verifiable post-write feedback; monitoring and
+  shadow analytics remain available.
+- The live RCEm 253 V emergency path remains independent of forecast/history,
+  but predictive RCEm discharge remains disabled in shadow mode.
+
+### Polski
+
+- Zachowano trzy osobne cele: RCE maksymalizuje przychód netto ze sprzedaży,
+  tanie ładowanie przenosi potrzebną energię domu do tanich godzin, a
+  eksperymentalny RCEm przygotowuje miejsce na PV i ogranicza wysokie napięcie.
+- RCE otrzymało planowanie całego horyzontu, poprawną obsługę DST i kolejności
+  danych PSE, fizyczne limity mocy oraz bezpieczne utrzymanie rezerwy SOC.
+- Tanie ładowanie odrzuca mikrocykle i nieświeże dane, zachowuje twardą rezerwę
+  Self-Use oraz osobno modeluje zimowe ryzyko zużycia.
+- RCEm został odłączony od rezerwy operacyjnej RCE, poprawnie rozróżnia ryzyko
+  nadwyżki PV od ochrony domu i nadal pozostaje domyślnie w trybie podglądu.
+- Niepotwierdzony zapis nie usuwa już właściciela automatyki; przywrócenie
+  ustawień jest ponawiane po odzyskaniu komunikacji.
+
 ## [1.5.1] - 2026-08-12
 
 ### User update steps / Kroki po aktualizacji

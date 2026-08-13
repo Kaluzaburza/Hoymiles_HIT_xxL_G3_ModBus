@@ -1,13 +1,19 @@
 # Automation simulation and safety report
 
-Date: 2026-08-12 (Europe/Warsaw)
-Validated release candidate: **v1.5.0**
+Baseline date: 2026-08-13 (Europe/Warsaw)
+Last fully validated offline release candidate in this report: **v1.5.2**
+Current documentation target: **v1.5.2 — live acceptance pending**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
 RCEm 253 V+ voltage management. The tests do not write to a real inverter.
 They verify arithmetic, state transitions, interlocks and fail-safe behaviour
 before field acceptance on each installation.
+
+The v1.5.2 deterministic, packaging and firmware checks below were completed
+on 2026-08-13. They do not replace field acceptance: deployment to the two test
+installations and post-deployment observations remain pending. The later
+v1.5.0 section is retained only as an explicitly archived live baseline.
 
 ## Representative systems
 
@@ -23,10 +29,10 @@ claims. They intentionally combine undersized and oversized storage, weak and
 strong PV, ordinary and winter-like load, parallel operation and BMS limits
 below inverter power.
 
-## Scenario-matrix result
+## Scenario-matrix result — v1.5.2 offline candidate
 
-**Quick matrix: 488/488 scenarios passed.**
-**Exhaustive matrix: 2064/2064 scenarios passed.**
+- **Quick matrix:** 488/488 scenarios passed.
+- **Exhaustive matrix:** 2064/2064 scenarios passed.
 
 The complete sweep covers:
 
@@ -41,26 +47,28 @@ The complete sweep covers:
 - power/energy invariants for every half-hour slot, conversion losses,
   minimum-SOC floors and end-of-horizon battery bounds.
 
-## RCE safeguards exercised
+## RCE v1.5.2 acceptance checks — passed offline
 
 - The protected energy reserve is rounded **up** to a full 1% SOC step and is
   enforced for every planned export slot, not only at the end of the plan.
 - The model distinguishes energy available now from energy expected later from
   PV, so a 48-hour export plan cannot silently treat forecast energy as current
   battery energy.
-- Day-three availability, forecast, expected load, shortfall and terminal
-  reserve reason are explicit. Missing data is not presented as a zero
-  shortfall.
-- A day-three AC shortfall is converted to the required DC battery reserve with
-  the household-discharge efficiency. Its value equals the avoided import cost,
-  preventing a low-price export followed by a more expensive grid purchase.
-- Gross additional revenue and net optimization benefit are separate. Net
-  benefit subtracts battery-wear cost and includes the change in terminal
-  energy value.
+- RCE keeps a revenue-first objective across a bounded joint horizon. Day-three
+  availability, forecast, expected LOAD, and shortfall remain explicit
+  diagnostics; they do not add a terminal objective to the sale planner.
+- The active-set implementation is explicitly heuristic. An independent oracle
+  compares small constructed horizons as regression evidence; it does not prove
+  exact or global optimality for the full mixed-constraint problem.
+- Gross sale revenue and estimated net benefit are separate. Net benefit can
+  subtract modeled battery wear, but no terminal household-energy value is
+  reported as realized sale revenue.
+- Charge and discharge plans share physical inverter/BMS/AC/export budgets,
+  respect energy-arrival time, and do not count natural PV export twice.
 - Export lockout, GCF/zero-export, physical system/BMS limits, stale inputs and
   Master/Slave readiness are fail-closed.
 
-## Tariff-charging safeguards exercised
+## Tariff-charging v1.5.2 acceptance checks — passed offline
 
 - Planning uses a real rolling horizon of at least 48 hours when fresh day-three
   Solcast data is available, including 47/48/49-slot DST days.
@@ -78,10 +86,10 @@ The complete sweep covers:
   available battery-charging power needs a full hour or longer.
 - G11 does not cycle the battery merely because all hours have the same price.
 
-## RCEm 253 V+ safeguards exercised
+## RCEm 253 V+ v1.5.2 acceptance checks — passed offline
 
-- RCEm starts in **observation-only** mode and does not change certified grid
-  protection settings.
+- RCEm starts in **observation-only (shadow)** mode, performs no inverter
+  writes, and does not change certified grid-protection settings.
 - Voltage risk uses per-phase history and robust recurring-window detection;
   current voltage can override historical expectations when the grid is calmer
   or worse than usual.
@@ -95,7 +103,7 @@ The complete sweep covers:
 - Multiple risk windows retain operational headroom independently; energy
   prepared for an early window is not double-counted for a later one.
 
-## Static control-contract checks
+## Static control-contract checks for v1.5.2 — passed offline
 
 These repository tests verify scheduler markers, interlocks and planner
 contracts statically. They do not execute a real Home Assistant automation or
@@ -113,7 +121,27 @@ separately below.
 - Notification debounce and fingerprints suppress repeated phone alerts while
   preserving a genuinely different stable state.
 
-## Live candidate acceptance — 2026-08-12
+## v1.5.2 completed offline gate — 2026-08-13
+
+- RCE optimizer: **63/63** deterministic scenarios passed, including the
+  independent small-horizon oracle and padded 48-hour regression cases.
+- Automation scheduler: **488/488** quick and **2064/2064** exhaustive
+  cross-system scenarios passed.
+- Tariff, RCEm, history reconstruction, policy-neutral energy/LOAD/power
+  helpers, diagnostics, executor offload and the frontend card all passed.
+- The physical FC03 actuator-readback and ownership contract passed; generated
+  Polish and English assets were deterministic and `validate_release.py`
+  reported **291** localized entities with no structural or localization error.
+- ESPHome **2026.7.1** accepted the complete local fixture and compiled it with
+  ESP-IDF **5.5.5**. The resulting application used 43.3% RAM and 52.9% flash.
+- An independent final read-only audit found no open P0/P1 issue in the frozen
+  source, generated packages or firmware configuration.
+
+These are offline results. HACS Action, Hassfest, deployment to both test
+installations and live observation are separate acceptance gates and must be
+recorded against the exact release-candidate commit.
+
+## Archived v1.5.0 live candidate acceptance — 2026-08-12
 
 The same candidate archive was installed on a single-inverter Home Assistant
 test system and on the two-inverter field system at `miernik.com.pl` during the

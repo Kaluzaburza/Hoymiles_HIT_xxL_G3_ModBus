@@ -63,7 +63,33 @@ def test_single_exceptional_day_does_not_schedule_control() -> None:
     assert result.profile_p90_v[52] > 248.5
 
 
+def test_sparse_single_slot_does_not_create_predictive_window() -> None:
+    now = datetime(2026, 8, 8, 12, 0, tzinfo=WARSAW)
+    samples = {entity_id: [] for entity_id in HISTORY.GRID_VOLTAGE_ENTITIES}
+    # Four days exist globally, but only yesterday contains a 13:00 sample.
+    # The other samples merely establish global history coverage at 08:00.
+    for days_ago in range(1, 5):
+        day = now - timedelta(days=days_ago)
+        healthy = day.replace(hour=8, minute=0, second=0)
+        for entity_id in HISTORY.GRID_VOLTAGE_ENTITIES:
+            samples[entity_id].append((healthy, 238.0))
+    risky_once = (now - timedelta(days=1)).replace(
+        hour=13,
+        minute=0,
+        second=0,
+    )
+    for entity_id in HISTORY.GRID_VOLTAGE_ENTITIES:
+        samples[entity_id].append((risky_once, 254.0))
+
+    result = HISTORY.summarize_voltage_history(samples, now=now)
+    assert result.history_days == 4
+    assert result.risk_windows == ()
+    assert result.profile_median_v[52] == 0.0
+    assert result.profile_p90_v[52] == 254.0
+
+
 if __name__ == "__main__":
     test_repeated_voltage_window_is_detected()
     test_single_exceptional_day_does_not_schedule_control()
+    test_sparse_single_slot_does_not_create_predictive_window()
     print("RCEm history: repeated-window and outlier scenarios passed")
