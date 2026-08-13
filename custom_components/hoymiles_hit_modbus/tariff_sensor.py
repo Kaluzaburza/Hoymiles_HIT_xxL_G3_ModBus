@@ -5,15 +5,12 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from datetime import date, datetime, timedelta
-from functools import partial
 import logging
 from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.components.recorder import get_instance as get_recorder_instance
-from homeassistant.components.recorder import history as recorder_history
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
@@ -27,6 +24,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
+from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
 from .energy_data import numeric_state_sample, state_age_seconds
 from .forecast_model import (
@@ -451,6 +449,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self._current_run_intent_signature: tuple[Any, ...] | None = None
         self._current_run_intent_changed_at: datetime | None = None
         self._live_pv_surplus_started_at: datetime | None = None
+        self._startup_warmup_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
         self._optimizer_lock = asyncio.Lock()
 
@@ -552,9 +551,34 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 timedelta(hours=12),
             )
         )
-        await self._async_refresh_forecast_accuracy()
-        await self._recalculate()
         self.async_write_ha_state()
+        self._schedule_startup_warmup()
+
+    @callback
+    def _schedule_startup_warmup(self) -> None:
+        """Start exactly one cancel-safe Recorder and optimizer warmup."""
+        if (
+            self._startup_warmup_task is not None
+            and not self._startup_warmup_task.done()
+        ):
+            return
+        task = self._entry.async_create_background_task(
+            self.hass,
+            self._async_startup_warmup(),
+            "hoymiles tariff optimizer startup warmup",
+        )
+        self._startup_warmup_task = task
+        self.async_on_remove(task.cancel)
+
+    async def _async_startup_warmup(self) -> None:
+        """Warm Recorder models after the fail-closed entity is registered."""
+        try:
+            await self._async_refresh_forecast_accuracy()
+            await self._recalculate_and_write()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - retain the fail-closed initial state
+            _LOGGER.exception("Cannot complete the tariff optimizer startup warmup")
 
     @callback
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
@@ -566,13 +590,19 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             self._forecast_accuracy_refreshed_at is None
             and not self._forecast_refresh_running
             and not self._forecast_retry_pending
+            and (
+                self._startup_warmup_task is None
+                or self._startup_warmup_task.done()
+            )
             and self._forecast_accuracy_source_available()
         ):
             self._forecast_retry_pending = True
-            self.hass.async_create_task(
+            task = self._entry.async_create_background_task(
+                self.hass,
                 self._async_retry_initial_forecast_accuracy(),
                 "hoymiles tariff initial forecast calibration",
             )
+            self.async_on_remove(task.cancel)
         if self._recalculate_cancel is not None:
             self._recalculate_cancel()
         self._recalculate_cancel = async_call_later(
@@ -750,19 +780,12 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             timezone = ZoneInfo(self.hass.config.time_zone)
             now = dt_util.now().astimezone(timezone)
             start = now - timedelta(days=29)
-            query = partial(
-                recorder_history.get_significant_states,
+            raw = await async_get_bounded_state_reports(
                 self.hass,
                 dt_util.as_utc(start),
                 dt_util.as_utc(now),
-                [forecast_entity, actual_entity],
-                None,
-                True,
-                False,
-                False,
-                True,
+                (forecast_entity, actual_entity),
             )
-            raw = await get_recorder_instance(self.hass).async_add_executor_job(query)
             forecast_by_day: dict[Any, list[float]] = {}
             actual_by_day: dict[Any, list[float]] = {}
             for entity_id, destination in (

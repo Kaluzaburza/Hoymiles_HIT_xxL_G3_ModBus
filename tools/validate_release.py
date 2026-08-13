@@ -215,6 +215,52 @@ script:
             "A user-modified dashboard was overwritten",
         )
 
+    with tempfile.TemporaryDirectory(prefix="hoymiles_storage_fresh_") as tmp:
+        config_path = Path(tmp)
+        storage_path = config_path / ".storage"
+        storage_path.mkdir()
+        resources_path = storage_path / "lovelace_resources"
+
+        migrated = assets._sync_lovelace_storage(config_path)
+        require(
+            migrated == [resources_path] and resources_path.is_file(),
+            "Fresh storage setup did not create the Lovelace resource store",
+        )
+        fresh_resources = json.loads(
+            resources_path.read_text(encoding="utf-8")
+        )
+        require(
+            fresh_resources == {
+                "version": 1,
+                "minor_version": 1,
+                "key": "lovelace_resources",
+                "data": {
+                    "items": [
+                        {
+                            "id": hashlib.sha256(
+                                f"{assets.DOMAIN}:frontend".encode()
+                            ).hexdigest()[:32],
+                            "url": assets.FRONTEND_RESOURCE_URL,
+                            "type": "module",
+                        }
+                    ]
+                },
+            },
+            "Fresh storage setup created an invalid Lovelace resource store",
+        )
+        require(
+            not resources_path.with_name(
+                f"{resources_path.name}.pre-{assets.VERSION}.bak"
+            ).exists(),
+            "Fresh storage setup created a backup without a source file",
+        )
+        fresh_text = resources_path.read_text(encoding="utf-8")
+        require(
+            assets._sync_lovelace_storage(config_path) == []
+            and resources_path.read_text(encoding="utf-8") == fresh_text,
+            "Fresh storage setup is not idempotent",
+        )
+
     with tempfile.TemporaryDirectory(prefix="hoymiles_storage_upgrade_") as tmp:
         config_path = Path(tmp)
         storage_path = config_path / ".storage"
@@ -1740,6 +1786,7 @@ def main() -> int:
         "python tools/test_tariff_optimizer.py",
         "python tools/test_rcm_history.py",
         "python tools/test_rcm_optimizer.py",
+        "python tools/test_optimizer_startup_contract.py",
         "python tools/test_automation_matrix.py",
         "python tools/test_automation_matrix.py --exhaustive",
     ):

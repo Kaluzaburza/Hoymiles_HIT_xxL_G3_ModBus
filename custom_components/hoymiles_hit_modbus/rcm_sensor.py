@@ -6,21 +6,19 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from functools import partial
 import logging
 from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from homeassistant.components.recorder import get_instance as get_recorder_instance
-from homeassistant.components.recorder import history as recorder_history
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
 from .energy_data import numeric_state_sample, state_age_seconds
 from .models import RuntimeData
@@ -234,6 +232,7 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         self._samples: deque[tuple[datetime, float]] = deque()
         self._history_refresh_running = False
         self._history_refreshed_at: datetime | None = None
+        self._startup_warmup_task: asyncio.Task[None] | None = None
         self._optimizer_lock = asyncio.Lock()
         self._attributes: dict[str, Any] = {
             "status_code": "missing_data",
@@ -289,9 +288,34 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 timedelta(hours=1),
             )
         )
-        await self._async_refresh_voltage_history()
-        await self._recalculate()
         self.async_write_ha_state()
+        self._schedule_startup_warmup()
+
+    @callback
+    def _schedule_startup_warmup(self) -> None:
+        """Start exactly one cancel-safe Recorder and optimizer warmup."""
+        if (
+            self._startup_warmup_task is not None
+            and not self._startup_warmup_task.done()
+        ):
+            return
+        task = self._entry.async_create_background_task(
+            self.hass,
+            self._async_startup_warmup(),
+            "hoymiles RCEm optimizer startup warmup",
+        )
+        self._startup_warmup_task = task
+        self.async_on_remove(task.cancel)
+
+    async def _async_startup_warmup(self) -> None:
+        """Warm Recorder models after the fail-closed entity is registered."""
+        try:
+            await self._async_refresh_voltage_history()
+            await self._recalculate_and_write()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - retain the fail-closed initial state
+            _LOGGER.exception("Cannot complete the RCEm optimizer startup warmup")
 
     async def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
         if event.data["entity_id"] in GRID_VOLTAGE_ENTITIES:
@@ -352,19 +376,12 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
             timezone = ZoneInfo(self.hass.config.time_zone)
             now = dt_util.now().astimezone(timezone)
             start = now - timedelta(days=5)
-            query = partial(
-                recorder_history.get_significant_states,
+            raw = await async_get_bounded_state_reports(
                 self.hass,
                 dt_util.as_utc(start),
                 dt_util.as_utc(now),
-                list(GRID_VOLTAGE_ENTITIES),
-                None,
-                True,
-                False,
-                False,
-                True,
+                GRID_VOLTAGE_ENTITIES,
             )
-            raw = await get_recorder_instance(self.hass).async_add_executor_job(query)
             normalized: dict[str, list[tuple[datetime, float]]] = {
                 entity_id: [] for entity_id in GRID_VOLTAGE_ENTITIES
             }

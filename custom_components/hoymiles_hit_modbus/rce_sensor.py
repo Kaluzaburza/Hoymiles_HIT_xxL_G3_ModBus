@@ -6,14 +6,11 @@ import asyncio
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
-from functools import partial
 import logging
 import re
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from homeassistant.components.recorder import get_instance as get_recorder_instance
-from homeassistant.components.recorder import history as recorder_history
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -27,6 +24,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
+from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
 from .energy_data import numeric_state_sample, state_age_seconds
 from .forecast_model import (
@@ -531,6 +529,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._forecast_accuracy_source = "automatic_conservative_fallback"
         self._forecast_refresh_running = False
         self._forecast_refresh_date: date | None = None
+        self._startup_warmup_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
         self._optimizer_lock = asyncio.Lock()
         self._current_slot_continue_eligible: bool | None = None
@@ -603,10 +602,35 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 timedelta(hours=1),
             )
         )
-        await self._async_refresh_load_history(force_full=True)
-        await self._async_refresh_forecast_accuracy(force=True)
-        await self._recalculate()
         self.async_write_ha_state()
+        self._schedule_startup_warmup()
+
+    @callback
+    def _schedule_startup_warmup(self) -> None:
+        """Start exactly one cancel-safe Recorder and optimizer warmup."""
+        if (
+            self._startup_warmup_task is not None
+            and not self._startup_warmup_task.done()
+        ):
+            return
+        task = self._entry.async_create_background_task(
+            self.hass,
+            self._async_startup_warmup(),
+            "hoymiles RCE optimizer startup warmup",
+        )
+        self._startup_warmup_task = task
+        self.async_on_remove(task.cancel)
+
+    async def _async_startup_warmup(self) -> None:
+        """Warm Recorder models after the fail-closed entity is registered."""
+        try:
+            await self._async_refresh_load_history(force_full=True)
+            await self._async_refresh_forecast_accuracy(force=True)
+            await self._recalculate_and_write()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - retain the fail-closed initial state
+            _LOGGER.exception("Cannot complete the RCE optimizer startup warmup")
 
     async def _async_history_timer(self, now: datetime) -> None:
         """Refresh recorder-backed LOAD history once per hour."""
@@ -630,21 +654,12 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 time.min,
                 tzinfo=timezone,
             )
-            query = partial(
-                recorder_history.get_significant_states,
+            raw_history = await async_get_bounded_state_reports(
                 self.hass,
                 dt_util.as_utc(local_start),
                 dt_util.as_utc(now),
-                list(LOAD_PHASE_ENERGY_ENTITIES),
-                None,
-                True,
-                False,
-                False,
-                True,
+                LOAD_PHASE_ENERGY_ENTITIES,
             )
-            raw_history = await get_recorder_instance(
-                self.hass
-            ).async_add_executor_job(query)
 
             samples: dict[str, list[tuple[datetime, float]]] = {
                 entity_id: [] for entity_id in LOAD_PHASE_ENERGY_ENTITIES
@@ -775,21 +790,12 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 return
             actual_entity = "sensor.hoymiles_hit_pv_total_energy_today"
             start = now - timedelta(days=15)
-            query = partial(
-                recorder_history.get_significant_states,
+            raw = await async_get_bounded_state_reports(
                 self.hass,
                 dt_util.as_utc(start),
                 dt_util.as_utc(now),
-                [forecast_entity, actual_entity],
-                None,
-                True,
-                False,
-                False,
-                True,
+                (forecast_entity, actual_entity),
             )
-            raw = await get_recorder_instance(
-                self.hass
-            ).async_add_executor_job(query)
             forecast_by_day: dict[date, list[float]] = {}
             actual_by_day: dict[date, list[float]] = {}
             for entity_id, destination in (

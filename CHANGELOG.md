@@ -79,6 +79,17 @@ All notable changes to this project are documented in this file.
   controller handover waits for a positive neutral-mode readback.
 - Derive parallel inverter and battery power from 32-bit system PV/Grid/LOAD
   balance instead of the wrapping 16-bit battery register.
+- Publish the RCE, tariff and RCEm optimizer entities in their fail-closed
+  initial state before warming Recorder-backed models. Each optimizer uses one
+  tracked, cancel-safe background warmup; Recorder reads are sequential and
+  limited to 50,000 reports per source entity plus one sentinel row, with a
+  15-second timeout per query.
+
+### Fixed
+
+- Allow a fresh installation to create `.storage/lovelace_resources` when the
+  file does not exist. The migration backs up only an existing regular file and
+  remains idempotent when it runs again.
 
 ### Safety
 
@@ -108,6 +119,15 @@ All notable changes to this project are documented in this file.
   nadwyżki PV od ochrony domu i nadal pozostaje domyślnie w trybie podglądu.
 - Niepotwierdzony zapis nie usuwa już właściciela automatyki; przywrócenie
   ustawień jest ponawiane po odzyskaniu komunikacji.
+- Encje optymalizatorów RCE, taniego ładowania i RCEm są rejestrowane od razu w
+  bezpiecznym stanie blokującym sterowanie, a rozgrzewanie modeli z danych
+  Recorder działa w pojedynczym, śledzonym zadaniu tła, które jest anulowane
+  przy wyładowaniu integracji. Każde zapytanie ma limit 50 000 raportów dla
+  jednej encji źródłowej plus jeden wiersz kontrolny oraz limit czasu 15 sekund;
+  przekroczenie budżetu pozostawia planer w stanie fail-closed.
+- Pierwsza instalacja może poprawnie utworzyć brakujący plik
+  `.storage/lovelace_resources`; kopia bezpieczeństwa powstaje tylko dla
+  istniejącego zwykłego pliku, a ponowna synchronizacja nie wprowadza zmian.
 
 ## [1.5.1] - 2026-08-12
 

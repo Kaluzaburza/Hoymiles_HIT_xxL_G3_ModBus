@@ -174,7 +174,7 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 def _backup_storage_once(path: Path) -> None:
     """Keep one exact rollback copy for this integration release."""
     backup = path.with_name(f"{path.name}.pre-{VERSION}.bak")
-    if not backup.exists():
+    if path.is_file() and not backup.exists():
         shutil.copy2(path, backup)
 
 
