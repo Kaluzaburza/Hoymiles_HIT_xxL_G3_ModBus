@@ -62,9 +62,11 @@ All notable changes to this project are documented in this file.
 - Keep three independent policies: **RCE maximizes net sale revenue**, tariff
   charging shifts necessary household energy into low-cost periods, and
   experimental **RCEm creates usable PV headroom and regulates high voltage**.
-- Make RCE parsing independent of PSE payload order and use absolute
-  `dtime_utc` across repeated DST hours. The current price now comes from the
-  same parsed plan as scheduling and revenue accounting.
+- Make RCE parsing independent of PSE payload order and use the absolute
+  `dtime_utc` interval end across repeated DST hours. The parser subtracts the
+  fixed 15-minute market interval on the UTC timeline before building
+  half-hours. The current price now comes from the same parsed plan as
+  scheduling and revenue accounting.
 - Apply current-slot duration, energy-arrival timing, natural export, shared
   inverter/BMS/AC/export budgets, signed freshness, monotonic protected SOC and
   positively acknowledged EMS ownership to RCE. Day 3 remains diagnostic and
@@ -100,6 +102,11 @@ All notable changes to this project are documented in this file.
   readbacks but unavailable ordinary stable sensor proxies because the gate
   had incorrectly covered every sensor; RC4 restores ordinary proxies to the
   availability of their native ESPHome sources.
+- Interpret the official PSE `dtime_utc` field as the **end** of its 15-minute
+  settlement interval, not its start. RC5 validates `period_utc` and
+  `business_date`, handles the official `24:00` clock label, and restores all
+  48 normal-day, 46 spring-DST and 50 autumn-DST half-hours without shifting
+  the current price into the preceding market quarter.
 
 ### Safety
 
@@ -118,11 +125,16 @@ All notable changes to this project are documented in this file.
 
 ### Release-candidate status
 
-- Full RC4 offline validation passes, including the firmware/readback,
-  executor, rebind **6/6**, quick **488/488**, exhaustive **2064/2064**, RCE
-  **63/63**, tariff, RCEm and dynamic power-balance contracts. Exact-candidate
-  CI, local redeployment and both-installation live re-audit remain pending;
-  this changelog does not claim a live GO.
+- RC4 passed exact-SHA push and workflow-dispatch CI, including the exhaustive
+  matrix, and was deployed locally. Stable physical EMS readbacks and ordinary
+  proxies were live, but the local PSE payload exposed that `dtime_utc` is the
+  quarter **end**. The old interpretation safely blocked RCE as incomplete but
+  made the engine unusable. RC5 fixes that mapping. Its full offline validation
+  now passes: RCE **68/68**, history **3/3**, quick **488/488**, exhaustive
+  **2064/2064**, tariff, RCEm, firmware/readback, executor, startup, rebind
+  **6/6**, power-balance and frontend contracts. Exact-SHA RC5 CI, local
+  redeployment and both-installation live re-audit remain pending; this
+  changelog does not claim a live GO.
 
 ### Polski
 
@@ -154,11 +166,14 @@ All notable changes to this project are documented in this file.
 - Lokalny test RC3 potwierdził działające natywne odczyty fizyczne EMS, ale
   zwykłe stabilne sensory proxy pozostawały niedostępne, ponieważ bramka
   topologii równoległej błędnie obejmowała wszystkie sensory. RC4 ogranicza ją
-  do dwóch wyliczanych encji mocy podglądu. Pełna walidacja offline RC4
-  przechodzi, w tym kontrakty firmware/readback, executor, rebind **6/6**,
-  macierze **488/488** i **2064/2064**, RCE **63/63**, taryfa, RCEm oraz
-  dynamiczny bilans mocy. CI dokładnego kandydata, ponowne wdrożenie lokalne i
-  audyt live obu instalacji nadal są wymagane; nie ma jeszcze zgody GO.
+  do dwóch wyliczanych encji mocy podglądu. RC4 przeszedł CI dokładnego SHA,
+  pełną macierz i lokalne wdrożenie; odczyty fizyczne, zwykłe proxy i stan
+  instalacji działały poprawnie.
+- Dane live PSE potwierdziły, że `dtime_utc` oznacza koniec kwadransa, a nie jego
+  początek. RC5 odejmuje 15 minut na osi UTC, sprawdza `period_utc` oraz
+  `business_date` i poprawnie odtwarza 48 półgodzin zwykłej doby, 46 wiosennej
+  oraz 50 jesiennej doby DST. Pełna walidacja offline RC5 przechodzi, ale CI
+  dokładnego SHA i ponowne testy live pozostają wymagane.
 
 ## [1.5.1] - 2026-08-12
 

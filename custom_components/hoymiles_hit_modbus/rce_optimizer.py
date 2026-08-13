@@ -24,6 +24,10 @@ except ImportError:  # pragma: no cover - exercised by tools/test_rce_optimizer.
 
 SLOT = timedelta(minutes=30)
 _PERIOD_START = re.compile(r"(?P<hour>\d{1,2}):(?P<minute>\d{2})")
+_PERIOD_RANGE = re.compile(
+    r"\A\s*(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})\s*-\s*"
+    r"(?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})\s*\Z"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,7 +297,8 @@ def parse_rce_rows(
 ) -> list[PriceSlot]:
     """Convert PSE 15-minute rows to half-hour market slots.
 
-    ``dtime_utc`` is authoritative when supplied by the official PSE API.  It
+    ``dtime_utc`` is the authoritative interval end when supplied by the
+    official PSE API.  Deriving the quarter start on the absolute UTC timeline
     preserves the real price-to-fold relationship during the repeated autumn
     hour.  Older cached payloads may contain only local wall time; those rows
     use the deterministic fold fallback below.  Payload order is never used.
@@ -310,7 +315,7 @@ def parse_rce_rows(
             candidates[utc_value] = local
         return [candidates[key] for key in sorted(candidates)]
 
-    def absolute_utc(row: Mapping[str, Any]) -> datetime | None:
+    def absolute_start_utc(row: Mapping[str, Any]) -> datetime | None:
         value = row.get("dtime_utc")
         if isinstance(value, datetime):
             parsed = value
@@ -328,7 +333,55 @@ def parse_rce_rows(
         # the suffix while retaining the absolute-field name.
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=dt_timezone.utc)
-        return parsed.astimezone(dt_timezone.utc)
+        interval_end = parsed.astimezone(dt_timezone.utc)
+        if (
+            interval_end.minute % 15 != 0
+            or interval_end.second != 0
+            or interval_end.microsecond != 0
+        ):
+            return None
+
+        if "period_utc" in row:
+            period_utc = row.get("period_utc")
+            if not isinstance(period_utc, str):
+                return None
+            match = _PERIOD_RANGE.fullmatch(period_utc)
+            if match is None:
+                return None
+
+            def clock_minute(hour_name: str, minute_name: str) -> int | None:
+                hour = int(match.group(hour_name))
+                minute = int(match.group(minute_name))
+                if hour == 24 and minute == 0:
+                    return 24 * 60
+                if 0 <= hour < 24 and 0 <= minute < 60:
+                    return hour * 60 + minute
+                return None
+
+            period_start = clock_minute("start_hour", "start_minute")
+            period_end = clock_minute("end_hour", "end_minute")
+            if period_start is None or period_end is None:
+                return None
+            if (period_end - period_start) % (24 * 60) != 15:
+                return None
+            interval_end_minute = interval_end.hour * 60 + interval_end.minute
+            if period_end % (24 * 60) != interval_end_minute:
+                return None
+
+        # PSE publishes the settlement interval end in ``dtime_utc``.  Work
+        # backwards on the UTC timeline so DST gaps/folds cannot distort the
+        # fixed 15-minute market interval.
+        interval_start = interval_end - timedelta(minutes=15)
+        if "business_date" in row:
+            try:
+                business_day = date.fromisoformat(
+                    str(row.get("business_date", "")).strip()
+                )
+            except ValueError:
+                return None
+            if interval_start.astimezone(timezone).date() != business_day:
+                return None
+        return interval_start
 
     absolute_grouped: dict[
         datetime,
@@ -340,11 +393,15 @@ def parse_rce_rows(
             price = float(row["rce_pln"]) / 1000.0
         except (KeyError, TypeError, ValueError):
             continue
+        if not math.isfinite(price):
+            continue
         stable_key = tuple(
             sorted((str(key), repr(value)) for key, value in row.items())
         )
-        utc_start = absolute_utc(row)
-        if utc_start is not None:
+        if "dtime_utc" in row:
+            utc_start = absolute_start_utc(row)
+            if utc_start is None:
+                continue
             absolute_grouped.setdefault(utc_start, []).append(
                 (stable_key, price)
             )

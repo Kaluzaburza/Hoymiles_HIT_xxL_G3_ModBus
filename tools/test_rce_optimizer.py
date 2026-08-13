@@ -1291,6 +1291,31 @@ def test_signed_age_contract_is_shared_with_rce_sensor() -> None:
     assert "_MIN_COMPLETE_RCE_DAY_PERIODS" not in sensor_source
 
 
+def test_rce_sensor_dates_dtime_only_rows_by_quarter_start() -> None:
+    """The no-business-date fallback retains PSE's final 24:00 row."""
+    sensor_source = (
+        ROOT
+        / "custom_components"
+        / "hoymiles_hit_modbus"
+        / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    assert 'raw_interval_end = item.get("dtime_utc")' in sensor_source
+    assert (
+        'item.get("dtime_utc") or item.get("period_utc")'
+        not in sensor_source
+    )
+    assert (
+        "interval_end = interval_end.replace(tzinfo=dt_util.UTC)"
+        in sensor_source
+    )
+    assert (
+        "interval_end.astimezone(dt_util.UTC)\n"
+        "                    - timedelta(minutes=15)"
+        in sensor_source
+    )
+    assert "if quarter_start.date() == target_date:" in sensor_source
+
+
 def test_current_run_end_covers_the_whole_consecutive_export_window() -> None:
     """The scheduler latch must cover adjacent planned half-hour slots."""
     now = NOW.replace(hour=18, minute=5)
@@ -1961,8 +1986,182 @@ def test_local_only_dst_fold_prices_cannot_be_swapped_into_false_profit() -> Non
     assert parsed(incomplete) == []
 
 
+def _official_pse_rows_for_local_day(
+    business_day: datetime,
+) -> list[dict[str, object]]:
+    """Build authoritative PSE UTC fields for one Warsaw market day.
+
+    The local ``period`` label is illustrative on DST transition days; the
+    public feed's nonstandard ``02a``/gap labels are intentionally ignored
+    whenever the authoritative absolute interval end is present.
+    """
+    utc = ZoneInfo("UTC")
+    utc_start = business_day.astimezone(utc)
+    utc_end = (business_day + timedelta(days=1)).astimezone(utc)
+    quarter_count = int((utc_end - utc_start).total_seconds() // (15 * 60))
+    rows: list[dict[str, object]] = []
+    for quarter_index in range(quarter_count):
+        interval_start = utc_start + timedelta(minutes=15 * quarter_index)
+        interval_end = interval_start + timedelta(minutes=15)
+        local_start = interval_start.astimezone(WARSAW)
+        local_end = interval_end.astimezone(WARSAW)
+        local_end_clock = (
+            "24:00"
+            if local_end.date() != business_day.date()
+            else local_end.strftime("%H:%M")
+        )
+        utc_end_clock = (
+            "24:00"
+            if interval_end.hour == 0 and interval_end.minute == 0
+            else interval_end.strftime("%H:%M")
+        )
+        rows.append(
+            {
+                "business_date": business_day.date().isoformat(),
+                "period": f"{local_start:%H:%M} - {local_end_clock}",
+                "period_utc": f"{interval_start:%H:%M} - {utc_end_clock}",
+                "dtime_utc": interval_end.strftime("%Y-%m-%d %H:%M:%S"),
+                "rce_pln": float(quarter_index),
+            }
+        )
+    return rows
+
+
+def _parsed_pse_rows(rows):
+    return RCE.parse_rce_rows(
+        rows,
+        WARSAW,
+        block_enabled=False,
+        block_start_minute=0,
+        block_end_minute=0,
+    )
+
+
+def test_live_pse_interval_end_payload_builds_complete_local_day() -> None:
+    """The exact live 96-row shape yields all 48 local half-hours."""
+    business_day = datetime(2026, 8, 13, tzinfo=WARSAW)
+    rows = _official_pse_rows_for_local_day(business_day)
+    assert len(rows) == 96
+    assert rows[0] == {
+        "business_date": "2026-08-13",
+        "period": "00:00 - 00:15",
+        "period_utc": "22:00 - 22:15",
+        "dtime_utc": "2026-08-12 22:15:00",
+        "rce_pln": 0.0,
+    }
+    assert rows[7]["period"] == "01:45 - 02:00"
+    assert rows[7]["period_utc"] == "23:45 - 24:00"
+    assert rows[7]["dtime_utc"] == "2026-08-13 00:00:00"
+    assert rows[-1]["period"] == "23:45 - 24:00"
+    assert rows[-1]["dtime_utc"] == "2026-08-13 22:00:00"
+    assert rows[50]["period"] == "12:30 - 12:45"
+    assert rows[51]["period"] == "12:45 - 13:00"
+
+    expected = _parsed_pse_rows(rows)
+    shuffled = list(rows)
+    random.Random(813).shuffle(shuffled)
+    assert expected == _parsed_pse_rows(list(reversed(rows)))
+    assert expected == _parsed_pse_rows(shuffled)
+    assert len(expected) == 48
+    assert expected[0].start == business_day
+    assert expected[-1].start == business_day.replace(hour=23, minute=30)
+    assert all(slot.start.date() == business_day.date() for slot in expected)
+    assert abs(expected[0].price_pln_kwh - 0.0005) < 1e-12
+    assert expected[25].start == business_day.replace(hour=12, minute=30)
+    assert abs(expected[25].price_pln_kwh - 0.0505) < 1e-12
+    assert abs(expected[-1].price_pln_kwh - 0.0945) < 1e-12
+
+
+def test_official_pse_interval_ends_cover_both_dst_day_lengths() -> None:
+    """Absolute ends preserve every real spring and autumn half-hour."""
+    for business_day, quarter_count, half_hour_count in (
+        (datetime(2026, 3, 29, tzinfo=WARSAW), 92, 46),
+        (datetime(2026, 10, 25, tzinfo=WARSAW), 100, 50),
+    ):
+        rows = _official_pse_rows_for_local_day(business_day)
+        assert len(rows) == quarter_count
+        expected = _parsed_pse_rows(rows)
+        shuffled = list(rows)
+        random.Random(quarter_count).shuffle(shuffled)
+        assert expected == _parsed_pse_rows(list(reversed(rows)))
+        assert expected == _parsed_pse_rows(shuffled)
+        assert len(expected) == half_hour_count
+        assert all(
+            slot.start.date() == business_day.date() for slot in expected
+        )
+        absolute = [slot.start.astimezone(ZoneInfo("UTC")) for slot in expected]
+        assert absolute == sorted(absolute)
+        assert len(set(absolute)) == half_hour_count
+
+    spring = _parsed_pse_rows(
+        _official_pse_rows_for_local_day(
+            datetime(2026, 3, 29, tzinfo=WARSAW)
+        )
+    )
+    assert all(slot.start.hour != 2 for slot in spring)
+    autumn = _parsed_pse_rows(
+        _official_pse_rows_for_local_day(
+            datetime(2026, 10, 25, tzinfo=WARSAW)
+        )
+    )
+    assert len([slot for slot in autumn if slot.start.hour == 2]) == 4
+
+
+def test_absolute_interval_end_accepts_naive_z_and_offset_dtime_only() -> None:
+    """Dtime-only cache rows retain all supported UTC encodings."""
+    utc = ZoneInfo("UTC")
+    starts = [
+        datetime(2026, 8, 12, 22, 0, tzinfo=utc),
+        datetime(2026, 8, 12, 22, 15, tzinfo=utc),
+    ]
+
+    def payload(formatter):
+        return [
+            {
+                "dtime_utc": formatter(start + timedelta(minutes=15)),
+                "rce_pln": 100.0 + 100.0 * index,
+            }
+            for index, start in enumerate(starts)
+        ]
+
+    variants = (
+        payload(lambda value: value.strftime("%Y-%m-%d %H:%M:%S")),
+        payload(lambda value: value.isoformat().replace("+00:00", "Z")),
+        payload(lambda value: value.isoformat()),
+    )
+    parsed = [_parsed_pse_rows(rows) for rows in variants]
+    assert parsed[0] == parsed[1] == parsed[2]
+    assert len(parsed[0]) == 1
+    assert parsed[0][0].start == datetime(2026, 8, 13, tzinfo=WARSAW)
+    assert abs(parsed[0][0].price_pln_kwh - 0.15) < 1e-12
+
+
+def test_absolute_interval_metadata_mismatch_fails_closed() -> None:
+    """Malformed absolute metadata cannot fall back to local wall time."""
+    valid = _official_pse_rows_for_local_day(
+        datetime(2026, 8, 13, tzinfo=WARSAW)
+    )[:2]
+    corruptions = (
+        {"period_utc": "22:00 - 22:30"},
+        {"period_utc": "22:15 - 22:30"},
+        {"dtime_utc": "2026-08-12 22:14:00"},
+        {"dtime_utc": "2026-08-12 22:15:01"},
+        {"dtime_utc": "not-a-timestamp"},
+        {"business_date": "2026-08-14"},
+    )
+    for corruption in corruptions:
+        rows = [dict(item) for item in valid]
+        rows[0].update(corruption)
+        assert _parsed_pse_rows(rows) == [], corruption
+
+    for invalid_price in (float("nan"), float("inf"), float("-inf")):
+        rows = [dict(item) for item in valid]
+        rows[0]["rce_pln"] = invalid_price
+        assert _parsed_pse_rows(rows) == []
+
+
 def test_pse_absolute_utc_preserves_price_to_dst_fold_relationship() -> None:
-    """dtime_utc, not payload or price order, assigns repeated-hour prices."""
+    """PSE interval ends, not payload order, assign repeated-hour prices."""
     utc = ZoneInfo("UTC")
     rows = []
     # Fold 0 deliberately has the larger price.  The wall-time fallback's
@@ -1974,12 +2173,17 @@ def test_pse_absolute_utc_preserves_price_to_dst_fold_relationship() -> None:
     ):
         for minute in (0, 15, 30, 45):
             instant = fold_start + timedelta(minutes=minute)
+            interval_end = instant + timedelta(minutes=15)
             rows.append(
                 {
                     "business_date": "2026-10-25",
                     "period": instant.astimezone(WARSAW).strftime("%H:%M"),
-                    "period_utc": instant.strftime("%H:%M"),
-                    "dtime_utc": instant.isoformat().replace("+00:00", "Z"),
+                    "period_utc": (
+                        f"{instant:%H:%M} - {interval_end:%H:%M}"
+                    ),
+                    "dtime_utc": interval_end.isoformat().replace(
+                        "+00:00", "Z"
+                    ),
                     "rce_pln": base_price + minute,
                 }
             )
@@ -2017,17 +2221,17 @@ def test_conflicting_absolute_duplicate_uses_conservative_price_end_to_end() -> 
     second_quarter_utc = first_quarter_utc + timedelta(minutes=15)
     rows = [
         {
-            "dtime_utc": first_quarter_utc.isoformat(),
+            "dtime_utc": (first_quarter_utc + timedelta(minutes=15)).isoformat(),
             "rce_pln": 10_000.0,
             "source": "inflated_duplicate",
         },
         {
-            "dtime_utc": first_quarter_utc.isoformat(),
+            "dtime_utc": (first_quarter_utc + timedelta(minutes=15)).isoformat(),
             "rce_pln": 900.0,
             "source": "conservative_duplicate",
         },
         {
-            "dtime_utc": second_quarter_utc.isoformat(),
+            "dtime_utc": (second_quarter_utc + timedelta(minutes=15)).isoformat(),
             "rce_pln": 900.0,
         },
     ]
@@ -2798,6 +3002,7 @@ def main() -> None:
         test_bms_charge_limit_fails_closed_and_caps_future_refill,
         test_pv_charge_and_both_export_paths_share_one_ac_bridge,
         test_signed_age_contract_is_shared_with_rce_sensor,
+        test_rce_sensor_dates_dtime_only_rows_by_quarter_start,
         test_current_run_end_covers_the_whole_consecutive_export_window,
         test_current_run_end_steps_across_autumn_dst_in_utc,
         test_p90_load_is_an_alternative_scenario_not_double_counted,
@@ -2812,6 +3017,10 @@ def main() -> None:
         test_rce_row_parser_is_independent_of_payload_order,
         test_autumn_duplicate_rows_split_folds_deterministically,
         test_local_only_dst_fold_prices_cannot_be_swapped_into_false_profit,
+        test_live_pse_interval_end_payload_builds_complete_local_day,
+        test_official_pse_interval_ends_cover_both_dst_day_lengths,
+        test_absolute_interval_end_accepts_naive_z_and_offset_dtime_only,
+        test_absolute_interval_metadata_mismatch_fails_closed,
         test_pse_absolute_utc_preserves_price_to_dst_fold_relationship,
         test_conflicting_absolute_duplicate_uses_conservative_price_end_to_end,
         test_scheduler_requests_absolute_ordered_pse_rows,

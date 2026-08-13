@@ -1,9 +1,9 @@
 # Automation simulation and safety report
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.2 RC4 full offline
+Last completed offline baseline in this report: **v1.5.2 RC5 full offline
 validation**
-Current documentation target: **v1.5.2 RC4 — exact-SHA CI, local redeployment
+Current documentation target: **v1.5.2 RC5 — exact-SHA CI, local redeployment
 and both-installation live re-audit pending**
 
 This report covers the deterministic planning and control safeguards used by
@@ -18,11 +18,14 @@ P1 source-device split. RC3 added the fail-closed rebind, passed its dedicated
 **6/6** contract and exact-SHA GitHub gates, and was deployed locally. The
 rebind persisted and native physical EMS readbacks were live, but ordinary
 stable sensor proxies remained unavailable because a parallel-topology
-availability gate incorrectly covered every sensor. RC4 scopes that gate only
-to the two derived parallel-power proxies. Full RC4 offline validation passes;
-exact-SHA CI, exact-candidate local redeployment and both-installation live
-re-audit remain pending. The later v1.5.0 section is retained only as an
-explicitly archived live baseline.
+availability gate incorrectly covered every sensor. RC4 scoped that gate only
+to the two derived parallel-power proxies, passed exact-SHA CI and restored the
+proxies in the local installation. That live run then exposed an independent
+PSE interval-end P1: `dtime_utc` marks the end of a quarter, not its start. RC5
+fixes the UTC mapping and passes full offline validation; exact-SHA RC5 CI,
+exact-candidate local redeployment and both-installation live re-audit remain
+pending. The later v1.5.0 section is retained only as an explicitly archived
+live baseline.
 
 ## Representative systems
 
@@ -76,6 +79,10 @@ The complete sweep covers:
   respect energy-arrival time, and do not count natural PV export twice.
 - Export lockout, GCF/zero-export, physical system/BMS limits, stale inputs and
   Master/Slave readiness are fail-closed.
+- Official PSE `dtime_utc` values are treated as 15-minute interval ends. The
+  parser validates `period_utc`/`business_date`, supports the live `24:00`
+  label, and reconstructs exactly 48 normal-day, 46 spring-DST and 50
+  autumn-DST half-hours without shifting the current price.
 
 ## Tariff-charging v1.5.2 acceptance checks — passed offline
 
@@ -134,10 +141,11 @@ separately below.
   native entity evidence, rejects ambiguous or contradictory candidates, and
   prevents a second integration entry for the resolved child.
 
-## v1.5.2 RC3 baseline, local finding and RC4 target — 2026-08-13
+## v1.5.2 RC4 live finding and RC5 target — 2026-08-13
 
-- RCE optimizer: **63/63** deterministic scenarios passed, including the
-  independent small-horizon oracle and padded 48-hour regression cases.
+- RCE optimizer: **68/68** deterministic scenarios passed, including the
+  independent small-horizon oracle, padded 48-hour regressions, the exact live
+  PSE interval-end shape, payload reordering, `24:00`, and both DST day lengths.
 - Automation scheduler: **488/488** quick and **2064/2064** exhaustive
   cross-system scenarios passed.
 - Tariff, RCEm, history reconstruction, policy-neutral energy/LOAD/power
@@ -166,16 +174,25 @@ separately below.
   Stable physical EMS readback proxies therefore remained unavailable despite
   their live native sources. RC4 limits this gate to `PARALLEL_POWER_TARGETS`;
   its dynamic ordinary-proxy regression passes.
-- Full RC4 offline validation passes: `validate_release.py`, the physical
-  firmware/readback contract, executor offload, source-device rebind **6/6**,
-  quick **488/488**, exhaustive **2064/2064**, RCE **63/63**, tariff, RCEm and
-  the dynamic power-balance suite.
+- RC4 then passed exact-SHA push and workflow-dispatch CI, including the
+  exhaustive matrix, and was deployed locally. The rebind, native readbacks,
+  ordinary proxies, setup readiness and fail-closed safety state were all live.
+- The live 96-row PSE payload exposed another independent P1. Its first
+  `dtime_utc` was `22:15` for local `00:00 - 00:15`, proving that the field is
+  the interval end. Treating it as a start produced 47/48 half-hours and safely
+  held RCE in `missing_data`, but made the engine unusable. RC5 subtracts 15
+  minutes on the UTC timeline and validates the accompanying metadata.
+- Full RC5 offline validation passes: `validate_release.py`, the physical
+  firmware/readback contract, executor/startup offload, source-device rebind
+  **6/6**, quick **488/488**, exhaustive **2064/2064**, RCE **68/68**, RCE
+  history **3/3**, tariff, RCEm, frontend and dynamic power-balance suites.
 
-The earlier deterministic, packaging, firmware and RC3 CI evidence remains
-valid. It does not constitute a live RC3 pass because local acceptance found
-the P1 above. Exact-SHA RC4 CI, exact-candidate local redeployment, deployment
-to the second test installation and the live re-audit are separate acceptance
-gates and remain pending. No live GO is claimed here.
+The earlier deterministic, packaging, firmware and RC4 CI evidence remains
+valid. It does not constitute RC5 acceptance because local RC4 testing found
+the independent PSE P1 above. Exact-SHA RC5 CI, exact-candidate local
+redeployment, deployment to the second test installation and the live re-audit
+are separate acceptance gates and remain pending. No live RC5 GO is claimed
+here.
 
 ## Archived v1.5.0 live candidate acceptance — 2026-08-12
 

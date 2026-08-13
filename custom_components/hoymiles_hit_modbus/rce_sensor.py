@@ -1471,11 +1471,34 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     continue
                 if raw_business_date:
                     continue
-                absolute = _parse_datetime(
-                    item.get("dtime_utc") or item.get("period_utc"),
-                    timezone,
-                )
-                if absolute is not None and absolute.date() == target_date:
+                # PSE ``dtime_utc`` is the end of the 15-minute settlement
+                # interval.  Resolve the market quarter on the absolute UTC
+                # timeline before assigning a local business date.  This is
+                # especially important for the 24:00 endpoint and both folds
+                # of the repeated autumn hour.  ``period_utc`` is a clock
+                # range, not an absolute datetime, so it is not a safe date
+                # fallback.
+                raw_interval_end = item.get("dtime_utc")
+                if isinstance(raw_interval_end, datetime):
+                    interval_end = raw_interval_end
+                elif (
+                    isinstance(raw_interval_end, str)
+                    and raw_interval_end.strip()
+                ):
+                    interval_end = dt_util.parse_datetime(
+                        raw_interval_end.strip()
+                    )
+                else:
+                    interval_end = None
+                if interval_end is None:
+                    continue
+                if interval_end.tzinfo is None:
+                    interval_end = interval_end.replace(tzinfo=dt_util.UTC)
+                quarter_start = (
+                    interval_end.astimezone(dt_util.UTC)
+                    - timedelta(minutes=15)
+                ).astimezone(timezone)
+                if quarter_start.date() == target_date:
                     matched.append(item)
             return matched
 
