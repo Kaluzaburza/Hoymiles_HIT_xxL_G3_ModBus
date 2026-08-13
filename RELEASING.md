@@ -67,7 +67,12 @@ When a release changes managed dashboard or frontend assets:
 - validate repeated module loading, fresh-no-`www`, storage and YAML modes
   offline. For a release candidate, also verify the exact versioned resource,
   dashboard render and absence of a strategy-registration timeout in a fresh
-  browser session after restart.
+  browser session after restart; and
+- record the exact commit SHA installed on every live test host before a
+  documentation-only release finalization commit is created. If the eventual
+  release/tag SHA differs, record it separately, verify that the delta contains
+  no runtime changes, and never describe that later SHA as the deployed
+  candidate.
 
 ## Release checklist
 

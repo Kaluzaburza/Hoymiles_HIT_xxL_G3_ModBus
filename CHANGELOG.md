@@ -148,10 +148,30 @@ All notable changes to this project are documented in this file.
   `static-r2` route returned a transient `404`, that response remained cached,
   and Lovelace timed out waiting for
   `ll-strategy-dashboard-hoymiles-hit-xxl-g3` after restart.
-- RC6 is the frontend-startup hotfix candidate described above. Code completion,
-  independent review and the full offline gate passed with P0=0/P1=0. Exact-SHA
-  CI, local redeployment and both installations' live frontend re-audit remain
-  **pending**. This changelog does not claim a live GO for RC6.
+- RC6 runtime commit `7ce13155533bfa0bf9752a0fd201224dac1a7393`
+  completed independent review and the full offline gate with P0=0/P1=0. Both
+  exact-SHA push CI and `workflow_dispatch`, including the exhaustive matrix,
+  passed.
+- On local Home Assistant 2026.8.1, the installed integration and managed assets
+  matched the RC6 runtime hashes, integration/package version 1.5.2 reported
+  **Ready**, the version-16 `/local` assets returned HTTP 200, and both a fresh
+  tab and a hard refresh rendered the dashboard. EMS remained in Self-Use with
+  every controller owner off.
+- On the parallel Home Assistant 2026.7.4 installation, the runtime and asset
+  hashes also matched, every required version-16 `/local` asset returned HTTP
+  200, and a hard refresh rendered the Aurora dashboard. RCE and tariff control
+  remained off; RCEm remained enabled only in shadow mode; every owner and
+  execution remained off because the required ESP32 firmware is still pending.
+  No firmware was flashed during this frontend audit.
+- One bounded background RCEm Recorder-history query timed out once. The planner
+  stayed fail-closed, no write was attempted and the timeout did not repeat in
+  the observation window. This is recorded as degraded history availability,
+  not a release blocker.
+- RC6 therefore has live GO for the tested Home Assistant runtime/frontend, not
+  for pending ESP32 commissioning or protected EMS writes. The exact deployed
+  runtime remains `7ce13155533bfa0bf9752a0fd201224dac1a7393`; a later
+  documentation-only/tag commit will have a different SHA and must not be
+  described as the live-tested runtime.
 
 ### Polski
 
@@ -199,10 +219,32 @@ All notable changes to this project are documented in this file.
   oraz 50 jesiennej doby DST. RC5 przeszedł pełną walidację offline, CI
   dokładnego SHA oraz wdrożenie na obu instalacjach; parser i bezpieczny stan
   backendu działały poprawnie live.
-- Wdrożenie RC5 ujawniło niezależny P1 frontendu opisany powyżej. Kod RC6,
-  niezależny przegląd oraz pełna walidacja offline przeszły bez P0/P1. Nadal
-  oczekują CI dokładnego SHA, ponowne wdrożenie lokalne i audyt live obu
-  instalacji. Nie ma jeszcze zgody GO dla RC6.
+- Wdrożenie RC5 ujawniło niezależny P1 frontendu opisany powyżej. Dokładny commit
+  runtime RC6 `7ce13155533bfa0bf9752a0fd201224dac1a7393` przeszedł
+  niezależny przegląd, pełną walidację offline bez P0/P1 oraz CI dokładnego SHA
+  dla push i `workflow_dispatch`, w tym pełną macierz.
+- Na lokalnym Home Assistant 2026.8.1 sumy kontrolne integracji i zasobów były
+  zgodne z RC6, wersje integracji i pakietu wynosiły 1.5.2, stan instalacji był **Gotowe**,
+  zasoby `/local` rewizji 16 zwracały HTTP 200, a dashboard działał w nowej
+  karcie i po twardym odświeżeniu. Tryb pozostał Self-Use, a wszyscy właściciele
+  automatyki byli wyłączeni.
+- Na równoległej instalacji Home Assistant 2026.7.4 sumy kontrolne runtime'u i
+  zasobów także były zgodne, wszystkie wymagane zasoby `/local` rewizji 16
+  zwracały HTTP 200,
+  a dashboard Aurora działał po twardym odświeżeniu. RCE i taryfa pozostały
+  wyłączone, RCEm działał wyłącznie w trybie shadow, a właściciele i wykonanie
+  pozostały wyłączone z powodu oczekującego firmware ESP32. Firmware nie było
+  wgrywane podczas tego audytu frontendu.
+- Jedno ograniczone czasowo zapytanie tła RCEm do historii Recorder zakończyło
+  się timeoutem. Planer pozostał fail-closed, nie wykonał zapisu, a zdarzenie nie
+  powtórzyło się w oknie obserwacji. Jest to odnotowana ograniczona dostępność
+  historii, a nie bloker wydania.
+- RC6 otrzymuje zgodę live GO dla przetestowanego runtime Home Assistant i
+  frontendu, nie dla oczekującego wdrożenia ESP32 ani chronionych zapisów EMS.
+  Dokładnym wdrożonym commitem runtime pozostaje
+  `7ce13155533bfa0bf9752a0fd201224dac1a7393`; późniejszy commit wyłącznie z
+  dokumentacją/tagiem będzie miał inne SHA i nie może być opisywany jako runtime
+  sprawdzony live.
 
 ## [1.5.1] - 2026-08-12
 

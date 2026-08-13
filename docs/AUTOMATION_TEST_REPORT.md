@@ -1,10 +1,13 @@
 # Automation simulation and safety report
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
+Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
 Last completed offline baseline in this report: **v1.5.2 RC6 full offline
 validation**
-Current documentation target: **v1.5.2 RC6 frontend-startup hotfix — code,
-review and offline validation complete; exact-SHA CI and live re-audit pending**
+Accepted live runtime candidate:
+**`7ce13155533bfa0bf9752a0fd201224dac1a7393`**
+Current status: **v1.5.2 RC6 Home Assistant runtime/frontend — offline,
+exact-SHA CI and both-installation live audit PASS**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -28,9 +31,11 @@ fail-closed state were correct live. The parallel dashboard then exposed a
 separate frontend P1: a transient `404` from the integration's `static-r2` route
 was retained by the reverse proxy/browser, so Lovelace timed out waiting for the
 dashboard strategy after restart. RC6 is the startup hotfix target; its code,
-independent review and full offline gate passed with P0=0/P1=0. Exact-SHA CI
-and live gates remain pending. The later v1.5.0
-section is retained only as an explicitly archived live baseline.
+independent review and full offline gate passed with P0=0/P1=0. Exact runtime
+commit `7ce13155533bfa0bf9752a0fd201224dac1a7393` then passed push CI and
+`workflow_dispatch`, including the exhaustive matrix, and passed the local and
+parallel-installation live frontend audit. The later v1.5.0 section is retained
+only as an explicitly archived live baseline.
 
 ## Representative systems
 
@@ -146,7 +151,7 @@ separately below.
   native entity evidence, rejects ambiguous or contradictory candidates, and
   prevents a second integration entry for the resolved child.
 
-## v1.5.2 RC5 live frontend finding and RC6 target — 2026-08-13
+## v1.5.2 RC5 frontend finding and RC6 final audit — 2026-08-14
 
 - RCE optimizer: **68/68** deterministic scenarios passed, including the
   independent small-horizon oracle, padded 48-hour regressions, the exact live
@@ -208,17 +213,19 @@ separately below.
   `.storage/lovelace.*`. A fresh installation without `config/www` copies the
   files, defers publication and raises a restart Repair. An already-open browser
   session requires a hard refresh after restart.
+- Exact runtime commit `7ce13155533bfa0bf9752a0fd201224dac1a7393`
+  passed push CI and `workflow_dispatch`; the exhaustive workflow completed
+  successfully.
 
 The earlier deterministic, packaging, firmware and RC5 backend evidence remains
-valid, but it does not constitute RC6 frontend acceptance. RC6 code completion
-and review, full offline validation, exact-SHA CI, exact-candidate local
-redeployment and both-installation live frontend re-audit are separate gates and
-remain pending. No live RC6 GO is claimed here.
+valid. Together with the RC6 exact-SHA CI and live results below, it supports GO
+for the tested Home Assistant runtime/frontend. Meter ESP32 firmware acceptance
+remains separate and pending; no firmware was flashed during this audit and no
+protected EMS writes were enabled.
 
-## RC6 frontend startup contract — offline PASS, live pending
+## RC6 frontend startup contract — offline and live PASS
 
-RC6 acceptance must demonstrate all of the following; listing these targets is
-not evidence that they have passed:
+The exact runtime candidate demonstrated the following:
 
 - one canonical full, versioned `/local` module registers the dashboard strategy
   before Lovelace's five-second deadline, and loading it again is idempotent;
@@ -234,6 +241,34 @@ not evidence that they have passed:
 - YAML-mode loading remains supported; and
 - after restart and hard refresh, the version-16 resource returns successfully,
   the dashboard renders, and the browser console contains no strategy timeout.
+
+## RC6 live installation audit — PASS with one degraded-history observation
+
+| Check | Local installation | Parallel meter installation |
+|---|---|---|
+| Home Assistant | 2026.8.1 | 2026.7.4 |
+| Exact candidate | Integration and managed-asset hashes matched runtime commit `7ce13155533bfa0bf9752a0fd201224dac1a7393` | Runtime and asset hashes matched the same commit |
+| Installation state | Integration/package 1.5.2; **Ready** | Integration runtime 1.5.2; ESP32 firmware update still pending |
+| Frontend | Version-16 `/local` assets returned HTTP 200; fresh-tab and hard-refresh dashboard checks passed | All required version-16 `/local` assets returned HTTP 200; hard refresh rendered the Aurora dashboard |
+| Control safety | Self-Use; every controller owner off | RCE and tariff off; RCEm enabled in shadow only; every owner and execution off |
+| Firmware action | No firmware action was part of this frontend audit | No firmware was flashed |
+
+One bounded background RCEm Recorder-history query timed out once during the
+final observation. The optimizer stayed fail-closed, execution and all owners
+remained off, no inverter write was attempted, and the timeout did not repeat in
+the observation window. This is recorded as observed degraded history
+availability. The bounded timeout and safe fallback behaved as designed, so it
+is not an RC6 Home Assistant runtime/frontend release blocker.
+
+## Exact-SHA traceability after documentation finalization
+
+The deployed and live-tested runtime SHA is
+`7ce13155533bfa0bf9752a0fd201224dac1a7393`. This final report changes
+documentation only, so its eventual commit and release/tag SHA will necessarily
+be later and different. Record that future SHA separately and verify that the
+delta from the runtime candidate contains documentation/release metadata only.
+Do not describe the future documentation/tag SHA as the candidate installed on
+either Home Assistant host.
 
 ## Archived v1.5.0 live candidate acceptance — 2026-08-12
 
