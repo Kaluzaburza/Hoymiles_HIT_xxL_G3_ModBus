@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from datetime import date, datetime, timedelta
-from functools import partial
 import logging
 from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.components.recorder import get_instance as get_recorder_instance
-from homeassistant.components.recorder import history as recorder_history
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
@@ -26,7 +24,9 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
+from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
+from .energy_data import numeric_state_sample, state_age_seconds
 from .forecast_model import (
     blend_low_expected,
     robust_weighted_factor,
@@ -50,11 +50,12 @@ from .tariff_optimizer import (
     TariffSchedule,
     adaptive_forecast_factor,
     floor_half_hour,
-    horizon_gap_load_reserve_kwh,
+    horizon_gap_expensive_load_reserve_kwh,
     is_polish_public_holiday,
     optimize_tariff_charging,
     resolve_planning_horizon,
     robust_weighted_estimate,
+    robust_weighted_upper_estimate,
 )
 from .tariff_profiles import (
     MANUAL_OPERATOR,
@@ -69,6 +70,11 @@ from .tariff_profiles import (
 _LOGGER = logging.getLogger(__name__)
 CHARGE_POWER_FEEDBACK_MIN_SAMPLES = 5
 PLANNING_HORIZON_TARGET_HOURS = 48.0
+LIVE_PV_SURPLUS_MIN_KW = 0.20
+LIVE_PV_SURPLUS_STABLE_SECONDS = 5 * 60.0
+LIVE_TELEMETRY_MAX_AGE_SECONDS = 120.0
+SLOW_TELEMETRY_MAX_AGE_SECONDS = 300.0
+LOAD_BROKER_MAX_AGE_SECONDS = 300.0
 
 DAY_3_FORECAST_CANDIDATES = (
     "sensor.solcast_pv_forecast_forecast_day_3",
@@ -88,9 +94,11 @@ WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_overview_battery_power",
     "sensor.hoymiles_hit_grid_to_battery_power",
     "sensor.hoymiles_hit_overview_load_active_power",
+    "sensor.hoymiles_actual_load_power",
+    "sensor.hoymiles_hit_overview_pv_total_power",
     "sensor.hoymiles_tariff_grid_charge_power",
-    "number.hoymiles_hit_self_use_soc",
-    "select.hoymiles_hit_ems_mode",
+    "sensor.hoymiles_hit_ems_self_use_soc_readback",
+    "sensor.hoymiles_hit_ems_mode_readback_code",
     "input_boolean.hoymiles_tariff_charge_enabled",
     "input_boolean.hoymiles_tariff_charge_active",
     "input_boolean.hoymiles_tariff_weekend_low_price",
@@ -125,10 +133,21 @@ WATCHED_TARIFF_ENTITIES = {
 
 STATUS_TEXT = {
     "pl": {
+        "soc_limits_conflict": (
+            "Konflikt limit\u00f3w SOC \u2014 \u0142adowanie zablokowane"
+        ),
+        "hard_reserve_unavailable": (
+            "Nie mo\u017cna odbudowa\u0107 rezerwy Self-Use \u2014 "
+            "\u0142adowanie zablokowane przez limit mocy lub BMS"
+        ),
         "ready": "Gotowa — zaplanowano tanie ładowanie",
         "no_charge_needed": "Brak potrzeby doładowania — PV i bateria wystarczą",
         "no_discount_window": "G11 — brak tańszej strefy do wykorzystania",
         "no_cheap_window": "Brak taniego okna przed prognozowanym deficytem",
+        "not_economically_beneficial": (
+            "Ładowanie pominięte — różnica cen nie pokrywa strat, zużycia "
+            "baterii i wymaganego marginesu"
+        ),
         "shortage_in_low_period": (
             "Deficyt przypada w taniej strefie — bezpośredni pobór bez strat baterii"
         ),
@@ -143,13 +162,22 @@ STATUS_TEXT = {
         "no_charge_needed": "No charging needed — PV and battery are sufficient",
         "no_discount_window": "G11 — no lower-cost period available",
         "no_cheap_window": "No low-cost period before the forecast shortage",
+        "not_economically_beneficial": (
+            "Charging skipped — the price spread does not cover losses, "
+            "battery wear and the required margin"
+        ),
         "shortage_in_low_period": (
             "Shortage occurs in the low-cost period — direct import avoids battery losses"
         ),
         "insufficient_cheap_window": "Low-cost periods cannot cover the full shortage",
+        "hard_reserve_unavailable": (
+            "Self-Use reserve cannot be restored — a hardware or charging "
+            "limit blocks Grid Charge"
+        ),
         "missing_data": "Required data missing — charging blocked",
         "optimizer_error": "Calculation error — charging blocked",
         "unsupported_profile": "This tariff group is unavailable for the selected DSO",
+        "soc_limits_conflict": "SOC limits conflict - charging blocked",
         "expired_profile": "Tariff prices expired — automatic charging blocked",
     },
 }
@@ -165,6 +193,87 @@ def _state_attribute_number(
         return float(state.attributes[attribute])
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _state_age_seconds(
+    state: State | None,
+    *,
+    now: datetime | None = None,
+) -> float | None:
+    """Return signed entity age through the shared EMS data contract."""
+    return state_age_seconds(state, now or dt_util.utcnow())
+
+
+def _number_sample(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    now: datetime,
+    max_age_seconds: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> tuple[float | None, bool, float | None]:
+    """Return numeric value, freshness and age without treating zero as absent."""
+    sample = numeric_state_sample(
+        hass.states.get(entity_id),
+        now,
+        max_age_seconds=max_age_seconds,
+        minimum=minimum,
+        maximum=maximum,
+    )
+    return (
+        sample.value,
+        sample.fresh,
+        sample.age_seconds,
+    )
+
+
+def _fresh_power_kw(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    max_age_seconds: float = 120.0,
+    non_negative: bool = True,
+) -> float | None:
+    """Return a fresh non-negative live power in kW, or a safe fallback flag."""
+    state = hass.states.get(entity_id)
+    value = _state_number(hass, entity_id)
+    if state is None or value is None or (non_negative and value < 0.0):
+        return None
+    reported = getattr(state, "last_reported", None) or state.last_updated
+    age = (dt_util.utcnow() - reported).total_seconds()
+    if age < -5.0 or age > max(max_age_seconds, 0.0):
+        return None
+    return value / 1000.0
+
+
+def _fresh_power_sample(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    max_age_seconds: float = 120.0,
+    non_negative: bool = True,
+) -> tuple[float | None, float | None, str]:
+    """Return live kW, age and a stable source reason for diagnostics."""
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None, None, "missing"
+    reported = getattr(state, "last_reported", None) or state.last_updated
+    age = max((dt_util.utcnow() - reported).total_seconds(), 0.0)
+    value = _fresh_power_kw(
+        hass,
+        entity_id,
+        max_age_seconds=max_age_seconds,
+        non_negative=non_negative,
+    )
+    if value is None:
+        raw = _state_number(hass, entity_id)
+        if raw is None:
+            return None, age, "not_numeric"
+        if non_negative and raw < 0.0:
+            return None, age, "invalid_negative"
+        return None, age, "stale"
+    return value, age, "live"
 
 
 def _state_attribute_profile(
@@ -309,6 +418,19 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             "status_code": "missing_data",
             "missing_entities": [],
             "planned_slots": [],
+            "current_run_start_eligible": False,
+            "current_run_suppression_reason": "live_data_missing",
+            "current_run_continue_eligible": False,
+            "current_run_continue_reason": "live_data_missing",
+            "control_inputs_fresh": False,
+            "control_input_block_reason": "missing_data",
+            "soc_data_fresh": False,
+            "bms_charge_data_fresh": False,
+            "bms_charge_available": False,
+            "bms_discharge_data_fresh": False,
+            "bms_discharge_available": False,
+            "load_profile_data_fresh": False,
+            "live_power_data_fresh": False,
         }
         self._forecast_accuracy_factor = 0.90
         self._forecast_accuracy_days = 0
@@ -324,7 +446,12 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self._charge_power_feedback_last_sample_at: datetime | None = None
         self._plan_signature: tuple[Any, ...] | None = None
         self._plan_changed_at: datetime | None = None
+        self._current_run_intent_signature: tuple[Any, ...] | None = None
+        self._current_run_intent_changed_at: datetime | None = None
+        self._live_pv_surplus_started_at: datetime | None = None
+        self._startup_warmup_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
+        self._optimizer_lock = asyncio.Lock()
 
     @property
     def suggested_object_id(self) -> str:
@@ -424,9 +551,34 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 timedelta(hours=12),
             )
         )
-        await self._async_refresh_forecast_accuracy()
-        self._recalculate()
         self.async_write_ha_state()
+        self._schedule_startup_warmup()
+
+    @callback
+    def _schedule_startup_warmup(self) -> None:
+        """Start exactly one cancel-safe Recorder and optimizer warmup."""
+        if (
+            self._startup_warmup_task is not None
+            and not self._startup_warmup_task.done()
+        ):
+            return
+        task = self._entry.async_create_background_task(
+            self.hass,
+            self._async_startup_warmup(),
+            "hoymiles tariff optimizer startup warmup",
+        )
+        self._startup_warmup_task = task
+        self.async_on_remove(task.cancel)
+
+    async def _async_startup_warmup(self) -> None:
+        """Warm Recorder models after the fail-closed entity is registered."""
+        try:
+            await self._async_refresh_forecast_accuracy()
+            await self._recalculate_and_write()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - retain the fail-closed initial state
+            _LOGGER.exception("Cannot complete the tariff optimizer startup warmup")
 
     @callback
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
@@ -438,13 +590,19 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             self._forecast_accuracy_refreshed_at is None
             and not self._forecast_refresh_running
             and not self._forecast_retry_pending
+            and (
+                self._startup_warmup_task is None
+                or self._startup_warmup_task.done()
+            )
             and self._forecast_accuracy_source_available()
         ):
             self._forecast_retry_pending = True
-            self.hass.async_create_task(
+            task = self._entry.async_create_background_task(
+                self.hass,
                 self._async_retry_initial_forecast_accuracy(),
                 "hoymiles tariff initial forecast calibration",
             )
+            self.async_on_remove(task.cancel)
         if self._recalculate_cancel is not None:
             self._recalculate_cancel()
         self._recalculate_cancel = async_call_later(
@@ -453,52 +611,73 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             self._async_debounced_recalculate,
         )
 
-    @callback
-    def _async_debounced_recalculate(self, now: datetime) -> None:
+    async def _async_debounced_recalculate(self, now: datetime) -> None:
         self._recalculate_cancel = None
-        self._recalculate_and_write()
+        await self._recalculate_and_write()
 
-    @callback
-    def _async_timer(self, now: datetime) -> None:
+    async def _async_timer(self, now: datetime) -> None:
         if self._recalculate_cancel is not None:
             self._recalculate_cancel()
             self._recalculate_cancel = None
         self._update_delivered_power_feedback()
-        self._recalculate_and_write()
+        await self._recalculate_and_write()
 
     def _update_delivered_power_feedback(self) -> None:
         """Learn a conservative real Grid Charge budget during active runs."""
+        now = dt_util.utcnow()
         active_state = self.hass.states.get(
             "input_boolean.hoymiles_tariff_charge_active"
         )
         if active_state is None or active_state.state != "on":
             return
-        if dt_util.utcnow() - active_state.last_changed < timedelta(minutes=2):
+        if now - active_state.last_changed < timedelta(minutes=2):
             # Ignore inverter ramp-up and Modbus propagation after a command.
             return
-        if not self.hass.states.is_state(
-            "select.hoymiles_hit_ems_mode", "grid_charge"
-        ):
+        mode_sample = numeric_state_sample(
+            self.hass.states.get("sensor.hoymiles_hit_ems_mode_readback_code"),
+            now,
+            max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
+            minimum=0.0,
+            maximum=5.0,
+        )
+        if not mode_sample.fresh or mode_sample.value != 4.0:
             return
         if self._attributes.get("current_action") not in {
             "battery_charge",
             "grid_support_and_charge",
         }:
             return
-        soc = _state_number(self.hass, "sensor.hoymiles_hit_overview_battery_soc")
+        soc_sample = numeric_state_sample(
+            self.hass.states.get("sensor.hoymiles_hit_overview_battery_soc"),
+            now,
+            max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+            minimum=0.0,
+            maximum=100.0,
+        )
+        soc = soc_sample.value if soc_sample.fresh else None
         maximum_soc = _state_number(
             self.hass, "input_number.hoymiles_tariff_maximum_soc"
         )
         if soc is None or maximum_soc is None or soc >= maximum_soc - 5.0:
             # Exclude the normal high-SOC taper from the power calibration.
             return
-        battery_power_w = _state_number(
-            self.hass, "sensor.hoymiles_hit_grid_to_battery_power"
+        battery_power_sample = numeric_state_sample(
+            self.hass.states.get("sensor.hoymiles_hit_grid_to_battery_power"),
+            now,
+            max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        battery_power_w = (
+            battery_power_sample.value if battery_power_sample.fresh else None
         )
         battery_power_is_ac = battery_power_w is not None
         if battery_power_w is None:
-            battery_power_w = _state_number(
-                self.hass, "sensor.hoymiles_tariff_grid_charge_power"
+            battery_power_sample = numeric_state_sample(
+                self.hass.states.get("sensor.hoymiles_tariff_grid_charge_power"),
+                now,
+                max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
+            )
+            battery_power_w = (
+                battery_power_sample.value if battery_power_sample.fresh else None
             )
         requested_kw = self._attributes.get("requested_charge_power_kw")
         if battery_power_w is None or not isinstance(requested_kw, (int, float)):
@@ -506,15 +685,20 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         battery_power_kw = max(battery_power_w, 0.0) / 1000.0
         if battery_power_kw < 0.25 or requested_kw < 0.5:
             return
-        load_w = _state_number(
-            self.hass, "sensor.hoymiles_hit_overview_load_active_power"
+        load_sample = numeric_state_sample(
+            self.hass.states.get("sensor.hoymiles_hit_overview_load_active_power"),
+            now,
+            max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
         )
-        load_kw = max(load_w or 0.0, 0.0) / 1000.0
+        if not load_sample.fresh or load_sample.value is None:
+            return
+        load_kw = max(load_sample.value, 0.0) / 1000.0
+        efficiency_value = _state_number(
+            self.hass,
+            "input_number.hoymiles_tariff_charge_efficiency",
+        )
         efficiency = (
-            _state_number(
-                self.hass, "input_number.hoymiles_tariff_charge_efficiency"
-            )
-            or 90.0
+            90.0 if efficiency_value is None else efficiency_value
         ) / 100.0
         battery_ac_kw = (
             battery_power_kw
@@ -525,7 +709,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         ratio = min(max(delivered_grid_budget / requested_kw, 0.35), 1.10)
         self._delivered_power_ratios.append(ratio)
         self._charge_power_feedback_last_ratio = ratio
-        self._charge_power_feedback_last_sample_at = dt_util.utcnow()
+        self._charge_power_feedback_last_sample_at = now
         if len(self._delivered_power_ratios) < CHARGE_POWER_FEEDBACK_MIN_SAMPLES:
             return
         target = min(max(median(self._delivered_power_ratios), 0.50), 1.0)
@@ -539,7 +723,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
     async def _async_forecast_accuracy_timer(self, now: datetime) -> None:
         """Refresh complete-day Solcast calibration twice per day."""
         await self._async_refresh_forecast_accuracy()
-        self._recalculate_and_write()
+        await self._recalculate_and_write()
 
     def _forecast_accuracy_source_available(self) -> bool:
         """Return whether the configured Solcast today source is numeric."""
@@ -559,17 +743,21 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         try:
             await self._async_refresh_forecast_accuracy()
             if self._forecast_accuracy_refreshed_at is not None:
-                self._recalculate_and_write()
+                await self._recalculate_and_write()
         finally:
             self._forecast_retry_pending = False
 
-    def _recalculate_and_write(self) -> None:
+    async def _recalculate_and_write(self) -> None:
         """Write only when the plan or its diagnostics actually changed."""
-        previous_state = self.native_value
-        previous_attributes = self._attributes
-        self._recalculate()
-        if previous_state != self.native_value or previous_attributes != self._attributes:
-            self.async_write_ha_state()
+        async with self._optimizer_lock:
+            previous_state = self.native_value
+            previous_attributes = self._attributes
+            await self._recalculate_locked()
+            if (
+                previous_state != self.native_value
+                or previous_attributes != self._attributes
+            ):
+                self.async_write_ha_state()
 
     async def _async_refresh_forecast_accuracy(self) -> None:
         """Learn a conservative PV factor from complete local days."""
@@ -592,19 +780,12 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             timezone = ZoneInfo(self.hass.config.time_zone)
             now = dt_util.now().astimezone(timezone)
             start = now - timedelta(days=29)
-            query = partial(
-                recorder_history.get_significant_states,
+            raw = await async_get_bounded_state_reports(
                 self.hass,
                 dt_util.as_utc(start),
                 dt_util.as_utc(now),
-                [forecast_entity, actual_entity],
-                None,
-                True,
-                False,
-                False,
-                True,
+                (forecast_entity, actual_entity),
             )
-            raw = await get_recorder_instance(self.hass).async_add_executor_job(query)
             forecast_by_day: dict[Any, list[float]] = {}
             actual_by_day: dict[Any, list[float]] = {}
             for entity_id, destination in (
@@ -660,23 +841,44 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         finally:
             self._forecast_refresh_running = False
 
-    def _recalculate(self) -> None:
+    async def _recalculate(self) -> None:
+        """Serialize startup and event-driven optimizer runs."""
+        async with self._optimizer_lock:
+            await self._recalculate_locked()
+
+    async def _recalculate_locked(self) -> None:
         try:
             settings, metadata = self._optimizer_input()
             if settings is None:
+                # A gap in required inputs breaks proof of a continuous live
+                # PV charging surplus; it must earn the five-minute window
+                # again after telemetry recovers.
+                self._live_pv_surplus_started_at = None
                 status_code = str(metadata.pop("_status_code", "missing_data"))
                 self._attributes = {
                     "status_code": status_code,
                     "planned_slots": [],
+                    "current_slot_planned": False,
+                    "current_action": "none",
+                    "current_run_start_eligible": False,
+                    "current_run_suppression_reason": "live_data_missing",
+                    "current_run_continue_eligible": False,
+                    "current_run_continue_reason": "live_data_missing",
+                    "current_run_intent_stable_seconds": 0.0,
                     **metadata,
                 }
                 return
-            result = optimize_tariff_charging(settings)
+            result = await self.hass.async_add_executor_job(
+                optimize_tariff_charging,
+                settings,
+            )
             planned_slots = [
                 {
                     "date": item.start.date().isoformat(),
                     "start": item.start.strftime("%H:%M"),
-                    "end": (item.start + timedelta(minutes=30)).strftime("%H:%M"),
+                    "end": (
+                        dt_util.as_utc(item.start) + timedelta(minutes=30)
+                    ).astimezone(item.start.tzinfo).strftime("%H:%M"),
                     "zone": item.zone,
                     "price": round(item.price_pln_kwh, 4),
                     "action": item.action,
@@ -705,6 +907,42 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 if self._plan_changed_at is not None
                 else 0.0
             )
+            current_run_action_family = (
+                "support_only"
+                if result.current_action == "grid_support"
+                else "required_charge"
+                if result.current_action in {
+                    "battery_charge",
+                    "grid_support_and_charge",
+                }
+                else "none"
+            )
+            current_run_intent = (
+                current_run_action_family,
+                result.current_slot_end,
+                result.current_run_start_eligible,
+                result.current_run_suppression_reason,
+            )
+            if current_run_intent != self._current_run_intent_signature:
+                self._current_run_intent_signature = current_run_intent
+                self._current_run_intent_changed_at = now
+            current_run_intent_stable_seconds = (
+                max(
+                    (now - self._current_run_intent_changed_at).total_seconds(),
+                    0.0,
+                )
+                if self._current_run_intent_changed_at is not None
+                else 0.0
+            )
+            current_run_start_eligible = result.current_run_start_eligible
+            current_run_suppression_reason = result.current_run_suppression_reason
+            if (
+                result.current_action == "grid_support"
+                and result.current_run_start_eligible
+                and current_run_intent_stable_seconds < 120.0
+            ):
+                current_run_start_eligible = False
+                current_run_suppression_reason = "intent_not_stable"
             feedback_samples = len(self._delivered_power_ratios)
             feedback_ready = (
                 feedback_samples >= CHARGE_POWER_FEEDBACK_MIN_SAMPLES
@@ -728,6 +966,144 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 "planned_slots": planned_slots,
                 "current_slot_planned": result.current_slot_planned,
                 "current_action": result.current_action,
+                "current_run_start_eligible": current_run_start_eligible,
+                "current_run_suppression_reason": (
+                    current_run_suppression_reason
+                ),
+                "current_run_continue_eligible": (
+                    result.current_run_continue_eligible
+                ),
+                "current_run_continue_reason": (
+                    result.current_run_continue_reason
+                ),
+                "current_run_grid_import_kwh": round(
+                    result.current_run_grid_import_kwh,
+                    3,
+                ),
+                "current_run_direct_load_kwh": round(
+                    result.current_run_direct_load_kwh,
+                    3,
+                ),
+                "current_run_stored_kwh": round(
+                    result.current_run_stored_kwh,
+                    3,
+                ),
+                "current_run_benefit_pln": round(
+                    result.current_run_benefit_pln,
+                    3,
+                ),
+                "current_run_remaining_minutes": round(
+                    result.current_run_duration_seconds / 60.0,
+                    2,
+                ),
+                "current_run_intent_stable_seconds": round(
+                    current_run_intent_stable_seconds,
+                    1,
+                ),
+                "current_run_intent_stable_minutes": round(
+                    current_run_intent_stable_seconds / 60.0,
+                    2,
+                ),
+                "current_slot_load_kwh": round(
+                    result.current_slot_load_kwh,
+                    3,
+                ),
+                "current_slot_pv_kwh": round(
+                    result.current_slot_pv_kwh,
+                    3,
+                ),
+                "current_slot_load_source": result.current_slot_load_source,
+                "current_slot_pv_source": result.current_slot_pv_source,
+                "current_battery_power_kw": (
+                    round(result.current_battery_power_kw, 3)
+                    if result.current_battery_power_kw is not None
+                    else None
+                ),
+                "base_reserve_soc_percent": round(
+                    result.base_reserve_soc_percent,
+                    1,
+                ),
+                "hard_reserve_deficit_kwh": round(
+                    result.hard_reserve_deficit_kwh,
+                    3,
+                ),
+                "hard_reserve_restoration_required": (
+                    result.hard_reserve_restoration_required
+                ),
+                "hard_reserve_restored_by_near_term_pv": (
+                    result.hard_reserve_restored_by_near_term_pv
+                ),
+                "hard_reserve_unavailable": result.hard_reserve_unavailable,
+                "hard_reserve_shortfall_kwh": round(
+                    result.hard_reserve_shortfall_kwh,
+                    3,
+                ),
+                "hard_reserve_deferral_source": (
+                    result.hard_reserve_deferral_source
+                ),
+                "live_pv_surplus_stable": result.live_pv_surplus_stable,
+                "live_pv_surplus_stable_seconds": round(
+                    result.live_pv_surplus_stable_seconds,
+                    1,
+                ),
+                "load_risk_multiplier": round(
+                    result.load_risk_multiplier,
+                    3,
+                ),
+                "load_risk_buffer_kwh": round(
+                    result.load_risk_buffer_kwh,
+                    3,
+                ),
+                "expensive_window_load_buffers": [
+                    {
+                        "start": item.start.isoformat(),
+                        "end": item.end.isoformat(),
+                        "expected_load_kwh": round(
+                            item.expected_load_kwh,
+                            3,
+                        ),
+                        "conservative_load_kwh": round(
+                            item.conservative_load_kwh,
+                            3,
+                        ),
+                        "buffer_kwh": round(item.buffer_kwh, 3),
+                    }
+                    for item in result.expensive_window_load_buffers
+                ],
+                "morning_protection_active": (
+                    result.morning_protection_active
+                ),
+                "morning_protection_mode": result.morning_protection_mode,
+                "morning_protection_window_start": (
+                    result.morning_protection_window_start.isoformat()
+                    if result.morning_protection_window_start is not None
+                    else None
+                ),
+                "morning_protection_window_end": (
+                    result.morning_protection_window_end.isoformat()
+                    if result.morning_protection_window_end is not None
+                    else None
+                ),
+                "morning_protection_expected_pv_kwh": round(
+                    result.morning_protection_expected_pv_kwh,
+                    3,
+                ),
+                "morning_protection_conservative_pv_kwh": round(
+                    result.morning_protection_conservative_pv_kwh,
+                    3,
+                ),
+                "remaining_low_direct_import_kwh": round(
+                    result.remaining_low_direct_import_kwh,
+                    3,
+                ),
+                "remaining_expensive_import_kwh": round(
+                    result.remaining_expensive_import_kwh,
+                    3,
+                ),
+                "capacity_or_power_shortfall_kwh": round(
+                    result.capacity_or_power_shortfall_kwh,
+                    3,
+                ),
                 "current_slot_end": (
                     result.current_slot_end.isoformat()
                     if result.current_slot_end is not None
@@ -959,6 +1335,20 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 "current_slot_planned": False,
                 "current_action": "none",
                 "current_slot_end": None,
+                "current_run_start_eligible": False,
+                "current_run_suppression_reason": "live_data_missing",
+                "current_run_continue_eligible": False,
+                "current_run_continue_reason": "live_data_missing",
+                "current_run_intent_stable_seconds": 0.0,
+                "control_inputs_fresh": False,
+                "control_input_block_reason": "optimizer_error",
+                "soc_data_fresh": False,
+                "bms_charge_data_fresh": False,
+                "bms_charge_available": False,
+                "bms_discharge_data_fresh": False,
+                "bms_discharge_available": False,
+                "load_profile_data_fresh": False,
+                "live_power_data_fresh": False,
             }
 
     def _optimizer_input(
@@ -967,20 +1357,211 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         timezone = ZoneInfo(self.hass.config.time_zone)
         now = dt_util.now().astimezone(timezone)
         now_slot = floor_half_hour(now)
-        rce_state = self.hass.states.get("sensor.hoymiles_hit_rce_optimized_plan")
+        rce_state_raw = self.hass.states.get(
+            "sensor.hoymiles_hit_rce_optimized_plan"
+        )
+        load_profile_age_seconds = _state_age_seconds(rce_state_raw, now=now)
+        load_profile_broker_fresh = bool(
+            rce_state_raw is not None
+            and rce_state_raw.state
+            not in {STATE_UNKNOWN, STATE_UNAVAILABLE, "none"}
+            and load_profile_age_seconds is not None
+            and -5.0 <= load_profile_age_seconds <= LOAD_BROKER_MAX_AGE_SECONDS
+        )
+        load_profile_generated_at = None
+        if rce_state_raw is not None:
+            raw_generated_at = rce_state_raw.attributes.get(
+                "load_profile_generated_at"
+            )
+            if isinstance(raw_generated_at, str):
+                load_profile_generated_at = dt_util.parse_datetime(
+                    raw_generated_at
+                )
+        load_profile_snapshot_age_seconds = (
+            (now - load_profile_generated_at.astimezone(now.tzinfo)).total_seconds()
+            if load_profile_generated_at is not None
+            else None
+        )
+        load_profile_snapshot_fresh = bool(
+            load_profile_snapshot_age_seconds is not None
+            and -5.0 <= load_profile_snapshot_age_seconds <= 30 * 60 * 60
+        )
+        load_profile_broker_fresh = bool(
+            load_profile_broker_fresh and load_profile_snapshot_fresh
+        )
+        # Never consume stale recorder-derived LOAD attributes. A configured
+        # static fallback may still produce a preview, but stale broker data
+        # cannot authorize the current Grid Charge transaction.
+        rce_state = rce_state_raw if load_profile_broker_fresh else None
+
+        (
+            battery_soc_value,
+            soc_data_fresh,
+            soc_age_seconds,
+        ) = _number_sample(
+            self.hass,
+            "sensor.hoymiles_hit_overview_battery_soc",
+            now=now,
+            max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+            minimum=0.0,
+            maximum=100.0,
+        )
+        (
+            self_use_soc_value,
+            self_use_soc_data_fresh,
+            self_use_soc_age_seconds,
+        ) = _number_sample(
+            self.hass,
+            "sensor.hoymiles_hit_ems_self_use_soc_readback",
+            now=now,
+            max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+            minimum=10.0,
+            maximum=100.0,
+        )
+        (
+            inverter_count_value,
+            inverter_count_data_fresh,
+            inverter_count_age_seconds,
+        ) = _number_sample(
+            self.hass,
+            "sensor.hoymiles_hit_number_of_machines_master_and_slave",
+            now=now,
+            max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        inverter_count_data_fresh = bool(
+            inverter_count_data_fresh
+            and inverter_count_value is not None
+            and 1.0 <= inverter_count_value <= 10.0
+        )
+        battery_voltage, battery_voltage_fresh, battery_voltage_age = (
+            _number_sample(
+                self.hass,
+                "sensor.hoymiles_hit_battery_voltage_bms",
+                now=now,
+                max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+            )
+        )
+        bms_charge_current, bms_charge_current_fresh, bms_charge_current_age = (
+            _number_sample(
+                self.hass,
+                "sensor.hoymiles_hit_maximum_charge_current",
+                now=now,
+                max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+            )
+        )
+        (
+            bms_discharge_current,
+            bms_discharge_current_fresh,
+            bms_discharge_current_age,
+        ) = _number_sample(
+            self.hass,
+            "sensor.hoymiles_hit_maximum_discharge_current",
+            now=now,
+            max_age_seconds=SLOW_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        bms_charge_data_fresh = bool(
+            battery_voltage_fresh and bms_charge_current_fresh
+        )
+        bms_discharge_data_fresh = bool(
+            battery_voltage_fresh and bms_discharge_current_fresh
+        )
+        bms_charge_age_seconds = (
+            max(battery_voltage_age, bms_charge_current_age)
+            if battery_voltage_age is not None
+            and bms_charge_current_age is not None
+            else None
+        )
+        bms_discharge_age_seconds = (
+            max(battery_voltage_age, bms_discharge_current_age)
+            if battery_voltage_age is not None
+            and bms_discharge_current_age is not None
+            else None
+        )
+        # Missing or stale BMS limits are zero-throughput, never "unlimited".
+        # A fresh exact zero is equally significant and remains zero.
+        bms_power_kw = (
+            max(
+                battery_voltage if battery_voltage is not None else 0.0,
+                0.0,
+            )
+            * max(
+                bms_charge_current
+                if bms_charge_current is not None
+                else 0.0,
+                0.0,
+            )
+            / 1000.0
+            if bms_charge_data_fresh
+            else 0.0
+        )
+        bms_discharge_power_kw = (
+            max(
+                battery_voltage if battery_voltage is not None else 0.0,
+                0.0,
+            )
+            * max(
+                bms_discharge_current
+                if bms_discharge_current is not None
+                else 0.0,
+                0.0,
+            )
+            / 1000.0
+            if bms_discharge_data_fresh
+            else 0.0
+        )
+        bms_charge_available = bms_charge_data_fresh and bms_power_kw > 0.0
+        bms_discharge_available = (
+            bms_discharge_data_fresh and bms_discharge_power_kw > 0.0
+        )
+
+        (
+            current_load_power_kw,
+            current_load_power_age_seconds,
+            current_load_power_source,
+        ) = _fresh_power_sample(
+            self.hass,
+            "sensor.hoymiles_actual_load_power",
+            max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        (
+            current_pv_power_kw,
+            current_pv_power_age_seconds,
+            current_pv_power_source,
+        ) = _fresh_power_sample(
+            self.hass,
+            "sensor.hoymiles_hit_overview_pv_total_power",
+            max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        (
+            current_battery_power_kw,
+            current_battery_power_age_seconds,
+            current_battery_power_source,
+        ) = _fresh_power_sample(
+            self.hass,
+            "sensor.hoymiles_hit_overview_battery_power",
+            max_age_seconds=LIVE_TELEMETRY_MAX_AGE_SECONDS,
+            non_negative=False,
+        )
+        live_power_data_fresh = all(
+            source == "live"
+            for source in (
+                current_load_power_source,
+                current_pv_power_source,
+                current_battery_power_source,
+            )
+        )
 
         required: dict[str, float | None] = {
             "sensor.hoymiles_hit_battery_capacity": _state_number(
                 self.hass,
                 "sensor.hoymiles_hit_battery_capacity",
             ),
-            "sensor.hoymiles_hit_overview_battery_soc": _state_number(
-                self.hass,
-                "sensor.hoymiles_hit_overview_battery_soc",
+            "sensor.hoymiles_hit_overview_battery_soc": battery_soc_value,
+            "sensor.hoymiles_hit_ems_self_use_soc_readback": (
+                self_use_soc_value if self_use_soc_data_fresh else None
             ),
-            "number.hoymiles_hit_self_use_soc": _state_number(
-                self.hass,
-                "number.hoymiles_hit_self_use_soc",
+            "sensor.hoymiles_hit_number_of_machines_master_and_slave": (
+                inverter_count_value if inverter_count_data_fresh else None
             ),
             "input_number.hoymiles_tariff_soc_safety_margin": _state_number(
                 self.hass,
@@ -1023,19 +1604,33 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 "input_number.hoymiles_tariff_peak_price",
             ),
         }
-        daily_load = _state_attribute_number(
+        daily_load_from_broker = _state_attribute_number(
             rce_state,
             "selected_average_daily_load_kwh",
         )
+        daily_load = daily_load_from_broker
         night_load = _state_attribute_number(
             rce_state,
             "average_night_load_4d_kwh",
         )
+        load_profile_source = "rce_recorder_broker"
         if daily_load is None:
             daily_load = _state_number(
                 self.hass,
                 "input_number.hoymiles_rce_fallback_daily_load",
             )
+            load_profile_source = "configured_daily_fallback"
+        load_profile_data_fresh = bool(
+            (
+                daily_load_from_broker is not None
+                and load_profile_broker_fresh
+            )
+            or (
+                rce_state_raw is None
+                and daily_load is not None
+                and daily_load > 0.0
+            )
+        )
         if daily_load is None:
             required["sensor.hoymiles_load_average_4_days"] = None
         complete_daily_loads = _state_attribute_daily_values(
@@ -1047,6 +1642,10 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             load_uncertainty_ratio,
             robust_load_days,
         ) = robust_weighted_estimate(complete_daily_loads)
+        (
+            conservative_daily_load,
+            conservative_load_days,
+        ) = robust_weighted_upper_estimate(complete_daily_loads)
         provisional_load = _state_attribute_number(
             rce_state,
             "provisional_daily_load_projection_kwh",
@@ -1143,25 +1742,29 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             DAY_3_FORECAST_CANDIDATES,
         )
         def state_age_minutes(state: State | None) -> float | None:
-            if state is None:
-                return None
-            return max(
-                (dt_util.utcnow() - state.last_updated).total_seconds() / 60.0,
-                0.0,
-            )
+            age = _state_age_seconds(state, now=now)
+            return age / 60.0 if age is not None else None
 
         today_forecast_age = state_age_minutes(today_state)
         tomorrow_forecast_age = state_age_minutes(tomorrow_state)
+        remaining_forecast_age = state_age_minutes(remaining_state)
         day_3_forecast_age = state_age_minutes(day_3_state)
         forecast_fresh = all(
-            age is not None and age <= 18 * 60
+            age is not None and -(5.0 / 60.0) <= age <= 18 * 60
             for age in (today_forecast_age, tomorrow_forecast_age)
+        )
+        remaining_forecast_fresh = bool(
+            remaining_forecast_age is not None
+            and -(5.0 / 60.0) <= remaining_forecast_age <= 18 * 60
         )
         if not forecast_fresh:
             required["Solcast forecast freshness"] = None
         if day_3_state is None:
             day_3_status = "missing"
-        elif day_3_forecast_age is not None and day_3_forecast_age > 18 * 60:
+        elif not (
+            day_3_forecast_age is not None
+            and -(5.0 / 60.0) <= day_3_forecast_age <= 18 * 60
+        ):
             day_3_status = "stale"
         else:
             day_3_status = "fresh"
@@ -1231,9 +1834,111 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         ):
             required["sun.sun"] = None
 
+        control_input_block_reason = "none"
+        if not self_use_soc_data_fresh:
+            control_input_block_reason = (
+                "self_use_soc_data_missing"
+                if self_use_soc_value is None
+                else "self_use_soc_data_stale"
+            )
+        elif not inverter_count_data_fresh:
+            control_input_block_reason = (
+                "inverter_count_data_missing"
+                if inverter_count_value is None
+                else "inverter_count_data_stale"
+            )
+        elif not soc_data_fresh:
+            control_input_block_reason = (
+                "soc_data_missing"
+                if battery_soc_value is None
+                else "soc_data_stale"
+            )
+        elif not bms_charge_data_fresh:
+            control_input_block_reason = (
+                "bms_charge_data_missing"
+                if battery_voltage is None or bms_charge_current is None
+                else "bms_charge_data_stale"
+            )
+        elif not bms_discharge_data_fresh:
+            control_input_block_reason = (
+                "bms_discharge_data_missing"
+                if battery_voltage is None or bms_discharge_current is None
+                else "bms_discharge_data_stale"
+            )
+        elif not load_profile_data_fresh:
+            control_input_block_reason = (
+                "load_profile_data_missing"
+                if daily_load is None
+                else "load_profile_data_stale"
+            )
+        control_inputs_fresh = control_input_block_reason == "none"
+
         missing = sorted(key for key, value in required.items() if value is None)
         metadata: dict[str, Any] = {
             "missing_entities": missing,
+            "control_inputs_fresh": control_inputs_fresh,
+            "control_input_block_reason": control_input_block_reason,
+            "soc_data_fresh": soc_data_fresh,
+            "soc_age_seconds": (
+                round(soc_age_seconds, 1)
+                if soc_age_seconds is not None
+                else None
+            ),
+            "self_use_soc_data_fresh": self_use_soc_data_fresh,
+            "self_use_soc_age_seconds": (
+                round(self_use_soc_age_seconds, 1)
+                if self_use_soc_age_seconds is not None
+                else None
+            ),
+            "inverter_count_data_fresh": inverter_count_data_fresh,
+            "inverter_count_age_seconds": (
+                round(inverter_count_age_seconds, 1)
+                if inverter_count_age_seconds is not None
+                else None
+            ),
+            "bms_charge_data_fresh": bms_charge_data_fresh,
+            "bms_charge_age_seconds": (
+                round(bms_charge_age_seconds, 1)
+                if bms_charge_age_seconds is not None
+                else None
+            ),
+            "bms_charge_available": bms_charge_available,
+            "bms_discharge_data_fresh": bms_discharge_data_fresh,
+            "bms_discharge_age_seconds": (
+                round(bms_discharge_age_seconds, 1)
+                if bms_discharge_age_seconds is not None
+                else None
+            ),
+            "bms_discharge_available": bms_discharge_available,
+            "load_profile_data_fresh": load_profile_data_fresh,
+            "load_profile_source": load_profile_source,
+            "load_profile_broker_fresh": load_profile_broker_fresh,
+            "load_profile_age_seconds": (
+                round(max(load_profile_age_seconds, 0.0), 1)
+                if load_profile_age_seconds is not None
+                else None
+            ),
+            "load_profile_snapshot_age_seconds": (
+                round(load_profile_snapshot_age_seconds, 1)
+                if load_profile_snapshot_age_seconds is not None
+                else None
+            ),
+            "live_power_data_fresh": live_power_data_fresh,
+            "current_load_power_age_seconds": (
+                round(current_load_power_age_seconds, 1)
+                if current_load_power_age_seconds is not None
+                else None
+            ),
+            "current_pv_power_age_seconds": (
+                round(current_pv_power_age_seconds, 1)
+                if current_pv_power_age_seconds is not None
+                else None
+            ),
+            "current_battery_power_age_seconds": (
+                round(current_battery_power_age_seconds, 1)
+                if current_battery_power_age_seconds is not None
+                else None
+            ),
             "automatic_charge_enabled": self.hass.states.is_state(
                 "input_boolean.hoymiles_tariff_charge_enabled",
                 "on",
@@ -1301,6 +2006,12 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 if robust_daily_load is not None
                 else None
             ),
+            "conservative_daily_load_p90_kwh": (
+                round(conservative_daily_load, 2)
+                if conservative_daily_load is not None
+                else None
+            ),
+            "conservative_load_history_days": conservative_load_days,
             "load_uncertainty_percent": round(
                 load_uncertainty_ratio * 100.0,
                 1,
@@ -1461,7 +2172,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         )
         remaining_today_raw = (
             max(float(remaining_state.state), 0.0)
-            if remaining_state is not None
+            if remaining_state is not None and remaining_forecast_fresh
             else max(forecast_today - actual_pv_today, 0.0)
         )
         today_interval_factor = (
@@ -1496,6 +2207,30 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 sunrise_today_local.hour * 60 + sunrise_today_local.minute,
                 sunset_today_local.hour * 60 + sunset_today_local.minute,
             )
+        pv_today_p10: dict[datetime, float] = {}
+        if today_p10 is not None:
+            remaining_today_p10 = min(
+                remaining_today,
+                max(today_p10 - actual_pv_today, 0.0)
+                * today_forecast_factor,
+            )
+            pv_today_p10 = _detailed_pv_map(
+                today_state,
+                now.date(),
+                remaining_today_p10,
+                timezone,
+                now_slot,
+                percentile="p10",
+            )
+            if not pv_today_p10:
+                pv_today_p10 = _fallback_pv_map(
+                    now.date(),
+                    remaining_today_p10,
+                    timezone,
+                    now_slot,
+                    sunrise_today_local.hour * 60 + sunrise_today_local.minute,
+                    sunset_today_local.hour * 60 + sunset_today_local.minute,
+                )
         tomorrow_date = now.date() + timedelta(days=1)
         pv_tomorrow = _detailed_pv_map(
             tomorrow_state,
@@ -1513,9 +2248,40 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 sunrise_tomorrow_local.hour * 60 + sunrise_tomorrow_local.minute,
                 sunset_tomorrow_local.hour * 60 + sunset_tomorrow_local.minute,
             )
+        pv_tomorrow_p10: dict[datetime, float] = {}
+        if tomorrow_p10 is not None:
+            tomorrow_p10_effective = (
+                min(tomorrow_p10, forecast_tomorrow_raw)
+                * self._forecast_accuracy_factor
+            )
+            pv_tomorrow_p10 = _detailed_pv_map(
+                tomorrow_state,
+                tomorrow_date,
+                tomorrow_p10_effective,
+                timezone,
+                now_slot,
+                percentile="p10",
+            )
+            if not pv_tomorrow_p10:
+                pv_tomorrow_p10 = _fallback_pv_map(
+                    tomorrow_date,
+                    tomorrow_p10_effective,
+                    timezone,
+                    now_slot,
+                    sunrise_tomorrow_local.hour * 60 + sunrise_tomorrow_local.minute,
+                    sunset_tomorrow_local.hour * 60 + sunset_tomorrow_local.minute,
+                )
         pv_by_slot = dict(pv_today)
+        pv_p10_by_slot = dict(pv_today_p10)
+        pv_p10_available_dates: set[date] = (
+            {now.date()} if today_p10 is not None else set()
+        )
         for start, energy in pv_tomorrow.items():
             pv_by_slot[start] = pv_by_slot.get(start, 0.0) + energy
+        for start, energy in pv_tomorrow_p10.items():
+            pv_p10_by_slot[start] = pv_p10_by_slot.get(start, 0.0) + energy
+        if tomorrow_p10 is not None:
+            pv_p10_available_dates.add(tomorrow_date)
         horizon_days = selected_horizon_days
         if day_3_state is not None:
             day_3_date = now.date() + timedelta(days=2)
@@ -1547,6 +2313,33 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 )
             for start, energy in pv_day_3.items():
                 pv_by_slot[start] = pv_by_slot.get(start, 0.0) + energy
+            if day_3_p10 is not None:
+                day_3_p10_effective = (
+                    min(day_3_p10, forecast_day_3_raw)
+                    * self._forecast_accuracy_factor
+                )
+                pv_day_3_p10 = _detailed_pv_map(
+                    day_3_state,
+                    day_3_date,
+                    day_3_p10_effective,
+                    timezone,
+                    now_slot,
+                    percentile="p10",
+                )
+                if not pv_day_3_p10:
+                    pv_day_3_p10 = _fallback_pv_map(
+                        day_3_date,
+                        day_3_p10_effective,
+                        timezone,
+                        now_slot,
+                        sunrise_day_3_local.hour * 60 + sunrise_day_3_local.minute,
+                        sunset_day_3_local.hour * 60 + sunset_day_3_local.minute,
+                    )
+                for start, energy in pv_day_3_p10.items():
+                    pv_p10_by_slot[start] = (
+                        pv_p10_by_slot.get(start, 0.0) + energy
+                    )
+                pv_p10_available_dates.add(day_3_date)
 
         load_by_slot: dict[datetime, float] | None = None
         if average_load_profile or weekday_load_profile or weekend_load_profile:
@@ -1573,41 +2366,46 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     load_by_slot[cursor] = slot_profile[slot] * scale
                 cursor_utc += timedelta(minutes=30)
 
-        inverter_count_raw = _state_number(
-            self.hass,
-            "sensor.hoymiles_hit_number_of_machines_master_and_slave",
+        # Only the unfinished current interval is corrected from the fresh
+        # power samples captured together with the control-input contract.
+        # Future slots retain the robust recorder profile.
+        live_pv_surplus_now = (
+            current_load_power_kw is not None
+            and current_pv_power_kw is not None
+            and current_battery_power_kw is not None
+            and current_pv_power_kw
+            > current_load_power_kw + LIVE_PV_SURPLUS_MIN_KW
+            # Overview convention is positive discharge, negative charge.
+            and current_battery_power_kw < -LIVE_PV_SURPLUS_MIN_KW
         )
-        inverter_count = min(max(round(inverter_count_raw or 1.0), 1), 10)
+        if live_pv_surplus_now:
+            if self._live_pv_surplus_started_at is None:
+                self._live_pv_surplus_started_at = now
+        else:
+            self._live_pv_surplus_started_at = None
+        live_pv_surplus_stable_seconds = (
+            max(
+                (
+                    now - self._live_pv_surplus_started_at
+                ).total_seconds(),
+                0.0,
+            )
+            if self._live_pv_surplus_started_at is not None
+            else 0.0
+        )
+        live_pv_surplus_stable = (
+            live_pv_surplus_stable_seconds
+            >= LIVE_PV_SURPLUS_STABLE_SECONDS
+        )
+
+        assert inverter_count_value is not None
+        inverter_count = min(max(round(inverter_count_value), 1), 10)
         system_power_kw = rated_power * inverter_count
         requested_percent = required[
             "input_number.hoymiles_tariff_requested_charge_power"
         ]
         assert requested_percent is not None
         requested_power_kw = system_power_kw * requested_percent / 100.0
-        battery_voltage = _state_number(
-            self.hass,
-            "sensor.hoymiles_hit_battery_voltage_bms",
-        )
-        bms_current = _state_number(
-            self.hass,
-            "sensor.hoymiles_hit_maximum_charge_current",
-        )
-        bms_discharge_current = _state_number(
-            self.hass,
-            "sensor.hoymiles_hit_maximum_discharge_current",
-        )
-        bms_power_kw = (
-            max(battery_voltage, 0.0) * max(bms_current, 0.0) / 1000.0
-            if battery_voltage is not None and bms_current is not None
-            else None
-        )
-        bms_discharge_power_kw = (
-            max(battery_voltage, 0.0)
-            * max(bms_discharge_current, 0.0)
-            / 1000.0
-            if battery_voltage is not None and bms_discharge_current is not None
-            else None
-        )
         # Maximum Charge Power is the complete AC budget used by Grid Charge.
         # The inverter supplies LOAD first and directs only the remainder to
         # the battery.  The BMS value therefore limits the battery branch, not
@@ -1639,8 +2437,47 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             for pair in (*cheap_windows, *medium_windows)
             for value in pair
         )
+        selected_schedule = TariffSchedule(
+            tariff_type=tariff_type,
+            g11_price_pln_kwh=(
+                profile.g11_price_pln_kwh
+                if profile is not None
+                else required["input_number.hoymiles_tariff_g11_price"]
+            ),
+            low_price_pln_kwh=(
+                profile.low_price_pln_kwh
+                if profile is not None
+                else required["input_number.hoymiles_tariff_low_price"]
+            ),
+            medium_price_pln_kwh=(
+                profile.medium_price_pln_kwh
+                if profile is not None
+                else required["input_number.hoymiles_tariff_medium_price"]
+            ),
+            peak_price_pln_kwh=(
+                profile.peak_price_pln_kwh
+                if profile is not None
+                else required["input_number.hoymiles_tariff_peak_price"]
+            ),
+            cheap_windows=cheap_windows,  # type: ignore[arg-type]
+            medium_windows=medium_windows,  # type: ignore[arg-type]
+            weekend_low_price=(
+                tariff_type in {"G12w", "G13"}
+                and self.hass.states.is_state(
+                    "input_boolean.hoymiles_tariff_weekend_low_price",
+                    "on",
+                )
+            ),
+            polish_holidays_low_price=self.hass.states.is_state(
+                "input_boolean.hoymiles_tariff_polish_holidays_low_price",
+                "on",
+            ),
+            operator=operator,
+        )
 
-        self_use_reserve_soc = required["number.hoymiles_hit_self_use_soc"]
+        self_use_reserve_soc = required[
+            "sensor.hoymiles_hit_ems_self_use_soc_readback"
+        ]
         safety_margin_soc = required[
             "input_number.hoymiles_tariff_soc_safety_margin"
         ]
@@ -1652,9 +2489,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         )
         capacity_kwh = required["sensor.hoymiles_hit_battery_capacity"]
         assert capacity_kwh is not None
-        load_risk_kwh = daily_load * min(
-            max(load_uncertainty_ratio * 0.25, 0.02),
-            0.08,
+        # With at least five complete days the P90 scenario is already applied
+        # slot-by-slot to every expensive window. Do not charge the same LOAD
+        # uncertainty again as a terminal lump. Sparse history keeps the old
+        # small fallback until an upper scenario is trustworthy.
+        load_risk_kwh = (
+            0.0
+            if conservative_daily_load is not None
+            and conservative_load_days >= 5
+            else daily_load
+            * min(max(load_uncertainty_ratio * 0.25, 0.02), 0.08)
         )
         forecast_risk_kwh = (
             (forecast_tomorrow + forecast_day_3)
@@ -1665,21 +2509,34 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             load_risk_kwh + forecast_risk_kwh,
             capacity_kwh * 0.08,
         )
-        fallback_gap_load_kwh = (
-            horizon_gap_load_reserve_kwh(
-                daily_load,
-                selected_horizon_hours,
-                target_hours=PLANNING_HORIZON_TARGET_HOURS,
-            )
-            if day_3_status != "fresh"
-            else 0.0
-        )
         maximum_soc = required["input_number.hoymiles_tariff_maximum_soc"]
         assert maximum_soc is not None
         terminal_headroom_kwh = capacity_kwh * max(
             maximum_soc - reserve_soc,
             0.0,
         ) / 100.0
+        (
+            fallback_gap_load_kwh,
+            fallback_gap_protected_hours,
+        ) = (
+            horizon_gap_expensive_load_reserve_kwh(
+                daily_load,
+                selected_horizon_end,
+                horizon_gap_hours,
+                selected_schedule,
+                charge_power_kw=effective_power_kw,
+                battery_charge_power_kw=bms_power_kw,
+                charge_efficiency_percent=required[
+                    "input_number.hoymiles_tariff_charge_efficiency"
+                ],
+                discharge_efficiency_percent=required[
+                    "input_number.hoymiles_tariff_discharge_efficiency"
+                ],
+                maximum_stored_energy_kwh=terminal_headroom_kwh,
+            )
+            if day_3_status != "fresh"
+            else (0.0, 0.0)
+        )
         uncertainty_margin_applied_kwh = min(
             uncertainty_margin_kwh,
             terminal_headroom_kwh,
@@ -1729,6 +2586,58 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     round(night_load, 2) if night_load is not None else None
                 ),
                 "model_input_load_profile_mode": metadata["load_profile_mode"],
+                "current_live_load_power_kw": (
+                    round(current_load_power_kw, 3)
+                    if current_load_power_kw is not None
+                    else None
+                ),
+                "current_live_pv_power_kw": (
+                    round(current_pv_power_kw, 3)
+                    if current_pv_power_kw is not None
+                    else None
+                ),
+                "current_live_battery_power_kw": (
+                    round(current_battery_power_kw, 3)
+                    if current_battery_power_kw is not None
+                    else None
+                ),
+                "current_live_power_fresh": all(
+                    value is not None
+                    for value in (
+                        current_load_power_kw,
+                        current_pv_power_kw,
+                        current_battery_power_kw,
+                    )
+                ),
+                "live_pv_surplus_now": live_pv_surplus_now,
+                "live_pv_surplus_stable": live_pv_surplus_stable,
+                "live_pv_surplus_stable_seconds": round(
+                    live_pv_surplus_stable_seconds,
+                    1,
+                ),
+                "live_pv_surplus_required_stable_seconds": (
+                    LIVE_PV_SURPLUS_STABLE_SECONDS
+                ),
+                "current_live_load_power_age_seconds": (
+                    round(current_load_power_age_seconds, 1)
+                    if current_load_power_age_seconds is not None
+                    else None
+                ),
+                "current_live_pv_power_age_seconds": (
+                    round(current_pv_power_age_seconds, 1)
+                    if current_pv_power_age_seconds is not None
+                    else None
+                ),
+                "current_live_battery_power_age_seconds": (
+                    round(current_battery_power_age_seconds, 1)
+                    if current_battery_power_age_seconds is not None
+                    else None
+                ),
+                "current_live_load_power_source": current_load_power_source,
+                "current_live_pv_power_source": current_pv_power_source,
+                "current_live_battery_power_source": (
+                    current_battery_power_source
+                ),
                 "model_input_fallback_zero_pv_hours": round(
                     horizon_gap_hours,
                     2,
@@ -1825,12 +2734,20 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     uncertainty_margin_applied_kwh,
                     2,
                 ),
+                "terminal_load_uncertainty_margin_kwh": round(
+                    load_risk_kwh,
+                    2,
+                ),
                 "fallback_zero_pv_load_reserve_kwh": round(
                     fallback_gap_load_applied_kwh,
                     2,
                 ),
                 "fallback_zero_pv_load_reserve_requested_kwh": round(
                     fallback_gap_load_kwh,
+                    2,
+                ),
+                "fallback_zero_pv_protected_expensive_hours": round(
+                    fallback_gap_protected_hours,
                     2,
                 ),
                 "model_input_fallback_zero_pv_load_reserve_kwh": round(
@@ -1855,11 +2772,24 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     else None
                 ),
                 "bms_limit_active": (
-                    bms_power_kw is not None
+                    bms_charge_data_fresh
                     and bms_power_kw + 0.05 < requested_power_kw
                 ),
                 "effective_charge_power_percent": round(
                     requested_percent,
+                    1,
+                ),
+                # The register command stays at the requested percentage.
+                # The learned factor predicts what that command physically
+                # delivers; applying it to the command again would square the
+                # derating. Keep the legacy alias above for older dashboards.
+                "command_charge_power_percent": round(
+                    requested_percent,
+                    1,
+                ),
+                "modeled_effective_charge_power_percent": round(
+                    requested_percent
+                    * min(max(self._effective_charge_power_factor, 0.50), 1.0),
                     1,
                 ),
                 "night_window": (
@@ -1888,16 +2818,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 night_end_minute=night_end,
                 charge_power_kw=effective_power_kw,
                 requested_charge_power_kw=requested_power_kw,
-                battery_charge_power_kw=(
-                    bms_power_kw
-                    if bms_power_kw is not None
-                    else system_power_kw
-                ),
-                battery_discharge_power_kw=(
-                    bms_discharge_power_kw
-                    if bms_discharge_power_kw is not None
-                    else system_power_kw
-                ),
+                battery_charge_power_kw=bms_power_kw,
+                battery_discharge_power_kw=bms_discharge_power_kw,
                 charge_efficiency_percent=required[
                     "input_number.hoymiles_tariff_charge_efficiency"
                 ],
@@ -1907,51 +2829,27 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 minimum_saving_pln_kwh=required[
                     "input_number.hoymiles_tariff_minimum_saving"
                 ],
-                schedule=TariffSchedule(
-                    tariff_type=tariff_type,
-                    g11_price_pln_kwh=(
-                        profile.g11_price_pln_kwh
-                        if profile is not None
-                        else required["input_number.hoymiles_tariff_g11_price"]
-                    ),
-                    low_price_pln_kwh=(
-                        profile.low_price_pln_kwh
-                        if profile is not None
-                        else required["input_number.hoymiles_tariff_low_price"]
-                    ),
-                    medium_price_pln_kwh=(
-                        profile.medium_price_pln_kwh
-                        if profile is not None
-                        else required["input_number.hoymiles_tariff_medium_price"]
-                    ),
-                    peak_price_pln_kwh=(
-                        profile.peak_price_pln_kwh
-                        if profile is not None
-                        else required["input_number.hoymiles_tariff_peak_price"]
-                    ),
-                    cheap_windows=cheap_windows,  # type: ignore[arg-type]
-                    medium_windows=medium_windows,  # type: ignore[arg-type]
-                    weekend_low_price=(
-                        tariff_type in {"G12w", "G13"}
-                        and self.hass.states.is_state(
-                            "input_boolean.hoymiles_tariff_weekend_low_price",
-                            "on",
-                        )
-                    ),
-                    polish_holidays_low_price=self.hass.states.is_state(
-                        "input_boolean.hoymiles_tariff_polish_holidays_low_price",
-                        "on",
-                    ),
-                    operator=operator,
-                ),
+                schedule=selected_schedule,
                 load_by_slot_kwh=load_by_slot,
-                pv_charge_power_kw=(
-                    bms_power_kw
-                    if bms_power_kw is not None
-                    else system_power_kw
-                ),
+                pv_charge_power_kw=bms_power_kw,
                 horizon_days=horizon_days,
                 terminal_reserve_soc_percent=terminal_reserve_soc,
+                base_reserve_soc_percent=self_use_reserve_soc,
+                conservative_daily_load_kwh=conservative_daily_load,
+                load_uncertainty_ratio=load_uncertainty_ratio,
+                load_history_days=robust_load_days,
+                pv_p10_by_slot_kwh=pv_p10_by_slot,
+                pv_p10_available_dates=tuple(sorted(pv_p10_available_dates)),
+                forecast_uncertainty_ratio=self._forecast_accuracy_uncertainty,
+                live_pv_surplus_stable=live_pv_surplus_stable,
+                live_pv_surplus_stable_seconds=(
+                    live_pv_surplus_stable_seconds
+                ),
+                current_load_power_kw=current_load_power_kw,
+                current_pv_power_kw=current_pv_power_kw,
+                current_battery_power_kw=current_battery_power_kw,
+                control_inputs_fresh=control_inputs_fresh,
+                control_input_block_reason=control_input_block_reason,
             ),
             metadata,
         )

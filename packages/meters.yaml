@@ -168,6 +168,23 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: S_DWORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            // On a parallel Master register 1814 is the system-wide grid
+            // source.  Tie the public overview timestamp to this FC03 reply.
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) == 1) {
+              id(overview_master_grid_last_readback_ms) = millis();
+              id(grid_total_active_power_30011).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}

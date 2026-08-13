@@ -57,6 +57,20 @@ jobs:
         run: python tools/test_automation_matrix.py
       - name: Test diagnostic privacy filters
         run: python tools/test_diagnostics.py
+      - name: Test parallel power balancing
+        run: python tools/test_power_balance.py
+      - name: Test shared energy input freshness
+        run: python tools/test_energy_data.py
+      - name: Test shared household LOAD estimates
+        run: python tools/test_load_model.py
+      - name: Test physical FC03 actuator readback contract
+        run: python tools/test_firmware_readback_contract.py
+      - name: Test optimizer event-loop offload contract
+        run: python tools/test_optimizer_executor_contract.py
+      - name: Test optimizer non-blocking startup contract
+        run: python tools/test_optimizer_startup_contract.py
+      - name: Test source-device registry rebind contract
+        run: python tools/test_source_device_rebind.py
       - name: Run exhaustive pre-release automation matrix
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: python tools/test_automation_matrix.py --exhaustive

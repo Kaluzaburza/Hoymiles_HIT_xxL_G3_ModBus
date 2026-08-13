@@ -3,29 +3,81 @@
 # Port Modbus Mastera nie przekazuje zapytań kierowanych bezpośrednio do
 # adresów urządzeń Slave. Rejestry 6050/6055/... opisują wewnętrzną sieć
 # równoległą, ale nie są dodatkowymi urządzeniami na zewnętrznej magistrali
-# RS485. Zgodnie z instrukcją Hoymiles ustawienia EMS i dispatch zapisane do
-# Mastera są rozsyłane przez Master do całej wykrytej sieci.
+# RS485. Master może rozsyłać ustawienia wewnętrznie, lecz jego zewnętrzny
+# port nie umożliwia niezależnego potwierdzenia FC03 z każdego Slave. Dlatego
+# chronione zapisy EMS pozostają fail-closed w topologii Master/Slave.
+
+globals:
+  # Lokalny znacznik pochodzi tylko z odpowiedzi FC03 obejmującej 6048-6049.
+  # Unsigned subtraction zachowuje się poprawnie również po zawinięciu millis().
+  - id: parallel_topology_last_readback_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
 
 sensor:
+  - platform: template
+    name: "Parallel Topology Readback Generation"
+    id: parallel_topology_readback_generation
+    accuracy_decimals: 0
+    update_interval: never
+    force_update: true
+    entity_category: diagnostic
+
+  # Numeric 0/1 is intentional: the HA proxy integration currently exposes
+  # ESPHome sensors, but not ESPHome binary_sensors.  Keeping the capability
+  # in the supported sensor domain makes the fail-closed gate observable by
+  # both the generated package and the integration catalog.
+  - platform: template
+    name: "EMS Verified Hardware Readback Supported"
+    id: ems_verified_hardware_readback_supported
+    accuracy_decimals: 0
+    update_interval: 1s
+    force_update: true
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(machines_type_6048).has_state()) {
+        return 0.0f;
+      }
+      const uint32_t last_readback = id(parallel_topology_last_readback_ms);
+      if (last_readback == 0 ||
+          static_cast<uint32_t>(millis() - last_readback) > 60000U) {
+        return 0.0f;
+      }
+      const uint16_t machine_type =
+          static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+      return machine_type == 0 ? 1.0f : 0.0f;
+
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Machines Type"
     id: machines_type_6048
     register_type: holding
     address: 6048
     accuracy_decimals: 0
     value_type: U_WORD
-    skip_updates: 9
+    force_update: true
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Number of Machines (Master and Slave)"
     id: number_of_machines_master_and_slave_6049
     register_type: holding
     address: 6049
     accuracy_decimals: 0
     value_type: U_WORD
-    skip_updates: 9
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            // 6049 zamyka zgrupowany odczyt FC03 6048-6049.
+            id(parallel_topology_last_readback_ms) = millis();
+            const float generation =
+                id(parallel_topology_readback_generation).has_state() &&
+                        id(parallel_topology_readback_generation).state < 16000000.0f
+                    ? id(parallel_topology_readback_generation).state + 1.0f
+                    : 1.0f;
+            id(parallel_topology_readback_generation).publish_state(generation);
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
@@ -157,6 +209,10 @@ text_sensor:
       const uint16_t machine_type =
           static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
       if (machine_type == 0) {
+        if (!id(ems_verified_hardware_readback_supported).has_state() ||
+            id(ems_verified_hardware_readback_supported).state < 0.5f) {
+          return std::string("Zablokowane - nieaktualny odczyt topologii");
+        }
         return std::string("Gotowe - sterowanie bezpośrednie");
       }
       if (machine_type == 2) {
@@ -174,34 +230,4 @@ text_sensor:
       if (count < 2 || count > 10) {
         return std::string("Nieprawidłowa liczba falowników");
       }
-
-      std::array<esphome::sensor::Sensor *, 10> address_sensors{
-          id(communication_address_1_master_device_6050),
-          id(communication_address_2_slave_device_1_6055),
-          id(communication_address_3_slave_device_2_6060),
-          id(communication_address_4_slave_device_3_6065),
-          id(communication_address_5_slave_device_4_6070),
-          id(communication_address_6_slave_device_5_6075),
-          id(communication_address7_slave_device_6_6080),
-          id(communication_address8_slave_device_7_6085),
-          id(communication_address9_slave_device_8_6090),
-          id(communication_address10_slave_device_9_6095),
-      };
-      std::array<uint16_t, 10> addresses{};
-      for (int slot = 0; slot < count; slot++) {
-        if (!address_sensors[slot]->has_state()) {
-          return std::string("Oczekiwanie na wykrycie sieci");
-        }
-        const int address =
-            static_cast<int>(std::lround(address_sensors[slot]->state));
-        if (address < 1 || address > 247) {
-          return std::string("Błąd adresów sieci równoległej");
-        }
-        addresses[slot] = static_cast<uint16_t>(address);
-        for (int previous = 0; previous < slot; previous++) {
-          if (addresses[previous] == addresses[slot]) {
-            return std::string("Błąd adresów sieci równoległej");
-          }
-        }
-      }
-      return std::string("Gotowe - Master steruje siecią równoległą");
+      return std::string("Zablokowane - brak FC03 dla każdego Slave");

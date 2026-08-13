@@ -3170,6 +3170,42 @@
   {
     "domain": "sensor",
     "source_component": "sensor",
+    "translation_key": "parallel_topology_readback_generation",
+    "source_name": "Parallel Topology Readback Generation",
+    "source_id": "parallel_topology_readback_generation",
+    "source_object_id": "parallel_topology_readback_generation",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Parallel Topology Readback Generation",
+      "pl": "Generacja odczytu topologii równoległej"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Parallel Topology Readback Generation.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generacja odczytu topologii równoległej."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_verified_hardware_readback_supported",
+    "source_name": "EMS Verified Hardware Readback Supported",
+    "source_id": "ems_verified_hardware_readback_supported",
+    "source_object_id": "ems_verified_hardware_readback_supported",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Verified Hardware Readback Supported",
+      "pl": "Obsługa potwierdzonego odczytu sprzętowego EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Verified Hardware Readback Supported.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Obsługa potwierdzonego odczytu sprzętowego EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
     "translation_key": "machines_type",
     "source_name": "Machines Type",
     "source_id": "machines_type_6048",
@@ -4262,6 +4298,240 @@
     "description": {
       "en": "Hoymiles HIT xxL G3 Modbus value: PV Total Power (Energy Block).",
       "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: PV łącznie moc (energia Block)."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_control_readback_generation",
+    "source_name": "EMS Control Readback Generation",
+    "source_id": "ems_control_readback_generation",
+    "source_object_id": "ems_control_readback_generation",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Control Readback Generation",
+      "pl": "Generacja odczytu sterowania EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Control Readback Generation.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generacja odczytu sterowania EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "gcf_control_readback_generation",
+    "source_name": "GCF Control Readback Generation",
+    "source_id": "gcf_control_readback_generation",
+    "source_object_id": "gcf_control_readback_generation",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "GCF Control Readback Generation",
+      "pl": "Generacja odczytu sterowania GCF"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: GCF Control Readback Generation.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generacja odczytu sterowania GCF."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_charge_power_readback_generation",
+    "source_name": "Battery Charge Power Readback Generation",
+    "source_id": "battery_charge_power_readback_generation",
+    "source_object_id": "battery_charge_power_readback_generation",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Battery Charge Power Readback Generation",
+      "pl": "Generacja odczytu mocy ładowania baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Charge Power Readback Generation.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Generacja odczytu mocy ładowania baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_mode_readback_code",
+    "source_name": "EMS Mode Readback Code",
+    "source_id": "ems_mode_raw_4300",
+    "source_object_id": "ems_mode_readback_code",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Mode Readback Code",
+      "pl": "Kod odczytanego trybu EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Mode Readback Code.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Kod odczytanego trybu EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_self_use_soc_readback",
+    "source_name": "EMS Self-Use SOC Readback",
+    "source_id": "self_used_soc_readback_4301",
+    "source_object_id": "ems_self_use_soc_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Self-Use SOC Readback",
+      "pl": "Odczyt rezerwy SOC autokonsumpcji EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Self-Use SOC Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt rezerwy SOC autokonsumpcji EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_backup_soc_readback",
+    "source_name": "EMS Backup SOC Readback",
+    "source_id": "backup_soc_raw_4302",
+    "source_object_id": "ems_backup_soc_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Backup SOC Readback",
+      "pl": "Odczyt rezerwy SOC Backup EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Backup SOC Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt rezerwy SOC Backup EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_force_charge_soc_readback",
+    "source_name": "EMS Force Charge SOC Readback",
+    "source_id": "force_charge_soc_readback_4303",
+    "source_object_id": "ems_force_charge_soc_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Force Charge SOC Readback",
+      "pl": "Odczyt docelowego SOC ładowania EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Force Charge SOC Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt docelowego SOC ładowania EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "gcf_enable_readback_code",
+    "source_name": "GCF Enable Readback Code",
+    "source_id": "gcf_enable_readback_258",
+    "source_object_id": "gcf_enable_readback_code",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "GCF Enable Readback Code",
+      "pl": "Kod odczytanego stanu GCF"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: GCF Enable Readback Code.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Kod odczytanego stanu GCF."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "gcf_maximum_export_power_readback",
+    "source_name": "GCF Maximum Export Power Readback",
+    "source_id": "gcf_export_soft_limit_ratio_readback_259",
+    "source_object_id": "gcf_maximum_export_power_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "GCF Maximum Export Power Readback",
+      "pl": "Odczyt maksymalnego limitu eksportu GCF"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: GCF Maximum Export Power Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt maksymalnego limitu eksportu GCF."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "battery_max_charge_power_readback",
+    "source_name": "Battery Max Charge Power Readback",
+    "source_id": "battery_max_charge_power_readback_306",
+    "source_object_id": "battery_max_charge_power_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Battery Max Charge Power Readback",
+      "pl": "Odczyt maksymalnej mocy ładowania baterii"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Battery Max Charge Power Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt maksymalnej mocy ładowania baterii."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_maximum_charge_power_readback",
+    "source_name": "EMS Maximum Charge Power Readback",
+    "source_id": "maximum_charge_power_readback_4304",
+    "source_object_id": "ems_maximum_charge_power_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Maximum Charge Power Readback",
+      "pl": "Odczyt maksymalnej mocy ładowania EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Maximum Charge Power Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt maksymalnej mocy ładowania EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_force_discharge_soc_readback",
+    "source_name": "EMS Force Discharge SOC Readback",
+    "source_id": "force_discharge_soc_readback_4305",
+    "source_object_id": "ems_force_discharge_soc_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Force Discharge SOC Readback",
+      "pl": "Odczyt minimalnego SOC rozładowania EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Force Discharge SOC Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt minimalnego SOC rozładowania EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
+    "translation_key": "ems_maximum_discharge_power_readback",
+    "source_name": "EMS Maximum Discharge Power Readback",
+    "source_id": "maximum_discharge_power_readback_4306",
+    "source_object_id": "ems_maximum_discharge_power_readback",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "EMS Maximum Discharge Power Readback",
+      "pl": "Odczyt maksymalnej mocy rozładowania EMS"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: EMS Maximum Discharge Power Readback.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Odczyt maksymalnej mocy rozładowania EMS."
     },
     "options": []
   },

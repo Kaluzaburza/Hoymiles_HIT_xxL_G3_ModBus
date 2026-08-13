@@ -1,13 +1,41 @@
 # Automation simulation and safety report
 
-Date: 2026-08-12 (Europe/Warsaw)
-Validated release candidate: **v1.5.0**
+Baseline date: 2026-08-13 (Europe/Warsaw)
+Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
+Last completed offline baseline in this report: **v1.5.2 RC6 full offline
+validation**
+Accepted live runtime candidate:
+**`7ce13155533bfa0bf9752a0fd201224dac1a7393`**
+Current status: **v1.5.2 RC6 Home Assistant runtime/frontend — offline,
+exact-SHA CI and both-installation live audit PASS**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
 RCEm 253 V+ voltage management. The tests do not write to a real inverter.
 They verify arithmetic, state transitions, interlocks and fail-safe behaviour
 before field acceptance on each installation.
+
+The v1.5.2 RC2 deterministic, packaging and firmware checks below were
+completed on 2026-08-13. Its local Home Assistant 2026.8 deployment exposed a
+P1 source-device split. RC3 added the fail-closed rebind, passed its dedicated
+**6/6** contract and exact-SHA GitHub gates, and was deployed locally. The
+rebind persisted and native physical EMS readbacks were live, but ordinary
+stable sensor proxies remained unavailable because a parallel-topology
+availability gate incorrectly covered every sensor. RC4 scoped that gate only
+to the two derived parallel-power proxies, passed exact-SHA CI and restored the
+proxies in the local installation. That live run then exposed an independent
+PSE interval-end P1: `dtime_utc` marks the end of a quarter, not its start. RC5
+fixed the UTC mapping, passed full offline validation and exact-SHA CI, and was
+deployed to the local and parallel test installations. Its parser and backend
+fail-closed state were correct live. The parallel dashboard then exposed a
+separate frontend P1: a transient `404` from the integration's `static-r2` route
+was retained by the reverse proxy/browser, so Lovelace timed out waiting for the
+dashboard strategy after restart. RC6 is the startup hotfix target; its code,
+independent review and full offline gate passed with P0=0/P1=0. Exact runtime
+commit `7ce13155533bfa0bf9752a0fd201224dac1a7393` then passed push CI and
+`workflow_dispatch`, including the exhaustive matrix, and passed the local and
+parallel-installation live frontend audit. The later v1.5.0 section is retained
+only as an explicitly archived live baseline.
 
 ## Representative systems
 
@@ -23,10 +51,10 @@ claims. They intentionally combine undersized and oversized storage, weak and
 strong PV, ordinary and winter-like load, parallel operation and BMS limits
 below inverter power.
 
-## Scenario-matrix result
+## Scenario-matrix result — v1.5.2 offline candidate
 
-**Quick matrix: 488/488 scenarios passed.**
-**Exhaustive matrix: 2064/2064 scenarios passed.**
+- **Quick matrix:** 488/488 scenarios passed.
+- **Exhaustive matrix:** 2064/2064 scenarios passed.
 
 The complete sweep covers:
 
@@ -41,26 +69,32 @@ The complete sweep covers:
 - power/energy invariants for every half-hour slot, conversion losses,
   minimum-SOC floors and end-of-horizon battery bounds.
 
-## RCE safeguards exercised
+## RCE v1.5.2 acceptance checks — passed offline
 
 - The protected energy reserve is rounded **up** to a full 1% SOC step and is
   enforced for every planned export slot, not only at the end of the plan.
 - The model distinguishes energy available now from energy expected later from
   PV, so a 48-hour export plan cannot silently treat forecast energy as current
   battery energy.
-- Day-three availability, forecast, expected load, shortfall and terminal
-  reserve reason are explicit. Missing data is not presented as a zero
-  shortfall.
-- A day-three AC shortfall is converted to the required DC battery reserve with
-  the household-discharge efficiency. Its value equals the avoided import cost,
-  preventing a low-price export followed by a more expensive grid purchase.
-- Gross additional revenue and net optimization benefit are separate. Net
-  benefit subtracts battery-wear cost and includes the change in terminal
-  energy value.
+- RCE keeps a revenue-first objective across a bounded joint horizon. Day-three
+  availability, forecast, expected LOAD, and shortfall remain explicit
+  diagnostics; they do not add a terminal objective to the sale planner.
+- The active-set implementation is explicitly heuristic. An independent oracle
+  compares small constructed horizons as regression evidence; it does not prove
+  exact or global optimality for the full mixed-constraint problem.
+- Gross sale revenue and estimated net benefit are separate. Net benefit can
+  subtract modeled battery wear, but no terminal household-energy value is
+  reported as realized sale revenue.
+- Charge and discharge plans share physical inverter/BMS/AC/export budgets,
+  respect energy-arrival time, and do not count natural PV export twice.
 - Export lockout, GCF/zero-export, physical system/BMS limits, stale inputs and
   Master/Slave readiness are fail-closed.
+- Official PSE `dtime_utc` values are treated as 15-minute interval ends. The
+  parser validates `period_utc`/`business_date`, supports the live `24:00`
+  label, and reconstructs exactly 48 normal-day, 46 spring-DST and 50
+  autumn-DST half-hours without shifting the current price.
 
-## Tariff-charging safeguards exercised
+## Tariff-charging v1.5.2 acceptance checks — passed offline
 
 - Planning uses a real rolling horizon of at least 48 hours when fresh day-three
   Solcast data is available, including 47/48/49-slot DST days.
@@ -78,10 +112,10 @@ The complete sweep covers:
   available battery-charging power needs a full hour or longer.
 - G11 does not cycle the battery merely because all hours have the same price.
 
-## RCEm 253 V+ safeguards exercised
+## RCEm 253 V+ v1.5.2 acceptance checks — passed offline
 
-- RCEm starts in **observation-only** mode and does not change certified grid
-  protection settings.
+- RCEm starts in **observation-only (shadow)** mode, performs no inverter
+  writes, and does not change certified grid-protection settings.
 - Voltage risk uses per-phase history and robust recurring-window detection;
   current voltage can override historical expectations when the grid is calmer
   or worse than usual.
@@ -95,7 +129,7 @@ The complete sweep covers:
 - Multiple risk windows retain operational headroom independently; energy
   prepared for an early window is not double-counted for a later one.
 
-## Static control-contract checks
+## Static control-contract checks for v1.5.2 — passed offline
 
 These repository tests verify scheduler markers, interlocks and planner
 contracts statically. They do not execute a real Home Assistant automation or
@@ -112,8 +146,131 @@ separately below.
   latched to the required charging window. This prevents rapid mode chatter.
 - Notification debounce and fingerprints suppress repeated phone alerts while
   preserving a genuinely different stable state.
+- The Home Assistant 2026.8 source-device contract preserves the configured
+  composite anchor, accepts only one ESPHome-owned successor with matching
+  native entity evidence, rejects ambiguous or contradictory candidates, and
+  prevents a second integration entry for the resolved child.
 
-## Live candidate acceptance — 2026-08-12
+## v1.5.2 RC5 frontend finding and RC6 final audit — 2026-08-14
+
+- RCE optimizer: **68/68** deterministic scenarios passed, including the
+  independent small-horizon oracle, padded 48-hour regressions, the exact live
+  PSE interval-end shape, payload reordering, `24:00`, and both DST day lengths.
+- Automation scheduler: **488/488** quick and **2064/2064** exhaustive
+  cross-system scenarios passed.
+- Tariff, RCEm, history reconstruction, policy-neutral energy/LOAD/power
+  helpers, diagnostics, executor offload and the frontend card all passed.
+- The heavy 96/110-slot solver wall-clock regressions use a **1.0 s**
+  shared-runner ceiling, while the small horizon-clamp fixture retains its
+  tighter **0.5 s** guard and event-loop executor offload remains an independent
+  contract. This RC3 adjustment changes only test thresholds, not the
+  production optimizer algorithm.
+- The physical FC03 actuator-readback and ownership contract passed; generated
+  Polish and English assets were deterministic and `validate_release.py`
+  reported **291** localized entities with no structural or localization error.
+- ESPHome **2026.7.1** accepted the complete local fixture and compiled it with
+  ESP-IDF **5.5.5**. The resulting application used 43.3% RAM and 52.9% flash.
+- A read-only audit found no open P0/P1 before RC2 deployment, but the local
+  Home Assistant 2026.8 run then exposed the composite-device P1 described
+  above. The RC3 rebind contract passes **6/6** offline: unique successor,
+  revalidated previous successor, ambiguous-candidate rejection, unchanged
+  live source, duplicate-entry rejection and invalid linkage rejection.
+- RC3 subsequently passed its exact-SHA GitHub project checks, HACS Action,
+  Hassfest and the exhaustive matrix. On local deployment the verified
+  successor was persisted and native ESPHome physical EMS readbacks reported
+  live values, confirming that the rebind itself worked.
+- The same local deployment exposed a new P1: `HoymilesSensor.available`
+  applied the parallel-topology readiness gate to every ordinary sensor proxy.
+  Stable physical EMS readback proxies therefore remained unavailable despite
+  their live native sources. RC4 limits this gate to `PARALLEL_POWER_TARGETS`;
+  its dynamic ordinary-proxy regression passes.
+- RC4 then passed exact-SHA push and workflow-dispatch CI, including the
+  exhaustive matrix, and was deployed locally. The rebind, native readbacks,
+  ordinary proxies, setup readiness and fail-closed safety state were all live.
+- The live 96-row PSE payload exposed another independent P1. Its first
+  `dtime_utc` was `22:15` for local `00:00 - 00:15`, proving that the field is
+  the interval end. Treating it as a start produced 47/48 half-hours and safely
+  held RCE in `missing_data`, but made the engine unusable. RC5 subtracts 15
+  minutes on the UTC timeline and validates the accompanying metadata.
+- Full RC5 offline validation passes: `validate_release.py`, the physical
+  firmware/readback contract, executor/startup offload, source-device rebind
+  **6/6**, quick **488/488**, exhaustive **2064/2064**, RCE **68/68**, RCE
+  history **3/3**, tariff, RCEm, frontend and dynamic power-balance suites.
+- RC5 passed exact-SHA push and workflow-dispatch CI and was deployed to both
+  test installations. Its PSE interval-end mapping and backend fail-closed
+  safety state were correct live.
+- The parallel dashboard exposed an independent frontend P1. Lovelace requested
+  `/api/hoymiles_hit_modbus/static-r2/hoymiles-rce-chart-card.js?v=1.5.2.15`
+  before the custom route was ready, received a transient `404`, and continued
+  receiving that cached response after restart. It then hit the five-second
+  timeout while waiting for
+  `ll-strategy-dashboard-hoymiles-hit-xxl-g3`.
+- The RC6 target uses one canonical full module at
+  `/local/hoymiles-rce-chart-card.js?v=1.5.2.16`. Before publishing the URL, the
+  installer atomically materializes the card, bootstrap, PL/EN dashboard JSON
+  and image. Storage mode is reconciled through Lovelace's live resource
+  collection, while runtime installation does not directly mutate
+  `.storage/lovelace.*`. A fresh installation without `config/www` copies the
+  files, defers publication and raises a restart Repair. An already-open browser
+  session requires a hard refresh after restart.
+- Exact runtime commit `7ce13155533bfa0bf9752a0fd201224dac1a7393`
+  passed push CI and `workflow_dispatch`; the exhaustive workflow completed
+  successfully.
+
+The earlier deterministic, packaging, firmware and RC5 backend evidence remains
+valid. Together with the RC6 exact-SHA CI and live results below, it supports GO
+for the tested Home Assistant runtime/frontend. Meter ESP32 firmware acceptance
+remains separate and pending; no firmware was flashed during this audit and no
+protected EMS writes were enabled.
+
+## RC6 frontend startup contract — offline and live PASS
+
+The exact runtime candidate demonstrated the following:
+
+- one canonical full, versioned `/local` module registers the dashboard strategy
+  before Lovelace's five-second deadline, and loading it again is idempotent;
+- the card, bootstrap, both localized dashboard JSON files and image exist under
+  `config/www` before the resource URL is published;
+- storage-mode migration uses Home Assistant's live Lovelace resource collection
+  and preserves user dashboards and `.storage/lovelace.*` files from direct
+  runtime mutation;
+- a fresh installation with no pre-existing `config/www` remains restart-gated,
+  creates the localized Repair and succeeds after the required restart;
+- optional asset `OSError` and live-resource failure are fail-soft: integration
+  setup completes, no incomplete module is published, and Repair is created;
+- YAML-mode loading remains supported; and
+- after restart and hard refresh, the version-16 resource returns successfully,
+  the dashboard renders, and the browser console contains no strategy timeout.
+
+## RC6 live installation audit — PASS with one degraded-history observation
+
+| Check | Local installation | Parallel meter installation |
+|---|---|---|
+| Home Assistant | 2026.8.1 | 2026.7.4 |
+| Exact candidate | Integration and managed-asset hashes matched runtime commit `7ce13155533bfa0bf9752a0fd201224dac1a7393` | Runtime and asset hashes matched the same commit |
+| Installation state | Integration/package 1.5.2; **Ready** | Integration runtime 1.5.2; ESP32 firmware update still pending |
+| Frontend | Version-16 `/local` assets returned HTTP 200; fresh-tab and hard-refresh dashboard checks passed | All required version-16 `/local` assets returned HTTP 200; hard refresh rendered the Aurora dashboard |
+| Control safety | Self-Use; every controller owner off | RCE and tariff off; RCEm enabled in shadow only; every owner and execution off |
+| Firmware action | No firmware action was part of this frontend audit | No firmware was flashed |
+
+One bounded background RCEm Recorder-history query timed out once during the
+final observation. The optimizer stayed fail-closed, execution and all owners
+remained off, no inverter write was attempted, and the timeout did not repeat in
+the observation window. This is recorded as observed degraded history
+availability. The bounded timeout and safe fallback behaved as designed, so it
+is not an RC6 Home Assistant runtime/frontend release blocker.
+
+## Exact-SHA traceability after documentation finalization
+
+The deployed and live-tested runtime SHA is
+`7ce13155533bfa0bf9752a0fd201224dac1a7393`. This final report changes
+documentation only, so its eventual commit and release/tag SHA will necessarily
+be later and different. Record that future SHA separately and verify that the
+delta from the runtime candidate contains documentation/release metadata only.
+Do not describe the future documentation/tag SHA as the candidate installed on
+either Home Assistant host.
+
+## Archived v1.5.0 live candidate acceptance — 2026-08-12
 
 The same candidate archive was installed on a single-inverter Home Assistant
 test system and on the two-inverter field system at `miernik.com.pl` during the

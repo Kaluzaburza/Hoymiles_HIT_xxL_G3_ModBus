@@ -7,13 +7,14 @@ tariff slot that occurs before the energy is needed by the home.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
-from math import ceil
+from math import ceil, isfinite
 
 try:  # Package import in Home Assistant; direct import in deterministic tests.
+    from .energy_data import numeric_sample_is_fresh
     from .forecast_model import adaptive_forecast_factor
+    from .load_model import robust_weighted_estimate, robust_weighted_upper_estimate
     from .tariff_profiles import (
         MANUAL_OPERATOR,
         get_tariff_profile,
@@ -21,7 +22,9 @@ try:  # Package import in Home Assistant; direct import in deterministic tests.
         profile_rate,
     )
 except ImportError:  # pragma: no cover - exercised by tools/test_tariff_optimizer.py
+    from energy_data import numeric_sample_is_fresh
     from forecast_model import adaptive_forecast_factor
+    from load_model import robust_weighted_estimate, robust_weighted_upper_estimate
     from tariff_profiles import (
         MANUAL_OPERATOR,
         get_tariff_profile,
@@ -33,46 +36,16 @@ except ImportError:  # pragma: no cover - exercised by tools/test_tariff_optimiz
 SLOT = timedelta(minutes=30)
 _EPSILON = 1e-6
 DEFAULT_BATTERY_WEAR_COST_PLN_KWH = 0.06
-
-
-def robust_weighted_estimate(
-    values: Sequence[float],
-    *,
-    max_points: int = 28,
-) -> tuple[float | None, float, int]:
-    """Return a recency-weighted, outlier-resistant estimate and uncertainty.
-
-    ``values`` must be ordered from oldest to newest.  Up to 28 complete days
-    are retained, recent observations receive more authority and isolated
-    spikes are winsorised around the sample median.  The uncertainty is the
-    weighted mean absolute relative error and is intended for diagnostics and
-    a small automatic planning margin, not as a user setting.
-    """
-    clean = [float(value) for value in values if 0.0 < float(value) < 1_000.0]
-    clean = clean[-max(max_points, 1) :]
-    if not clean:
-        return None, 0.0, 0
-
-    ordered = sorted(clean)
-    middle = len(ordered) // 2
-    centre = (
-        ordered[middle]
-        if len(ordered) % 2
-        else (ordered[middle - 1] + ordered[middle]) / 2.0
-    )
-    lower = max(centre * 0.45, 0.05)
-    upper = max(centre * 1.75, lower)
-    clipped = [min(max(value, lower), upper) for value in clean]
-    # Half-life is roughly seven observations.  This remains responsive to a
-    # changed household while no longer allowing one unusual day to dominate.
-    weights = [0.5 ** ((len(clipped) - 1 - index) / 7.0) for index in range(len(clipped))]
-    weight_sum = sum(weights)
-    estimate = sum(value * weight for value, weight in zip(clipped, weights)) / weight_sum
-    uncertainty = sum(
-        abs(value - estimate) / max(estimate, _EPSILON) * weight
-        for value, weight in zip(clipped, weights)
-    ) / weight_sum
-    return estimate, min(max(uncertainty, 0.0), 1.0), len(clean)
+# Starting Grid Charge has a real operational cost: a Modbus write, an EMS
+# mode transition and user-visible notifications. Pure home support therefore
+# needs to form one meaningful continuous cycle. These conservative constants
+# are deliberately not user settings. A genuine battery/reserve charge is
+# never gated by them.
+GRID_SUPPORT_MODE_TRANSITION_SECONDS = 2 * 60
+MIN_GRID_SUPPORT_USEFUL_RUNTIME_SECONDS = 5 * 60
+MIN_GRID_SUPPORT_CYCLE_ENERGY_KWH = 0.25
+MIN_GRID_SUPPORT_CYCLE_BENEFIT_PLN = 0.10
+GRID_SUPPORT_TARGET_SOC_OFFSET_PERCENT = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +105,39 @@ class TariffOptimizerInput:
     # It is intentionally automatic: users should not need battery-finance
     # expertise to avoid shifting energy for a few groszy.
     battery_wear_cost_pln_kwh: float = DEFAULT_BATTERY_WEAR_COST_PLN_KWH
+    # Optional fresh powers for the unfinished current half-hour. Historical
+    # profiles remain the deterministic fallback for missing/stale telemetry
+    # and for every complete future interval.
+    current_load_power_kw: float | None = None
+    current_pv_power_kw: float | None = None
+    # Overview convention: positive means battery discharge, negative charge.
+    current_battery_power_kw: float | None = None
+    # The user's actual Self-Use floor without the automatic safety margin.
+    # Falling below it is a hard reserve deficit; the extra margin may still
+    # be restored just in time before the next expensive period.
+    base_reserve_soc_percent: float | None = None
+    # P90-like daily LOAD inferred automatically from the same 28-day recorder
+    # history as the normal estimate. It is applied only inside expensive
+    # windows, separately for each contiguous window.
+    conservative_daily_load_kwh: float | None = None
+    load_uncertainty_ratio: float = 0.0
+    load_history_days: int = 0
+    # Slot-level Solcast P10 scenario. The normal plan retains its blended
+    # forecast; only the first morning peak following an overnight low window
+    # is protected with this map (or zero PV under high uncertainty).
+    pv_p10_by_slot_kwh: dict[datetime, float] | None = None
+    pv_p10_available_dates: tuple[date, ...] = ()
+    forecast_uncertainty_ratio: float = 0.0
+    # A hard Self-Use deficit may be left to PV only after fresh measured
+    # PV>LOAD has remained stable. Forecast energy alone is never sufficient.
+    live_pv_surplus_stable: bool = False
+    live_pv_surplus_stable_seconds: float = 0.0
+    # The HA adapter validates the age of SOC, BMS limits and the recorder
+    # LOAD broker.  Keeping the verdict in the pure input prevents a caller
+    # from accidentally presenting a stale current block as executable while
+    # still allowing the deterministic plan to remain visible diagnostically.
+    control_inputs_fresh: bool = True
+    control_input_block_reason: str = "none"
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +152,17 @@ class PlannedCharge:
     direct_load_kwh: float
     action: str
     target_soc_percent: float
+
+
+@dataclass(frozen=True, slots=True)
+class ExpensiveWindowLoadBuffer:
+    """Conservative LOAD scenario for one contiguous non-low tariff window."""
+
+    start: datetime
+    end: datetime
+    expected_load_kwh: float
+    conservative_load_kwh: float
+    buffer_kwh: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +209,47 @@ class TariffOptimizerResult:
     modeled_load_kwh: float = 0.0
     modeled_pv_kwh: float = 0.0
     effective_terminal_reserve_soc_percent: float = 0.0
+    current_run_end: datetime | None = None
+    current_run_duration_seconds: float = 0.0
+    current_run_grid_import_kwh: float = 0.0
+    current_run_stored_kwh: float = 0.0
+    current_run_direct_load_kwh: float = 0.0
+    current_run_benefit_pln: float = 0.0
+    current_run_start_eligible: bool = False
+    current_run_suppression_reason: str = "not_support_only"
+    # Continuation deliberately has a weaker contract than a new start. Once
+    # Grid Charge supplies the home, battery discharge should fall to zero;
+    # treating that expected effect as a fault would stop every support run.
+    current_run_continue_eligible: bool = False
+    current_run_continue_reason: str = "not_support_only"
+    current_slot_load_kwh: float = 0.0
+    current_slot_pv_kwh: float = 0.0
+    current_slot_load_source: str = "profile"
+    current_slot_pv_source: str = "forecast"
+    current_battery_power_kw: float | None = None
+    base_reserve_soc_percent: float = 0.0
+    hard_reserve_deficit_kwh: float = 0.0
+    hard_reserve_restoration_required: bool = False
+    hard_reserve_restored_by_near_term_pv: bool = False
+    hard_reserve_unavailable: bool = False
+    hard_reserve_shortfall_kwh: float = 0.0
+    hard_reserve_deferral_source: str = "not_required"
+    live_pv_surplus_stable: bool = False
+    live_pv_surplus_stable_seconds: float = 0.0
+    expensive_window_load_buffers: tuple[ExpensiveWindowLoadBuffer, ...] = ()
+    load_risk_multiplier: float = 1.0
+    load_risk_buffer_kwh: float = 0.0
+    morning_protection_active: bool = False
+    morning_protection_mode: str = "not_applicable"
+    morning_protection_window_start: datetime | None = None
+    morning_protection_window_end: datetime | None = None
+    morning_protection_expected_pv_kwh: float = 0.0
+    morning_protection_conservative_pv_kwh: float = 0.0
+    remaining_low_direct_import_kwh: float = 0.0
+    remaining_expensive_import_kwh: float = 0.0
+    capacity_or_power_shortfall_kwh: float = 0.0
+    control_inputs_fresh: bool = True
+    control_input_block_reason: str = "none"
 
 
 @dataclass(slots=True)
@@ -208,6 +266,7 @@ class _Simulation:
     total_grid_cost_pln: float
     total_optimization_cost_pln: float
     terminal_shortfall_kwh: float
+    terminal_import_kwh: float
 
 
 def floor_half_hour(value: datetime) -> datetime:
@@ -276,6 +335,90 @@ def horizon_gap_load_reserve_kwh(
     """
     missing_hours = max(target_hours - max(planning_horizon_hours, 0.0), 0.0)
     return max(average_daily_load_kwh, 0.0) * missing_hours / 24.0
+
+
+def horizon_gap_expensive_load_reserve_kwh(
+    average_daily_load_kwh: float,
+    horizon_end: datetime,
+    missing_hours: float,
+    schedule: TariffSchedule,
+    *,
+    charge_power_kw: float | None = None,
+    battery_charge_power_kw: float | None = None,
+    charge_efficiency_percent: float = 100.0,
+    discharge_efficiency_percent: float = 100.0,
+    maximum_stored_energy_kwh: float | None = None,
+) -> tuple[float, float]:
+    """Return initial stored energy needed across an unseen zero-PV tail.
+
+    The calculation walks the complete tail backwards. Expensive blocks add
+    LOAD demand; low blocks subtract only the energy that can really be stored
+    after the same shared Grid Charge budget supplies the home and after BMS,
+    conversion and storage-headroom limits. Therefore an early low window does
+    not erase a later peak when a cold home or a low BMS limit makes that window
+    insufficient. UTC stepping preserves the real number of slots over DST.
+    """
+    bounded_gap = max(missing_hours, 0.0)
+    if bounded_gap <= _EPSILON:
+        return 0.0, 0.0
+    charge_efficiency = min(
+        max(charge_efficiency_percent / 100.0, 0.01),
+        1.0,
+    )
+    discharge_efficiency = min(
+        max(discharge_efficiency_percent / 100.0, 0.01),
+        1.0,
+    )
+    headroom = (
+        max(maximum_stored_energy_kwh, 0.0)
+        if maximum_stored_energy_kwh is not None
+        else float("inf")
+    )
+    slot_model: list[tuple[str, float, float, float]] = []
+    elapsed_hours = 0.0
+    cursor_utc = horizon_end.astimezone(timezone.utc)
+    while elapsed_hours + _EPSILON < bounded_gap:
+        slot_hours = min(0.5, bounded_gap - elapsed_hours)
+        cursor = cursor_utc.astimezone(horizon_end.tzinfo)
+        zone = tariff_rate(cursor, schedule)[1]
+        load_kwh = max(average_daily_load_kwh, 0.0) * slot_hours / 24.0
+        stored_kwh = 0.0
+        if zone in {"low", "g11"}:
+            grid_budget_kwh = (
+                max(charge_power_kw, 0.0) * slot_hours
+                if charge_power_kw is not None
+                else float("inf")
+            )
+            battery_ac_kwh = max(grid_budget_kwh - load_kwh, 0.0)
+            bms_stored_kwh = (
+                max(battery_charge_power_kw, 0.0) * slot_hours
+                if battery_charge_power_kw is not None
+                else float("inf")
+            )
+            stored_kwh = min(
+                battery_ac_kwh * charge_efficiency,
+                bms_stored_kwh,
+                headroom,
+            )
+        slot_model.append((zone, load_kwh, stored_kwh, slot_hours))
+        elapsed_hours += slot_hours
+        cursor_utc += SLOT
+
+    required_stored_kwh = 0.0
+    expensive_hours = 0.0
+    for zone, load_kwh, storable_kwh, slot_hours in reversed(slot_model):
+        if zone in {"low", "g11"}:
+            required_stored_kwh = max(
+                required_stored_kwh - storable_kwh,
+                0.0,
+            )
+        else:
+            required_stored_kwh = min(
+                required_stored_kwh + load_kwh / discharge_efficiency,
+                headroom,
+            )
+            expensive_hours += slot_hours
+    return required_stored_kwh, expensive_hours
 
 
 def _in_window(minute: int, start: int, end: int) -> bool:
@@ -622,6 +765,7 @@ def _simulate(
         total_grid_cost_pln=total_grid_cost,
         total_optimization_cost_pln=total_optimization_cost,
         terminal_shortfall_kwh=terminal_shortfall,
+        terminal_import_kwh=terminal_import,
     )
 
 
@@ -647,9 +791,14 @@ def optimize_tariff_charging(
         starts.append(cursor_utc.astimezone(settings.now.tzinfo))
         cursor_utc += SLOT
 
-    first_fraction = max(
-        min((30 - settings.now.minute % 30) / 30.0, 1.0),
-        1 / 30,
+    seconds_into_slot = (
+        (settings.now.minute % 30) * 60
+        + settings.now.second
+        + settings.now.microsecond / 1_000_000.0
+    )
+    first_fraction = min(
+        max((30 * 60 - seconds_into_slot) / (30 * 60), 0.0),
+        1.0,
     )
     slot_fractions = [1.0 for _ in starts]
     if slot_fractions:
@@ -657,13 +806,164 @@ def optimize_tariff_charging(
     loads = _slot_loads(settings, starts)
     if loads:
         loads[0] *= first_fraction
-    modeled_pv = sum(
-        max(settings.pv_by_slot_kwh.get(start, 0.0), 0.0) * fraction
-        for start, fraction in zip(starts, slot_fractions)
+    current_slot_load_source = "profile"
+    if (
+        loads
+        and settings.current_load_power_kw is not None
+        and isfinite(settings.current_load_power_kw)
+        and settings.current_load_power_kw >= 0.0
+    ):
+        loads[0] = settings.current_load_power_kw * 0.5 * first_fraction
+        current_slot_load_source = "live"
+    current_slot_pv_source = "forecast"
+    effective_pv_by_slot = settings.pv_by_slot_kwh
+    if (
+        starts
+        and settings.current_pv_power_kw is not None
+        and isfinite(settings.current_pv_power_kw)
+        and settings.current_pv_power_kw >= 0.0
+    ):
+        effective_pv_by_slot = dict(settings.pv_by_slot_kwh)
+        # Store a complete-slot equivalent because the simulation applies the
+        # same ``first_fraction`` as every other current-slot input.
+        effective_pv_by_slot[starts[0]] = settings.current_pv_power_kw * 0.5
+        current_slot_pv_source = "live"
+    effective_settings = (
+        replace(settings, pv_by_slot_kwh=effective_pv_by_slot)
+        if effective_pv_by_slot is not settings.pv_by_slot_kwh
+        else settings
     )
     rates = [tariff_rate(start, settings.schedule) for start in starts]
+    base_loads = list(loads)
+    load_risk_multiplier = 1.0
+    if (
+        settings.load_history_days >= 5
+        and settings.conservative_daily_load_kwh is not None
+        and settings.average_daily_load_kwh > _EPSILON
+    ):
+        load_risk_multiplier = min(
+            max(
+                settings.conservative_daily_load_kwh
+                / settings.average_daily_load_kwh,
+                1.0,
+            ),
+            1.35,
+        )
+
+    expensive_window_load_buffers: list[ExpensiveWindowLoadBuffer] = []
+    index = 0
+    while index < len(starts):
+        if rates[index][1] in {"low", "g11"}:
+            index += 1
+            continue
+        window_start = index
+        while index < len(starts) and rates[index][1] not in {"low", "g11"}:
+            index += 1
+        window_end = index
+        expected_load = sum(base_loads[window_start:window_end])
+        # A fresh live sample is already more authoritative for the unfinished
+        # current interval. Apply the upper scenario only to complete future
+        # intervals so the buffer cannot double-count an observed cold spike.
+        risk_start = window_start + (
+            1
+            if window_start == 0 and current_slot_load_source == "live"
+            else 0
+        )
+        for risk_index in range(risk_start, window_end):
+            loads[risk_index] *= load_risk_multiplier
+        conservative_load = sum(loads[window_start:window_end])
+        expensive_window_load_buffers.append(
+            ExpensiveWindowLoadBuffer(
+                start=starts[window_start],
+                end=(
+                    starts[window_end - 1].astimezone(timezone.utc) + SLOT
+                ).astimezone(settings.now.tzinfo),
+                expected_load_kwh=expected_load,
+                conservative_load_kwh=conservative_load,
+                buffer_kwh=max(conservative_load - expected_load, 0.0),
+            )
+        )
+
+    morning_protection_active = False
+    morning_protection_mode = "not_applicable"
+    morning_window_start: datetime | None = None
+    morning_window_end: datetime | None = None
+    morning_expected_pv = 0.0
+    morning_conservative_pv = 0.0
+    # At the end of an overnight low-price run, protect the complete following
+    # morning peak with Solcast P10. If P10 is unavailable and historical load
+    # or forecast accuracy is highly variable, use the safe zero-PV scenario.
+    if starts and rates[0][1] == "low":
+        morning_start_index = next(
+            (
+                candidate
+                for candidate in range(1, len(starts))
+                if rates[candidate][1] not in {"low", "g11"}
+            ),
+            None,
+        )
+        if (
+            morning_start_index is not None
+            and starts[morning_start_index].hour <= 8
+        ):
+            morning_end_index = morning_start_index
+            while (
+                morning_end_index < len(starts)
+                and rates[morning_end_index][1] not in {"low", "g11"}
+            ):
+                morning_end_index += 1
+            morning_window_start = starts[morning_start_index]
+            morning_window_end = (
+                starts[morning_end_index - 1].astimezone(timezone.utc) + SLOT
+            ).astimezone(settings.now.tzinfo)
+            morning_expected_pv = sum(
+                max(effective_pv_by_slot.get(starts[item], 0.0), 0.0)
+                * slot_fractions[item]
+                for item in range(morning_start_index, morning_end_index)
+            )
+            p10_available = (
+                morning_window_start.date() in settings.pv_p10_available_dates
+            )
+            high_variability = (
+                settings.load_uncertainty_ratio >= 0.20
+                or settings.forecast_uncertainty_ratio >= 0.18
+            )
+            if p10_available or high_variability:
+                protected_pv = dict(effective_pv_by_slot)
+                if p10_available:
+                    p10_map = settings.pv_p10_by_slot_kwh or {}
+                    morning_protection_mode = "solcast_p10"
+                    for item in range(morning_start_index, morning_end_index):
+                        start = starts[item]
+                        protected_pv[start] = min(
+                            max(effective_pv_by_slot.get(start, 0.0), 0.0),
+                            max(p10_map.get(start, 0.0), 0.0),
+                        )
+                else:
+                    morning_protection_mode = "zero_pv_high_variability"
+                    for item in range(morning_start_index, morning_end_index):
+                        protected_pv[starts[item]] = 0.0
+                effective_pv_by_slot = protected_pv
+                effective_settings = replace(
+                    effective_settings,
+                    pv_by_slot_kwh=effective_pv_by_slot,
+                )
+                morning_protection_active = True
+                morning_conservative_pv = sum(
+                    max(effective_pv_by_slot.get(starts[item], 0.0), 0.0)
+                    * slot_fractions[item]
+                    for item in range(morning_start_index, morning_end_index)
+                )
+            else:
+                morning_protection_mode = "p10_unavailable_stable_history"
+                morning_conservative_pv = morning_expected_pv
+
+    modeled_pv = sum(
+        max(effective_pv_by_slot.get(start, 0.0), 0.0) * fraction
+        for start, fraction in zip(starts, slot_fractions)
+    )
     baseline = _simulate(
-        settings,
+        effective_settings,
         starts,
         loads,
         {},
@@ -696,12 +996,243 @@ def optimize_tariff_charging(
     support_limits = [
         max(
             loads[index]
-            - max(settings.pv_by_slot_kwh.get(start, 0.0), 0.0)
+            - max(effective_pv_by_slot.get(start, 0.0), 0.0)
             * slot_fractions[index],
             0.0,
         )
         for index, start in enumerate(starts)
     ]
+
+    composite_reserve_soc = min(max(settings.reserve_soc_percent, 0.0), 100.0)
+    base_reserve_soc = min(
+        max(
+            settings.base_reserve_soc_percent
+            if settings.base_reserve_soc_percent is not None
+            else composite_reserve_soc,
+            0.0,
+        ),
+        composite_reserve_soc,
+    )
+    base_reserve_energy = (
+        max(settings.battery_capacity_kwh, 0.001)
+        * base_reserve_soc
+        / 100.0
+    )
+    initial_battery_energy = (
+        max(settings.battery_capacity_kwh, 0.001)
+        * min(max(settings.battery_soc_percent, 0.0), 100.0)
+        / 100.0
+    )
+    hard_reserve_deficit = max(
+        base_reserve_energy - initial_battery_energy,
+        0.0,
+    )
+    hard_reserve_restoration_required = False
+    hard_reserve_restored_by_near_term_pv = False
+    hard_reserve_deferral_source = (
+        "not_required" if hard_reserve_deficit <= _EPSILON else "none"
+    )
+    soc_limits_conflict = (
+        settings.maximum_soc_percent + _EPSILON < composite_reserve_soc
+    )
+    if soc_limits_conflict:
+        # Invalid limits must fail closed. Keep the complete baseline
+        # diagnostics, but make every Grid Charge trial physically inert.
+        effective_settings = replace(effective_settings, charge_power_kw=0.0)
+        charge_power = 0.0
+        block_limits = [0.0 for _ in starts]
+        battery_slot_limits = [0.0 for _ in starts]
+
+    # Falling below the user's actual Self-Use floor is a hard reserve deficit,
+    # unlike the small automatic safety margin. Restore it in the earliest low
+    # slot. A forecast must never defer this restoration: only fresh measured
+    # PV>LOAD that has remained stable and can physically replace the missing
+    # energy inside two hours is accepted.
+    if (
+        not soc_limits_conflict
+        and settings.schedule.tariff_type.casefold().replace(" ", "") != "g11"
+        and hard_reserve_deficit > _EPSILON
+    ):
+        live_surplus_kw = max(
+            (
+                settings.current_pv_power_kw
+                - settings.current_load_power_kw
+            )
+            if (
+                settings.current_pv_power_kw is not None
+                and settings.current_load_power_kw is not None
+                and isfinite(settings.current_pv_power_kw)
+                and isfinite(settings.current_load_power_kw)
+            )
+            else 0.0,
+            0.0,
+        )
+        live_charge_limit_kw = min(
+            limit
+            for limit in (
+                live_surplus_kw,
+                (
+                    max(settings.pv_charge_power_kw, 0.0)
+                    if settings.pv_charge_power_kw is not None
+                    else live_surplus_kw
+                ),
+                (
+                    max(settings.battery_charge_power_kw, 0.0)
+                    if settings.battery_charge_power_kw is not None
+                    else live_surplus_kw
+                ),
+                (
+                    abs(settings.current_battery_power_kw)
+                    if (
+                        settings.current_battery_power_kw is not None
+                        and isfinite(settings.current_battery_power_kw)
+                        and settings.current_battery_power_kw < 0.0
+                    )
+                    else 0.0
+                ),
+            )
+        )
+        live_surplus_two_hour_stored_kwh = (
+            live_charge_limit_kw * 2.0 * charge_efficiency
+        )
+        hard_reserve_restored_by_near_term_pv = (
+            settings.live_pv_surplus_stable
+            and live_charge_limit_kw > 0.20
+            and settings.current_battery_power_kw is not None
+            and isfinite(settings.current_battery_power_kw)
+            and settings.current_battery_power_kw < -0.20
+            and live_surplus_two_hour_stored_kwh
+            >= hard_reserve_deficit - _EPSILON
+        )
+        if hard_reserve_restored_by_near_term_pv:
+            hard_reserve_deferral_source = "stable_live_pv_surplus"
+        if not hard_reserve_restored_by_near_term_pv:
+            hard_reserve_restoration_required = True
+            hard_reserve_deferral_source = (
+                "live_surplus_not_stable"
+                if live_surplus_kw > 0.20
+                else "no_live_pv_surplus"
+            )
+            # Forecast PV is not evidence that a hard reserve below the user's
+            # Self-Use floor will recover. Until live PV charging is stable,
+            # build this mandatory restoration against a zero-PV scenario up
+            # to the end of the first available low window. A later SOC update
+            # removes the plan automatically if real production did restore
+            # the floor before that window starts.
+            first_low_index = next(
+                (
+                    item
+                    for item, (_, zone) in enumerate(rates)
+                    if zone == "low"
+                ),
+                None,
+            )
+            conservative_end_index = len(starts)
+            if first_low_index is not None:
+                conservative_end_index = first_low_index
+                while (
+                    conservative_end_index < len(starts)
+                    and rates[conservative_end_index][1] == "low"
+                ):
+                    conservative_end_index += 1
+            hard_reserve_pv = dict(effective_pv_by_slot)
+            for item in range(conservative_end_index):
+                hard_reserve_pv[starts[item]] = 0.0
+            effective_pv_by_slot = hard_reserve_pv
+            effective_settings = replace(
+                effective_settings,
+                pv_by_slot_kwh=effective_pv_by_slot,
+            )
+            if current_slot_pv_source == "live" and conservative_end_index > 0:
+                current_slot_pv_source = "live_unstable_reserve_guard"
+            modeled_pv = sum(
+                max(effective_pv_by_slot.get(start, 0.0), 0.0) * fraction
+                for start, fraction in zip(starts, slot_fractions)
+            )
+            baseline = _simulate(
+                effective_settings,
+                starts,
+                loads,
+                {},
+                {},
+                rates,
+                slot_fractions,
+            )
+            simulation = baseline
+            support_limits = [
+                max(
+                    loads[item]
+                    - max(effective_pv_by_slot.get(start, 0.0), 0.0)
+                    * slot_fractions[item],
+                    0.0,
+                )
+                for item, start in enumerate(starts)
+            ]
+            for index in range(len(starts)):
+                if rates[index][1] != "low":
+                    continue
+                projected_before = (
+                    simulation.battery_after_kwh.get(
+                        index - 1,
+                        initial_battery_energy,
+                    )
+                    if index > 0
+                    else initial_battery_energy
+                )
+                if projected_before >= base_reserve_energy - _EPSILON:
+                    break
+                available = block_limits[index] - planned.get(index, 0.0)
+                if available <= _EPSILON:
+                    continue
+                base_amount = planned.get(index, 0.0)
+                full_trial = dict(planned)
+                full_trial[index] = base_amount + available
+                full_simulation = _simulate(
+                    effective_settings,
+                    starts,
+                    loads,
+                    full_trial,
+                    planned_support,
+                    rates,
+                    slot_fractions,
+                )
+                full_projected = full_simulation.battery_after_kwh.get(
+                    index,
+                    projected_before,
+                )
+                if full_projected <= projected_before + _EPSILON:
+                    continue
+                if full_projected >= base_reserve_energy - _EPSILON:
+                    lower = 0.0
+                    upper = available
+                    selected_simulation = full_simulation
+                    for _ in range(18):
+                        middle = (lower + upper) / 2.0
+                        trial = dict(planned)
+                        trial[index] = base_amount + middle
+                        trial_simulation = _simulate(
+                            effective_settings,
+                            starts,
+                            loads,
+                            trial,
+                            planned_support,
+                            rates,
+                            slot_fractions,
+                        )
+                        trial_projected = trial_simulation.battery_after_kwh.get(
+                            index,
+                            projected_before,
+                        )
+                        if trial_projected >= base_reserve_energy - _EPSILON:
+                            upper = middle
+                            selected_simulation = trial_simulation
+                        else:
+                            lower = middle
+                    planned[index] = base_amount + upper
+                    simulation = selected_simulation
+                    break
+                planned[index] = base_amount + available
+                simulation = full_simulation
 
     # The configured Self-Use reserve plus the user's safety correction is a
     # real planning floor.  Being below that floor during a long low-price
@@ -755,7 +1286,7 @@ def optimize_tariff_charging(
                     full_trial = dict(planned)
                     full_trial[index] = base_amount + available
                     full_simulation = _simulate(
-                        settings,
+                        effective_settings,
                         starts,
                         loads,
                         full_trial,
@@ -783,7 +1314,7 @@ def optimize_tariff_charging(
                             trial = dict(planned)
                             trial[index] = base_amount + middle
                             trial_simulation = _simulate(
-                                settings,
+                                effective_settings,
                                 starts,
                                 loads,
                                 trial,
@@ -814,6 +1345,7 @@ def optimize_tariff_charging(
     # keeps the repeated storage simulation inexpensive even for 230 kWh banks.
     quantum = max(min(charge_power * 0.5, 0.5), 0.05)
     max_iterations = max(ceil(baseline.shortage_kwh / 0.05) + len(starts) * 4, 100)
+    uneconomic_low_trial_found = False
     for _ in range(max_iterations):
         if simulation.shortage_kwh <= 0.01:
             break
@@ -835,6 +1367,11 @@ def optimize_tariff_charging(
         # total future shortage is genuinely reduced.
         for index in range(len(starts)):
             rate = rates[index][0]
+            # Grid Charge is a low-zone actuator. Medium G13 pricing remains
+            # part of the cost simulation, but it must never become an
+            # execution window: the scheduler intentionally accepts only low.
+            if rates[index][1] != "low":
+                continue
 
             # Grid Charge is a mode for the complete slot: enabling it makes
             # the inverter supply the whole remaining home load from the grid.
@@ -847,7 +1384,7 @@ def optimize_tariff_charging(
                 trial_support = dict(planned_support)
                 trial_support[index] = support_remaining
                 trial_simulation = _simulate(
-                    settings,
+                    effective_settings,
                     starts,
                     loads,
                     planned,
@@ -866,12 +1403,16 @@ def optimize_tariff_charging(
                     simulation.total_optimization_cost_pln
                     - trial_simulation.total_optimization_cost_pln
                 )
-                if (
-                    reduction > 1e-5
-                    and accepted_delta > _EPSILON
-                    and cost_reduction
+                feasible_reduction = (
+                    reduction > 1e-5 and accepted_delta > _EPSILON
+                )
+                economically_beneficial = (
+                    cost_reduction
                     > settings.minimum_saving_pln_kwh * accepted_delta
-                ):
+                )
+                if feasible_reduction and not economically_beneficial:
+                    uneconomic_low_trial_found = True
+                if feasible_reduction and economically_beneficial:
                     score = (
                         -cost_reduction / accepted_delta,
                         rate,
@@ -895,7 +1436,7 @@ def optimize_tariff_charging(
                 trial_charge = dict(planned)
                 trial_charge[index] = trial_charge.get(index, 0.0) + increment
                 trial_simulation = _simulate(
-                    settings,
+                    effective_settings,
                     starts,
                     loads,
                     trial_charge,
@@ -914,12 +1455,16 @@ def optimize_tariff_charging(
                     simulation.total_optimization_cost_pln
                     - trial_simulation.total_optimization_cost_pln
                 )
-                if (
-                    reduction > 1e-5
-                    and accepted_delta > _EPSILON
-                    and cost_reduction
+                feasible_reduction = (
+                    reduction > 1e-5 and accepted_delta > _EPSILON
+                )
+                economically_beneficial = (
+                    cost_reduction
                     > settings.minimum_saving_pln_kwh * accepted_delta
-                ):
+                )
+                if feasible_reduction and not economically_beneficial:
+                    uneconomic_low_trial_found = True
+                if feasible_reduction and economically_beneficial:
                     score = (
                         -cost_reduction / accepted_delta,
                         rate,
@@ -998,12 +1543,151 @@ def optimize_tariff_charging(
     current_planned = bool(charges and charges[0].start == now_slot)
     current_action = charges[0].action if current_planned else "none"
     current_slot_end: datetime | None = None
+    current_run_items: list[PlannedCharge] = []
     if current_planned:
-        current_slot_end = charges[0].start + timedelta(minutes=30)
+        current_run_items = [charges[0]]
+        current_slot_end_utc = charges[0].start.astimezone(timezone.utc) + SLOT
+        current_action_family = (
+            "support_only"
+            if current_action == "grid_support"
+            else "required_charge"
+        )
         for item in charges[1:]:
-            if item.start != current_slot_end or item.action != current_action:
+            item_action_family = (
+                "support_only"
+                if item.action == "grid_support"
+                else "required_charge"
+            )
+            if (
+                item.start.astimezone(timezone.utc) != current_slot_end_utc
+                or item_action_family != current_action_family
+            ):
                 break
-            current_slot_end += timedelta(minutes=30)
+            current_run_items.append(item)
+            current_slot_end_utc += SLOT
+        current_slot_end = current_slot_end_utc.astimezone(settings.now.tzinfo)
+    current_run_duration_seconds = (
+        max(
+            (
+                current_slot_end.astimezone(timezone.utc)
+                - settings.now.astimezone(timezone.utc)
+            ).total_seconds(),
+            0.0,
+        )
+        if current_slot_end is not None
+        else 0.0
+    )
+    current_run_useful_seconds = max(
+        current_run_duration_seconds - GRID_SUPPORT_MODE_TRANSITION_SECONDS,
+        0.0,
+    )
+    current_run_grid_import = sum(
+        item.grid_import_kwh for item in current_run_items
+    )
+    current_run_stored = sum(
+        item.stored_energy_kwh for item in current_run_items
+    )
+    current_run_direct = sum(
+        item.direct_load_kwh for item in current_run_items
+    )
+    current_run_benefit = 0.0
+    if current_run_items:
+        current_run_indices = set(range(len(current_run_items)))
+        counterfactual = _simulate(
+            effective_settings,
+            starts,
+            loads,
+            {
+                index: amount
+                for index, amount in planned.items()
+                if index not in current_run_indices
+            },
+            {
+                index: amount
+                for index, amount in planned_support.items()
+                if index not in current_run_indices
+            },
+            rates,
+            slot_fractions,
+        )
+        current_run_benefit = max(
+            counterfactual.total_optimization_cost_pln
+            - simulation.total_optimization_cost_pln,
+            0.0,
+        )
+    current_run_start_eligible = current_planned
+    current_run_suppression_reason = "not_support_only"
+    current_run_continue_eligible = current_planned
+    current_run_continue_reason = "not_support_only"
+    if current_action == "grid_support":
+        # Continuing an already active support run only needs trustworthy live
+        # evidence that the home still has a material net demand. Do not check
+        # battery discharge here: successful Grid Charge makes it disappear.
+        support_live_values = (
+            settings.current_load_power_kw,
+            settings.current_pv_power_kw,
+        )
+        if any(
+            value is None or not isfinite(value)
+            for value in support_live_values
+        ):
+            current_run_continue_eligible = False
+            current_run_continue_reason = "live_data_missing"
+        elif (
+            settings.current_load_power_kw  # type: ignore[operator]
+            <= settings.current_pv_power_kw + 0.20  # type: ignore[operator]
+        ):
+            current_run_continue_eligible = False
+            current_run_continue_reason = "pv_covers_load"
+        else:
+            current_run_continue_reason = "eligible"
+
+        live_values = (
+            settings.current_load_power_kw,
+            settings.current_pv_power_kw,
+            settings.current_battery_power_kw,
+        )
+        if any(value is None or not isfinite(value) for value in live_values):
+            current_run_start_eligible = False
+            current_run_suppression_reason = "live_data_missing"
+        elif (
+            settings.current_load_power_kw  # type: ignore[operator]
+            <= settings.current_pv_power_kw + 0.20  # type: ignore[operator]
+        ):
+            current_run_start_eligible = False
+            current_run_suppression_reason = "pv_covers_load"
+        elif settings.current_battery_power_kw <= 0.20:  # type: ignore[operator]
+            current_run_start_eligible = False
+            current_run_suppression_reason = "battery_not_discharging"
+        elif (
+            settings.battery_soc_percent
+            <= settings.reserve_soc_percent + 1.0 + _EPSILON
+        ):
+            current_run_start_eligible = False
+            current_run_suppression_reason = "battery_not_discharging"
+        elif (
+            current_run_useful_seconds + _EPSILON
+            < MIN_GRID_SUPPORT_USEFUL_RUNTIME_SECONDS
+        ):
+            current_run_start_eligible = False
+            current_run_suppression_reason = "insufficient_runtime"
+        elif current_run_direct + _EPSILON < MIN_GRID_SUPPORT_CYCLE_ENERGY_KWH:
+            current_run_start_eligible = False
+            current_run_suppression_reason = "insufficient_energy"
+        elif current_run_benefit + _EPSILON < MIN_GRID_SUPPORT_CYCLE_BENEFIT_PLN:
+            current_run_start_eligible = False
+            current_run_suppression_reason = "insufficient_benefit"
+        else:
+            current_run_suppression_reason = "eligible"
+    if current_planned and not settings.control_inputs_fresh:
+        block_reason = (
+            settings.control_input_block_reason.strip()
+            or "control_inputs_stale"
+        )
+        current_run_start_eligible = False
+        current_run_suppression_reason = block_reason
+        current_run_continue_eligible = False
+        current_run_continue_reason = block_reason
     next_start = charges[0].start if charges else None
 
     current_index = 0
@@ -1013,6 +1697,19 @@ def optimize_tariff_charging(
                 0,
                 settings.battery_capacity_kwh
                 * settings.battery_soc_percent
+                / 100.0,
+            )
+            # A pure support cycle must preserve, not charge, the battery. A
+            # target slightly below current SOC prevents the inverter from
+            # interpreting a rounded 100% target as a request to top up.
+            target_energy = min(
+                target_energy,
+                capacity
+                * max(
+                    settings.battery_soc_percent
+                    - GRID_SUPPORT_TARGET_SOC_OFFSET_PERCENT,
+                    settings.reserve_soc_percent,
+                )
                 / 100.0,
             )
         else:
@@ -1063,14 +1760,78 @@ def optimize_tariff_charging(
     else:
         target_energy = settings.battery_capacity_kwh * settings.battery_soc_percent / 100.0
 
-    if charges:
+    maximum_hard_reserve_energy = max(
+        (
+            simulation.battery_after_kwh.get(item, initial_battery_energy)
+            for item, imported in simulation.accepted_import_kwh.items()
+            if imported > _EPSILON
+        ),
+        default=initial_battery_energy,
+    )
+    hard_reserve_shortfall = (
+        max(base_reserve_energy - maximum_hard_reserve_energy, 0.0)
+        if hard_reserve_restoration_required
+        and not hard_reserve_restored_by_near_term_pv
+        else 0.0
+    )
+    hard_reserve_unavailable = hard_reserve_shortfall > _EPSILON
+    remaining_low_direct_import = 0.0
+    remaining_expensive_import = 0.0
+    terminal_index = len(starts) - 1
+    for shortage_index, shortage_energy in simulation.uncovered_import_kwh.items():
+        real_energy = shortage_energy
+        if shortage_index == terminal_index:
+            real_energy = max(
+                real_energy - simulation.terminal_import_kwh,
+                0.0,
+            )
+        if real_energy <= _EPSILON:
+            continue
+        if rates[shortage_index][1] == "low":
+            remaining_low_direct_import += real_energy
+        elif rates[shortage_index][1] != "g11":
+            remaining_expensive_import += real_energy
+    # Attribute only the part that had at least one actionable low slot before
+    # the expensive deficit to physical capacity/power limits. A deficit with
+    # no preceding low slot is a timing/window problem, not a hardware limit.
+    capacity_or_power_shortfall = 0.0
+    for shortage_index, shortage_energy in simulation.uncovered_import_kwh.items():
+        real_energy = shortage_energy
+        if shortage_index == terminal_index:
+            real_energy = max(real_energy - simulation.terminal_import_kwh, 0.0)
+        if (
+            real_energy > _EPSILON
+            and rates[shortage_index][1] not in {"low", "g11"}
+            and any(
+                rates[candidate][1] == "low"
+                and block_limits[candidate] > _EPSILON
+                for candidate in range(shortage_index)
+            )
+        ):
+            capacity_or_power_shortfall += real_energy
+    if hard_reserve_unavailable:
+        capacity_or_power_shortfall += hard_reserve_shortfall
+
+    if soc_limits_conflict:
+        status = "soc_limits_conflict"
+    elif hard_reserve_unavailable and planned_stored <= 0.001:
+        status = "hard_reserve_unavailable"
+    elif hard_reserve_unavailable:
+        # A constrained BMS may still provide a useful, safe partial plan.
+        # Execute it and expose the remaining hard-floor gap diagnostically;
+        # only a zero-throughput plan is blocked completely above.
+        status = "insufficient_cheap_window"
+    elif charges:
         # A partial plan is still worth executing, but it must not be presented
         # as fully feasible.  This happens, for example, when only the last few
         # minutes of a low-price window remain and the configured Grid Charge
         # power cannot store all energy needed for the following peak period.
         status = (
             "insufficient_cheap_window"
-            if simulation.shortage_kwh > 0.01
+            if (
+                remaining_expensive_import > 0.01
+                or simulation.terminal_shortfall_kwh > 0.01
+            )
             else "ready"
         )
     elif baseline.shortage_kwh <= 0.01:
@@ -1085,6 +1846,14 @@ def optimize_tariff_charging(
             # No battery round trip is useful here: Self-Use will import the
             # unavoidable deficit directly while the low tariff is active.
             status = "shortage_in_low_period"
+        elif uneconomic_low_trial_found:
+            # A usable low-price actuator exists and physically reduces a
+            # later shortage, but conversion losses, battery wear and the
+            # configured minimum margin make the cycle more expensive than
+            # direct import. This is an intentional economic decision, not a
+            # missing time window or battery power/capacity failure.
+            status = "not_economically_beneficial"
+            capacity_or_power_shortfall = 0.0
         else:
             status = "no_cheap_window"
     else:
@@ -1145,5 +1914,62 @@ def optimize_tariff_charging(
         modeled_pv_kwh=modeled_pv,
         effective_terminal_reserve_soc_percent=(
             _effective_terminal_reserve_soc_percent(settings)
+        ),
+        current_run_end=current_slot_end,
+        current_run_duration_seconds=current_run_duration_seconds,
+        current_run_grid_import_kwh=current_run_grid_import,
+        current_run_stored_kwh=current_run_stored,
+        current_run_direct_load_kwh=current_run_direct,
+        current_run_benefit_pln=current_run_benefit,
+        current_run_start_eligible=current_run_start_eligible,
+        current_run_suppression_reason=current_run_suppression_reason,
+        current_run_continue_eligible=current_run_continue_eligible,
+        current_run_continue_reason=current_run_continue_reason,
+        current_slot_load_kwh=loads[0] if loads else 0.0,
+        current_slot_pv_kwh=(
+            max(effective_pv_by_slot.get(starts[0], 0.0), 0.0)
+            * first_fraction
+            if starts
+            else 0.0
+        ),
+        current_slot_load_source=current_slot_load_source,
+        current_slot_pv_source=current_slot_pv_source,
+        current_battery_power_kw=settings.current_battery_power_kw,
+        base_reserve_soc_percent=base_reserve_soc,
+        hard_reserve_deficit_kwh=hard_reserve_deficit,
+        hard_reserve_restoration_required=hard_reserve_restoration_required,
+        hard_reserve_restored_by_near_term_pv=(
+            hard_reserve_restored_by_near_term_pv
+        ),
+        hard_reserve_unavailable=hard_reserve_unavailable,
+        hard_reserve_shortfall_kwh=hard_reserve_shortfall,
+        hard_reserve_deferral_source=hard_reserve_deferral_source,
+        live_pv_surplus_stable=settings.live_pv_surplus_stable,
+        live_pv_surplus_stable_seconds=max(
+            settings.live_pv_surplus_stable_seconds,
+            0.0,
+        ),
+        expensive_window_load_buffers=tuple(expensive_window_load_buffers),
+        load_risk_multiplier=load_risk_multiplier,
+        load_risk_buffer_kwh=sum(
+            item.buffer_kwh for item in expensive_window_load_buffers
+        ),
+        morning_protection_active=morning_protection_active,
+        morning_protection_mode=morning_protection_mode,
+        morning_protection_window_start=morning_window_start,
+        morning_protection_window_end=morning_window_end,
+        morning_protection_expected_pv_kwh=morning_expected_pv,
+        morning_protection_conservative_pv_kwh=morning_conservative_pv,
+        remaining_low_direct_import_kwh=remaining_low_direct_import,
+        remaining_expensive_import_kwh=remaining_expensive_import,
+        capacity_or_power_shortfall_kwh=capacity_or_power_shortfall,
+        control_inputs_fresh=settings.control_inputs_fresh,
+        control_input_block_reason=(
+            settings.control_input_block_reason.strip()
+            or (
+                "none"
+                if settings.control_inputs_fresh
+                else "control_inputs_stale"
+            )
         ),
     )

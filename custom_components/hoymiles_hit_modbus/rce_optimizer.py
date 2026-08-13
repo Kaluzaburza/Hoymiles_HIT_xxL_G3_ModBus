@@ -8,16 +8,26 @@ the protected night after the second market day.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 import math
 import re
+from time import perf_counter
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
+
+try:  # Package import in Home Assistant; direct import in deterministic tests.
+    from .load_model import robust_weighted_upper_estimate
+except ImportError:  # pragma: no cover - exercised by tools/test_rce_optimizer.py
+    from load_model import robust_weighted_upper_estimate
 
 
 SLOT = timedelta(minutes=30)
 _PERIOD_START = re.compile(r"(?P<hour>\d{1,2}):(?P<minute>\d{2})")
+_PERIOD_RANGE = re.compile(
+    r"\A\s*(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})\s*-\s*"
+    r"(?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})\s*\Z"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,8 +75,15 @@ class OptimizerInput:
     discharge_power_percent: float
     export_efficiency_percent: float
     bms_max_discharge_current_a: float | None = None
+    bms_max_charge_current_a: float | None = None
     battery_voltage_v: float | None = None
     bms_power_safety_percent: float = 95.0
+    bms_discharge_data_fresh: bool = False
+    bms_discharge_data_age_seconds: float | None = None
+    bms_discharge_data_available: bool = False
+    bms_charge_data_fresh: bool = False
+    bms_charge_data_age_seconds: float | None = None
+    bms_charge_data_available: bool = False
     actual_day_load_today_kwh: float | None = None
     pv_to_load_power_kw: float = 0.0
     # Optional recorder profiles contain one kWh value for every half-hour.
@@ -75,20 +92,35 @@ class OptimizerInput:
     weekday_load_profile_30m_kwh: tuple[float, ...] = ()
     weekend_load_profile_30m_kwh: tuple[float, ...] = ()
     # P50 drives expected revenue; this risk-adjusted P10/P50 blend is used
-    # for every reserve and physical-feasibility check.
+    # for physical PV feasibility checks.
     conservative_pv_by_slot_kwh: Mapping[datetime, float] | None = None
     forecast_confidence_percent: float = 0.0
     # Additional physical caps.  GCF is an installation/DSO limit, while the
     # effective value may be learned from delivered power or another sensor.
     export_power_cap_kw: float | None = None
     effective_export_power_kw: float | None = None
-    # Economic defaults require no new helper.  Stored energy is credited only
-    # when a Day-3 PV deficit exists; battery wear applies to DC throughput.
+    # Economic defaults require no new helper.  Day-3 retained-energy value is
+    # diagnostic only; battery wear applies to DC export throughput.
     avoided_import_price_pln_kwh: float = 1.0
     battery_wear_cost_pln_kwh: float = 0.08
     day3_pv_forecast_kwh: float | None = None
     charge_efficiency_percent: float = 95.0
     house_discharge_efficiency_percent: float = 95.0
+    # A recorder-derived upper LOAD scenario is exposed for diagnostics.  The
+    # expected profile remains the single physical/economic LOAD model, which
+    # prevents a tariff-style P90 buffer from suppressing RCE export.
+    conservative_daily_load_kwh: float | None = None
+    conservative_night_load_kwh: float | None = None
+    load_history_days: int = 0
+    # Fresh live powers describe only the unfinished current half-hour.  They
+    # are optional so old callers retain their profile/forecast behaviour.
+    current_load_power_kw: float | None = None
+    current_pv_power_kw: float | None = None
+    current_battery_soc_fresh: bool = True
+    # Fail-closed PV scenario for the critical interval through the end of the
+    # upcoming protected night when P10 is missing, stale or high-risk.
+    critical_zero_pv_guard: bool = False
+    critical_zero_pv_guard_reason: str = "not_required"
 
 
 @dataclass(slots=True)
@@ -114,6 +146,13 @@ class OptimizerResult:
     bms_discharge_power_limit_kw: float | None = None
     bms_discharge_limit_percent: float | None = None
     bms_limit_active: bool = False
+    bms_discharge_data_fresh: bool = False
+    bms_discharge_data_age_seconds: float | None = None
+    bms_discharge_data_available: bool = False
+    bms_charge_power_limit_kw: float = 0.0
+    bms_charge_data_fresh: bool = False
+    bms_charge_data_age_seconds: float | None = None
+    bms_charge_data_available: bool = False
     maximum_export_power_kw: float = 0.0
     historical_day_load_kwh: float = 0.0
     live_projected_day_load_kwh: float = 0.0
@@ -136,8 +175,37 @@ class OptimizerResult:
     terminal_energy_value_pln_kwh: float = 0.0
     terminal_energy_value_pln: float = 0.0
     baseline_terminal_energy_value_pln: float = 0.0
+    terminal_energy_value_applied_to_objective: bool = False
     net_objective_pln: float = 0.0
     baseline_net_objective_pln: float = 0.0
+    conservative_daily_load_kwh: float | None = None
+    conservative_night_load_kwh: float | None = None
+    load_risk_multiplier: float = 1.0
+    load_risk_buffer_kwh: float = 0.0
+    load_risk_mode: str = "diagnostic_only"
+    critical_zero_pv_guard_active: bool = False
+    critical_zero_pv_guard_reason: str = "not_required"
+    critical_zero_pv_guard_until: datetime | None = None
+    critical_zero_pv_guarded_kwh: float = 0.0
+    current_slot_end: datetime | None = None
+    current_run_end: datetime | None = None
+    current_slot_remaining_minutes: float = 0.0
+    current_slot_fraction: float = 0.0
+    current_slot_planned_export_kwh: float = 0.0
+    current_slot_execution_export_power_kw: float = 0.0
+    current_slot_execution_discharge_power_kw: float = 0.0
+    current_slot_execution_power_percent: float = 0.0
+    current_slot_start_eligible: bool = False
+    current_slot_suppression_reason: str = "no_current_plan"
+    current_required_minimum_soc_percent: int = 100
+    current_slot_load_kwh: float = 0.0
+    current_slot_pv_kwh: float = 0.0
+    current_slot_load_source: str = "profile"
+    current_slot_pv_source: str = "forecast"
+    current_slot_shared_discharge_limit_kwh: float = 0.0
+    solver_method: str = "joint_horizon_bounded_active_set"
+    optimality_verified: bool = False
+    solver_runtime_ms: float = 0.0
 
     @property
     def planned_export_kwh(self) -> float:
@@ -173,7 +241,7 @@ class OptimizerResult:
         Keep this property for dashboard and package compatibility.  New
         consumers should use :attr:`gross_optimization_gain_pln` or
         :attr:`net_optimization_gain_pln`, whose names state whether battery
-        wear and terminal stored-energy value are included.
+        wear is included.  Terminal stored-energy value is diagnostic only.
         """
         return self.gross_optimization_gain_pln
 
@@ -184,7 +252,7 @@ class OptimizerResult:
 
     @property
     def net_optimization_gain_pln(self) -> float:
-        """Return economic gain including wear and terminal battery value."""
+        """Return market-revenue gain after battery wear."""
         return self.net_objective_pln - self.baseline_net_objective_pln
 
     @property
@@ -227,9 +295,118 @@ def parse_rce_rows(
     block_start_minute: int,
     block_end_minute: int,
 ) -> list[PriceSlot]:
-    """Convert PSE 15-minute rows to half-hour market slots."""
-    parsed: list[tuple[datetime, float]] = []
+    """Convert PSE 15-minute rows to half-hour market slots.
+
+    ``dtime_utc`` is the authoritative interval end when supplied by the
+    official PSE API.  Deriving the quarter start on the absolute UTC timeline
+    preserves the real price-to-fold relationship during the repeated autumn
+    hour.  Older cached payloads may contain only local wall time; those rows
+    use the deterministic fold fallback below.  Payload order is never used.
+    """
+
+    def valid_instants(naive: datetime) -> list[datetime]:
+        candidates: dict[datetime, datetime] = {}
+        for fold in (0, 1):
+            local = naive.replace(tzinfo=timezone, fold=fold)
+            utc_value = local.astimezone(dt_timezone.utc)
+            round_trip = utc_value.astimezone(timezone)
+            if round_trip.replace(tzinfo=None) != naive:
+                continue
+            candidates[utc_value] = local
+        return [candidates[key] for key in sorted(candidates)]
+
+    def absolute_start_utc(row: Mapping[str, Any]) -> datetime | None:
+        value = row.get("dtime_utc")
+        if isinstance(value, datetime):
+            parsed = value
+        elif isinstance(value, str) and value.strip():
+            text = value.strip()
+            if text.endswith(("Z", "z")):
+                text = f"{text[:-1]}+00:00"
+            try:
+                parsed = datetime.fromisoformat(text)
+            except ValueError:
+                return None
+        else:
+            return None
+        # The field is explicitly UTC.  Be tolerant of an API/cache that omits
+        # the suffix while retaining the absolute-field name.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt_timezone.utc)
+        interval_end = parsed.astimezone(dt_timezone.utc)
+        if (
+            interval_end.minute % 15 != 0
+            or interval_end.second != 0
+            or interval_end.microsecond != 0
+        ):
+            return None
+
+        if "period_utc" in row:
+            period_utc = row.get("period_utc")
+            if not isinstance(period_utc, str):
+                return None
+            match = _PERIOD_RANGE.fullmatch(period_utc)
+            if match is None:
+                return None
+
+            def clock_minute(hour_name: str, minute_name: str) -> int | None:
+                hour = int(match.group(hour_name))
+                minute = int(match.group(minute_name))
+                if hour == 24 and minute == 0:
+                    return 24 * 60
+                if 0 <= hour < 24 and 0 <= minute < 60:
+                    return hour * 60 + minute
+                return None
+
+            period_start = clock_minute("start_hour", "start_minute")
+            period_end = clock_minute("end_hour", "end_minute")
+            if period_start is None or period_end is None:
+                return None
+            if (period_end - period_start) % (24 * 60) != 15:
+                return None
+            interval_end_minute = interval_end.hour * 60 + interval_end.minute
+            if period_end % (24 * 60) != interval_end_minute:
+                return None
+
+        # PSE publishes the settlement interval end in ``dtime_utc``.  Work
+        # backwards on the UTC timeline so DST gaps/folds cannot distort the
+        # fixed 15-minute market interval.
+        interval_start = interval_end - timedelta(minutes=15)
+        if "business_date" in row:
+            try:
+                business_day = date.fromisoformat(
+                    str(row.get("business_date", "")).strip()
+                )
+            except ValueError:
+                return None
+            if interval_start.astimezone(timezone).date() != business_day:
+                return None
+        return interval_start
+
+    absolute_grouped: dict[
+        datetime,
+        list[tuple[tuple[tuple[str, str], ...], float]],
+    ] = {}
+    grouped: dict[datetime, list[tuple[tuple[tuple[str, str], ...], float]]] = {}
     for row in rows:
+        try:
+            price = float(row["rce_pln"]) / 1000.0
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not math.isfinite(price):
+            continue
+        stable_key = tuple(
+            sorted((str(key), repr(value)) for key, value in row.items())
+        )
+        if "dtime_utc" in row:
+            utc_start = absolute_start_utc(row)
+            if utc_start is None:
+                continue
+            absolute_grouped.setdefault(utc_start, []).append(
+                (stable_key, price)
+            )
+            continue
+
         business_date = str(row.get("business_date", ""))
         period = str(row.get("period", ""))
         match = _PERIOD_START.search(period)
@@ -237,30 +414,87 @@ def parse_rce_rows(
             continue
         try:
             day = date.fromisoformat(business_date)
-            start = datetime.combine(
+            hour = int(match.group("hour"))
+            minute = int(match.group("minute"))
+            if hour == 24:
+                day += timedelta(days=1)
+            naive = datetime.combine(
                 day,
-                time(
-                    hour=int(match.group("hour")) % 24,
-                    minute=int(match.group("minute")),
-                ),
-                tzinfo=timezone,
+                time(hour=hour % 24, minute=minute),
             )
-            price = float(row["rce_pln"]) / 1000.0
-        except (KeyError, TypeError, ValueError):
+        except (TypeError, ValueError):
             continue
-        parsed.append((start, price))
+        # Stable content ordering makes reversed/shuffled payloads equivalent.
+        # Price is part of this key, so two distinct fold values keep a stable
+        # assignment even when OData returns the repeated hour in reverse.
+        grouped.setdefault(naive, []).append((stable_key, price))
 
-    parsed.sort(key=lambda item: item[0])
-    result: list[PriceSlot] = []
-    for index in range(0, len(parsed) - 1, 2):
-        first, second = parsed[index], parsed[index + 1]
-        if second[0] - first[0] > timedelta(minutes=20):
+    parsed_by_utc: dict[datetime, tuple[datetime, float]] = {}
+    for utc_start in sorted(absolute_grouped):
+        records = absolute_grouped[utc_start]
+        # Conflicting rows for one authoritative UTC instant are ambiguous.
+        # Use the lower price so a duplicated/corrupted payload can only make
+        # export more conservative, never manufacture an inflated sale value.
+        price = min(item[1] for item in records)
+        parsed_by_utc[utc_start] = (
+            utc_start.astimezone(timezone),
+            price,
+        )
+
+    for naive in sorted(grouped):
+        candidates = valid_instants(naive)
+        if not candidates:
+            # A nonexistent spring-forward wall-clock interval is not a real
+            # market interval and must not enter either the plan or reserve.
             continue
-        minute = first[0].hour * 60 + first[0].minute
+        records = sorted(grouped[naive], key=lambda item: item[0])
+        # Non-ambiguous accidental duplicates collapse to one deterministic
+        # row.  A local-only autumn repeated time has no fold provenance: its
+        # two prices cannot safely be mapped to the two real instants.  Require
+        # both rows and assign their minimum price to both folds.  This may
+        # understate revenue but cannot manufacture a profitable export from
+        # a high price which actually belonged to the other fold.
+        if len(candidates) > 1:
+            if len(records) < len(candidates):
+                continue
+            conservative_price = min(item[1] for item in records)
+            selected = [
+                (start, conservative_price) for start in candidates
+            ]
+        else:
+            selected = [(candidates[0], min(item[1] for item in records))]
+        for start, price in selected:
+            utc_start = start.astimezone(dt_timezone.utc)
+            # Absolute PSE telemetry wins when a mixed old/new cache contains
+            # both representations of the same quarter.
+            parsed_by_utc.setdefault(utc_start, (start, price))
+
+    quarters_by_half_hour: dict[datetime, dict[int, float]] = {}
+    for start_utc in sorted(parsed_by_utc):
+        _, price = parsed_by_utc[start_utc]
+        minute_in_half_hour = start_utc.minute % 30
+        if minute_in_half_hour not in (0, 15):
+            continue
+        half_hour_utc = start_utc.replace(
+            minute=0 if start_utc.minute < 30 else 30,
+            second=0,
+            microsecond=0,
+        )
+        quarters_by_half_hour.setdefault(half_hour_utc, {})[
+            minute_in_half_hour
+        ] = price
+
+    result: list[PriceSlot] = []
+    for half_hour_utc in sorted(quarters_by_half_hour):
+        quarters = quarters_by_half_hour[half_hour_utc]
+        if 0 not in quarters or 15 not in quarters:
+            continue
+        local_start = half_hour_utc.astimezone(timezone)
+        minute = local_start.hour * 60 + local_start.minute
         result.append(
             PriceSlot(
-                start=first[0],
-                price_pln_kwh=(first[1] + second[1]) / 2.0,
+                start=local_start,
+                price_pln_kwh=(quarters[0] + quarters[15]) / 2.0,
                 blocked=blocked_minute(
                     minute,
                     block_start_minute,
@@ -298,6 +532,88 @@ def _horizon_end(settings: OptimizerInput) -> datetime:
         time(hour=hour % 24, minute=minute),
         tzinfo=settings.now.tzinfo,
     )
+
+
+def _supported_price_slots(settings: OptimizerInput) -> list[PriceSlot]:
+    """Return deterministic market slots inside the supported two-day scope.
+
+    The public RCE feed is a today/tomorrow product.  Treating an accidental
+    far-future timestamp as the end of the optimization horizon makes every
+    battery simulation scale with that malformed row.  Normalize on absolute
+    UTC instants, reject dates outside today/tomorrow, and collapse duplicate
+    instants conservatively so input ordering cannot change the plan.
+    """
+
+    first_day = settings.now.date()
+    last_day = first_day + timedelta(days=1)
+    timezone = settings.now.tzinfo
+    if timezone is None:
+        return []
+
+    by_utc: dict[datetime, PriceSlot] = {}
+    for slot in settings.price_slots:
+        try:
+            if slot.start.tzinfo is None or slot.start.utcoffset() is None:
+                continue
+            price = float(slot.price_pln_kwh)
+            if not math.isfinite(price):
+                continue
+            utc_start = slot.start.astimezone(dt_timezone.utc)
+            local_start = utc_start.astimezone(timezone)
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            continue
+        if not first_day <= local_start.date() <= last_day:
+            continue
+        if (
+            local_start.minute not in (0, 30)
+            or local_start.second != 0
+            or local_start.microsecond != 0
+        ):
+            continue
+        candidate = PriceSlot(
+            start=local_start,
+            price_pln_kwh=price,
+            blocked=bool(slot.blocked),
+        )
+        previous = by_utc.get(utc_start)
+        if previous is None:
+            by_utc[utc_start] = candidate
+        else:
+            # Conflicting duplicates are ambiguous.  The lower price and the
+            # stricter block flag are the fail-safe, order-independent view.
+            by_utc[utc_start] = PriceSlot(
+                start=local_start,
+                price_pln_kwh=min(previous.price_pln_kwh, price),
+                blocked=previous.blocked or bool(slot.blocked),
+            )
+    return [by_utc[start] for start in sorted(by_utc)]
+
+
+def _local_slot(start: datetime, settings: OptimizerInput) -> datetime:
+    """Return an internal UTC slot in the installation timezone."""
+    return start.astimezone(settings.now.tzinfo)
+
+
+def _utc_energy_map(values: Mapping[datetime, float]) -> dict[datetime, float]:
+    """Normalize energy keys to absolute UTC instants.
+
+    Python treats the two ``fold`` values of the same ZoneInfo wall time as
+    equal dictionary keys.  UTC keys keep the repeated autumn hour distinct.
+    """
+    normalized: dict[datetime, float] = {}
+    for start, energy in values.items():
+        key = start.astimezone(dt_timezone.utc)
+        normalized[key] = normalized.get(key, 0.0) + max(float(energy), 0.0)
+    return normalized
+
+
+def _current_slot_fraction(now: datetime) -> float:
+    seconds_into_slot = (
+        (now.minute % 30) * 60
+        + now.second
+        + now.microsecond / 1_000_000.0
+    )
+    return min(max((30 * 60 - seconds_into_slot) / (30 * 60), 0.0), 1.0)
 
 
 def _day_load_projection(
@@ -395,7 +711,7 @@ def _load_by_slot(
     if average_profile or weekday_profile or weekend_profile:
         loads: dict[datetime, float] = {}
         modes: set[str] = set()
-        dates = sorted({start.date() for start in starts})
+        dates = sorted({_local_slot(start, settings).date() for start in starts})
         for slot_date in dates:
             weekend = slot_date.weekday() >= 5
             profile = weekend_profile if weekend else weekday_profile
@@ -436,10 +752,15 @@ def _load_by_slot(
             day_scale = (
                 modeled_day_energy / day_weight if day_weight > 0 else 0.0
             )
-            for start in (item for item in starts if item.date() == slot_date):
-                index = start.hour * 2 + start.minute // 30
+            for start in (
+                item
+                for item in starts
+                if _local_slot(item, settings).date() == slot_date
+            ):
+                local_start = _local_slot(start, settings)
+                index = local_start.hour * 2 + local_start.minute // 30
                 is_night = _is_night(
-                    start,
+                    local_start,
                     settings.night_start_minute,
                     settings.night_end_minute,
                 )
@@ -458,9 +779,9 @@ def _load_by_slot(
         today_day_starts = [
             start
             for start in starts
-            if start.date() == settings.now.date()
+            if _local_slot(start, settings).date() == settings.now.date()
             and not _is_night(
-                start,
+                _local_slot(start, settings),
                 settings.night_start_minute,
                 settings.night_end_minute,
             )
@@ -508,13 +829,15 @@ def _load_by_slot(
     day_slots_by_date: dict[date, list[datetime]] = {}
     for start in starts:
         if _is_night(
-            start,
+            _local_slot(start, settings),
             settings.night_start_minute,
             settings.night_end_minute,
         ):
             loads[start] = night_slot
         else:
-            day_slots_by_date.setdefault(start.date(), []).append(start)
+            day_slots_by_date.setdefault(
+                _local_slot(start, settings).date(), []
+            ).append(start)
 
     for slot_date, day_starts in day_slots_by_date.items():
         day_energy = modeled_day_energy
@@ -555,6 +878,244 @@ def _quantize_reserve_to_soc_percent(
     return capacity_kwh * percent / 100.0
 
 
+def _conservative_load_by_slot(
+    starts: list[datetime],
+    settings: OptimizerInput,
+    expected: Mapping[datetime, float],
+    *,
+    modeled_day_energy: float,
+    current_slot_is_live: bool,
+) -> tuple[dict[datetime, float], float, float]:
+    """Return an alternative P90 LOAD scenario, never an additive reserve."""
+    conservative = {
+        start: max(float(expected.get(start, 0.0)), 0.0) for start in starts
+    }
+    if (
+        settings.load_history_days < 5
+        or settings.conservative_daily_load_kwh is None
+        or settings.average_daily_load_kwh <= 1e-9
+    ):
+        return conservative, 1.0, 0.0
+
+    expected_daily = max(settings.average_daily_load_kwh, 1e-9)
+    daily_upper = max(settings.conservative_daily_load_kwh, expected_daily)
+    daily_factor = min(max(daily_upper / expected_daily, 1.0), 1.35)
+    day_factor = daily_factor
+    night_factor = daily_factor
+    if (
+        settings.conservative_night_load_kwh is not None
+        and settings.average_night_load_kwh is not None
+    ):
+        expected_night = max(settings.average_night_load_kwh, 0.0)
+        upper_night = max(settings.conservative_night_load_kwh, expected_night)
+        if expected_night > 1e-9:
+            night_factor = min(max(upper_night / expected_night, 1.0), 1.35)
+        expected_day = max(modeled_day_energy, 0.0)
+        upper_day = max(daily_upper - upper_night, expected_day)
+        if expected_day > 1e-9:
+            day_factor = min(max(upper_day / expected_day, 1.0), 1.35)
+
+    for index, start in enumerate(starts):
+        # The unfinished live interval is already measured; multiplying it by
+        # a historical upper percentile would count the same cold spike twice.
+        if index == 0 and current_slot_is_live:
+            continue
+        local_start = _local_slot(start, settings)
+        factor = (
+            night_factor
+            if _is_night(
+                local_start,
+                settings.night_start_minute,
+                settings.night_end_minute,
+            )
+            else day_factor
+        )
+        conservative[start] *= factor
+    buffer = sum(conservative.values()) - sum(
+        max(float(expected.get(start, 0.0)), 0.0) for start in starts
+    )
+    return conservative, max(day_factor, night_factor), max(buffer, 0.0)
+
+
+def _critical_zero_pv_scenario(
+    starts: list[datetime],
+    settings: OptimizerInput,
+    conservative_pv: Mapping[datetime, float],
+    *,
+    preserve_live_current: bool,
+) -> tuple[dict[datetime, float], datetime | None, float]:
+    """Zero uncertain PV through the end of the upcoming protected night."""
+    guarded = {
+        start: max(float(conservative_pv.get(start, 0.0)), 0.0)
+        for start in starts
+    }
+    if not settings.critical_zero_pv_guard or not starts:
+        return guarded, None, 0.0
+
+    entered_night = False
+    guard_until: datetime | None = None
+    for start in starts:
+        is_night = _is_night(
+            _local_slot(start, settings),
+            settings.night_start_minute,
+            settings.night_end_minute,
+        )
+        if not entered_night and is_night:
+            entered_night = True
+        elif entered_night and not is_night:
+            guard_until = start
+            break
+    if guard_until is None:
+        guard_until = starts[-1] + SLOT
+
+    removed = 0.0
+    for index, start in enumerate(starts):
+        if start >= guard_until or (index == 0 and preserve_live_current):
+            continue
+        removed += guarded[start]
+        guarded[start] = 0.0
+    return guarded, guard_until, removed
+
+
+def _bms_dc_power_limit_kw(settings: OptimizerInput) -> float | None:
+    # RCE may display a diagnostic plan while telemetry is unavailable, but
+    # every physical calculation must fail closed to 0 kW.  In particular, a
+    # fresh 0 A register is a contractual stop, never an unlimited fallback.
+    if (
+        not settings.bms_discharge_data_fresh
+        or not settings.bms_discharge_data_available
+    ):
+        return 0.0
+    if (
+        settings.bms_max_discharge_current_a is None
+        or settings.battery_voltage_v is None
+        or settings.battery_voltage_v <= 0
+    ):
+        return 0.0
+    return (
+        max(settings.bms_max_discharge_current_a, 0.0)
+        * settings.battery_voltage_v
+        / 1000.0
+        * min(max(settings.bms_power_safety_percent, 0.0), 100.0)
+        / 100.0
+    )
+
+
+def _bms_charge_dc_power_limit_kw(settings: OptimizerInput) -> float:
+    """Return fresh BMS charge power, preserving a contractual zero limit."""
+    if (
+        not settings.bms_charge_data_fresh
+        or not settings.bms_charge_data_available
+        or settings.bms_max_charge_current_a is None
+        or settings.battery_voltage_v is None
+        or settings.battery_voltage_v <= 0.0
+    ):
+        return 0.0
+    return (
+        max(settings.bms_max_charge_current_a, 0.0)
+        * settings.battery_voltage_v
+        / 1000.0
+        * min(max(settings.bms_power_safety_percent, 0.0), 100.0)
+        / 100.0
+    )
+
+
+def _bms_start_suppression_reason(settings: OptimizerInput) -> str | None:
+    """Return the fail-closed scheduler reason for BMS discharge telemetry."""
+    if not settings.bms_discharge_data_fresh:
+        return (
+            "bms_discharge_data_unavailable"
+            if settings.bms_discharge_data_age_seconds is None
+            else "bms_discharge_data_stale"
+        )
+    if not settings.bms_discharge_data_available:
+        return "bms_discharge_limit_zero"
+    return None
+
+
+def _slot_export_limit_kwh(
+    settings: OptimizerInput,
+    load_kwh: float,
+    pv_kwh: float,
+    slot_fraction: float,
+) -> float:
+    """Return grid-export energy after sharing discharge power with LOAD."""
+    fraction = min(max(slot_fraction, 0.0), 1.0)
+    hours = 0.5 * fraction
+    if hours <= 0.0:
+        return 0.0
+    system_power = settings.inverter_power_kw * settings.inverter_count
+    requested_power = system_power * min(
+        max(settings.discharge_power_percent, 0.0), 100.0
+    ) / 100.0
+    load_deficit_ac = max(load_kwh - pv_kwh, 0.0)
+    # Battery discharge power is shared with battery-fed LOAD, while the whole
+    # inverter AC bridge is shared by PV/LOAD and every grid-export branch.
+    shared_limits = [max(requested_power * hours - load_deficit_ac, 0.0)]
+    shared_limits.append(
+        max(system_power * hours - min(load_kwh, system_power * hours), 0.0)
+    )
+
+    bms_dc_power = _bms_dc_power_limit_kw(settings)
+    export_efficiency = max(
+        min(settings.export_efficiency_percent / 100.0, 1.0), 0.01
+    )
+    house_efficiency = max(
+        min(settings.house_discharge_efficiency_percent / 100.0, 1.0),
+        0.01,
+    )
+    if bms_dc_power is not None:
+        remaining_dc = max(
+            bms_dc_power * hours - load_deficit_ac / house_efficiency,
+            0.0,
+        )
+        shared_limits.append(remaining_dc * export_efficiency)
+
+    # GCF and learned delivered power limit only the grid branch.  They do not
+    # reduce the separate AC power needed to keep the house supplied.
+    if settings.export_power_cap_kw is not None:
+        shared_limits.append(max(settings.export_power_cap_kw, 0.0) * hours)
+    if settings.effective_export_power_kw is not None:
+        shared_limits.append(
+            max(settings.effective_export_power_kw, 0.0) * hours
+        )
+    return max(min(shared_limits), 0.0)
+
+
+def _slot_charge_input_limit_kwh(
+    settings: OptimizerInput,
+    load_kwh: float,
+    pv_kwh: float,
+    slot_fraction: float,
+    controlled_export_kwh: float = 0.0,
+) -> float:
+    """Return PV AC energy that can physically charge the battery this slot."""
+    surplus = max(pv_kwh - load_kwh, 0.0)
+    if surplus <= 0.0:
+        return 0.0
+    fraction = min(max(slot_fraction, 0.0), 1.0)
+    hours = 0.5 * fraction
+    if hours <= 0.0:
+        return 0.0
+    system_energy = settings.inverter_power_kw * settings.inverter_count * hours
+    remaining_conversion = max(
+        system_energy
+        - min(load_kwh, system_energy)
+        - max(controlled_export_kwh, 0.0),
+        0.0,
+    )
+    charge_efficiency = max(
+        min(settings.charge_efficiency_percent / 100.0, 1.0),
+        0.01,
+    )
+    bms_ac_input = (
+        _bms_charge_dc_power_limit_kw(settings)
+        * hours
+        / charge_efficiency
+    )
+    return max(min(surplus, remaining_conversion, bms_ac_input), 0.0)
+
+
 def _simulate(
     starts: list[datetime],
     settings: OptimizerInput,
@@ -563,6 +1124,7 @@ def _simulate(
     floor_kwh: float,
     export_reserve_by_slot: Mapping[datetime, float] | None = None,
     pv_by_slot_kwh: Mapping[datetime, float] | None = None,
+    slot_fractions: Mapping[datetime, float] | None = None,
 ) -> tuple[bool, float, dict[datetime, float]]:
     capacity = settings.battery_capacity_kwh
     battery = capacity * settings.battery_soc_percent / 100.0
@@ -583,11 +1145,37 @@ def _simulate(
     for start in starts:
         pv = max(float(pv_map.get(start, 0.0)), 0.0)
         load = max(float(load_by_slot.get(start, 0.0)), 0.0)
-        if pv >= load:
-            battery += (pv - load) * charge_efficiency
-        else:
+        export = max(float(exports.get(start, 0.0)), 0.0)
+        fraction = (
+            min(max(float(slot_fractions.get(start, 1.0)), 0.0), 1.0)
+            if slot_fractions is not None
+            else 1.0
+        )
+        if export > _slot_export_limit_kwh(
+            settings,
+            load,
+            pv,
+            fraction,
+        ) + 1e-6:
+            return False, battery, {}
+        if pv < load:
             battery -= (load - pv) / house_discharge_efficiency
-        battery -= max(float(exports.get(start, 0.0)), 0.0) / efficiency
+        battery -= export / efficiency
+        if pv >= load:
+            charge_input_ac = _slot_charge_input_limit_kwh(
+                settings,
+                load,
+                pv,
+                fraction,
+                export,
+            )
+            charge_input_ac = min(
+                charge_input_ac,
+                max(capacity - battery, 0.0) / charge_efficiency,
+            )
+            battery += charge_input_ac * charge_efficiency
+        else:
+            charge_input_ac = 0.0
         if battery < floor_kwh - 1e-6:
             return False, battery, {}
         if (
@@ -598,20 +1186,42 @@ def _simulate(
             - 1e-6
         ):
             return False, battery, {}
-        if battery > capacity:
-            overflow_ac = (
-                battery - capacity
-            ) / charge_efficiency
-            if settings.export_power_cap_kw is not None:
-                remaining_export_headroom = max(
-                    settings.export_power_cap_kw * 0.5
-                    - max(float(exports.get(start, 0.0)), 0.0),
-                    0.0,
+        if pv >= load:
+            unallocated_pv = max(pv - load - charge_input_ac, 0.0)
+            system_energy = (
+                settings.inverter_power_kw
+                * settings.inverter_count
+                * 0.5
+                * fraction
+            )
+            remaining_system_headroom = max(
+                system_energy
+                - min(load, system_energy)
+                - export
+                - charge_input_ac,
+                0.0,
+            )
+            grid_caps = [
+                max(cap, 0.0)
+                for cap in (
+                    settings.export_power_cap_kw,
+                    settings.effective_export_power_kw,
                 )
-                overflow_ac = min(overflow_ac, remaining_export_headroom)
-            if overflow_ac > 0:
-                natural_exports[start] = overflow_ac
-            battery = capacity
+                if cap is not None
+            ]
+            remaining_grid_headroom = (
+                max(min(grid_caps) * 0.5 * fraction - export, 0.0)
+                if grid_caps
+                else remaining_system_headroom
+            )
+            natural_export = min(
+                unallocated_pv,
+                remaining_system_headroom,
+                remaining_grid_headroom,
+            )
+            if natural_export > 0.0:
+                natural_exports[start] = natural_export
+        battery = min(battery, capacity)
     return True, battery, natural_exports
 
 
@@ -636,6 +1246,7 @@ def _required_energy_now(
     load_by_slot: Mapping[datetime, float],
     floor_kwh: float,
     pv_by_slot_kwh: Mapping[datetime, float] | None = None,
+    slot_fractions: Mapping[datetime, float] | None = None,
 ) -> float:
     required = floor_kwh
     capacity = settings.battery_capacity_kwh
@@ -651,8 +1262,19 @@ def _required_energy_now(
     for start in reversed(starts):
         load = max(float(load_by_slot.get(start, 0.0)), 0.0)
         pv = max(float(pv_map.get(start, 0.0)), 0.0)
+        fraction = (
+            min(max(float(slot_fractions.get(start, 1.0)), 0.0), 1.0)
+            if slot_fractions is not None
+            else 1.0
+        )
         if pv >= load:
-            required -= (pv - load) * charge_efficiency
+            charge_input_ac = _slot_charge_input_limit_kwh(
+                settings,
+                load,
+                pv,
+                fraction,
+            )
+            required -= charge_input_ac * charge_efficiency
         else:
             required += (load - pv) / discharge_efficiency
         required = min(max(required, floor_kwh), capacity)
@@ -671,7 +1293,13 @@ def _economic_objective(
     terminal_energy_target_kwh: float,
     terminal_energy_value_pln_kwh: float,
 ) -> tuple[float, float, float]:
-    """Return net objective, wear cost and credited terminal value."""
+    """Return RCE objective, wear cost and diagnostic terminal value.
+
+    RCE is explicitly a sale-profit optimizer.  Day-3 avoided-import value is
+    still calculated for dashboards and diagnostics, but it cannot veto an
+    otherwise profitable export.  Household safety remains a hard physical
+    constraint through the base reserve, protected night and LOAD/PV horizon.
+    """
 
     revenue = _market_revenue(exports, natural_exports, price_by_start)
     dc_throughput = sum(max(value, 0.0) for value in exports.values()) / max(
@@ -684,7 +1312,7 @@ def _economic_objective(
         max(terminal_energy_target_kwh, 0.0),
     )
     terminal_value = retained * max(terminal_energy_value_pln_kwh, 0.0)
-    return revenue - wear + terminal_value, wear, terminal_value
+    return revenue - wear, wear, terminal_value
 
 
 def _protected_night_reserve_by_slot(
@@ -713,7 +1341,7 @@ def _protected_night_reserve_by_slot(
         energy = 0.0
         for later in starts[after_index:]:
             is_night = _is_night(
-                later,
+                _local_slot(later, settings),
                 settings.night_start_minute,
                 settings.night_end_minute,
             )
@@ -743,6 +1371,567 @@ def _protected_night_reserve_by_slot(
     return current_night_energy, reserve_by_slot
 
 
+def _solve_joint_horizon_exports(
+    *,
+    starts: list[datetime],
+    settings: OptimizerInput,
+    candidates: list[tuple[PriceSlot, datetime]],
+    load_by_slot: Mapping[datetime, float],
+    floor_kwh: float,
+    export_reserve_by_slot: Mapping[datetime, float],
+    conservative_pv: Mapping[datetime, float],
+    expected_pv: Mapping[datetime, float],
+    slot_fractions: Mapping[datetime, float],
+    price_by_start: Mapping[datetime, float],
+    baseline_objective: float,
+    export_efficiency: float,
+    terminal_energy_target: float,
+    terminal_unit_value: float,
+) -> dict[datetime, float]:
+    """Return a bounded joint-horizon plan across deterministic active sets.
+
+    A one-slot-at-a-time economic acceptance rule is not globally valid for a
+    battery with finite headroom.  Several individually neutral exports can
+    jointly prevent a later low-price PV spill.  This solver therefore builds
+    complete feasible active sets first and only then optimizes every continuous
+    slot amount against the *whole* horizon objective.
+
+    For short horizons every active set is enumerated.  Normal 48-hour horizons
+    use economically distinct price thresholds plus chronological and reverse
+    chronological bases.  Only the strongest complete plans receive a bounded
+    coordinate refinement; this keeps runtime predictable for HA while still
+    optimizing the coupled headroom effect which defeated the former greedy
+    planner.  Every trial is checked by ``_simulate``; the hard home reserve,
+    protected night, both PV trajectories, shared LOAD/export power, BMS/GCF
+    caps and current-slot fraction remain authoritative.
+    """
+
+    if not candidates:
+        return {}
+
+    candidate_by_start = {start: slot for slot, start in candidates}
+    price_order = [
+        start
+        for _, start in sorted(
+            candidates,
+            key=lambda item: (-item[0].price_pln_kwh, item[1]),
+        )
+    ]
+    reverse_tie_price_order = [
+        start
+        for _, start in sorted(
+            candidates,
+            key=lambda item: (
+                -item[0].price_pln_kwh,
+                -item[1].timestamp(),
+            ),
+        )
+    ]
+    short_horizon = len(candidates) <= 7
+    # Padding rows which cannot cover battery wear are common in a complete
+    # 48-hour PSE response.  Keep every row in seeds and physical simulations,
+    # but rank the bounded exchange set by direct marginal net value.  Lower
+    # priced rows which are active in a strong seed are added back below; they
+    # can still be valuable indirectly by creating later PV headroom.
+    direct_break_even_price = (
+        max(settings.battery_wear_cost_pln_kwh, 0.0)
+        / max(export_efficiency, 0.01)
+    )
+    profitable_price_order = [
+        start
+        for start in price_order
+        if candidate_by_start[start].price_pln_kwh
+        > direct_break_even_price + 1e-9
+    ]
+    chronological = sorted(candidate_by_start)
+
+    def normalized(plan: Mapping[datetime, float]) -> dict[datetime, float]:
+        return {
+            start: max(float(energy), 0.0)
+            for start, energy in plan.items()
+            if energy >= 0.001
+        }
+
+    def signature(plan: Mapping[datetime, float]) -> tuple[tuple[int, int], ...]:
+        return tuple(
+            (int(start.timestamp()), round(energy * 10000.0))
+            for start, energy in sorted(normalized(plan).items())
+        )
+
+    feasibility_cache: dict[tuple[tuple[int, int], ...], bool] = {}
+    objective_cache: dict[tuple[tuple[int, int], ...], float] = {}
+
+    def feasible(plan: Mapping[datetime, float]) -> bool:
+        key = signature(plan)
+        cached = feasibility_cache.get(key)
+        if cached is not None:
+            return cached
+        value = _simulate(
+            starts,
+            settings,
+            load_by_slot,
+            plan,
+            floor_kwh,
+            export_reserve_by_slot,
+            conservative_pv,
+            slot_fractions,
+        )[0]
+        feasibility_cache[key] = value
+        return value
+
+    def objective(plan: Mapping[datetime, float]) -> float:
+        trial = normalized(plan)
+        key = signature(trial)
+        cached = objective_cache.get(key)
+        if cached is not None:
+            return cached
+        if not feasible(trial):
+            return -math.inf
+        _, expected_end, natural = _simulate(
+            starts,
+            settings,
+            load_by_slot,
+            trial,
+            floor_kwh,
+            export_reserve_by_slot,
+            expected_pv,
+            slot_fractions,
+        )
+        value = _economic_objective(
+            exports=trial,
+            natural_exports=natural,
+            price_by_start=price_by_start,
+            ending_battery_kwh=expected_end,
+            floor_kwh=floor_kwh,
+            export_efficiency=export_efficiency,
+            battery_wear_cost_pln_kwh=settings.battery_wear_cost_pln_kwh,
+            terminal_energy_target_kwh=terminal_energy_target,
+            terminal_energy_value_pln_kwh=terminal_unit_value,
+        )[0]
+        objective_cache[key] = value
+        return value
+
+    def slot_physical_cap(start: datetime) -> float:
+        return _slot_export_limit_kwh(
+            settings,
+            load_by_slot.get(start, 0.0),
+            conservative_pv.get(start, 0.0),
+            slot_fractions.get(start, 1.0),
+        )
+
+    def maximum_feasible(
+        base: Mapping[datetime, float],
+        start: datetime,
+    ) -> float:
+        low = 0.0
+        high = slot_physical_cap(start)
+        if high <= 0.0:
+            return 0.0
+        full_trial = dict(base)
+        full_trial[start] = high
+        if feasible(full_trial):
+            return high
+        minimum_trial = dict(base)
+        minimum_trial[start] = min(0.01, high)
+        if not feasible(minimum_trial):
+            return 0.0
+        # A coarse fixed iteration count left material residual energy whenever
+        # the physical slot cap was large (for example 1.125 kWh from a 23 kWh
+        # budget).  Resolve every boundary below 0.01 kWh.  Twelve probes are
+        # the minimum for long horizons; exceptionally large caps receive only
+        # the few additional probes mathematically required by their range.
+        precision_iterations = max(
+            12,
+            math.ceil(math.log2(max(high / 0.01, 1.0))),
+        )
+        for _ in range(precision_iterations):
+            middle = (low + high) / 2.0
+            trial = dict(base)
+            trial[start] = middle
+            if feasible(trial):
+                low = middle
+            else:
+                high = middle
+        return low
+
+    def grow(
+        order: Iterable[datetime],
+        active: set[datetime] | None = None,
+    ) -> dict[datetime, float]:
+        plan: dict[datetime, float] = {}
+        for start in order:
+            if active is not None and start not in active:
+                continue
+            energy = maximum_feasible(plan, start)
+            if energy >= 0.01:
+                plan[start] = energy
+        return plan
+
+    # Complete active-set enumeration is practical for short horizons and is
+    # also the release-test oracle path.  Longer horizons receive deterministic
+    # bases at every distinct market-price boundary.
+    seeds: dict[tuple[tuple[int, int], ...], tuple[float, dict[datetime, float]]] = {}
+
+    def remember(plan: Mapping[datetime, float]) -> None:
+        clean = normalized(plan)
+        value = objective(clean)
+        key = signature(clean)
+        previous = seeds.get(key)
+        if previous is None or value > previous[0]:
+            seeds[key] = (value, clean)
+
+    remember({})
+    remember(grow(chronological))
+    if short_horizon:
+        remember(grow(price_order))
+        remember(grow(reversed(chronological)))
+        for mask in range(1, 1 << len(price_order)):
+            active = {
+                start
+                for index, start in enumerate(price_order)
+                if mask & (1 << index)
+            }
+            remember(grow(price_order, active))
+            remember(grow(chronological, active))
+    else:
+        # One price-ordered pass produces every threshold prefix.  Remembering
+        # the plan whenever the price changes costs no extra feasibility
+        # searches and prevents a profitable middle price band from vanishing
+        # between only the maximum/minimum thresholds.
+        price_prefix: dict[datetime, float] = {}
+        for index, start in enumerate(price_order):
+            energy = maximum_feasible(price_prefix, start)
+            if energy >= 0.01:
+                price_prefix[start] = energy
+            current_price = candidate_by_start[start].price_pln_kwh
+            next_price = (
+                candidate_by_start[price_order[index + 1]].price_pln_kwh
+                if index + 1 < len(price_order)
+                else None
+            )
+            if next_price != current_price:
+                remember(price_prefix)
+
+        # Equal-price slots are not interchangeable when an early export can
+        # consume battery headroom which later PV would otherwise refill.  A
+        # second threshold pass with reversed chronological tie-breaking is a
+        # linear, deterministic hedge against that coupling on real 48-hour
+        # horizons; it does not enumerate active sets.
+        reverse_price_prefix: dict[datetime, float] = {}
+        for index, start in enumerate(reverse_tie_price_order):
+            energy = maximum_feasible(reverse_price_prefix, start)
+            if energy >= 0.01:
+                reverse_price_prefix[start] = energy
+            current_price = candidate_by_start[start].price_pln_kwh
+            next_price = (
+                candidate_by_start[
+                    reverse_tie_price_order[index + 1]
+                ].price_pln_kwh
+                if index + 1 < len(reverse_tie_price_order)
+                else None
+            )
+            if next_price != current_price:
+                remember(reverse_price_prefix)
+
+    def optimize_coordinate(
+        original: Mapping[datetime, float],
+        order: Iterable[datetime],
+        *,
+        passes: int = 2,
+    ) -> tuple[float, dict[datetime, float]]:
+        plan = normalized(original)
+        current_value = objective(plan)
+        for _ in range(max(passes, 1)):
+            changed = False
+            for start in order:
+                base = dict(plan)
+                old_energy = base.pop(start, 0.0)
+                high = maximum_feasible(base, start)
+                if high < 0.001:
+                    candidate_energy = 0.0
+                    candidate_value = objective(base)
+                else:
+                    # Natural PV spill creates non-concave one-dimensional
+                    # sections.  Scan the complete bounded interval first,
+                    # then refine around its best section.
+                    grid = [high * index / 8.0 for index in range(9)]
+                    # Never worsen a seed solely because its existing
+                    # continuous amount lies between coarse grid points.
+                    if 0.0 < old_energy < high:
+                        grid.append(old_energy)
+                    values = []
+                    for energy in grid:
+                        trial = dict(base)
+                        if energy >= 0.001:
+                            trial[start] = energy
+                        values.append(objective(trial))
+                    best_index = max(range(len(grid)), key=values.__getitem__)
+                    left = grid[max(best_index - 1, 0)]
+                    right = grid[min(best_index + 1, len(grid) - 1)]
+                    for _ in range(12):
+                        first = left + (right - left) / 3.0
+                        second = right - (right - left) / 3.0
+                        first_trial = dict(base)
+                        second_trial = dict(base)
+                        if first >= 0.001:
+                            first_trial[start] = first
+                        if second >= 0.001:
+                            second_trial[start] = second
+                        if objective(first_trial) < objective(second_trial):
+                            left = first
+                        else:
+                            right = second
+                    choices = (
+                        0.0,
+                        old_energy,
+                        high,
+                        left,
+                        (left + right) / 2.0,
+                        right,
+                    )
+                    candidate_energy = 0.0
+                    candidate_value = -math.inf
+                    for energy in choices:
+                        trial = dict(base)
+                        if energy >= 0.001:
+                            trial[start] = energy
+                        value = objective(trial)
+                        if value > candidate_value:
+                            candidate_value = value
+                            candidate_energy = energy
+                if candidate_energy >= 0.01:
+                    base[start] = candidate_energy
+                plan = base
+                if abs(candidate_energy - old_energy) >= 0.005:
+                    changed = True
+                current_value = candidate_value
+            if not changed:
+                break
+        return current_value, normalized(plan)
+
+    # Refine only the strongest distinct bases; this bounds HA update latency
+    # independently of the number of PSE rows.
+    # Short/medium horizons have only a handful of deterministic seeds.  Keep
+    # enough of them for refinement so a middle-price active set is not
+    # discarded merely because its unrefined boundary plan ranks below two
+    # extreme-price seeds.  Real 48-hour horizons stay capped at two, which is
+    # the part that controls Home Assistant event-loop latency.
+    strongest_count = (
+        len(seeds) if short_horizon else (8 if len(candidates) <= 10 else 2)
+    )
+    strongest = sorted(seeds.values(), key=lambda item: item[0], reverse=True)[
+        :strongest_count
+    ]
+    best_value = baseline_objective
+    best_plan: dict[datetime, float] = {}
+    for seed_value, seed in strongest:
+        if seed_value > best_value + 0.0001:
+            best_value = seed_value
+            best_plan = seed
+        # On a real 48-hour horizon, optimizing every empty coordinate would
+        # make runtime scale with all PSE rows.  Threshold seeds already choose
+        # the active set; refine only their active amounts in a single pass.
+        # This is enough to avoid a full-slot, below-wear discharge when only a
+        # partial export is needed to create PV headroom.
+        if len(candidates) <= 10:
+            coordinate_order = price_order
+            passes = 2
+        else:
+            # Bound long-horizon work independently of market-row count.  The
+            # economically relevant partial-headroom correction is on the top
+            # active sale branches; lower-price active amounts remain at their
+            # already feasible seed boundaries.
+            coordinate_order = [
+                start for start in price_order if start in seed
+            ][:2]
+            passes = 1
+        orders: tuple[Iterable[datetime], ...] = (coordinate_order,)
+        for order in orders:
+            value, plan = optimize_coordinate(seed, order, passes=passes)
+            if value > best_value + 0.0001:
+                best_value = value
+                best_plan = plan
+
+    # Build a genuinely bounded active/relevant exchange set.  At most six
+    # low-value active coordinates are candidates for removal; the remaining
+    # places go first to profitable inactive rows, then to rows active in an
+    # alternative strong seed and immediate temporal neighbours.  The final
+    # highest-price fallback also covers a below-wear headroom opportunity
+    # without letting dozens of zero/small-positive padding rows disable the
+    # exchange.  Six active places are intentional: a few profitable tail
+    # rows can otherwise consume all low-price ranks and hide the earlier
+    # export whose removal restores expected PV value.  Four inactive places
+    # remain available while the total search set stays capped at ten.
+    active_order = sorted(
+        best_plan,
+        key=lambda start: (
+            candidate_by_start[start].price_pln_kwh,
+            start,
+        ),
+    )
+    inactive_priority: list[datetime] = []
+    inactive_seen: set[datetime] = set()
+
+    def add_inactive(start: datetime) -> None:
+        if start in best_plan or start in inactive_seen:
+            return
+        inactive_seen.add(start)
+        inactive_priority.append(start)
+
+    for start in profitable_price_order:
+        add_inactive(start)
+    for _, seed in strongest:
+        for start in price_order:
+            if start in seed:
+                add_inactive(start)
+    chronological_index = {
+        start: index for index, start in enumerate(chronological)
+    }
+    for active in active_order:
+        index = chronological_index[active]
+        if index > 0:
+            add_inactive(chronological[index - 1])
+        if index + 1 < len(chronological):
+            add_inactive(chronological[index + 1])
+    for start in price_order:
+        add_inactive(start)
+
+    active_limit = min(len(active_order), 6)
+    selected_pair_starts = active_order[:active_limit]
+    selected_pair_starts.extend(
+        inactive_priority[: 10 - len(selected_pair_starts)]
+    )
+    pair_starts = sorted(selected_pair_starts)
+    pair_price_spread = (
+        max(candidate_by_start[start].price_pln_kwh for start in pair_starts)
+        - min(candidate_by_start[start].price_pln_kwh for start in pair_starts)
+        if pair_starts
+        else 0.0
+    )
+    # Runtime is bounded by ``pair_starts`` itself, not by the number of rows
+    # whose price happens to clear the wear threshold.  A normal 48-hour PSE
+    # payload may contain dozens of barely-above-wear padding rows; they must
+    # not switch off refinement of the genuinely relevant active/inactive
+    # coordinates selected above.
+    sparse_exchange = not short_horizon and 2 <= len(pair_starts) <= 10
+
+    # A threshold seed is grown to every feasible boundary.  Under different
+    # conservative/expected PV trajectories, that can retain an export which
+    # is physically safe but destroys expected natural-export value.  A swap
+    # search cannot remove it unless a useful inactive coordinate exists.
+    # Prune at most the six bounded low-value active rows first, accepting
+    # only strict whole-horizon improvements.  This is a tiny linear local
+    # search (at most 6 + 5 + ... + 1 objective evaluations), not an active-set
+    # enumeration.  If pruning changed the plan, refine only the surviving
+    # coordinates from the same bounded set so newly released PV/battery
+    # headroom can be assigned continuously.
+    pruned = False
+    if sparse_exchange:
+        for _ in range(active_limit):
+            removal_value = best_value
+            removal_plan: dict[datetime, float] | None = None
+            for start in pair_starts:
+                if start not in best_plan:
+                    continue
+                trial = dict(best_plan)
+                trial.pop(start, None)
+                value = objective(trial)
+                if value > removal_value + 0.0001:
+                    removal_value = value
+                    removal_plan = trial
+            if removal_plan is None:
+                break
+            best_value = removal_value
+            best_plan = removal_plan
+            pruned = True
+        if pruned:
+            refinement_order = [
+                start for start in pair_starts if start in best_plan
+            ]
+            if refinement_order:
+                refined_value, refined_plan = optimize_coordinate(
+                    best_plan,
+                    refinement_order,
+                    passes=1,
+                )
+                if refined_value > best_value + 0.0001:
+                    best_value = refined_value
+                    best_plan = refined_plan
+
+    # The exchange search remains bounded even when the complete market input
+    # contains many directly profitable rows: only ``pair_starts`` (at most
+    # ten relevant coordinates) participates.
+    if (
+        sparse_exchange
+        # Equal-price timing is already covered by both chronological tie
+        # orders above.  Repeating every active/inactive exchange in that case
+        # cannot improve direct sale value and consumed most of the 48-hour
+        # runtime budget in flat price bands.
+        and pair_price_spread > 1e-9
+        and any(start in best_plan for start in pair_starts)
+        and any(start not in best_plan for start in pair_starts)
+    ):
+        # Coordinate descent cannot cross a valley where one early export must
+        # be removed at the same time as a later slot is added.  Search only
+        # active/inactive exchanges inside the bounded relevant set.  Each
+        # trial grows both coordinates to their exact feasible boundary; the
+        # single winning active set is then continuously refined.  This avoids
+        # running the expensive one-dimensional scan for every padded market
+        # row while preserving a runtime linear in the simulated horizon.
+        # Medium horizons can require two consecutive exchanges to cross a
+        # three-coordinate valley.  Keep that exhaustive-on-the-bounded-set
+        # behaviour for <=10 rows; real 48-hour inputs get one pass.
+        exchange_passes = (
+            2
+            if len(candidates) <= 10
+            or any(
+                candidate_by_start[start].price_pln_kwh
+                <= direct_break_even_price + 1e-9
+                for start in pair_starts
+            )
+            else 1
+        )
+        for _ in range(exchange_passes):
+            pass_value = best_value
+            pass_plan = best_plan
+            pass_order: tuple[datetime, datetime] | None = None
+            active_starts = [
+                start for start in pair_starts if start in best_plan
+            ]
+            inactive_starts = [
+                start for start in pair_starts if start not in best_plan
+            ]
+            for first in active_starts:
+                for second in inactive_starts:
+                    base = dict(best_plan)
+                    base.pop(first, None)
+                    base.pop(second, None)
+                    for order in ((first, second), (second, first)):
+                        plan = dict(base)
+                        for start in order:
+                            energy = maximum_feasible(plan, start)
+                            if energy >= 0.01:
+                                plan[start] = energy
+                        value = objective(plan)
+                        if value > pass_value + 0.0001:
+                            pass_value = value
+                            pass_plan = plan
+                            pass_order = order
+            if pass_value <= best_value + 0.0001:
+                break
+            refined_value, refined_plan = optimize_coordinate(
+                pass_plan,
+                pass_order or pair_starts,
+                passes=1,
+            )
+            if refined_value > pass_value + 0.0001:
+                pass_value = refined_value
+                pass_plan = refined_plan
+            best_value = pass_value
+            best_plan = pass_plan
+    return best_plan
+
+
 def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
     """Return the most valuable feasible RCE export plan."""
     capacity = settings.battery_capacity_kwh
@@ -763,13 +1952,27 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
             available_energy_now_kwh=0.0,
         )
 
-    now_slot = floor_half_hour(settings.now)
-    horizon_end = _horizon_end(settings)
+    # Keep malformed/duplicated market rows from changing either solver
+    # complexity or economics.  ``replace`` preserves the caller's input for
+    # diagnostics and makes every downstream helper consume the same scope.
+    settings = replace(
+        settings,
+        price_slots=_supported_price_slots(settings),
+    )
+
+    now_slot_local = floor_half_hour(settings.now)
+    now_slot = now_slot_local.astimezone(dt_timezone.utc)
+    horizon_end_local = _horizon_end(settings)
+    horizon_end = horizon_end_local.astimezone(dt_timezone.utc)
     starts: list[datetime] = []
     cursor = now_slot
     while cursor < horizon_end:
         starts.append(cursor)
         cursor += SLOT
+    first_fraction = _current_slot_fraction(settings.now)
+    slot_fractions = {start: 1.0 for start in starts}
+    if starts:
+        slot_fractions[starts[0]] = first_fraction
 
     (
         historical_day_load,
@@ -785,10 +1988,62 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         modeled_day_energy=modeled_day_load,
         daylight_progress=daylight_progress,
     )
-    conservative_pv = (
+    if starts:
+        load_by_slot[starts[0]] *= first_fraction
+    current_slot_load_source = "profile"
+    if (
+        starts
+        and settings.current_load_power_kw is not None
+        and math.isfinite(settings.current_load_power_kw)
+        and settings.current_load_power_kw >= 0.0
+    ):
+        load_by_slot[starts[0]] = (
+            settings.current_load_power_kw * 0.5 * first_fraction
+        )
+        current_slot_load_source = "live"
+
+    expected_pv_source = _utc_energy_map(settings.pv_by_slot_kwh)
+    expected_pv = {
+        start: max(float(expected_pv_source.get(start, 0.0)), 0.0)
+        for start in starts
+    }
+    if starts:
+        expected_pv[starts[0]] *= first_fraction
+    current_slot_pv_source = "forecast"
+    if (
+        starts
+        and settings.current_pv_power_kw is not None
+        and math.isfinite(settings.current_pv_power_kw)
+        and settings.current_pv_power_kw >= 0.0
+    ):
+        expected_pv[starts[0]] = (
+            settings.current_pv_power_kw * 0.5 * first_fraction
+        )
+        current_slot_pv_source = "live"
+
+    conservative_source = (
         settings.conservative_pv_by_slot_kwh
         if settings.conservative_pv_by_slot_kwh is not None
         else settings.pv_by_slot_kwh
+    )
+    conservative_source_utc = _utc_energy_map(conservative_source)
+    conservative_pv = {
+        start: max(float(conservative_source_utc.get(start, 0.0)), 0.0)
+        for start in starts
+    }
+    if starts:
+        conservative_pv[starts[0]] *= first_fraction
+        if current_slot_pv_source == "live":
+            conservative_pv[starts[0]] = expected_pv[starts[0]]
+
+    conservative_load, load_risk_multiplier, load_risk_buffer = (
+        _conservative_load_by_slot(
+            starts,
+            settings,
+            load_by_slot,
+            modeled_day_energy=modeled_day_load,
+            current_slot_is_live=(current_slot_load_source == "live"),
+        )
     )
     if settings.dynamic_reserve_enabled:
         base_soc = min(
@@ -812,6 +2067,30 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         if settings.dynamic_reserve_enabled
         else (0.0, {})
     )
+    current_energy = capacity * settings.battery_soc_percent / 100.0
+    # RCE is revenue-first.  Missing/wide P10 alone must not erase a large,
+    # plausible PV forecast as it does in the tariff worst-case model.  The
+    # zero-PV scenario becomes active only when stored energy cannot already
+    # cover the base reserve plus the complete upcoming protected night.
+    critical_guard_active = (
+        settings.critical_zero_pv_guard
+        and current_energy
+        <= min(floor_kwh + protected_night_energy, capacity) + 1e-6
+    )
+    if critical_guard_active:
+        (
+            conservative_pv,
+            critical_guard_until,
+            critical_guarded_kwh,
+        ) = _critical_zero_pv_scenario(
+            starts,
+            settings,
+            conservative_pv,
+            preserve_live_current=(current_slot_pv_source == "live"),
+        )
+    else:
+        critical_guard_until = None
+        critical_guarded_kwh = 0.0
     required_now = (
         _required_energy_now(
             starts,
@@ -819,6 +2098,7 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
             load_by_slot,
             floor_kwh,
             conservative_pv,
+            slot_fractions,
         )
         if settings.dynamic_reserve_enabled
         else floor_kwh
@@ -842,7 +2122,6 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
             start: max(reserve, control_reserve)
             for start, reserve in export_reserve_by_slot.items()
         }
-    current_energy = capacity * settings.battery_soc_percent / 100.0
     available_now = max(current_energy - control_reserve, 0.0)
 
     baseline_ok, baseline_end, _ = _simulate(
@@ -852,6 +2131,7 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         {},
         floor_kwh,
         pv_by_slot_kwh=conservative_pv,
+        slot_fractions=slot_fractions,
     )
     _, baseline_expected_end, baseline_natural = _simulate(
         starts,
@@ -859,32 +2139,24 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         load_by_slot,
         {},
         floor_kwh,
-        pv_by_slot_kwh=settings.pv_by_slot_kwh,
+        pv_by_slot_kwh=expected_pv,
+        slot_fractions=slot_fractions,
     )
     system_power = settings.inverter_power_kw * settings.inverter_count
     requested_power = system_power * min(
         max(settings.discharge_power_percent, 0.0),
         100.0,
     ) / 100.0
+    bms_dc_power_limit = _bms_dc_power_limit_kw(settings)
+    bms_charge_power_limit = _bms_charge_dc_power_limit_kw(settings)
     bms_power_limit: float | None = None
-    if (
-        settings.bms_max_discharge_current_a is not None
-        and settings.bms_max_discharge_current_a > 0
-        and settings.battery_voltage_v is not None
-        and settings.battery_voltage_v > 0
-    ):
+    if bms_dc_power_limit is not None:
         # Register 1917 is the dynamic DC-current limit reported by the BMS.
         # Convert it to safe AC export power and keep a separate guard below
         # that limit so voltage/temperature changes do not trip the battery.
-        bms_power_limit = (
-            settings.bms_max_discharge_current_a
-            * settings.battery_voltage_v
-            / 1000.0
-            * min(max(settings.export_efficiency_percent, 0.0), 100.0)
-            / 100.0
-            * min(max(settings.bms_power_safety_percent, 0.0), 100.0)
-            / 100.0
-        )
+        bms_power_limit = bms_dc_power_limit * min(
+            max(settings.export_efficiency_percent, 0.0), 100.0
+        ) / 100.0
     power_limits: list[tuple[str, float]] = [
         ("requested_power", requested_power)
     ]
@@ -953,7 +2225,8 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         * house_discharge_efficiency
     )
     price_by_start = {
-        slot.start: slot.price_pln_kwh for slot in settings.price_slots
+        slot.start.astimezone(dt_timezone.utc): slot.price_pln_kwh
+        for slot in settings.price_slots
     }
     (
         baseline_objective,
@@ -998,6 +2271,13 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
             max(settings.forecast_confidence_percent, 0.0),
             100.0,
         ),
+        bms_discharge_data_fresh=settings.bms_discharge_data_fresh,
+        bms_discharge_data_age_seconds=settings.bms_discharge_data_age_seconds,
+        bms_discharge_data_available=settings.bms_discharge_data_available,
+        bms_charge_power_limit_kw=bms_charge_power_limit,
+        bms_charge_data_fresh=settings.bms_charge_data_fresh,
+        bms_charge_data_age_seconds=settings.bms_charge_data_age_seconds,
+        bms_charge_data_available=settings.bms_charge_data_available,
         export_power_cap_kw=settings.export_power_cap_kw,
         effective_export_power_kw=settings.effective_export_power_kw,
         physical_limit_source=physical_limit_source,
@@ -1014,14 +2294,77 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         baseline_terminal_energy_value_pln=baseline_terminal_value,
         net_objective_pln=baseline_objective,
         baseline_net_objective_pln=baseline_objective,
+        conservative_daily_load_kwh=settings.conservative_daily_load_kwh,
+        conservative_night_load_kwh=settings.conservative_night_load_kwh,
+        load_risk_multiplier=load_risk_multiplier,
+        load_risk_buffer_kwh=load_risk_buffer,
+        load_risk_mode="diagnostic_only",
+        critical_zero_pv_guard_active=critical_guard_active,
+        critical_zero_pv_guard_reason=(
+            settings.critical_zero_pv_guard_reason
+            if critical_guard_active
+            else (
+                "risk_not_energy_critical"
+                if settings.critical_zero_pv_guard
+                else "not_required"
+            )
+        ),
+        critical_zero_pv_guard_until=(
+            critical_guard_until.astimezone(settings.now.tzinfo)
+            if critical_guard_until is not None
+            else None
+        ),
+        critical_zero_pv_guarded_kwh=critical_guarded_kwh,
+        current_slot_end=(
+            (starts[0] + SLOT).astimezone(settings.now.tzinfo)
+            if starts
+            else None
+        ),
+        current_slot_remaining_minutes=(
+            max(
+                ((starts[0] + SLOT) - settings.now.astimezone(dt_timezone.utc))
+                .total_seconds()
+                / 60.0,
+                0.0,
+            )
+            if starts
+            else 0.0
+        ),
+        current_slot_fraction=first_fraction if starts else 0.0,
+        current_required_minimum_soc_percent=(
+            math.ceil(
+                max(
+                    export_reserve_by_slot.get(starts[0], control_reserve),
+                    control_reserve,
+                )
+                / capacity
+                * 100.0
+                - 1e-9
+            )
+            if starts
+            else minimum_soc
+        ),
+        current_slot_load_kwh=(
+            load_by_slot.get(starts[0], 0.0) if starts else 0.0
+        ),
+        current_slot_pv_kwh=(expected_pv.get(starts[0], 0.0) if starts else 0.0),
+        current_slot_load_source=current_slot_load_source,
+        current_slot_pv_source=current_slot_pv_source,
+        current_slot_shared_discharge_limit_kwh=(
+            _slot_export_limit_kwh(
+                settings,
+                load_by_slot.get(starts[0], 0.0),
+                conservative_pv.get(starts[0], 0.0),
+                first_fraction,
+            )
+            if starts
+            else 0.0
+        ),
         uncontrolled_export_kwh=sum(baseline_natural.values()),
         uncontrolled_revenue_pln=_market_revenue(
             {},
             baseline_natural,
-            {
-                slot.start: slot.price_pln_kwh
-                for slot in settings.price_slots
-            },
+            price_by_start,
         ),
     )
     if not baseline_ok:
@@ -1029,13 +2372,13 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         return result
 
     candidates = [
-        slot
+        (slot, slot.start.astimezone(dt_timezone.utc))
         for slot in settings.price_slots
-        if slot.start >= now_slot
-        and slot.start < horizon_end
+        if slot.start.astimezone(dt_timezone.utc) >= now_slot
+        and slot.start.astimezone(dt_timezone.utc) < horizon_end
         and not slot.blocked
     ]
-    candidates.sort(key=lambda slot: (-slot.price_pln_kwh, slot.start))
+    candidates.sort(key=lambda item: (-item[0].price_pln_kwh, item[1]))
     if not candidates or maximum_power <= 0:
         result.status_code = (
             "zero_export"
@@ -1045,100 +2388,29 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         )
         result.natural_export_kwh = sum(baseline_natural.values())
         result.natural_revenue_pln = result.uncontrolled_revenue_pln
+        bms_reason = _bms_start_suppression_reason(settings)
+        if bms_reason is not None:
+            result.current_slot_suppression_reason = bms_reason
         return result
 
-    exports: dict[datetime, float] = {}
-    current_objective = baseline_objective
-    maximum_slot_energy = maximum_power * 0.5
-    for candidate in candidates:
-        low = 0.0
-        high = maximum_slot_energy
-        for _ in range(12):
-            middle = (low + high) / 2.0
-            trial = dict(exports)
-            trial[candidate.start] = middle
-            feasible, _, _ = _simulate(
-                starts,
-                settings,
-                load_by_slot,
-                trial,
-                floor_kwh,
-                export_reserve_by_slot,
-                conservative_pv,
-            )
-            if feasible:
-                low = middle
-            else:
-                high = middle
-        if low < 0.01:
-            continue
-
-        def evaluate(energy: float) -> tuple[bool, float, dict[datetime, float]]:
-            trial = dict(exports)
-            if energy >= 0.001:
-                trial[candidate.start] = energy
-            feasible, _, _ = _simulate(
-                starts,
-                settings,
-                load_by_slot,
-                trial,
-                floor_kwh,
-                export_reserve_by_slot,
-                conservative_pv,
-            )
-            if not feasible:
-                return False, -math.inf, trial
-            _, expected_end, natural = _simulate(
-                starts,
-                settings,
-                load_by_slot,
-                trial,
-                floor_kwh,
-                export_reserve_by_slot,
-                settings.pv_by_slot_kwh,
-            )
-            objective, _, _ = _economic_objective(
-                exports=trial,
-                natural_exports=natural,
-                price_by_start=price_by_start,
-                ending_battery_kwh=expected_end,
-                floor_kwh=floor_kwh,
-                export_efficiency=export_efficiency,
-                battery_wear_cost_pln_kwh=settings.battery_wear_cost_pln_kwh,
-                terminal_energy_target_kwh=terminal_energy_target,
-                terminal_energy_value_pln_kwh=terminal_unit_value,
-            )
-            return True, objective, trial
-
-        # Feasible maximum is not always the economic maximum: after retained
-        # Day-3 energy drops below its target, another exported kWh may cost
-        # more in future imports than it earns.  The objective is piecewise
-        # linear/concave for one slot, so a bounded ternary search finds that
-        # kink without introducing a heavyweight solver dependency.
-        search_low = 0.0
-        search_high = low
-        for _ in range(18):
-            first = search_low + (search_high - search_low) / 3.0
-            second = search_high - (search_high - search_low) / 3.0
-            _, first_objective, _ = evaluate(first)
-            _, second_objective, _ = evaluate(second)
-            if first_objective < second_objective:
-                search_low = first
-            else:
-                search_high = second
-
-        best_energy = 0.0
-        best_objective = current_objective
-        best_trial = dict(exports)
-        for energy in (search_low, (search_low + search_high) / 2.0, search_high, low):
-            feasible, objective, trial = evaluate(energy)
-            if feasible and objective > best_objective + 0.0001:
-                best_energy = energy
-                best_objective = objective
-                best_trial = trial
-        if best_energy >= 0.01:
-            exports = best_trial
-            current_objective = best_objective
+    solver_started = perf_counter()
+    exports = _solve_joint_horizon_exports(
+        starts=starts,
+        settings=settings,
+        candidates=candidates,
+        load_by_slot=load_by_slot,
+        floor_kwh=floor_kwh,
+        export_reserve_by_slot=export_reserve_by_slot,
+        conservative_pv=conservative_pv,
+        expected_pv=expected_pv,
+        slot_fractions=slot_fractions,
+        price_by_start=price_by_start,
+        baseline_objective=baseline_objective,
+        export_efficiency=export_efficiency,
+        terminal_energy_target=terminal_energy_target,
+        terminal_unit_value=terminal_unit_value,
+    )
+    result.solver_runtime_ms = (perf_counter() - solver_started) * 1000.0
 
     feasible, ending_battery, _ = _simulate(
         starts,
@@ -1148,6 +2420,7 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         floor_kwh,
         export_reserve_by_slot,
         conservative_pv,
+        slot_fractions,
     )
     _, expected_ending_battery, natural_exports = _simulate(
         starts,
@@ -1156,7 +2429,8 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         exports,
         floor_kwh,
         export_reserve_by_slot,
-        settings.pv_by_slot_kwh,
+        expected_pv,
+        slot_fractions,
     )
     if not feasible:
         result.ready = False
@@ -1165,7 +2439,7 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
 
     result.planned_exports = [
         PlannedExport(
-            start=start,
+            start=start.astimezone(settings.now.tzinfo),
             price_pln_kwh=price_by_start[start],
             energy_kwh=energy,
         )
@@ -1192,6 +2466,66 @@ def optimize_rce(settings: OptimizerInput) -> OptimizerResult:
         terminal_energy_target_kwh=terminal_energy_target,
         terminal_energy_value_pln_kwh=terminal_unit_value,
     )
+    current_export = exports.get(starts[0], 0.0) if starts else 0.0
+    result.current_slot_planned_export_kwh = current_export
+    current_remaining_hours = result.current_slot_remaining_minutes / 60.0
+    if current_export >= 0.01 and current_remaining_hours > 0.0:
+        execution_export_power = current_export / current_remaining_hours
+        current_load_deficit = max(
+            result.current_slot_load_kwh - result.current_slot_pv_kwh,
+            0.0,
+        )
+        execution_discharge_power = (
+            execution_export_power
+            + current_load_deficit / current_remaining_hours
+        )
+        result.current_slot_execution_export_power_kw = (
+            execution_export_power
+        )
+        result.current_slot_execution_discharge_power_kw = min(
+            execution_discharge_power,
+            requested_power,
+            system_power,
+        )
+        result.current_slot_execution_power_percent = min(
+            max(
+                result.current_slot_execution_discharge_power_kw
+                / system_power
+                * 100.0,
+                0.0,
+            ),
+            100.0,
+        )
+    current_planned = current_export >= 0.01
+    if current_planned:
+        current_run_end_utc = starts[0]
+        while exports.get(current_run_end_utc, 0.0) >= 0.01:
+            current_run_end_utc += SLOT
+        result.current_run_end = current_run_end_utc.astimezone(
+            settings.now.tzinfo
+        )
+    live_ready = (
+        current_slot_load_source == "live"
+        and current_slot_pv_source == "live"
+        and settings.current_battery_soc_fresh
+    )
+    bms_reason = _bms_start_suppression_reason(settings)
+    if bms_reason is not None:
+        suppression_reason = bms_reason
+    elif not current_planned:
+        suppression_reason = "no_current_plan"
+    elif result.current_slot_remaining_minutes < 5.0:
+        suppression_reason = "insufficient_runtime"
+    elif current_export < 0.01:
+        suppression_reason = "no_export_energy"
+    elif not live_ready:
+        suppression_reason = "live_data_missing"
+    elif result.current_slot_shared_discharge_limit_kwh < current_export - 1e-6:
+        suppression_reason = "pv_or_grid_balance_unsafe"
+    else:
+        suppression_reason = "eligible"
+    result.current_slot_suppression_reason = suppression_reason
+    result.current_slot_start_eligible = suppression_reason == "eligible"
     if not result.planned_exports:
         result.status_code = "home_protected"
     return result

@@ -72,6 +72,21 @@ PHRASE_TRANSLATIONS = {
     "Parallel Networking Command": "Polecenie sieci równoległej",
     "Parallel Topology": "Topologia sieci równoległej",
     "Parallel EMS Control Status": "Stan sterowania EMS sieci równoległej",
+    "Parallel Topology Readback Generation": "Generacja odczytu topologii równoległej",
+    "EMS Verified Hardware Readback Supported": "Obsługa potwierdzonego odczytu sprzętowego EMS",
+    "EMS Control Readback Generation": "Generacja odczytu sterowania EMS",
+    "GCF Control Readback Generation": "Generacja odczytu sterowania GCF",
+    "Battery Charge Power Readback Generation": "Generacja odczytu mocy ładowania baterii",
+    "EMS Mode Readback Code": "Kod odczytanego trybu EMS",
+    "EMS Self-Use SOC Readback": "Odczyt rezerwy SOC autokonsumpcji EMS",
+    "EMS Backup SOC Readback": "Odczyt rezerwy SOC Backup EMS",
+    "EMS Force Charge SOC Readback": "Odczyt docelowego SOC ładowania EMS",
+    "EMS Maximum Charge Power Readback": "Odczyt maksymalnej mocy ładowania EMS",
+    "EMS Force Discharge SOC Readback": "Odczyt minimalnego SOC rozładowania EMS",
+    "EMS Maximum Discharge Power Readback": "Odczyt maksymalnej mocy rozładowania EMS",
+    "GCF Enable Readback Code": "Kod odczytanego stanu GCF",
+    "GCF Maximum Export Power Readback": "Odczyt maksymalnego limitu eksportu GCF",
+    "Battery Max Charge Power Readback": "Odczyt maksymalnej mocy ładowania baterii",
     "Machines Type": "Rola urządzenia w sieci równoległej",
     "Number of Machines (Master and Slave)": "Liczba falowników (Master i Slave)",
     "Communication Address 1 (Master Device)": "Adres komunikacyjny 1 (Master)",
@@ -2032,6 +2047,11 @@ ENGLISH_REPLACEMENTS = {
         "Additional reserve after the horizon (day-three deficit)"
     ),
     "brak danych o przyczynie": "reason unavailable",
+    "Dane sterujące taryfy są nieświeże:": "Tariff control data is stale:",
+    "brak danych": "data unavailable",
+    "Dom zasilany z taniej sieci — bateria zachowana": (
+        "Home powered from the low-cost grid — battery preserved"
+    ),
     "Moc czynna L1": "Active power L1",
     "Moc czynna L2": "Active power L2",
     "Moc czynna L3": "Active power L3",
@@ -2058,6 +2078,89 @@ ENGLISH_REPLACEMENTS = {
     "RCE — szczegóły i diagnostyka": "RCE — details and diagnostics",
     "Tanie ładowanie — ustawienia": "Low-cost charging — settings",
     "Co zrobi automat": "What the automation will do",
+    "Energia w zaplanowanych blokach Grid Charge": (
+        "Energy in scheduled Grid Charge slots"
+    ),
+    "Podsumowanie planu": "Plan summary",
+    "Automatyka wymaga uwagi.": "The automation requires attention.",
+    "Nie można odbudować bazowej rezerwy Self-Use.": (
+        "The base Self-Use reserve cannot be restored."
+    ),
+    "Sprzęt albo": "The hardware or",
+    "aktywny limit ładowania nie pozwala wykonać wymaganej operacji Grid Charge.": (
+        "an active charging limit prevents the required Grid Charge operation."
+    ),
+    "Automat pozostanie w bezpiecznym trybie. Szczegóły są dostępne w": (
+        "The automation will remain in a safe mode. Details are available in"
+    ),
+    "danych zaawansowanych.": "advanced data.",
+    "Plan jest wykonalny tylko częściowo.": "The plan is only partially feasible.",
+    "Automat wykorzysta dostępne": "The automation will use the available",
+    "tanie okna, ale nie zdoła pokryć całego przewidywanego zapotrzebowania.": (
+        "low-cost periods but cannot cover all forecast demand."
+    ),
+    "Po uwzględnieniu mocy i pojemności magazynu": (
+        "After accounting for battery power and capacity,"
+    ),
+    "pozostanie **{{ expensive | round(2) }} kWh** poboru w droższej strefie.": (
+        "there will remain **{{ expensive | round(2) }} kWh** of import in a "
+        "higher-cost period."
+    ),
+    "Do wymaganej rezerwy na końcu horyzontu": (
+        "The required reserve at the end of the horizon"
+    ),
+    "zabraknie jeszcze": "will be short by",
+    "Plan jest prawidłowy.": "The plan is correct.",
+    "Brakująca energia przypada wyłącznie w taniej": (
+        "The remaining energy demand occurs only in the low-cost"
+    ),
+    "strefie, dlatego dom pobierze ją bezpośrednio z sieci bez strat magazynu.": (
+        "period, so the home will import it directly without battery conversion losses."
+    ),
+    "Nie trzeba doładowywać magazynu.": "The battery does not need charging.",
+    "Prognozowane PV i energia baterii": "Forecast PV and stored battery energy",
+    "wystarczą do następnego taniego okna z zachowaniem rezerwy.": (
+        "will last until the next low-cost period while preserving the reserve."
+    ),
+    "Taryfa G11 nie ma tańszego okna.": "The G11 tariff has no lower-cost period.",
+    "Automat pozostaje w Self-Use,": "The automation remains in Self-Use",
+    "ponieważ przesuwanie energii przez baterię nie obniży kosztu.": (
+        "because shifting energy through the battery would not reduce cost."
+    ),
+    "Przed przewidywanym deficytem nie ma taniego okna.": (
+        "There is no low-cost period before the forecast shortage."
+    ),
+    "Automat nie uruchomi Grid Charge w drogiej strefie.": (
+        "The automation will not start Grid Charge in a high-cost period."
+    ),
+    "Ładowanie celowo pominięte.": "Charging intentionally skipped.",
+    "Tania strefa jest dostępna, ale": (
+        "A low-cost period is available, but"
+    ),
+    "różnica cen nie pokrywa strat konwersji, kosztu zużycia baterii i": (
+        "the price spread does not cover conversion losses, battery wear, and"
+    ),
+    "wymaganego marginesu oszczędności. Automat pozostaje w Self-Use": (
+        "the required savings margin. The automation remains in Self-Use"
+    ),
+    "zamiast wykonywać nieopłacalny cykl.": (
+        "instead of running an uneconomical cycle."
+    ),
+    "Plan gotowy.": "Plan ready.",
+    "Automat pobierze z sieci tylko wyliczoną energię": (
+        "The automation will import only the calculated energy"
+    ),
+    "w wybranych tanich blokach i zachowa wymaganą rezerwę baterii.": (
+        "in selected low-cost slots and preserve the required battery reserve."
+    ),
+    "Brak potrzeby uruchamiania Grid Charge.": "Grid Charge is not needed.",
+    "Aktualny bilans nie wymaga": "The current balance does not require",
+    "dodatkowego doładowania magazynu.": "additional battery charging.",
+    "to przewidywany bezpośredni pobór": "is the forecast direct import",
+    "w taniej strefie. Automat wybiera go celowo, aby magazyn nie ponosił": (
+        "in the low-cost period. The automation selects it intentionally to avoid"
+    ),
+    "strat konwersji.": "battery conversion losses.",
     "Tanie ładowanie — diagnostyka": "Low-cost charging — diagnostics",
     "Jak działa tanie ładowanie": "How low-cost charging works",
     "Jak działa automatyka taryfowa — szczegóły": (
@@ -2196,8 +2299,40 @@ ENGLISH_REPLACEMENTS = {
     "Rezerwa końcowa z niepewnością:": "Terminal uncertainty reserve:",
     "margines": "margin",
     "Stabilność decyzji:": "Decision stability:",
+    "Decyzja:": "Decision:",
+    "Energia w wybranych blokach Grid Charge:": (
+        "Energy in selected Grid Charge slots:"
+    ),
+    "Deficyt bez optymalizacji:": "Shortage without optimization:",
+    "Pozostały bezpośredni pobór w taniej strefie:": (
+        "Remaining direct import in the low-cost period:"
+    ),
+    "Pozostały pobór w strefie średniej lub drogiej:": (
+        "Remaining import in a medium- or high-cost period:"
+    ),
+    "Niedobór wynikający z mocy lub pojemności:": (
+        "Shortfall caused by power or capacity limits:"
+    ),
+    "Brak rezerwy na końcu horyzontu:": (
+        "Missing reserve at the end of the horizon:"
+    ),
+    "Pozostały deficyt modelu — wartość techniczna:": (
+        "Remaining model shortage — technical value:"
+    ),
     "min bez istotnej zmiany": "min without a material change",
     "EMS RCE — koniec zapamiętanego bloku": "EMS RCE — latched slot end",
+    "EMS RCE — zapamiętany minimalny SOC aktywnego bloku": (
+        "EMS RCE — latched minimum SOC for the active slot"
+    ),
+    "RCEm 253 V+ — zapamiętany koniec przygotowania miejsca": (
+        "RCEm 253 V+ — latched headroom-preparation deadline"
+    ),
+    "RCEm 253 V+ — zapamiętany cel SOC przygotowania miejsca": (
+        "RCEm 253 V+ — latched headroom-preparation SOC target"
+    ),
+    "RCEm 253 V+ — zapamiętana moc przygotowania miejsca": (
+        "RCEm 253 V+ — latched headroom-preparation power"
+    ),
     "Gotowe - sterowanie bezpośrednie": "Ready - direct control",
     "Gotowe - Master steruje siecią równoległą": (
         "Ready - Master controls the parallel network"
@@ -2217,8 +2352,11 @@ ENGLISH_REPLACEMENTS = {
     ),
     "Plan RCE i dane PSE są nieaktualne": "The RCE plan and PSE data are stale",
     "Brak potwierdzenia ustawień eksportu": "Export settings are not confirmed",
-    "Plan taryfowy i prognoza nie były raportowane od ponad 5 minut": (
-        "The tariff plan and forecast have not been reported for more than 5 minutes"
+    "Plan taryfowy nie był raportowany od ponad 5 minut": (
+        "The tariff plan has not been reported for more than 5 minutes"
+    ),
+    "Prognoza taryfowa nie była raportowana od ponad 5 minut": (
+        "The tariff forecast has not been reported for more than 5 minutes"
     ),
     "Falownik nie potwierdził limitu ładowania": (
         "The inverter did not confirm the charging limit"
@@ -2278,8 +2416,151 @@ ENGLISH_REPLACEMENTS = {
     "nie ucząc się na rozruchu ani na zwalnianiu ładowania blisko 100% SOC.": (
         "without learning from ramp-up or charge taper near 100% SOC."
     ),
+    "Samo wsparcie domu tanią siecią ma dodatkowy kontrakt wykonawczy:": (
+        "Using low-cost grid power solely to supply the home has an additional "
+        "execution contract:"
+    ),
+    "optymalizator musi zaakceptować cały ciągły blok, a jego intencja": (
+        "the optimizer must accept the whole continuous run and its intent"
+    ),
+    "musi pozostać niezmienna przez 120 s. Pilne ładowanie magazynu nie": (
+        "must remain unchanged for 120 s. Urgent battery charging does not"
+    ),
+    "czeka na ten filtr mikrocykli.": "wait for this micro-cycle filter.",
+    "Za mało czasu na bezpieczny start w taniej strefie": (
+        "Not enough time for a safe start in the low-cost period"
+    ),
+    "Warunki bezpiecznego startu Grid Charge wygasły": (
+        "Safe Grid Charge start conditions expired"
+    ),
+    "'ustawienie'": "'configuration'",
     "'Taryfa' if": "'Tariff' if",
 }
+
+# Release 1.5.2 adds physical Modbus-readback transactions and stricter
+# execution-readiness diagnostics to the EMS package.  Keep these complete
+# phrases here (instead of relying on word-by-word substitutions) so the
+# generated English package remains natural and cannot contain mixed-language
+# safety messages.
+ENGLISH_REPLACEMENTS.update(
+    {
+        "EMS taryfowy — zapamiętany limit mocy ładowania": (
+            "Tariff EMS — saved charging-power limit"
+        ),
+        "EMS taryfowy — zapamiętany cel ładowania": (
+            "Tariff EMS — saved charging target"
+        ),
+        "EMS RCE — zapamiętany limit mocy rozładowania": (
+            "RCE EMS — saved discharging-power limit"
+        ),
+        "EMS RCE — zapamiętany próg rozładowania": (
+            "RCE EMS — saved discharge threshold"
+        ),
+        "Brak obsługi zweryfikowanego odczytu sprzętowego": (
+            "Verified hardware readback is not supported"
+        ),
+        "Brak fizycznego odczytu trybu EMS": "Physical EMS-mode readback is unavailable",
+        "Brak aktualnego SOC magazynu": "Current battery SOC is unavailable",
+        "Eksport zablokowany przez GCF lub limit 0%": (
+            "Export is blocked by GCF or a 0% limit"
+        ),
+        "Plan RCE jest nieaktualny albo niekompletny": (
+            "The RCE plan is stale or incomplete"
+        ),
+        "Dzisiejsze dane RCE są nieświeże lub niepełne": (
+            "Today's RCE data is stale or incomplete"
+        ),
+        "Dzisiejsza prognoza PV jest nieświeża lub niepełna": (
+            "Today's PV forecast is stale or incomplete"
+        ),
+        "Stan GCF lub jego limit eksportu są nieświeże": (
+            "The GCF state or its export limit is stale"
+        ),
+        "Brak aktualnej ceny RCE": "Current RCE price is unavailable",
+        "GCF wyłączone — eksport bez limitu GCF": (
+            "GCF disabled — export is not constrained by a GCF limit"
+        ),
+        "Eksport dozwolony przez GCF": "Export permitted by GCF",
+        "Plan taryfowy jest nieaktualny albo niekompletny": (
+            "The tariff plan is stale or incomplete"
+        ),
+        "Wspólny limit Grid Charge ograniczony świeżą zdolnością ładowania": (
+            "The shared Grid Charge limit is constrained by fresh BMS charging capability"
+        ),
+        "BMS; uwzględnia bieżące obciążenie domu i wszystkie falowniki.": (
+            "and accounts for current home load and every inverter."
+        ),
+        "EMS — zapisz tryb z odczytem sprzętowym": (
+            "EMS — set mode with hardware readback"
+        ),
+        "Wykonuje FC10 dla trybu EMS i potwierdza nową generację odczytu, kod": (
+            "Writes the EMS mode with FC10 and confirms a new readback generation, mode code"
+        ),
+        "trybu oraz niezmienione fizyczne lustra wszystkich sześciu nastaw 430x.": (
+            "and unchanged physical mirrors for all six remaining 430x settings."
+        ),
+        "EMS — zapisz limit ładowania z odczytem sprzętowym": (
+            "EMS — set charging limit with hardware readback"
+        ),
+        "EMS — zapisz próg ładowania z odczytem sprzętowym": (
+            "EMS — set charging threshold with hardware readback"
+        ),
+        "EMS — zapisz limit rozładowania z odczytem sprzętowym": (
+            "EMS — set discharging limit with hardware readback"
+        ),
+        "EMS — zapisz próg rozładowania z odczytem sprzętowym": (
+            "EMS — set discharge threshold with hardware readback"
+        ),
+        "RCEm — zapisz limit ładowania baterii z odczytem sprzętowym": (
+            "RCEm — set battery charging limit with hardware readback"
+        ),
+        "GCF — zapisz limit eksportu z odczytem sprzętowym": (
+            "GCF — set export limit with hardware readback"
+        ),
+        "EMS — zatrzymaj cykl i wróć do Self-Use": (
+            "EMS — stop the cycle and return to Self-Use"
+        ),
+        "EMS taryfowy — wycofaj niepełną transakcję": (
+            "Tariff EMS — roll back an incomplete transaction"
+        ),
+        "EMS RCE — wycofaj niepełną transakcję": (
+            "RCE EMS — roll back an incomplete transaction"
+        ),
+        "Wraca do Self-Use i odtwarza obie nastawy sprzed automatycznego startu.": (
+            "Returns to Self-Use and restores both settings from before the automatic start."
+        ),
+        "Własność pozostaje aktywna, dopóki wszystkie odczyty nie są zgodne.": (
+            "Ownership remains active until every readback matches."
+        ),
+        "Pozwala działać tylko jednemu automatowi wykonawczemu. RCE, ładowanie": (
+            "Allows only one execution automation to run. RCE, tariff charging"
+        ),
+        "taryfowe i aktywne sterowanie RCEm 253 V+ wzajemnie się wykluczają.": (
+            "and active RCEm 253 V+ control are mutually exclusive."
+        ),
+        "RCEm w trybie podglądu może równolegle zbierać dane bez przejmowania EMS.": (
+            "RCEm can collect data in observation mode without taking ownership of EMS."
+        ),
+        "Falownik nie potwierdził limitu rozładowania RCE": (
+            "The inverter did not confirm the RCE discharging limit"
+        ),
+        "Falownik nie potwierdził progu SOC RCE": (
+            "The inverter did not confirm the RCE SOC threshold"
+        ),
+        "Warunki bezpiecznego startu Grid Discharge wygasły": (
+            "Safe Grid Discharge start conditions expired"
+        ),
+        "Kończy ręczny cykl dopiero po potwierdzonym odczycie Self-Use.": (
+            "Ends a manual cycle only after a confirmed Self-Use readback."
+        ),
+        "Minutowy watchdog ponawia niedokończoną finalizację po utracie API": (
+            "A one-minute watchdog retries unfinished finalization after API loss"
+        ),
+        "albo restarcie Home Assistant, nie zwalniając wcześniej własności.": (
+            "or a Home Assistant restart without releasing ownership early."
+        ),
+    }
+)
 
 
 @dataclass
@@ -2500,7 +2781,27 @@ def static_translations(language: str) -> dict:
                         "`overwrite: true`, a następnie uruchom Home Assistant "
                         "ponownie."
                     ),
-                }
+                },
+                "frontend_assets_restart_required": {
+                    "title": "Zasoby dashboardu wymagajÄ… restartu",
+                    "description": (
+                        "Integracja utworzyĹ‚a katalog `www` i skopiowaĹ‚a "
+                        "zarzÄ…dzane zasoby dashboardu. Uruchom Home Assistant "
+                        "ponownie, aby bezpiecznie udostÄ™pniÄ‡ je pod `/local` "
+                        "przed zaĹ‚adowaniem dashboardu."
+                    ),
+                },
+                "frontend_assets_install_failed": {
+                    "title": "Nie udało się zainstalować zasobów dashboardu",
+                    "description": (
+                        "Nie udało się zainstalować opcjonalnych zasobów "
+                        "dashboardu i EMS, ale encje urządzenia Hoymiles "
+                        "pozostają dostępne. Sprawdź wolne miejsce i "
+                        "uprawnienia, następnie uruchom "
+                        "`hoymiles_hit_modbus.install_assets` z "
+                        "`overwrite: true` i uruchom Home Assistant ponownie."
+                    ),
+                },
             },
             "services": {
                 "install_assets": {
@@ -2572,7 +2873,25 @@ def static_translations(language: str) -> dict:
                     "changes, run `hoymiles_hit_modbus.install_assets` with "
                     "`overwrite: true`, and restart Home Assistant again."
                 ),
-            }
+            },
+            "frontend_assets_restart_required": {
+                "title": "Dashboard assets require a restart",
+                "description": (
+                    "The integration created the `www` directory and copied its "
+                    "managed dashboard assets. Restart Home Assistant so they are "
+                    "safely exposed under `/local` before the dashboard loads."
+                ),
+            },
+            "frontend_assets_install_failed": {
+                "title": "Dashboard assets could not be installed",
+                "description": (
+                    "The optional dashboard and EMS assets could not be "
+                    "installed, but Hoymiles device entities remain available. "
+                    "Check free disk space and permissions, then run "
+                    "`hoymiles_hit_modbus.install_assets` with "
+                    "`overwrite: true` and restart Home Assistant."
+                ),
+            },
         },
         "services": {
             "install_assets": {

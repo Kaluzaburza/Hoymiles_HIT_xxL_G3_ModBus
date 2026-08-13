@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import voluptuous as vol
 
@@ -16,7 +17,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
 from .assets import (
-    FRONTEND_BOOTSTRAP_URL,
     FRONTEND_RESOURCE_URL,
     FRONTEND_STATIC_ROUTE,
     RESOURCE_ROOT,
@@ -25,6 +25,7 @@ from .assets import (
 from .catalog import async_match_entities, matched_source_count
 from .const import (
     ATTR_OVERWRITE,
+    CONF_RESOLVED_SOURCE_DEVICE_ID,
     CONF_SOURCE_DEVICE_ID,
     DOMAIN,
     EMS_PACKAGE_SENTINEL,
@@ -35,12 +36,16 @@ from .const import (
     VERSION,
 )
 from .models import RuntimeData
+from .source_device import (
+    async_resolve_source_device,
+    persist_resolved_source_entry,
+)
 from .support_http import HoymilesSupportBundleView
 
 
 _LOGGER = logging.getLogger(__name__)
 STATIC_URL = f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}"
-FRONTEND_MODULE_URL = FRONTEND_BOOTSTRAP_URL
+FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 INSTALL_ASSETS_SCHEMA = vol.Schema(
@@ -52,6 +57,8 @@ EMS_PACKAGE_DOCS_URL = (
     "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
     "#4-dashboard-and-ems-automation"
 )
+FRONTEND_ASSETS_RESTART_ISSUE_ID = "frontend_assets_restart_required"
+FRONTEND_ASSETS_INSTALL_FAILED_ISSUE_ID = "frontend_assets_install_failed"
 
 
 def _ems_package_issue_id(entry: ConfigEntry) -> str:
@@ -62,6 +69,45 @@ def _ems_package_issue_id(entry: ConfigEntry) -> str:
 def _ems_package_restart_issue_id(entry: ConfigEntry) -> str:
     """Return the stable issue id for an EMS package activation restart."""
     return f"ems_package_restart_required_{entry.entry_id}"
+
+
+async def _async_prepare_frontend_assets(
+    hass: HomeAssistant,
+) -> tuple[list, bool, bool]:
+    """Install optional assets without making device setup depend on them."""
+    try:
+        # Frontend registers /local only when www exists during frontend setup.
+        # Capture that fact before the installer is allowed to create www.
+        frontend_local_ready = await hass.async_add_executor_job(
+            (Path(hass.config.config_dir) / "www").is_dir
+        )
+        paths = await async_install_assets(
+            hass,
+            overwrite=False,
+            publish_frontend=frontend_local_ready,
+        )
+    except Exception:  # noqa: BLE001 - optional assets must not disable devices
+        _LOGGER.exception(
+            "Failed to install optional Hoymiles dashboard/EMS assets"
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            FRONTEND_ASSETS_INSTALL_FAILED_ISSUE_ID,
+            is_fixable=False,
+            issue_domain=DOMAIN,
+            learn_more_url=EMS_PACKAGE_DOCS_URL,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="frontend_assets_install_failed",
+        )
+        return [], False, False
+
+    ir.async_delete_issue(
+        hass,
+        DOMAIN,
+        FRONTEND_ASSETS_INSTALL_FAILED_ISSUE_ID,
+    )
+    return paths, frontend_local_ready, True
 
 
 def _async_update_ems_package_issue(
@@ -102,28 +148,6 @@ def _async_update_ems_package_issue(
         severity=ir.IssueSeverity.WARNING,
         translation_key="ems_package_not_loaded",
     )
-
-
-async def _async_reload_lovelace_resources(
-    hass: HomeAssistant,
-    paths: list,
-) -> None:
-    """Reload a migrated Lovelace resource now or after startup."""
-    if not any(path.name == "lovelace_resources" for path in paths):
-        return
-
-    async def async_reload(_event=None) -> None:
-        if hass.services.has_service("lovelace", "reload_resources"):
-            await hass.services.async_call(
-                "lovelace",
-                "reload_resources",
-                blocking=True,
-            )
-
-    if hass.is_running:
-        await async_reload()
-    else:
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, async_reload)
 
 
 def _async_reconcile_entity_registry(
@@ -213,6 +237,14 @@ def _async_reconcile_entity_registry(
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Register integration-wide services."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Materialize every /local frontend dependency before publishing its URL.
+    # Availability is restart-gated: frontend registers /local only when www
+    # exists during frontend startup. The required post-install/update restart
+    # therefore makes the files routable before Lovelace requests them.
+    paths, frontend_local_ready, frontend_assets_ready = (
+        await _async_prepare_frontend_assets(hass)
+    )
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
@@ -222,20 +254,40 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             )
         ]
     )
-    # A tiny classic-script bootstrap registers the dashboard strategy before
-    # Lovelace asks it to generate the first view.  The larger ES module remains
-    # a Lovelace resource and provides the custom RCE/power-flow cards.  Keeping
-    # import.meta out of the global bootstrap avoids intermittent first-load
-    # strategy timeouts after a Home Assistant restart.
-    add_extra_js_url(hass, FRONTEND_MODULE_URL)
+    # Publish one canonical ES module. It defines the dashboard strategy before
+    # registering the remaining custom cards. Storage mode may also list this
+    # exact URL as a Lovelace resource; browser module loading is idempotent.
+    if frontend_assets_ready and frontend_local_ready:
+        add_extra_js_url(hass, FRONTEND_MODULE_URL)
+        ir.async_delete_issue(
+            hass,
+            DOMAIN,
+            FRONTEND_ASSETS_RESTART_ISSUE_ID,
+        )
+    elif frontend_assets_ready:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            FRONTEND_ASSETS_RESTART_ISSUE_ID,
+            is_fixable=False,
+            issue_domain=DOMAIN,
+            learn_more_url=EMS_PACKAGE_DOCS_URL,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="frontend_assets_restart_required",
+        )
+    if paths:
+        _LOGGER.info(
+            "Installed initial Hoymiles assets: %s",
+            ", ".join(str(path) for path in paths),
+        )
     hass.http.register_view(HoymilesSupportBundleView())
 
     async def async_handle_install_assets(call: ServiceCall) -> None:
         paths = await async_install_assets(
             hass,
             overwrite=call.data[ATTR_OVERWRITE],
+            publish_frontend=frontend_local_ready,
         )
-        await _async_reload_lovelace_resources(hass, paths)
         _LOGGER.info(
             "Installed %s Hoymiles dashboard/automation assets: %s",
             len(paths),
@@ -257,10 +309,40 @@ async def async_setup_entry(
 ) -> bool:
     """Set up a localized Hoymiles device from an ESPHome device."""
     source_device_id = entry.data[CONF_SOURCE_DEVICE_ID]
-    source_device, matched = await async_match_entities(hass, source_device_id)
+    resolution = await async_resolve_source_device(
+        hass,
+        source_device_id,
+        async_match_entities,
+        entry.data.get(CONF_RESOLVED_SOURCE_DEVICE_ID),
+    )
+    source_device = resolution.source_device
+    matched = resolution.matched
     if source_device is None:
-        _LOGGER.error("ESPHome source device %s no longer exists", source_device_id)
+        _LOGGER.error(
+            "ESPHome source device %s is not live and has no unambiguous "
+            "compatible successor (exact: %s, compatible: %s)",
+            source_device_id,
+            resolution.exact_successor_count,
+            resolution.compatible_successor_count,
+        )
         return False
+
+    if resolution.rebound:
+        resolved_device_id = resolution.resolved_device_id
+        # Preserve source_device_id as the stable composite anchor. A future
+        # split successor continues to point to that old id, not necessarily to
+        # the currently resolved child id.
+        persist_resolved_source_entry(
+            hass,
+            entry,
+            resolution,
+            CONF_RESOLVED_SOURCE_DEVICE_ID,
+        )
+        _LOGGER.info(
+            "Rebound ESPHome source device %s to verified split successor %s",
+            source_device_id,
+            resolved_device_id,
+        )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = RuntimeData(
         source_device=source_device,
@@ -282,15 +364,6 @@ async def async_setup_entry(
     # entities immediately receive the same stable IDs as existing entities.
     _async_reconcile_entity_registry(hass, entry, hass.data[DOMAIN][entry.entry_id])
 
-    # Managed assets are always synchronized. The installer preserves files
-    # modified by the user and overwrites only files it can identify as its own.
-    paths = await async_install_assets(hass, overwrite=False)
-    await _async_reload_lovelace_resources(hass, paths)
-    if paths:
-        _LOGGER.info(
-            "Installed initial Hoymiles assets: %s",
-            ", ".join(str(path) for path in paths),
-        )
     if hass.is_running:
         _async_update_ems_package_issue(hass, entry)
     else:

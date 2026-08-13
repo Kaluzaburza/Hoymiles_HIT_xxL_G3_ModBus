@@ -641,17 +641,74 @@ views:
           - entity: sensor.hoymiles_tariff_target_soc
             name: Wyliczony docelowy SOC
           - entity: sensor.hoymiles_tariff_planned_grid_import
-            name: Zaplanowany pobór z sieci
+            name: Energia w zaplanowanych blokach Grid Charge
           - entity: sensor.hoymiles_tariff_estimated_savings
             name: Prognozowana oszczędność względem G11
           - entity: sensor.hoymiles_hit_overview_battery_soc
             name: Aktualny SOC magazynu
       - type: markdown
-        title: Dlaczego taki plan?
+        title: Podsumowanie planu
         entity_id: sensor.hoymiles_hit_tariff_charge_plan
         content: |-
           {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
           {% if plan is not none %}
+          {% set status = plan.attributes.status_code | default('missing_data', true) %}
+          {% set slots = plan.attributes.planned_slots | default([], true) %}
+          {% set low_direct = plan.attributes.remaining_low_direct_import_kwh
+             | default(0) | float(0) %}
+          {% set expensive = plan.attributes.remaining_expensive_import_kwh
+             | default(0) | float(0) %}
+          {% set physical = plan.attributes.capacity_or_power_shortfall_kwh
+             | default(expensive) | float(0) %}
+          {% set terminal = plan.attributes.terminal_shortfall_kwh
+             | default(0) | float(0) %}
+          {% if status in ['missing_data', 'optimizer_error', 'unsupported_profile',
+                           'expired_profile', 'soc_limits_conflict'] %}
+          ⚠️ **Automatyka wymaga uwagi.**
+          {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}
+          {% elif status == 'hard_reserve_unavailable' %}
+          ⚠️ **Nie można odbudować bazowej rezerwy Self-Use.** Sprzęt albo
+          aktywny limit ładowania nie pozwala wykonać wymaganej operacji Grid Charge.
+          Automat pozostanie w bezpiecznym trybie. Szczegóły są dostępne w
+          danych zaawansowanych.
+          {% elif status == 'no_cheap_window' %}
+          ⚠️ **Przed przewidywanym deficytem nie ma taniego okna.**
+          Automat nie uruchomi Grid Charge w drogiej strefie.
+          {% elif status == 'not_economically_beneficial' %}
+          ℹ️ **Ładowanie celowo pominięte.** Tania strefa jest dostępna, ale
+          różnica cen nie pokrywa strat konwersji, kosztu zużycia baterii i
+          wymaganego marginesu oszczędności. Automat pozostaje w Self-Use
+          zamiast wykonywać nieopłacalny cykl.
+          {% elif expensive > 0.01 or terminal > 0.01 %}
+          ⚠️ **Plan jest wykonalny tylko częściowo.** Automat wykorzysta dostępne
+          tanie okna, ale nie zdoła pokryć całego przewidywanego zapotrzebowania.
+          {% if expensive > 0.01 %}Po uwzględnieniu mocy i pojemności magazynu
+          pozostanie **{{ expensive | round(2) }} kWh** poboru w droższej strefie.{% endif %}
+          {% if terminal > 0.01 %}Do wymaganej rezerwy na końcu horyzontu
+          zabraknie jeszcze **{{ terminal | round(2) }} kWh**.{% endif %}
+          {% elif status == 'shortage_in_low_period' %}
+          ✅ **Plan jest prawidłowy.** Brakująca energia przypada wyłącznie w taniej
+          strefie, dlatego dom pobierze ją bezpośrednio z sieci bez strat magazynu.
+          {% elif status == 'no_charge_needed' %}
+          ✅ **Nie trzeba doładowywać magazynu.** Prognozowane PV i energia baterii
+          wystarczą do następnego taniego okna z zachowaniem rezerwy.
+          {% elif status == 'no_discount_window' %}
+          ℹ️ **Taryfa G11 nie ma tańszego okna.** Automat pozostaje w Self-Use,
+          ponieważ przesuwanie energii przez baterię nie obniży kosztu.
+          {% elif slots %}
+          ✅ **Plan gotowy.** Automat pobierze z sieci tylko wyliczoną energię
+          w wybranych tanich blokach i zachowa wymaganą rezerwę baterii.
+          {% else %}
+          ✅ **Brak potrzeby uruchamiania Grid Charge.** Aktualny bilans nie wymaga
+          dodatkowego doładowania magazynu.
+          {% endif %}
+
+          {% if low_direct > 0.01 %}
+          ℹ️ **{{ low_direct | round(2) }} kWh** to przewidywany bezpośredni pobór
+          w taniej strefie. Automat wybiera go celowo, aby magazyn nie ponosił
+          strat konwersji.
+          {% endif %}
+
           Automat liczy decyzję z **ostrożnych wartości użytych przez model**,
           a nie z surowej prognozy wyświetlanej przez Solcast.
 
@@ -719,17 +776,34 @@ views:
           {% set slots = plan.attributes.planned_slots | default([], true) %}
           {% set status = plan.attributes.status_code | default('missing_data', true) %}
           {% set missing = plan.attributes.missing_entities | default([], true) %}
+          {% set low_direct = plan.attributes.remaining_low_direct_import_kwh
+             | default(0) | float(0) %}
+          {% set expensive = plan.attributes.remaining_expensive_import_kwh
+             | default(0) | float(0) %}
+          {% set physical = plan.attributes.capacity_or_power_shortfall_kwh
+             | default(expensive) | float(0) %}
+          {% set terminal = plan.attributes.terminal_shortfall_kwh
+             | default(0) | float(0) %}
           **Tryb planu:** {{ 'aktywny' if is_state(
              'input_boolean.hoymiles_tariff_charge_enabled', 'on')
              else 'podgląd — automatyczne ładowanie jest wyłączone' }}<br>
-          **Wynik:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>
-          **Deficyt bez doładowania:**
-          {{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>
-          **Pozostały deficyt po planie:**
-          {{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>
-          **Pobór z sieci łącznie:** {{ plan.attributes.planned_grid_import_kwh
+          **Decyzja:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>
+          **Energia w wybranych blokach Grid Charge:**
+          {{ plan.attributes.planned_grid_import_kwh
              | default(0) }} kWh<br>
           {% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}
+          **Deficyt bez optymalizacji:**
+          {{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>
+          **Pozostały bezpośredni pobór w taniej strefie:**
+          {{ low_direct | round(2) }} kWh<br>
+          **Pozostały pobór w strefie średniej lub drogiej:**
+          {{ expensive | round(2) }} kWh<br>
+          **Niedobór wynikający z mocy lub pojemności:**
+          {{ physical | round(2) }} kWh<br>
+          **Brak rezerwy na końcu horyzontu:**
+          {{ terminal | round(2) }} kWh<br>
+          **Pozostały deficyt modelu — wartość techniczna:**
+          {{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>
           **Bezpośrednio sieć → dom:**
           {{ plan.attributes.planned_direct_load_kwh | default(0) }} kWh<br>
           **Zapisane w magazynie po stratach:**

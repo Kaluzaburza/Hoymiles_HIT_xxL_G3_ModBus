@@ -29,6 +29,14 @@
     "ems_package_restart_required": {
       "title": "EMS package update requires another restart",
       "description": "The integration updated the managed EMS package after Home Assistant had loaded its configuration. Validate the configuration and restart Home Assistant once more. If this message remains after the restart, back up your custom changes, run `hoymiles_hit_modbus.install_assets` with `overwrite: true`, and restart Home Assistant again."
+    },
+    "frontend_assets_restart_required": {
+      "title": "Dashboard assets require a restart",
+      "description": "The integration created the `www` directory and copied its managed dashboard assets. Restart Home Assistant so they are safely exposed under `/local` before the dashboard loads."
+    },
+    "frontend_assets_install_failed": {
+      "title": "Dashboard assets could not be installed",
+      "description": "The optional dashboard and EMS assets could not be installed, but Hoymiles device entities remain available. Check free disk space and permissions, then run `hoymiles_hit_modbus.install_assets` with `overwrite: true` and restart Home Assistant."
     }
   },
   "services": {
@@ -689,6 +697,12 @@
       "overview_battery_soc": {
         "name": "Overview Battery SOC"
       },
+      "parallel_topology_readback_generation": {
+        "name": "Parallel Topology Readback Generation"
+      },
+      "ems_verified_hardware_readback_supported": {
+        "name": "EMS Verified Hardware Readback Supported"
+      },
       "machines_type": {
         "name": "Machines Type"
       },
@@ -945,6 +959,45 @@
       },
       "pv_total_power_energy_block": {
         "name": "PV Total Power (Energy Block)"
+      },
+      "ems_control_readback_generation": {
+        "name": "EMS Control Readback Generation"
+      },
+      "gcf_control_readback_generation": {
+        "name": "GCF Control Readback Generation"
+      },
+      "battery_charge_power_readback_generation": {
+        "name": "Battery Charge Power Readback Generation"
+      },
+      "ems_mode_readback_code": {
+        "name": "EMS Mode Readback Code"
+      },
+      "ems_self_use_soc_readback": {
+        "name": "EMS Self-Use SOC Readback"
+      },
+      "ems_backup_soc_readback": {
+        "name": "EMS Backup SOC Readback"
+      },
+      "ems_force_charge_soc_readback": {
+        "name": "EMS Force Charge SOC Readback"
+      },
+      "gcf_enable_readback_code": {
+        "name": "GCF Enable Readback Code"
+      },
+      "gcf_maximum_export_power_readback": {
+        "name": "GCF Maximum Export Power Readback"
+      },
+      "battery_max_charge_power_readback": {
+        "name": "Battery Max Charge Power Readback"
+      },
+      "ems_maximum_charge_power_readback": {
+        "name": "EMS Maximum Charge Power Readback"
+      },
+      "ems_force_discharge_soc_readback": {
+        "name": "EMS Force Discharge SOC Readback"
+      },
+      "ems_maximum_discharge_power_readback": {
+        "name": "EMS Maximum Discharge Power Readback"
       },
       "inverter_work_status": {
         "name": "Inverter Work Status",

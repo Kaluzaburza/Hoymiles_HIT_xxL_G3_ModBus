@@ -60,7 +60,10 @@ sensor:
       return {};
 
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    # SOC is a control input for all three engines.  Poll it with the fast
+    # operational block so a valid Master sample never ages past the 90/120 s
+    # live-data contracts between normal 150 s diagnostic cycles.
+    modbus_controller_id: ${modbus_fast_controller_id}
     name: "Battery SOC (BMS)"
     id: battery_soc_1909
     register_type: read
@@ -70,6 +73,20 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     value_type: U_WORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) == 1) {
+              id(battery_soc_30020).publish_state(x);
+            }
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}

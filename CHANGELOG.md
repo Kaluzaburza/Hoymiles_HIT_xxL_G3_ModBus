@@ -4,6 +4,248 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-08-13
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.5.2**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.5.2**.
+2. **Home Assistant:** restart Home Assistant after the HACS update. The managed
+   EMS package, bilingual dashboard and frontend assets are synchronized
+   automatically. A fresh installation that has just created `config/www`
+   raises **Dashboard assets require a restart**; validate the configuration
+   and restart once more. After the final restart, hard-refresh any dashboard
+   tab that was already open so it loads frontend revision 16.
+   **PL:** po aktualizacji HACS uruchom Home Assistant ponownie. Zarządzany
+   pakiet EMS, dashboard PL/EN i zasoby interfejsu zsynchronizują się
+   automatycznie. Pierwsza instalacja, która właśnie utworzyła `config/www`,
+   zgłosi Naprawę **Zasoby dashboardu wymagają restartu**; sprawdź konfigurację
+   i wykonaj jeszcze jeden restart. Po ostatnim restarcie wykonaj twarde
+   odświeżenie każdej wcześniej otwartej karty dashboardu, aby wczytała rewizję
+   frontendową 16.
+3. **ESP32 / ESPHome:** rebuild and upload are **required** because v1.5.2
+   changes the runtime system-power balance and adds independent FC03 actuator
+   mirrors and topology guards in `packages/overview.yaml`,
+   `packages/settings.yaml` and `packages/parallel_network.yaml`.
+   Refresh the top-level ESPHome file pinned to **v1.5.2**, validate, compile,
+   and upload it to the ESP32. HACS does **not** flash ESP32 firmware.
+   **PL:** ponowna kompilacja i wgranie są **wymagane**, ponieważ v1.5.2
+   zmienia runtime bilansu mocy systemu oraz dodaje niezależne lustra FC03 i
+   zabezpieczenia topologii w `packages/overview.yaml`, `packages/settings.yaml`
+   i `packages/parallel_network.yaml`. Odśwież
+   główny plik ESPHome przypięty do **v1.5.2**, sprawdź go, skompiluj i wgraj
+   na ESP32. HACS **nie** wgrywa firmware ESP32.
+4. **Verification / Weryfikacja:** keep **RCEm in observation (shadow) mode**.
+   Verify the RCE and tariff plans, fresh-data diagnostics and one complete
+   start/stop cycle before enabling automatic RCE or tariff writes.
+   **PL:** pozostaw **RCEm w trybie obserwacji (shadow)**. Przed włączeniem
+   automatycznych zapisów RCE albo taryfy sprawdź plan, diagnostykę świeżości
+   danych oraz jeden pełny cykl start/stop.
+5. **Parallel Master/Slave:** monitoring and RCEm shadow analytics remain
+   available, but protected EMS writes fail closed in v1.5.2 because every
+   Slave cannot yet provide an independently verified post-write FC03 readback.
+   **PL:** monitoring i analiza RCEm shadow pozostają dostępne, lecz chronione
+   zapisy EMS są w v1.5.2 blokowane w układzie Master/Slave do czasu niezależnego
+   potwierdzania FC03 z każdego urządzenia.
+
+### Added
+
+- Add policy-neutral freshness, LOAD-profile sanitation and parallel power
+  balance helpers shared by all planners without merging their objectives.
+- Add signed source ages, BMS availability, plan provenance and explicit
+  start/continue eligibility diagnostics for fail-closed commissioning.
+- Add a bounded joint-horizon RCE active-set heuristic with an independent
+  small-horizon oracle test. Regression cases cover known failures of the former
+  greedy planner, while the engine and UI explicitly do not claim exact or
+  mathematical global optimality for the full mixed-constraint problem.
+- Add winter tariff simulations and regression cases for cold-load profiles,
+  missing Day 3, failed PV strings, DST and restricted BMS power.
+
+### Changed
+
+- Keep three independent policies: **RCE maximizes net sale revenue**, tariff
+  charging shifts necessary household energy into low-cost periods, and
+  experimental **RCEm creates usable PV headroom and regulates high voltage**.
+- Make RCE parsing independent of PSE payload order and use the absolute
+  `dtime_utc` interval end across repeated DST hours. The parser subtracts the
+  fixed 15-minute market interval on the UTC timeline before building
+  half-hours. The current price now comes from the same parsed plan as
+  scheduling and revenue accounting.
+- Apply current-slot duration, energy-arrival timing, natural export, shared
+  inverter/BMS/AC/export budgets, signed freshness, monotonic protected SOC and
+  positively acknowledged EMS ownership to RCE. Day 3 remains diagnostic and
+  is not a terminal sales objective.
+- Make tariff charging reject micro-cycles, stale/future forecasts and stale
+  BMS/SOC inputs; preserve hard Self-Use reserve and model winter LOAD risk
+  separately from RCE sale policy.
+- Decouple RCEm from the RCE operational floor. RCEm now uses high-PV/low-LOAD
+  risk for headroom, low-PV/high-LOAD stress only as a safety constraint, and
+  chronological pre-risk energy balance with BMS/register quantization limits.
+- Permit RCEm shadow analytics alongside RCE or tariff control, while active
+  controller handover waits for a positive neutral-mode readback.
+- Derive parallel inverter and battery power from 32-bit system PV/Grid/LOAD
+  balance instead of the wrapping 16-bit battery register.
+- Publish the RCE, tariff and RCEm optimizer entities in their fail-closed
+  initial state before warming Recorder-backed models. Each optimizer uses one
+  tracked, cancel-safe background warmup; Recorder reads are sequential and
+  limited to 50,000 reports per source entity plus one sentinel row, with a
+  15-second timeout per query.
+
+### Fixed
+
+- Prevent a transient, reverse-proxy/browser-cached `404` from the integration's
+  former `static-r2` API route from leaving the dashboard strategy unregistered
+  after restart. RC6 publishes one canonical full module from the versioned
+  `/local/hoymiles-rce-chart-card.js?v=1.5.2.16` URL.
+- Materialize the card, bootstrap, Polish and English dashboard JSON, and image
+  atomically under `config/www` before publishing the module URL. Storage mode
+  resources are reconciled through Lovelace's live resource collection; runtime
+  installation never edits `.storage/lovelace.*` directly. If `config/www` did
+  not exist when frontend started, publication is deferred and a localized
+  restart Repair is raised.
+- Keep Home Assistant device entities available if optional dashboard/EMS asset
+  installation fails (for example because the disk is full). The integration
+  reports a Repair issue and leaves the explicit install action available for a
+  controlled retry instead of failing integration-wide setup.
+- Recover stable proxy bindings when Home Assistant 2026.8 splits a legacy
+  composite device into a new ESPHome-owned child. The integration preserves
+  the original source anchor and rebinds only to one uniquely verified
+  successor; ambiguous or mismatched candidates fail closed, and the config
+  flow blocks a duplicate entry for the resolved child.
+- Scope the parallel-topology availability gate to the two derived overview
+  power proxies. A local RC3 deployment showed live native physical EMS
+  readbacks but unavailable ordinary stable sensor proxies because the gate
+  had incorrectly covered every sensor; RC4 restores ordinary proxies to the
+  availability of their native ESPHome sources.
+- Interpret the official PSE `dtime_utc` field as the **end** of its 15-minute
+  settlement interval, not its start. RC5 validates `period_utc` and
+  `business_date`, handles the official `24:00` clock label, and restores all
+  48 normal-day, 46 spring-DST and 50 autumn-DST half-hours without shifting
+  the current price into the preceding market quarter.
+
+### Safety
+
+- Missing, stale, future-dated or exact-zero control capabilities now fail
+  closed instead of being interpreted as unlimited power.
+- Actuator ownership is retained after a failed or unavailable readback so the
+  scheduler retries restoration instead of leaving orphan Grid Charge or Grid
+  Discharge modes.
+- Treat only a newer physical FC03 generation with matching read-only register
+  mirrors as acknowledgement; optimistic command echoes never release an owner.
+- Fail closed on protected EMS writes in Master/Slave systems until every node
+  can provide independently verifiable post-write feedback; monitoring and
+  shadow analytics remain available.
+- The live RCEm 253 V emergency path remains independent of forecast/history,
+  but predictive RCEm discharge remains disabled in shadow mode.
+
+### Release-candidate status
+
+- RC5 passed full offline validation and exact-SHA push plus workflow-dispatch
+  CI, then was deployed to the local and parallel test installations. The RCE
+  interval-end parser and backend safety state were correct live. The parallel
+  dashboard exposed a separate frontend P1: an early request to the custom
+  `static-r2` route returned a transient `404`, that response remained cached,
+  and Lovelace timed out waiting for
+  `ll-strategy-dashboard-hoymiles-hit-xxl-g3` after restart.
+- RC6 runtime commit `7ce13155533bfa0bf9752a0fd201224dac1a7393`
+  completed independent review and the full offline gate with P0=0/P1=0. Both
+  exact-SHA push CI and `workflow_dispatch`, including the exhaustive matrix,
+  passed.
+- On local Home Assistant 2026.8.1, the installed integration and managed assets
+  matched the RC6 runtime hashes, integration/package version 1.5.2 reported
+  **Ready**, the version-16 `/local` assets returned HTTP 200, and both a fresh
+  tab and a hard refresh rendered the dashboard. EMS remained in Self-Use with
+  every controller owner off.
+- On the parallel Home Assistant 2026.7.4 installation, the runtime and asset
+  hashes also matched, every required version-16 `/local` asset returned HTTP
+  200, and a hard refresh rendered the Aurora dashboard. RCE and tariff control
+  remained off; RCEm remained enabled only in shadow mode; every owner and
+  execution remained off because the required ESP32 firmware is still pending.
+  No firmware was flashed during this frontend audit.
+- One bounded background RCEm Recorder-history query timed out once. The planner
+  stayed fail-closed, no write was attempted and the timeout did not repeat in
+  the observation window. This is recorded as degraded history availability,
+  not a release blocker.
+- RC6 therefore has live GO for the tested Home Assistant runtime/frontend, not
+  for pending ESP32 commissioning or protected EMS writes. The exact deployed
+  runtime remains `7ce13155533bfa0bf9752a0fd201224dac1a7393`; a later
+  documentation-only/tag commit will have a different SHA and must not be
+  described as the live-tested runtime.
+
+### Polski
+
+- Zachowano trzy osobne cele: RCE maksymalizuje przychód netto ze sprzedaży,
+  tanie ładowanie przenosi potrzebną energię domu do tanich godzin, a
+  eksperymentalny RCEm przygotowuje miejsce na PV i ogranicza wysokie napięcie.
+- RCE otrzymało planowanie całego horyzontu, poprawną obsługę DST i kolejności
+  danych PSE, fizyczne limity mocy oraz bezpieczne utrzymanie rezerwy SOC.
+- Tanie ładowanie odrzuca mikrocykle i nieświeże dane, zachowuje twardą rezerwę
+  Self-Use oraz osobno modeluje zimowe ryzyko zużycia.
+- RCEm został odłączony od rezerwy operacyjnej RCE, poprawnie rozróżnia ryzyko
+  nadwyżki PV od ochrony domu i nadal pozostaje domyślnie w trybie podglądu.
+- Niepotwierdzony zapis nie usuwa już właściciela automatyki; przywrócenie
+  ustawień jest ponawiane po odzyskaniu komunikacji.
+- Encje optymalizatorów RCE, taniego ładowania i RCEm są rejestrowane od razu w
+  bezpiecznym stanie blokującym sterowanie, a rozgrzewanie modeli z danych
+  Recorder działa w pojedynczym, śledzonym zadaniu tła, które jest anulowane
+  przy wyładowaniu integracji. Każde zapytanie ma limit 50 000 raportów dla
+  jednej encji źródłowej plus jeden wiersz kontrolny oraz limit czasu 15 sekund;
+  przekroczenie budżetu pozostawia planer w stanie fail-closed.
+- RC6 usuwa wyścig startowy interfejsu, w którym przejściowe `404` z dawnej
+  trasy API `static-r2` było zapamiętywane przez reverse proxy lub przeglądarkę,
+  a Lovelace po restarcie nie doczekał się rejestracji strategii dashboardu.
+  Ładowany jest jeden pełny moduł spod wersjonowanego adresu
+  `/local/hoymiles-rce-chart-card.js?v=1.5.2.16`.
+- Karta, bootstrap, dashboard JSON po polsku i angielsku oraz obraz są kopiowane
+  atomowo do `config/www` przed publikacją modułu. Zasób trybu storage jest
+  uzgadniany przez aktywną kolekcję Lovelace; instalator w czasie działania nie
+  zmienia bezpośrednio `.storage/lovelace.*`. Gdy `config/www` nie istniał przy
+  starcie frontendu, publikacja czeka do restartu, a integracja zgłasza Naprawę.
+- Po podziale starszego urządzenia złożonego przez Home Assistant 2026.8
+  integracja odzyskuje stabilne powiązania encji proxy. Zachowuje pierwotny
+  identyfikator źródłowy i przełącza się wyłącznie na jednego jednoznacznie
+  zweryfikowanego następcę ESPHome; kandydaci niejednoznaczni lub niezgodni są
+  bezpiecznie odrzucani, a kreator blokuje drugi wpis dla rozwiązanego urządzenia.
+- Lokalny test RC3 potwierdził działające natywne odczyty fizyczne EMS, ale
+  zwykłe stabilne sensory proxy pozostawały niedostępne, ponieważ bramka
+  topologii równoległej błędnie obejmowała wszystkie sensory. RC4 ogranicza ją
+  do dwóch wyliczanych encji mocy podglądu. RC4 przeszedł CI dokładnego SHA,
+  pełną macierz i lokalne wdrożenie; odczyty fizyczne, zwykłe proxy i stan
+  instalacji działały poprawnie.
+- Dane live PSE potwierdziły, że `dtime_utc` oznacza koniec kwadransa, a nie jego
+  początek. RC5 odejmuje 15 minut na osi UTC, sprawdza `period_utc` oraz
+  `business_date` i poprawnie odtwarza 48 półgodzin zwykłej doby, 46 wiosennej
+  oraz 50 jesiennej doby DST. RC5 przeszedł pełną walidację offline, CI
+  dokładnego SHA oraz wdrożenie na obu instalacjach; parser i bezpieczny stan
+  backendu działały poprawnie live.
+- Wdrożenie RC5 ujawniło niezależny P1 frontendu opisany powyżej. Dokładny commit
+  runtime RC6 `7ce13155533bfa0bf9752a0fd201224dac1a7393` przeszedł
+  niezależny przegląd, pełną walidację offline bez P0/P1 oraz CI dokładnego SHA
+  dla push i `workflow_dispatch`, w tym pełną macierz.
+- Na lokalnym Home Assistant 2026.8.1 sumy kontrolne integracji i zasobów były
+  zgodne z RC6, wersje integracji i pakietu wynosiły 1.5.2, stan instalacji był **Gotowe**,
+  zasoby `/local` rewizji 16 zwracały HTTP 200, a dashboard działał w nowej
+  karcie i po twardym odświeżeniu. Tryb pozostał Self-Use, a wszyscy właściciele
+  automatyki byli wyłączeni.
+- Na równoległej instalacji Home Assistant 2026.7.4 sumy kontrolne runtime'u i
+  zasobów także były zgodne, wszystkie wymagane zasoby `/local` rewizji 16
+  zwracały HTTP 200,
+  a dashboard Aurora działał po twardym odświeżeniu. RCE i taryfa pozostały
+  wyłączone, RCEm działał wyłącznie w trybie shadow, a właściciele i wykonanie
+  pozostały wyłączone z powodu oczekującego firmware ESP32. Firmware nie było
+  wgrywane podczas tego audytu frontendu.
+- Jedno ograniczone czasowo zapytanie tła RCEm do historii Recorder zakończyło
+  się timeoutem. Planer pozostał fail-closed, nie wykonał zapisu, a zdarzenie nie
+  powtórzyło się w oknie obserwacji. Jest to odnotowana ograniczona dostępność
+  historii, a nie bloker wydania.
+- RC6 otrzymuje zgodę live GO dla przetestowanego runtime Home Assistant i
+  frontendu, nie dla oczekującego wdrożenia ESP32 ani chronionych zapisów EMS.
+  Dokładnym wdrożonym commitem runtime pozostaje
+  `7ce13155533bfa0bf9752a0fd201224dac1a7393`; późniejszy commit wyłącznie z
+  dokumentacją/tagiem będzie miał inne SHA i nie może być opisywany jako runtime
+  sprawdzony live.
+
 ## [1.5.1] - 2026-08-12
 
 ### User update steps / Kroki po aktualizacji

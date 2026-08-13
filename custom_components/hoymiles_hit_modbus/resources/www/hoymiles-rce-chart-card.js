@@ -2460,8 +2460,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       grid_import_today_entity: "sensor.hoymiles_hit_grid_energy_buy_today",
       grid_to_load_today_entity: "sensor.hoymiles_rce_grid_to_load_today",
       grid_to_battery_today_entity: "sensor.hoymiles_grid_to_battery_today",
-      inverter_image:
-        "/api/hoymiles_hit_modbus/static-r2/hoymiles-inverter.png",
+      inverter_image: "/local/hoymiles-inverter.png",
       ...config,
     };
     this._mount();
@@ -3296,7 +3295,7 @@ class HoymilesPowerFlowCard extends HTMLElement {
     }
     const inverterImage =
       powerFlowConfig.inverter_image ??
-      "/api/hoymiles_hit_modbus/static/hoymiles-inverter.png";
+      "/local/hoymiles-inverter.png";
     delete powerFlowConfig.inverter_image;
     delete powerFlowConfig.inverter_image_left;
     delete powerFlowConfig.inverter_image_top;

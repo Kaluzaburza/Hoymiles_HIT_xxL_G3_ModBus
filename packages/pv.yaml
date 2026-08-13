@@ -698,3 +698,21 @@ sensor:
     icon: mdi:flash
     accuracy_decimals: 0
     value_type: U_WORD
+    force_update: true
+    on_value:
+      then:
+        - lambda: |-
+            // Register 2150 is the system-wide PV source on a parallel Master.
+            // Publish only from its real FC03 callback so source timestamps
+            // cannot be refreshed by a cached 1 s overview template.
+            const uint32_t topology_readback =
+                id(parallel_topology_last_readback_ms);
+            if (!id(machines_type_6048).has_state() ||
+                topology_readback == 0 ||
+                static_cast<uint32_t>(millis() - topology_readback) > 60000U) {
+              return;
+            }
+            if (std::lround(id(machines_type_6048).state) == 1) {
+              id(overview_master_pv_last_readback_ms) = millis();
+              id(pv_total_power_30001).publish_state(x);
+            }

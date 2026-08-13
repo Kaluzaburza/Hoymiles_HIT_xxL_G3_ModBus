@@ -641,17 +641,74 @@ views:
           - entity: sensor.hoymiles_tariff_target_soc
             name: Calculated target SOC
           - entity: sensor.hoymiles_tariff_planned_grid_import
-            name: Planned grid import
+            name: Energy in scheduled Grid Charge slots
           - entity: sensor.hoymiles_tariff_estimated_savings
             name: Forecast savings versus G11
           - entity: sensor.hoymiles_hit_overview_battery_soc
             name: Current battery SOC
       - type: markdown
-        title: Why this plan?
+        title: Plan summary
         entity_id: sensor.hoymiles_hit_tariff_charge_plan
         content: |-
           {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
           {% if plan is not none %}
+          {% set status = plan.attributes.status_code | default('missing_data', true) %}
+          {% set slots = plan.attributes.planned_slots | default([], true) %}
+          {% set low_direct = plan.attributes.remaining_low_direct_import_kwh
+             | default(0) | float(0) %}
+          {% set expensive = plan.attributes.remaining_expensive_import_kwh
+             | default(0) | float(0) %}
+          {% set physical = plan.attributes.capacity_or_power_shortfall_kwh
+             | default(expensive) | float(0) %}
+          {% set terminal = plan.attributes.terminal_shortfall_kwh
+             | default(0) | float(0) %}
+          {% if status in ['missing_data', 'optimizer_error', 'unsupported_profile',
+                           'expired_profile', 'soc_limits_conflict'] %}
+          ⚠️ **The automation requires attention.**
+          {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}
+          {% elif status == 'hard_reserve_unavailable' %}
+          ⚠️ **The base Self-Use reserve cannot be restored.** The hardware or
+          an active charging limit prevents the required Grid Charge operation.
+          The automation will remain in a safe mode. Details are available in
+          advanced data.
+          {% elif status == 'no_cheap_window' %}
+          ⚠️ **There is no low-cost period before the forecast shortage.**
+          The automation will not start Grid Charge in a high-cost period.
+          {% elif status == 'not_economically_beneficial' %}
+          ℹ️ **Charging intentionally skipped.** A low-cost period is available, but
+          the price spread does not cover conversion losses, battery wear, and
+          the required savings margin. The automation remains in Self-Use
+          instead of running an uneconomical cycle.
+          {% elif expensive > 0.01 or terminal > 0.01 %}
+          ⚠️ **The plan is only partially feasible.** The automation will use the available
+          low-cost periods but cannot cover all forecast demand.
+          {% if expensive > 0.01 %}After accounting for battery power and capacity,
+          there will remain **{{ expensive | round(2) }} kWh** of import in a higher-cost period.{% endif %}
+          {% if terminal > 0.01 %}The required reserve at the end of the horizon
+          will be short by **{{ terminal | round(2) }} kWh**.{% endif %}
+          {% elif status == 'shortage_in_low_period' %}
+          ✅ **The plan is correct.** The remaining energy demand occurs only in the low-cost
+          period, so the home will import it directly without battery conversion losses.
+          {% elif status == 'no_charge_needed' %}
+          ✅ **The battery does not need charging.** Forecast PV and stored battery energy
+          will last until the next low-cost period while preserving the reserve.
+          {% elif status == 'no_discount_window' %}
+          ℹ️ **The G11 tariff has no lower-cost period.** The automation remains in Self-Use
+          because shifting energy through the battery would not reduce cost.
+          {% elif slots %}
+          ✅ **Plan ready.** The automation will import only the calculated energy
+          in selected low-cost slots and preserve the required battery reserve.
+          {% else %}
+          ✅ **Grid Charge is not needed.** The current balance does not require
+          additional battery charging.
+          {% endif %}
+
+          {% if low_direct > 0.01 %}
+          ℹ️ **{{ low_direct | round(2) }} kWh** is the forecast direct import
+          in the low-cost period. The automation selects it intentionally to avoid
+          battery conversion losses.
+          {% endif %}
+
           The automation bases its decision on **conservative values used by the model**,
           not on the raw forecast displayed by Solcast.
 
@@ -719,17 +776,34 @@ views:
           {% set slots = plan.attributes.planned_slots | default([], true) %}
           {% set status = plan.attributes.status_code | default('missing_data', true) %}
           {% set missing = plan.attributes.missing_entities | default([], true) %}
+          {% set low_direct = plan.attributes.remaining_low_direct_import_kwh
+             | default(0) | float(0) %}
+          {% set expensive = plan.attributes.remaining_expensive_import_kwh
+             | default(0) | float(0) %}
+          {% set physical = plan.attributes.capacity_or_power_shortfall_kwh
+             | default(expensive) | float(0) %}
+          {% set terminal = plan.attributes.terminal_shortfall_kwh
+             | default(0) | float(0) %}
           **Plan mode:** {{ 'active' if is_state(
              'input_boolean.hoymiles_tariff_charge_enabled', 'on')
              else 'preview — automatic charging is disabled' }}<br>
-          **Result:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>
-          **Shortage without top-up:**
-          {{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>
-          **Remaining shortage after plan:**
-          {{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>
-          **Total grid import:** {{ plan.attributes.planned_grid_import_kwh
+          **Decision:** {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}<br>
+          **Energy in selected Grid Charge slots:**
+          {{ plan.attributes.planned_grid_import_kwh
              | default(0) }} kWh<br>
           {% if is_state('input_boolean.hoymiles_tariff_advanced_view', 'on') %}
+          **Shortage without optimization:**
+          {{ plan.attributes.baseline_shortage_kwh | default(0) }} kWh<br>
+          **Remaining direct import in the low-cost period:**
+          {{ low_direct | round(2) }} kWh<br>
+          **Remaining import in a medium- or high-cost period:**
+          {{ expensive | round(2) }} kWh<br>
+          **Shortfall caused by power or capacity limits:**
+          {{ physical | round(2) }} kWh<br>
+          **Missing reserve at the end of the horizon:**
+          {{ terminal | round(2) }} kWh<br>
+          **Remaining model shortage — technical value:**
+          {{ plan.attributes.remaining_shortage_kwh | default(0) }} kWh<br>
           **Direct grid → home:**
           {{ plan.attributes.planned_direct_load_kwh | default(0) }} kWh<br>
           **Stored in the battery after losses:**
@@ -783,7 +857,7 @@ views:
           {{ plan.attributes.requested_charge_power_kw | default(0) }} kW · effective
           {{ plan.attributes.effective_charge_power_kw | default(0) }} kW ·
           source {{ plan.attributes.effective_charge_power_source
-             | default('ustawienie') }}<br>
+             | default('configuration') }}<br>
           **Actual power learning:**
           {{ plan.attributes.effective_charge_power_feedback_samples | default(0) }} samples ·
           factor {{ ((plan.attributes.effective_charge_power_factor

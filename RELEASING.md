@@ -51,6 +51,29 @@ does not flash the ESP32. Users must use the top-level ESPHome file and the
 compatible remote-package tag named in that release's notes. When firmware is
 unchanged, retain and document the last compatible ESPHome tag.
 
+## Frontend asset startup contract
+
+When a release changes managed dashboard or frontend assets:
+
+- the release notes must require a Home Assistant restart and a hard refresh of
+  any dashboard tab that remained open across that restart;
+- copy every `/local` dependency before publishing its versioned URL, and load
+  one canonical full module instead of competing bootstrap and bundle strategy
+  implementations;
+- update storage-mode resources through Lovelace's live resource collection;
+  never mutate `.storage/lovelace.*` directly while Home Assistant is running;
+- if `config/www` did not exist when frontend started, copy the assets but defer
+  publication, raise a localized restart Repair and verify the next boot; and
+- validate repeated module loading, fresh-no-`www`, storage and YAML modes
+  offline. For a release candidate, also verify the exact versioned resource,
+  dashboard render and absence of a strategy-registration timeout in a fresh
+  browser session after restart; and
+- record the exact commit SHA installed on every live test host before a
+  documentation-only release finalization commit is created. If the eventual
+  release/tag SHA differs, record it separately, verify that the delta contains
+  no runtime changes, and never describe that later SHA as the deployed
+  candidate.
+
 ## Release checklist
 
 1. Move the completed `Unreleased` notes to the new version heading.
@@ -70,6 +93,13 @@ unchanged, retain and document the last compatible ESPHome tag.
    python tools/test_tariff_optimizer.py
    python tools/test_rcm_history.py
    python tools/test_rcm_optimizer.py
+   python tools/test_energy_data.py
+   python tools/test_load_model.py
+   python tools/test_power_balance.py
+   python tools/test_firmware_readback_contract.py
+   python tools/test_optimizer_executor_contract.py
+   python tools/test_optimizer_startup_contract.py
+   python tools/test_source_device_rebind.py
    python tools/test_automation_matrix.py --exhaustive
    node tools/validate_rce_card.js
    ```

@@ -10,6 +10,12 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from homeassistant.components.lovelace.const import (
+    CONF_RESOURCE_TYPE_WS,
+    LOVELACE_DATA,
+    MODE_STORAGE,
+)
+from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
@@ -27,15 +33,22 @@ ASSET_STORAGE_KEY = f"{DOMAIN}.assets"
 LOVELACE_RESOURCES_KEY = "lovelace_resources"
 LOVELACE_STORAGE_PREFIX = "lovelace."
 ZEBRA_CARD_TYPE = "custom:hoymiles-zebra-entities-card"
-FRONTEND_ASSET_REVISION = 13
+FRONTEND_ASSET_REVISION = 16
 FRONTEND_STATIC_ROUTE = "static-r2"
 FRONTEND_RESOURCE_URL = (
-    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-rce-chart-card.js"
+    "/local/hoymiles-rce-chart-card.js"
     f"?v={VERSION}.{FRONTEND_ASSET_REVISION}"
 )
 FRONTEND_BOOTSTRAP_URL = (
-    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-dashboard-strategy.js"
+    "/local/hoymiles-dashboard-strategy.js"
     f"?v={VERSION}.{FRONTEND_ASSET_REVISION}"
+)
+LOCAL_FRONTEND_ASSETS = (
+    "hoymiles-rce-chart-card.js",
+    "hoymiles-dashboard-strategy.js",
+    "dashboard_hoymiles_en.json",
+    "dashboard_hoymiles_pl.json",
+    "hoymiles-inverter.png",
 )
 MANAGED_FRONTEND_RESOURCE_PATHS = {
     "/local/hoymiles-rce-chart-card.js",
@@ -174,7 +187,7 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 def _backup_storage_once(path: Path) -> None:
     """Keep one exact rollback copy for this integration release."""
     backup = path.with_name(f"{path.name}.pre-{VERSION}.bak")
-    if not backup.exists():
+    if path.is_file() and not backup.exists():
         shutil.copy2(path, backup)
 
 
@@ -243,66 +256,53 @@ def _is_hoymiles_dashboard(config: Any) -> bool:
     return all(marker in serialized for marker in HOYMILES_DASHBOARD_MARKERS)
 
 
-def _sync_lovelace_resource(storage_path: Path) -> bool:
-    """Install or cache-bust the managed Hoymiles frontend module."""
-    path = storage_path / LOVELACE_RESOURCES_KEY
-    if path.is_file():
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return False
-    else:
-        # A fresh HA installation may not have a Lovelace resource store yet.
-        # Relying only on add_extra_js_url creates a startup race: Lovelace can
-        # request the dashboard strategy before the integration module has
-        # registered its custom element.  Creating the standard resource store
-        # makes HA load the module before generating the managed dashboard.
-        payload = {
-            "version": 1,
-            "minor_version": 1,
-            "key": LOVELACE_RESOURCES_KEY,
-            "data": {"items": []},
-        }
-
-    items = payload.get("data", {}).get("items")
-    if not isinstance(items, list):
+async def _async_sync_lovelace_resource(hass: HomeAssistant) -> bool:
+    """Install or cache-bust the module through Lovelace's live collection."""
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if lovelace_data is None or lovelace_data.resource_mode != MODE_STORAGE:
         return False
 
+    resources = lovelace_data.resources
+    # async_get_info is the public read path and guarantees the lazy storage
+    # collection is loaded before async_items is inspected on supported HA
+    # versions. Mutating via the same collection used by the websocket API
+    # keeps memory and delayed storage writes consistent.
+    await resources.async_get_info()
     matched = False
     changed = False
-    for item in items:
+    for item in list(resources.async_items()):
         if not isinstance(item, dict):
             continue
-        url = item.get("url")
+        url = item.get(CONF_URL)
         if not isinstance(url, str):
             continue
-        base_url = url.partition("?")[0]
-        if base_url not in MANAGED_FRONTEND_RESOURCE_PATHS:
+        if url.partition("?")[0] not in MANAGED_FRONTEND_RESOURCE_PATHS:
+            continue
+        if url == FRONTEND_RESOURCE_URL and item.get(CONF_TYPE) == "module":
+            matched = True
+            continue
+        resource_id = item.get(CONF_ID)
+        if not isinstance(resource_id, str):
             continue
         matched = True
-        if url != FRONTEND_RESOURCE_URL or item.get("type") != "module":
-            item["url"] = FRONTEND_RESOURCE_URL
-            item["type"] = "module"
-            changed = True
-
-    if not matched:
-        resource_id = hashlib.sha256(
-            f"{DOMAIN}:frontend".encode()
-        ).hexdigest()[:32]
-        items.append(
+        await resources.async_update_item(
+            resource_id,
             {
-                "id": resource_id,
-                "url": FRONTEND_RESOURCE_URL,
-                "type": "module",
-            }
+                CONF_URL: FRONTEND_RESOURCE_URL,
+                CONF_RESOURCE_TYPE_WS: "module",
+            },
         )
         changed = True
 
-    if not changed:
-        return False
-    _backup_storage_once(path)
-    _atomic_write_json(path, payload)
-    return True
+    if not matched:
+        await resources.async_create_item(
+            {
+                CONF_URL: FRONTEND_RESOURCE_URL,
+                CONF_RESOURCE_TYPE_WS: "module",
+            }
+        )
+        changed = True
+    return changed
 
 
 def _sync_lovelace_storage(
@@ -315,8 +315,6 @@ def _sync_lovelace_storage(
         return []
 
     written: list[Path] = []
-    if _sync_lovelace_resource(storage_path):
-        written.append(storage_path / LOVELACE_RESOURCES_KEY)
 
     for path in sorted(storage_path.glob(f"{LOVELACE_STORAGE_PREFIX}*")):
         if not path.is_file() or path.name == LOVELACE_RESOURCES_KEY:
@@ -377,13 +375,11 @@ def _sync_assets(
         / "hoymiles_ems_scheduler.yaml": (
             config_path / "packages" / "hoymiles_ems_scheduler.yaml"
         ),
-        RESOURCE_ROOT / "www" / "hoymiles-rce-chart-card.js": (
-            config_path / "www" / "hoymiles-rce-chart-card.js"
-        ),
-        RESOURCE_ROOT / "www" / "hoymiles-inverter.png": (
-            config_path / "www" / "hoymiles-inverter.png"
-        ),
     }
+    for filename in LOCAL_FRONTEND_ASSETS:
+        sources[RESOURCE_ROOT / "www" / filename] = (
+            config_path / "www" / filename
+        )
     written: list[Path] = []
     previous_hashes = managed_hashes or {}
     next_hashes: dict[str, str] = {}
@@ -431,6 +427,7 @@ async def async_install_assets(
     hass: HomeAssistant,
     *,
     overwrite: bool,
+    publish_frontend: bool = True,
 ) -> list[Path]:
     """Install the optional assets without blocking Home Assistant."""
     config_path = Path(hass.config.config_dir)
@@ -448,13 +445,11 @@ async def async_install_assets(
         overwrite,
         managed_hashes,
     )
-    written.extend(
-        await hass.async_add_executor_job(
-            _sync_lovelace_storage,
-            config_path,
-            hass.config.language,
-        )
-    )
+    # Do not rewrite .storage/lovelace.* behind Lovelace's in-memory dashboard
+    # objects. The bundled strategy dashboard and filesystem YAML asset already
+    # carry current IDs and image paths; user storage dashboards remain intact.
+    if publish_frontend:
+        await _async_sync_lovelace_resource(hass)
     await store.async_save(
         {
             "integration_version": VERSION,

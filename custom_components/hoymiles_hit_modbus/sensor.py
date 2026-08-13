@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -19,8 +21,20 @@ from .const import (
     VERSION,
 )
 from .entity import HoymilesProxyEntity
+from .energy_data import numeric_state_sample
 from .localization import localized_text_state
-from .models import RuntimeData
+from .models import MatchedEntity, RuntimeData
+from .power_balance import (
+    OVERVIEW_BATTERY_POWER,
+    OVERVIEW_INVERTER_ACTIVE_POWER,
+    PARALLEL_POWER_SOURCE_KEYS_BY_TARGET,
+    PARALLEL_POWER_TARGETS,
+    calculate_parallel_power_balance,
+    calculate_parallel_inverter_power,
+    is_parallel_master,
+    is_known_machine_type,
+    select_overview_power,
+)
 from .rcm_sensor import HoymilesRCMOptimizerSensor
 from .rce_sensor import HoymilesRCEOptimizerSensor
 from .tariff_sensor import HoymilesTariffOptimizerSensor
@@ -201,11 +215,127 @@ class HoymilesSetupStatusSensor(SensorEntity):
 class HoymilesSensor(HoymilesProxyEntity, SensorEntity):
     """A sensor mirrored from the ESPHome Modbus bridge."""
 
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        runtime: RuntimeData,
+        matched: MatchedEntity,
+    ) -> None:
+        """Initialize a mirrored sensor and its optional balance sources."""
+        super().__init__(hass, entry, runtime, matched)
+        self._parallel_power_sources: dict[str, str] = {}
+        if self._catalog["translation_key"] not in PARALLEL_POWER_TARGETS:
+            return
+
+        dependency_keys = set(
+            PARALLEL_POWER_SOURCE_KEYS_BY_TARGET[
+                self._catalog["translation_key"]
+            ]
+        )
+        self._parallel_power_sources = {
+            candidate.catalog["translation_key"]: candidate.source.entity_id
+            for candidate in runtime.entities["sensor"]
+            if candidate.catalog["translation_key"] in dependency_keys
+            and candidate.source is not None
+        }
+
+    def _parallel_source_state(self, translation_key: str) -> State | None:
+        """Return a native source state used by the parallel power balance."""
+        entity_id = self._parallel_power_sources.get(translation_key)
+        return self.hass.states.get(entity_id) if entity_id is not None else None
+
+    def _parallel_source_value(self, translation_key: str) -> float | None:
+        """Return a fresh finite source value, converted to watts."""
+        source = self._parallel_source_state(translation_key)
+        if source is None:
+            return None
+        unit = source.attributes.get("unit_of_measurement")
+        if unit not in {None, "W"}:
+            if unit != "kW":
+                return None
+        sample = numeric_state_sample(
+            source,
+            dt_util.utcnow(),
+            max_age_seconds=120.0,
+            scale=1000.0 if unit == "kW" else 1.0,
+        )
+        return sample.value if sample.fresh else None
+
     @property
-    def native_value(self) -> Any:
-        """Return a numeric value or localized text state."""
+    def _parallel_master_declared(self) -> bool:
+        """Return whether the last topology value identifies this as Master."""
+        topology = self._parallel_source_state("machines_type")
+        return topology is not None and is_parallel_master(topology.state)
+
+    @property
+    def _parallel_topology_known(self) -> bool:
+        """Require a fresh explicit topology before any native fallback."""
+        topology = self._parallel_source_state("machines_type")
+        sample = numeric_state_sample(
+            topology,
+            dt_util.utcnow(),
+            max_age_seconds=300.0,
+            minimum=0.0,
+            maximum=2.0,
+        )
+        return sample.fresh and is_known_machine_type(sample.value)
+
+    @property
+    def _is_parallel_master(self) -> bool:
+        """Require a fresh topology sample before using the derived balance."""
+        topology = self._parallel_source_state("machines_type")
+        sample = numeric_state_sample(
+            topology,
+            dt_util.utcnow(),
+            max_age_seconds=300.0,
+            minimum=0.0,
+        )
+        return sample.fresh and is_parallel_master(sample.value)
+
+    def _parallel_power_value(self) -> float | None:
+        """Return system-wide power derived from the required balance sources."""
+        if not self._is_parallel_master:
+            return None
+        grid_power = self._parallel_source_value(
+            "overview_grid_total_active_power"
+        )
+        load_power = self._parallel_source_value("overview_load_active_power")
+        if grid_power is None or load_power is None:
+            return None
+
+        translation_key = self._catalog["translation_key"]
+        if translation_key == OVERVIEW_INVERTER_ACTIVE_POWER:
+            return calculate_parallel_inverter_power(
+                grid_power=grid_power,
+                load_power=load_power,
+            )
+
+        pv_power = self._parallel_source_value("overview_pv_total_power")
+        if pv_power is None:
+            return None
+        balance = calculate_parallel_power_balance(
+            pv_power=pv_power,
+            grid_power=grid_power,
+            load_power=load_power,
+        )
+        return balance.battery_power if balance is not None else None
+
+    @property
+    def available(self) -> bool:
+        """Mirror ordinary sources; fail closed for parallel power balances."""
+        if self._catalog["translation_key"] not in PARALLEL_POWER_TARGETS:
+            return super().available
+        if not self._parallel_topology_known:
+            return False
+        if self._parallel_master_declared:
+            return self._is_parallel_master and self._parallel_power_value() is not None
+        return super().available
+
+    def _mirrored_native_value(self) -> Any:
+        """Return the source value without invoking the derived availability."""
         source = self.source_state
-        if source is None or not self.available:
+        if source is None or not super().available:
             return None
         if self._catalog.get("source_component") == "text_sensor":
             return localized_text_state(source.state, self.hass.config.language)
@@ -213,6 +343,53 @@ class HoymilesSensor(HoymilesProxyEntity, SensorEntity):
             return float(source.state)
         except (TypeError, ValueError):
             return source.state
+
+    @property
+    def native_value(self) -> Any:
+        """Return a numeric value or localized text state."""
+        source_value = self._mirrored_native_value()
+        translation_key = self._catalog["translation_key"]
+        if translation_key not in PARALLEL_POWER_TARGETS:
+            return source_value
+
+        topology = self._parallel_source_state("machines_type")
+        return select_overview_power(
+            translation_key,
+            machine_type=topology.state if topology is not None else None,
+            source_power=(
+                source_value if isinstance(source_value, (float, int)) else None
+            ),
+            derived_power=self._parallel_power_value(),
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose whether a parallel power value uses the AC system balance."""
+        attributes = super().extra_state_attributes
+        if self._catalog["translation_key"] not in PARALLEL_POWER_TARGETS:
+            return attributes
+        derived_power = self._parallel_power_value()
+        attributes.update(
+            {
+                "parallel_balance_active": (
+                    self._is_parallel_master and derived_power is not None
+                ),
+                "power_value_source": (
+                    "parallel_ac_balance"
+                    if self._is_parallel_master and derived_power is not None
+                    else (
+                        "parallel_balance_unavailable"
+                        if self._parallel_master_declared
+                        or not self._parallel_topology_known
+                        else "esphome_source"
+                    )
+                ),
+                "power_sign_convention": (
+                    "battery_positive_discharge_grid_positive_export"
+                ),
+            }
+        )
+        return attributes
 
     @property
     def native_unit_of_measurement(self) -> str | None:
@@ -240,3 +417,19 @@ class HoymilesSensor(HoymilesProxyEntity, SensorEntity):
             return None
         precision = source.attributes.get("suggested_display_precision")
         return int(precision) if precision is not None else None
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe balance proxies to topology, PV, grid and LOAD changes."""
+        await super().async_added_to_hass()
+        if not self._parallel_power_sources:
+            return
+        dependency_entity_ids = tuple(
+            dict.fromkeys(self._parallel_power_sources.values())
+        )
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                dependency_entity_ids,
+                self._async_source_state_changed,
+            )
+        )

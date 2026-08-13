@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import asyncio
 import hashlib
 import importlib.util
 import json
@@ -45,15 +47,33 @@ def load_localization_module():
 def load_assets_module():
     """Load the asset installer with a minimal Home Assistant type stub."""
     homeassistant = types.ModuleType("homeassistant")
+    components = types.ModuleType("homeassistant.components")
+    lovelace = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    ha_const = types.ModuleType("homeassistant.const")
     core = types.ModuleType("homeassistant.core")
     helpers = types.ModuleType("homeassistant.helpers")
     storage = types.ModuleType("homeassistant.helpers.storage")
     core.HomeAssistant = object
+    lovelace_const.CONF_RESOURCE_TYPE_WS = "res_type"
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    ha_const.CONF_ID = "id"
+    ha_const.CONF_TYPE = "type"
+    ha_const.CONF_URL = "url"
     storage.Store = object
+    homeassistant.components = components
+    components.lovelace = lovelace
+    lovelace.const = lovelace_const
+    homeassistant.const = ha_const
     homeassistant.core = core
     homeassistant.helpers = helpers
     helpers.storage = storage
     sys.modules.setdefault("homeassistant", homeassistant)
+    sys.modules.setdefault("homeassistant.components", components)
+    sys.modules.setdefault("homeassistant.components.lovelace", lovelace)
+    sys.modules.setdefault("homeassistant.components.lovelace.const", lovelace_const)
+    sys.modules.setdefault("homeassistant.const", ha_const)
     sys.modules.setdefault("homeassistant.core", core)
     sys.modules.setdefault("homeassistant.helpers", helpers)
     sys.modules.setdefault("homeassistant.helpers.storage", storage)
@@ -92,10 +112,16 @@ def validate_fresh_asset_install() -> None:
         package_path = (
             config_path / "packages" / "hoymiles_ems_scheduler.yaml"
         )
+        frontend_local_ready = (config_path / "www").is_dir()
         polish_written = assets._copy_assets(config_path, "pl-PL", False)
         require(
-            len(polish_written) == 4,
-            "Fresh Polish installation did not copy all four assets",
+            len(polish_written) == 7,
+            "Fresh Polish installation did not copy all seven assets",
+        )
+        require(
+            (config_path / "www").is_dir()
+            and not frontend_local_ready,
+            "Fresh-no-www setup must remain restart-gated after copying assets",
         )
         require(
             dashboard_path.read_text(encoding="utf-8")
@@ -104,6 +130,12 @@ def validate_fresh_asset_install() -> None:
             ),
             "Fresh Polish installation copied the wrong dashboard",
         )
+        for filename in assets.LOCAL_FRONTEND_ASSETS:
+            require(
+                (config_path / "www" / filename).read_bytes()
+                == (RESOURCES / "www" / filename).read_bytes(),
+                f"Fresh installation copied the wrong /local asset: {filename}",
+            )
         require(
             assets._copy_assets(config_path, "pl-PL", False) == [],
             "Asset installer overwrites user files without explicit permission",
@@ -169,8 +201,8 @@ script:
 
         english_written = assets._copy_assets(config_path, "en-GB", True)
         require(
-            len(english_written) == 4,
-            "English overwrite installation did not copy all four assets",
+            len(english_written) == 7,
+            "English overwrite installation did not copy all seven assets",
         )
         require(
             (config_path / "dashboard_hoymiles.yaml").read_text(
@@ -215,6 +247,73 @@ script:
             "A user-modified dashboard was overwritten",
         )
 
+    class FakeResourceCollection:
+        """Exercise the same live collection contract as Lovelace websocket."""
+
+        def __init__(self, items: list[dict]) -> None:
+            self.data = {item["id"]: dict(item) for item in items}
+            self.loaded = False
+
+        async def async_get_info(self) -> dict[str, int]:
+            self.loaded = True
+            return {"resources": len(self.data)}
+
+        def async_items(self) -> list[dict]:
+            require(self.loaded, "Resource items were read before lazy loading")
+            return list(self.data.values())
+
+        async def async_update_item(self, item_id: str, updates: dict) -> dict:
+            require(self.loaded, "Resource was updated before lazy loading")
+            normalized = dict(updates)
+            if "res_type" in normalized:
+                normalized["type"] = normalized.pop("res_type")
+            self.data[item_id].update(normalized)
+            return self.data[item_id]
+
+        async def async_create_item(self, data: dict) -> dict:
+            require(self.loaded, "Resource was created before lazy loading")
+            item = dict(data)
+            if "res_type" in item:
+                item["type"] = item.pop("res_type")
+            item["id"] = "generated-hoymiles-resource"
+            self.data[item["id"]] = item
+            return item
+
+    def fake_hass(
+        collection: FakeResourceCollection,
+        mode: str = "storage",
+    ) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            data={
+                "lovelace": types.SimpleNamespace(
+                    resource_mode=mode,
+                    resources=collection,
+                )
+            }
+        )
+
+    fresh_collection = FakeResourceCollection([])
+    fresh_hass = fake_hass(fresh_collection)
+    require(
+        asyncio.run(assets._async_sync_lovelace_resource(fresh_hass)),
+        "Fresh storage setup did not create the live Lovelace resource",
+    )
+    require(
+        fresh_collection.async_items()
+        == [
+            {
+                "id": "generated-hoymiles-resource",
+                "url": assets.FRONTEND_RESOURCE_URL,
+                "type": "module",
+            }
+        ],
+        "Fresh setup created an invalid live Lovelace resource",
+    )
+    require(
+        not asyncio.run(assets._async_sync_lovelace_resource(fresh_hass)),
+        "Live Lovelace resource setup is not idempotent",
+    )
+
     with tempfile.TemporaryDirectory(prefix="hoymiles_storage_upgrade_") as tmp:
         config_path = Path(tmp)
         storage_path = config_path / ".storage"
@@ -228,7 +327,10 @@ script:
                 "items": [
                     {
                         "id": "legacy-hoymiles-resource",
-                        "url": "/local/hoymiles-rce-chart-card.js?v=old",
+                        "url": (
+                            "/api/hoymiles_hit_modbus/static-r2/"
+                            "hoymiles-rce-chart-card.js?v=1.5.2.15"
+                        ),
                         "type": "module",
                     },
                     {
@@ -314,7 +416,7 @@ script:
 
         migrated = assets._sync_lovelace_storage(config_path)
         require(
-            migrated == [resources_path, dashboard_path],
+            migrated == [dashboard_path],
             "Storage-mode dashboard migration changed unexpected files",
         )
         migrated_dashboard = json.loads(
@@ -351,9 +453,17 @@ script:
             == "Energia pobrana z sieci — diagnostycznie",
             "Storage-mode RCE LOAD rows were not migrated safely",
         )
-        migrated_resources = json.loads(
-            resources_path.read_text(encoding="utf-8")
-        )["data"]["items"]
+        require(
+            json.loads(resources_path.read_text(encoding="utf-8"))
+            == resources_payload,
+            "Dashboard migration edited Lovelace resources behind HA's live collection",
+        )
+        collection = FakeResourceCollection(resources_payload["data"]["items"])
+        require(
+            asyncio.run(assets._async_sync_lovelace_resource(fake_hass(collection))),
+            "Legacy integration-static resource was not migrated live",
+        )
+        migrated_resources = collection.async_items()
         require(
             migrated_resources[0]["url"] == assets.FRONTEND_RESOURCE_URL
             and migrated_resources[0]["type"] == "module"
@@ -361,13 +471,16 @@ script:
             "Managed Lovelace resource was not cache-busted safely",
         )
         require(
+            not asyncio.run(
+                assets._async_sync_lovelace_resource(fake_hass(collection))
+            ),
+            "Migrated live Lovelace resource is not idempotent",
+        )
+        require(
             dashboard_path.with_name(
                 f"{dashboard_path.name}.pre-{assets.VERSION}.bak"
-            ).is_file()
-            and resources_path.with_name(
-                f"{resources_path.name}.pre-{assets.VERSION}.bak"
             ).is_file(),
-            "Storage migration did not create rollback backups",
+            "Dashboard storage migration did not create a rollback backup",
         )
         require(
             unrelated_path.read_text(encoding="utf-8") == unrelated_text,
@@ -377,6 +490,179 @@ script:
             assets._sync_lovelace_storage(config_path) == [],
             "Storage-mode migration is not idempotent",
         )
+
+    require(
+        assets.FRONTEND_RESOURCE_URL.startswith(
+            "/local/hoymiles-rce-chart-card.js?v="
+        )
+        and assets.FRONTEND_BOOTSTRAP_URL.startswith(
+            "/local/hoymiles-dashboard-strategy.js?v="
+        ),
+        "Frontend entry points must use Home Assistant's always-available /local route",
+    )
+
+
+def validate_frontend_asset_failure_isolation(init_source: str) -> None:
+    """Prove optional asset failures cannot disable integration-wide setup."""
+    source_tree = ast.parse(init_source)
+    selected = [
+        node
+        for node in source_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_async_prepare_frontend_assets", "async_setup"}
+    ]
+    require(
+        {node.name for node in selected}
+        == {"_async_prepare_frontend_assets", "async_setup"},
+        "Frontend failure-isolation functions are missing",
+    )
+    executable = ast.Module(
+        body=[
+            ast.ImportFrom(
+                module="__future__",
+                names=[ast.alias(name="annotations")],
+                level=0,
+            ),
+            *selected,
+        ],
+        type_ignores=[],
+    )
+    ast.fix_missing_locations(executable)
+
+    class FakeIssueRegistry:
+        def __init__(self) -> None:
+            self.created: list[tuple] = []
+            self.deleted: list[tuple] = []
+
+        def async_create_issue(self, *args, **kwargs) -> None:
+            self.created.append((args, kwargs))
+
+        def async_delete_issue(self, *args, **kwargs) -> None:
+            self.deleted.append((args, kwargs))
+
+        class IssueSeverity:
+            WARNING = "warning"
+
+    class FakeLogger:
+        def exception(self, *args, **kwargs) -> None:
+            return None
+
+        def info(self, *args, **kwargs) -> None:
+            return None
+
+    class FakeHttp:
+        def __init__(self) -> None:
+            self.static_paths: list = []
+            self.views: list = []
+
+        async def async_register_static_paths(self, paths) -> None:
+            self.static_paths.extend(paths)
+
+        def register_view(self, view) -> None:
+            self.views.append(view)
+
+    class FakeServices:
+        def __init__(self) -> None:
+            self.registrations: list[tuple] = []
+
+        def async_register(self, *args, **kwargs) -> None:
+            self.registrations.append((args, kwargs))
+
+    class FakeHass:
+        def __init__(self, config_dir: Path) -> None:
+            self.config = types.SimpleNamespace(
+                config_dir=str(config_dir),
+                language="en",
+            )
+            self.data: dict = {}
+            self.http = FakeHttp()
+            self.services = FakeServices()
+
+        async def async_add_executor_job(self, target, *args):
+            return target(*args)
+
+    issues = FakeIssueRegistry()
+    module_globals = {
+        "Path": Path,
+        "HomeAssistant": object,
+        "ServiceCall": object,
+        "_LOGGER": FakeLogger(),
+        "ir": issues,
+        "DOMAIN": "hoymiles_hit_modbus",
+        "EMS_PACKAGE_DOCS_URL": "https://example.invalid/docs",
+        "FRONTEND_ASSETS_RESTART_ISSUE_ID": "frontend_restart",
+        "FRONTEND_ASSETS_INSTALL_FAILED_ISSUE_ID": "frontend_failed",
+        "STATIC_URL": "/api/hoymiles/static-r2",
+        "RESOURCE_ROOT": Path("resources"),
+        "FRONTEND_MODULE_URL": "/local/card.js?v=test",
+        "ATTR_OVERWRITE": "overwrite",
+        "SERVICE_INSTALL_ASSETS": "install_assets",
+        "INSTALL_ASSETS_SCHEMA": object(),
+        "StaticPathConfig": lambda *args, **kwargs: (args, kwargs),
+        "HoymilesSupportBundleView": lambda: object(),
+    }
+    exec(compile(executable, "<frontend-startup-contract>", "exec"), module_globals)
+
+    async def exercise_failure(error: Exception) -> None:
+        async def failing_install(*args, **kwargs):
+            raise error
+
+        module_globals["async_install_assets"] = failing_install
+        with tempfile.TemporaryDirectory(prefix="hoymiles_asset_failure_") as tmp:
+            hass = FakeHass(Path(tmp))
+            result = await module_globals["_async_prepare_frontend_assets"](hass)
+        require(
+            result == ([], False, False),
+            f"Optional asset error was not isolated: {type(error).__name__}",
+        )
+        require(
+            any(
+                args[2] == "frontend_failed"
+                for args, _kwargs in issues.created
+            ),
+            "Optional asset failure did not create a Repair issue",
+        )
+
+    asyncio.run(exercise_failure(OSError("disk full")))
+    asyncio.run(exercise_failure(RuntimeError("live resource failed")))
+
+    async def setup_failure_tuple(_hass):
+        return [], False, False
+
+    extra_urls: list[str] = []
+    module_globals["_async_prepare_frontend_assets"] = setup_failure_tuple
+    module_globals["add_extra_js_url"] = (
+        lambda _hass, url: extra_urls.append(url)
+    )
+    module_globals["async_install_assets"] = lambda *args, **kwargs: None
+    with tempfile.TemporaryDirectory(prefix="hoymiles_setup_failure_") as tmp:
+        failed_hass = FakeHass(Path(tmp))
+        require(
+            asyncio.run(module_globals["async_setup"](failed_hass, {})) is True,
+            "Asset failure disabled integration-wide setup",
+        )
+    require(
+        len(failed_hass.http.static_paths) == 1
+        and len(failed_hass.http.views) == 1
+        and len(failed_hass.services.registrations) == 1
+        and not extra_urls,
+        "Asset failure did not preserve setup or published an unsafe module",
+    )
+
+    async def setup_success_tuple(_hass):
+        return [Path("asset")], True, True
+
+    module_globals["_async_prepare_frontend_assets"] = setup_success_tuple
+    with tempfile.TemporaryDirectory(prefix="hoymiles_setup_success_") as tmp:
+        success_hass = FakeHass(Path(tmp))
+        require(
+            asyncio.run(module_globals["async_setup"](success_hass, {})) is True,
+            "Successful frontend setup did not complete",
+        )
+    require(
+        extra_urls == ["/local/card.js?v=test"],
+        "Successful frontend setup did not publish exactly one canonical module",
+    )
 
 
 def png_dimensions(path: Path) -> tuple[int, int]:
@@ -440,6 +726,19 @@ def main() -> int:
     require(
         f'VERSION = "{manifest["version"]}"' in const_source,
         "const.py VERSION does not match manifest.json",
+    )
+    require(
+        "async_track_state_report_event" in entity_source
+        and "EventStateReportedData" in entity_source
+        and "_async_source_state_reported" in entity_source,
+        "Proxy entities must forward unchanged source reports for signed freshness",
+    )
+    firmware_core_source = (ROOT / "packages" / "core.yaml").read_text(
+        encoding="utf-8"
+    )
+    require(
+        f'version: "{manifest["version"]}"' in firmware_core_source,
+        "ESPHome project version in packages/core.yaml does not match manifest.json",
     )
     ems_package_version_match = re.search(
         r'^EMS_PACKAGE_VERSION = "([^"]+)"$', const_source, re.MULTILINE
@@ -508,9 +807,39 @@ def main() -> int:
         and "?v={VERSION}" in assets_source,
         "Dashboard strategy module is not registered with versioned cache busting",
     )
+    setup_body = init_source.split(
+        "async def async_setup(hass: HomeAssistant, config: dict) -> bool:", 1
+    )[1].split("async def async_setup_entry", 1)[0]
+    require(
+        setup_body.index("await _async_prepare_frontend_assets")
+        < setup_body.index("add_extra_js_url"),
+        "Local frontend assets must be prepared before their URL is published",
+    )
+    require(
+        "Availability is restart-gated" in setup_body
+        and "frontend_assets_ready and frontend_local_ready" in setup_body
+        and setup_body.count("add_extra_js_url(hass,") == 1
+        and "FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL" in init_source
+        and "FRONTEND_BOOTSTRAP_URL" not in init_source,
+        "Restart-gated /local startup or canonical frontend loader is missing",
+    )
     require(
         "frontend" in manifest.get("dependencies", []),
         "Frontend dependency is required for automatic strategy registration",
+    )
+    require(
+        "lovelace" in manifest.get("dependencies", [])
+        and "_async_sync_lovelace_resource" in assets_source
+        and "async_update_item" in assets_source
+        and "async_create_item" in assets_source,
+        "Managed resource migration must use Lovelace's live storage collection",
+    )
+    require(
+        "_sync_lovelace_storage" not in init_source
+        and "_sync_lovelace_storage" not in assets_source.split(
+            "async def async_install_assets", 1
+        )[1],
+        "Runtime asset install must not mutate .storage/lovelace.* behind HA",
     )
     require(
         "_async_default_source_device_id" in config_flow_source
@@ -668,6 +997,8 @@ def main() -> int:
     require(
         "ll-strategy-dashboard-hoymiles-hit-xxl-g3" in bootstrap_source
         and "document.currentScript" in bootstrap_source
+        and 'new URL("/local/", window.location.origin)' in bootstrap_source
+        and "/api/hoymiles_hit_modbus/static-r2/" not in bootstrap_source
         and "import.meta" not in bootstrap_source,
         "Classic dashboard bootstrap is missing or uses ES-module-only syntax",
     )
@@ -787,14 +1118,20 @@ def main() -> int:
     rce_optimizer_source = (
         COMPONENT / "rce_optimizer.py"
     ).read_text(encoding="utf-8")
+    rce_test_source = (ROOT / "tools" / "test_rce_optimizer.py").read_text(
+        encoding="utf-8"
+    )
     require(
-        (
-            "exports[candidate.start] = low" in rce_optimizer_source
-            or "trial[candidate.start] = low" in rce_optimizer_source
-            or "exports = best_trial" in rce_optimizer_source
-        )
-        and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source,
-        "RCE optimizer can still invalidate feasible plans by rounding upward",
+        "def _solve_joint_horizon_exports(" in rce_optimizer_source
+        and "def maximum_feasible(" in rce_optimizer_source
+        and 'solver_method: str = "joint_horizon_bounded_active_set"'
+        in rce_optimizer_source
+        and "optimality_verified: bool = False" in rce_optimizer_source
+        and "exports[candidate.start] = round(low, 2)" not in rce_optimizer_source
+        and "test_solver_matches_independent_random_oracle"
+        in rce_test_source
+        and "test_real_horizon_solver_runtime_is_bounded" in rce_test_source,
+        "RCE optimizer lacks the bounded joint-horizon/oracle safety contract",
     )
     require(
         "minimum_price_pln_kwh" not in rce_optimizer_source
@@ -934,7 +1271,7 @@ def main() -> int:
             "state_attr('sun.sun', 'next_rising')",
             "state_attr('sun.sun', 'next_setting')",
             "sensor.hoymiles_hit_battery_capacity",
-            "number.hoymiles_hit_self_use_soc",
+            "sensor.hoymiles_hit_ems_self_use_soc_readback",
             "sensor.hoymiles_hit_rce_optimized_plan",
             "sensor.hoymiles_rce_dynamic_minimum_soc",
             "sensor.hoymiles_rce_effective_minimum_soc",
@@ -1146,8 +1483,9 @@ def main() -> int:
             f"Public ESPHome entry point has no remote package: {entry_file.name}",
         )
         require(
-            "ref: v1.4.4" in entry_text,
-            f"ESPHome entry point is not pinned to v1.4.4: {entry_file.name}",
+            f"ref: v{manifest['version']}" in entry_text,
+            "ESPHome entry point is not pinned to the release version: "
+            f"{entry_file.name}",
         )
         require(
             "dashboard_import:" in entry_text
@@ -1180,8 +1518,10 @@ def main() -> int:
         "address: 6049",
         'name: "Parallel Topology"',
         'name: "Parallel EMS Control Status"',
+        'name: "Parallel Topology Readback Generation"',
+        'name: "EMS Verified Hardware Readback Supported"',
         "count < 2 || count > 10",
-        "Gotowe - Master steruje siecią równoległą",
+        "Zablokowane - brak FC03 dla każdego Slave",
     ):
         require(
             marker in parallel_source,
@@ -1190,18 +1530,129 @@ def main() -> int:
     for marker in (
         "machine_type == 2",
         "machine_count < 2 || machine_count > 10",
-        "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E",
-        "id(modbus_1).send_raw(payload);",
-        "poza kolejką ModbusController oczekującą na odpowiedź",
+        'name: "EMS Control Readback Generation"',
+        'name: "GCF Control Readback Generation"',
+        'name: "Battery Charge Power Readback Generation"',
+        "id(ems_verified_hardware_readback_supported).state",
+        "Master nie pozwala potwierdzić FC03 na każdym Slave",
     ):
         require(
             marker in settings_source,
             f"Parallel EMS safety marker missing: {marker}",
         )
     require(
+        "send_raw(payload)" not in settings_source
+        and "0x00, 0x10, 0x10, 0xCC" not in settings_source,
+        "Unacknowledged parallel EMS broadcast must remain disabled",
+    )
+    require(
         "hoymiles_modbus_slave_" not in parallel_source
         and "hoymiles_modbus_slave_" not in settings_source,
         "External Modbus must not poll or write internal parallel Slave addresses",
+    )
+
+    overview_source = (ROOT / "packages" / "overview.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    def esphome_sensor_block(source: str, sensor_id: str) -> str:
+        """Return one ESPHome sensor block for structural assertions."""
+        marker = f"    id: {sensor_id}\n"
+        start = source.index(marker)
+        end = source.find("\n  - platform:", start)
+        return source[start:] if end == -1 else source[start:end]
+
+    overview_ids = (
+        "pv_total_power_30001",
+        "inv_active_power_30007",
+        "battery_power_30009",
+        "grid_total_active_power_30011",
+        "load_active_power_30015",
+        "battery_soc_30020",
+    )
+    for overview_id in overview_ids:
+        overview_block = esphome_sensor_block(overview_source, overview_id)
+        require(
+            "update_interval: never" in overview_block
+            and "force_update: true" in overview_block
+            and "lambda:" not in overview_block,
+            f"{overview_id} must be published only by physical FC03 callbacks",
+        )
+
+    pv_source = (ROOT / "packages" / "pv.yaml").read_text(encoding="utf-8")
+    load_source = (ROOT / "packages" / "backup_load.yaml").read_text(
+        encoding="utf-8"
+    )
+    grid_source = (ROOT / "packages" / "meters.yaml").read_text(
+        encoding="utf-8"
+    )
+    battery_source = (ROOT / "packages" / "battery.yaml").read_text(
+        encoding="utf-8"
+    )
+    physical_publications = {
+        "pv_total_power_30001": (overview_source, pv_source),
+        "inv_active_power_30007": (overview_source, load_source),
+        "battery_power_30009": (overview_source, load_source),
+        "grid_total_active_power_30011": (overview_source, grid_source),
+        "load_active_power_30015": (overview_source, load_source),
+        "battery_soc_30020": (overview_source, battery_source),
+    }
+    for overview_id, sources in physical_publications.items():
+        marker = f"id({overview_id}).publish_state("
+        require(
+            all(marker in source for source in sources),
+            f"{overview_id} lacks one single/Master physical publication path",
+        )
+
+    require(
+        "bat_total_power_8546" not in load_source,
+        "Parallel overview power must not use the signed 16-bit register 2162",
+    )
+    for marker in (
+        "id(pv_total_power_8528)",
+        "id(grid_total_active_power_1814)",
+        "static_cast<uint32_t>(now_ms - grid_ms) <= 30000U",
+        "static_cast<uint32_t>(now_ms - pv_ms) <= 30000U",
+    ):
+        require(
+            marker in load_source,
+            f"Parallel event-driven balance is missing input/coherence: {marker}",
+        )
+    require(
+        "const float inverter_power =" in load_source
+        and "x + id(grid_total_active_power_1814).state" in load_source,
+        "Parallel inverter overview must equal LOAD plus grid export",
+    )
+    require(
+        "inverter_power - id(pv_total_power_8528).state" in load_source,
+        "Parallel battery overview must equal LOAD plus grid export minus PV",
+    )
+    require(
+        "65 535 W" in overview_source
+        and "nie pozwala wykryć zawinięcia do zera" in overview_source,
+        "Parallel overview must document the U_WORD range limitation",
+    )
+
+    pv_system_block = esphome_sensor_block(
+        pv_source,
+        "pv_total_power_8528",
+    )
+    load_system_block = esphome_sensor_block(
+        load_source,
+        "load_power_total_8553",
+    )
+    grid_system_block = esphome_sensor_block(
+        grid_source,
+        "grid_total_active_power_1814",
+    )
+    require(
+        "address: 2150" in pv_system_block
+        and "value_type: U_WORD" in pv_system_block
+        and "address: 2169" in load_system_block
+        and "value_type: U_WORD" in load_system_block
+        and "address: 1814" in grid_system_block
+        and "value_type: S_DWORD" in grid_system_block,
+        "Parallel overview balance input widths no longer match the documented map",
     )
 
     for asset in required_assets[:4]:
@@ -1450,7 +1901,7 @@ def main() -> int:
         "battery_max_discharge_power_307",
     ):
         register_offset = settings_source.index(f"id: {register_id}")
-        register_block = settings_source[register_offset : register_offset + 650]
+        register_block = settings_source[register_offset : register_offset + 1300]
         require(
             "lambda: return x * 0.1f;" in register_block
             and "return safe * 10.0f;" in register_block,
@@ -1513,9 +1964,9 @@ def main() -> int:
     )
     require(
         localization.localized_text_state(
-            "Gotowe - Master steruje siecią równoległą", "en"
+            "Gotowe - sterowanie bezpośrednie", "en"
         )
-        == "Ready - Master controls the parallel network",
+        == "Ready - direct control",
         "English parallel EMS state localization failed",
     )
     require(
@@ -1526,6 +1977,7 @@ def main() -> int:
         "Polish parallel EMS state localization failed",
     )
     validate_fresh_asset_install()
+    validate_frontend_asset_failure_isolation(init_source)
 
     for image_name in (
         "icon.png",
@@ -1607,6 +2059,7 @@ def main() -> int:
         "python tools/test_tariff_optimizer.py",
         "python tools/test_rcm_history.py",
         "python tools/test_rcm_optimizer.py",
+        "python tools/test_optimizer_startup_contract.py",
         "python tools/test_automation_matrix.py",
         "python tools/test_automation_matrix.py --exhaustive",
     ):
