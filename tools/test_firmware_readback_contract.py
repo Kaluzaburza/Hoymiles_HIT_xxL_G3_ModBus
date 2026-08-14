@@ -85,9 +85,15 @@ def main() -> None:
     assert "update_interval: never" in mode_block
     assert "optimistic:" not in mode_block
     assert ".publish_state(x)" not in mode_block
-    assert "id(ems_write_complete_block_4300_4306)->execute(" in mode_block
-    assert "create_write_multiple_command" not in mode_block
-    assert "send_raw" not in mode_block
+    # Mode changes retain the exact field-proven v1.3.0 wire path: compose and
+    # send the complete block inline, without waiting behind the generic queued
+    # writer. Physical mirrors/generation still provide the acknowledgement.
+    assert "id(ems_write_complete_block_4300_4306)->execute(" not in mode_block
+    assert "create_write_multiple_command" in mode_block
+    assert "controller, 4300, values.size(), values" in mode_block
+    assert "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E" in mode_block
+    assert "id(modbus_1).send_raw(payload);" in mode_block
+    assert "static_cast<uint32_t>(millis() - ems_snapshot_ms) > 15000U" in mode_block
 
     # Every EMS edit is composed from the complete physical 4300-4306
     # snapshot. A Master gets the same FC16 frame on the system broadcast
@@ -216,8 +222,8 @@ def main() -> None:
 
     # The broadcast itself has no Modbus response. HA must therefore certify
     # completion only from the later physical Master FC03 generation.
-    assert settings.count("send_raw(payload)") == 1
-    assert settings.count("0x00, 0x10, 0x10, 0xCC") == 1
+    assert settings.count("send_raw(payload)") == 2
+    assert settings.count("0x00, 0x10, 0x10, 0xCC") == 2
 
     # Operational overview timestamps must prove a physical FC03 response.
     # A periodic template may keep publishing its cached value after Modbus
