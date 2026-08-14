@@ -5,17 +5,21 @@ const source = fs.readFileSync(
   "home_assistant/www/hoymiles-rce-chart-card.js",
   "utf8",
 );
+const bootstrapSource = fs.readFileSync(
+  "home_assistant/www/hoymiles-dashboard-strategy.js",
+  "utf8",
+);
 if (!source.includes("import.meta.url")) {
   throw new Error("Dashboard strategy no longer resolves assets from its module URL");
 }
 // The card is loaded as an ES module by Home Assistant.  vm.runInNewContext
 // executes classic scripts, so inject the same deterministic module URL while
 // retaining an explicit assertion above that production code uses import.meta.
+const canonicalModuleUrl =
+  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.3.17";
 const executableSource = source.replaceAll(
   "import.meta.url",
-  JSON.stringify(
-    "https://homeassistant.example/local/hoymiles-rce-chart-card.js",
-  ),
+  JSON.stringify(canonicalModuleUrl),
 );
 const registry = new Map();
 
@@ -151,6 +155,55 @@ if (
   registry.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3") !== canonicalStrategy
 ) {
   throw new Error("Duplicate module loading replaced the canonical dashboard strategy");
+}
+
+// A stale storage resource from an older release can execute the classic
+// bootstrap before the canonical module on the first page load after an
+// update. The immutable custom-element registration must still be upgraded to
+// the full decorated generate() implementation when the canonical module runs.
+const bootstrapFirstRegistry = new Map();
+const bootstrapFirstWindow = {
+  loadCardHelpers: context.window.loadCardHelpers,
+};
+const bootstrapFirstContext = {
+  ...context,
+  document: {
+    ...context.document,
+    currentScript: {
+      src: (
+        "https://homeassistant.example/local/"
+        + "hoymiles-dashboard-strategy.js?v=1.5.3.17"
+      ),
+    },
+  },
+  window: bootstrapFirstWindow,
+  customElements: {
+    define(name, constructor) {
+      bootstrapFirstRegistry.set(name, constructor);
+    },
+    get(name) {
+      return bootstrapFirstRegistry.get(name);
+    },
+    async whenDefined() {},
+  },
+};
+vm.runInNewContext(bootstrapSource, bootstrapFirstContext, {
+  filename: "hoymiles-dashboard-strategy-bootstrap-first.js",
+});
+const bootstrapFirstStrategy = bootstrapFirstRegistry.get(
+  "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
+);
+if (!bootstrapFirstStrategy) {
+  throw new Error("Bootstrap-first fixture did not register its legacy strategy");
+}
+vm.runInNewContext(executableSource, bootstrapFirstContext, {
+  filename: "hoymiles-rce-chart-card-after-bootstrap.js",
+});
+if (
+  bootstrapFirstRegistry.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3")
+  !== bootstrapFirstStrategy
+) {
+  throw new Error("Canonical module attempted to redefine a bootstrap-first strategy");
 }
 
 const Card = registry.get("hoymiles-rce-chart-card");
@@ -812,9 +865,10 @@ if (
 Promise.all([
   Strategy.generate({}, { locale: { language: "pl-PL" } }),
   Strategy.generate({}, { locale: { language: "en-GB" } }),
+  bootstrapFirstStrategy.generate({}, { locale: { language: "pl-PL" } }),
   auroraFrameMountPromise,
 ])
-  .then(([polishDashboard, englishDashboard]) => {
+  .then(([polishDashboard, englishDashboard, bootstrapFirstDashboard]) => {
     if (
       polishDashboard.views?.length < 10 ||
       englishDashboard.views?.length < 10
@@ -841,13 +895,19 @@ Promise.all([
       }
       return found;
     };
-    for (const dashboard of [polishDashboard, englishDashboard]) {
+    for (const dashboard of [
+      polishDashboard,
+      englishDashboard,
+      bootstrapFirstDashboard,
+    ]) {
       const allCards = dashboard.views.flatMap((view) => collectCards(view.cards));
       const frames = allCards.filter(
         (card) => card?.type === "custom:hoymiles-aurora-frame-card",
       );
-      if (!frames.length) {
-        throw new Error("Dashboard strategy did not apply Aurora frames at runtime");
+      if (frames.length !== 42) {
+        throw new Error(
+          `Dashboard strategy produced ${frames.length} Aurora frames, expected 42`,
+        );
       }
       if (
         frames.some(
@@ -864,7 +924,9 @@ Promise.all([
         throw new Error("Dashboard strategy lost the existing Aurora energy card");
       }
     }
-    console.log("Dashboard strategy: PL/EN payloads loaded successfully");
+    console.log(
+      "Dashboard strategy: PL/EN and bootstrap-first paths render 42 Aurora frames",
+    );
   })
   .catch((error) => {
     console.error(error);

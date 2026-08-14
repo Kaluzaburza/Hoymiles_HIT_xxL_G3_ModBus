@@ -17,7 +17,7 @@ esphome:
   comment: "${device_description}"
   project:
     name: "hoymiles.energy-storage-modbus"
-    version: "1.5.2"
+    version: "1.5.3"
 
 logger:
   level: WARN

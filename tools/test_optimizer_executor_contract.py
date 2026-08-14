@@ -5,14 +5,17 @@ from __future__ import annotations
 import ast
 import asyncio
 from copy import deepcopy
+import importlib.util
 from pathlib import Path
+import sys
 import threading
-from types import MethodType
+from types import MethodType, SimpleNamespace
 from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "hoymiles_hit_modbus"
+SCHEDULER = ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
 SENSORS = {
     "rce_sensor.py": ("HoymilesRCEOptimizerSensor", "optimize_rce"),
     "tariff_sensor.py": (
@@ -21,6 +24,169 @@ SENSORS = {
     ),
     "rcm_sensor.py": ("HoymilesRCMOptimizerSensor", "optimize_rcm"),
 }
+
+
+def _load_revision_module():
+    path = COMPONENT / "optimizer_revision.py"
+    spec = importlib.util.spec_from_file_location(
+        "hoymiles_optimizer_revision_contract",
+        path,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _assert_revision_fingerprint_contract() -> None:
+    revision_module = _load_revision_module()
+    revision = revision_module.OptimizerInputRevision()
+    old = SimpleNamespace(
+        state="ready",
+        attributes={"price": 1.0, "result_current": True},
+        last_updated="old",
+    )
+    diagnostic_only = SimpleNamespace(
+        state="waiting",
+        attributes={"price": 1.0, "result_current": False},
+        last_updated="new",
+    )
+    assert not revision.invalidate_state_change(
+        old,
+        diagnostic_only,
+        attributes=("price",),
+        include_state=False,
+        include_last_updated=False,
+    ), "Diagnostic publication caused a cross-optimizer revision ping-pong"
+    consumed_change = SimpleNamespace(
+        state="waiting",
+        attributes={"price": 1.1, "result_current": False},
+        last_updated="newer",
+    )
+    assert revision.invalidate_state_change(
+        diagnostic_only,
+        consumed_change,
+        attributes=("price",),
+        include_state=False,
+        include_last_updated=False,
+    )
+    captured = revision.value
+    revision.invalidate()
+    assert not revision.is_current(captured)
+
+    physical_old = SimpleNamespace(
+        state="50",
+        attributes={},
+        last_reported="report-one",
+        last_updated="unchanged",
+    )
+    physical_refreshed = SimpleNamespace(
+        state="50",
+        attributes={},
+        last_reported="report-two",
+        last_updated="unchanged",
+    )
+    assert revision.invalidate_state_change(
+        physical_old,
+        physical_refreshed,
+        include_last_updated=True,
+    ), "A fresh identical physical report did not invalidate signed-age inputs"
+
+
+async def _assert_dirty_result_is_never_committed() -> None:
+    """Change an input mid-executor and commit only the latest snapshot."""
+    revision_module = _load_revision_module()
+    revision = revision_module.OptimizerInputRevision()
+
+    class States:
+        def __init__(self) -> None:
+            self.value = SimpleNamespace(
+                state="80",
+                attributes={},
+                last_updated="one",
+            )
+
+        def get(self, entity_id: str) -> Any:
+            assert entity_id == "sensor.battery_soc"
+            return self.value
+
+    hass = SimpleNamespace(states=States())
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    attempts = 0
+    committed: list[str] = []
+
+    async def solve(snapshot: str) -> str:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            first_started.set()
+            await release_first.wait()
+        return snapshot
+
+    async def run_latest() -> None:
+        for _attempt in range(revision_module.MAX_IMMEDIATE_RECALCULATIONS):
+            captured_revision = revision.value
+            captured_fingerprint = revision_module.optimizer_input_fingerprint(
+                hass,
+                ("sensor.battery_soc",),
+            )
+            result = await solve(hass.states.value.state)
+            if (
+                not revision.is_current(captured_revision)
+                or captured_fingerprint
+                != revision_module.optimizer_input_fingerprint(
+                    hass,
+                    ("sensor.battery_soc",),
+                )
+            ):
+                continue
+            committed.append(result)
+            return
+
+    task = asyncio.create_task(run_latest())
+    await asyncio.wait_for(first_started.wait(), timeout=5.0)
+    hass.states.value = SimpleNamespace(
+        state="20",
+        attributes={},
+        last_updated="two",
+    )
+    revision.invalidate()
+    release_first.set()
+    await asyncio.wait_for(task, timeout=5.0)
+    assert attempts == 2
+    assert committed == ["20"], "The stale executor result was committed"
+
+
+def _assert_scheduler_result_current_gates() -> None:
+    source = SCHEDULER.read_text(encoding="utf-8")
+    rce_ready = source[
+        source.index("unique_id: hoymiles_rce_control_data_ready") :
+        source.index("unique_id: hoymiles_ems_export_allowed")
+    ]
+    tariff_ready = source[
+        source.index("unique_id: hoymiles_tariff_control_data_ready") :
+        source.index("unique_id: hoymiles_ems_control_conflict")
+    ]
+    assert "'result_current') is sameas true" in rce_ready
+    assert "'result_current') is sameas true" in tariff_ready
+    rcm_control = source[
+        source.index("id: hoymiles_rcm_voltage_charge_control") :
+        source.index("id: hoymiles_rcm_pre_discharge_control")
+    ]
+    rcm_pre_discharge = source[
+        source.index("id: hoymiles_rcm_pre_discharge_control") :
+    ]
+    for label, section in (
+        ("RCEm voltage control", rcm_control),
+        ("RCEm pre-discharge", rcm_pre_discharge),
+    ):
+        assert "result_current: >-" in section, f"{label} lacks a current-result variable"
+        assert "and result_current" in section, f"{label} can start from a stale plan"
+        assert "or not result_current" not in section, (
+            f"{label} treats normal in-flight recalculation as a hardware failure"
+        )
 
 
 def _class_node(tree: ast.Module, name: str) -> ast.ClassDef:
@@ -111,7 +277,7 @@ def _compile_probe_method(method: ast.AsyncFunctionDef) -> type[Any]:
         body=[deepcopy(method)],
     )
     module = ast.fix_missing_locations(ast.Module(body=[probe_class], type_ignores=[]))
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, Any] = {"MAX_IMMEDIATE_RECALCULATIONS": 3}
     exec(compile(module, "<optimizer-lock-probe>", "exec"), namespace)
     return namespace["Probe"]
 
@@ -165,6 +331,16 @@ def _assert_static_contract(
         and node.value.func.attr == "Lock"
     ]
     assert len(lock_assignments) == 1, f"{path.name} lacks one asyncio.Lock"
+    revision_assignments = [
+        node
+        for node in ast.walk(init)
+        if isinstance(node, ast.Assign)
+        and any(_is_self_attribute(target, "_input_revision") for target in node.targets)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "OptimizerInputRevision"
+    ]
+    assert len(revision_assignments) == 1, f"{path.name} lacks one input revision"
 
     callback_names = [
         "_async_control_timer" if path.name == "rcm_sensor.py" else "_async_timer",
@@ -224,6 +400,29 @@ def _assert_static_contract(
     ]
     assert not direct_calls, f"{path.name} still calls {optimizer_name} on the HA loop"
     executor_await = _optimizer_executor_await(locked, optimizer_name)
+    revision_checks = [
+        node
+        for node in ast.walk(locked)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "is_current"
+        and isinstance(node.func.value, ast.Attribute)
+        and _is_self_attribute(node.func.value, "_input_revision")
+    ]
+    assert revision_checks, f"{path.name} never rejects a stale executor result"
+    assert any(
+        getattr(node, "lineno", 0) > getattr(executor_await, "lineno", 0)
+        for node in revision_checks
+    ), f"{path.name} checks revision only before the executor await"
+    fingerprint_checks = [
+        node
+        for node in ast.walk(locked)
+        if isinstance(node, ast.Call)
+        and _is_self_attribute(node.func, "_current_input_fingerprint")
+    ]
+    assert len(fingerprint_checks) >= 2, (
+        f"{path.name} does not compare HA state before and after the executor"
+    )
     return recalculate, executor_await
 
 
@@ -241,7 +440,7 @@ async def _assert_fifo_single_flight(
     active = 0
     maximum_active = 0
 
-    async def fake_locked(self: Any) -> None:
+    async def fake_locked(self: Any) -> bool:
         nonlocal active, maximum_active
         task = asyncio.current_task()
         assert task is not None
@@ -255,8 +454,10 @@ async def _assert_fifo_single_flight(
         await asyncio.sleep(0)
         order.append(("end", task_name))
         active -= 1
+        return True
 
     probe._recalculate_locked = MethodType(fake_locked, probe)
+    probe._mark_result_current = MethodType(lambda self: None, probe)
     first = asyncio.create_task(probe._recalculate(), name="first")
     await asyncio.wait_for(first_started.wait(), timeout=5.0)
     second = asyncio.create_task(probe._recalculate(), name="second")
@@ -317,6 +518,9 @@ async def _assert_loop_remains_responsive(
 
 
 async def _async_main() -> None:
+    _assert_revision_fingerprint_contract()
+    _assert_scheduler_result_current_gates()
+    await _assert_dirty_result_is_never_committed()
     contracts: list[tuple[str, ast.AsyncFunctionDef, ast.Await]] = []
     for filename, (class_name, optimizer_name) in SENSORS.items():
         wrapper, executor_await = _assert_static_contract(

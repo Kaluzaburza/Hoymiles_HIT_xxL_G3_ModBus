@@ -4,6 +4,68 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-08-14
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** update **Hoymiles HIT xxL G3 Modbus** to version **1.5.3**.
+   **PL:** zaktualizuj integrację **Hoymiles HIT xxL G3 Modbus** w HACS do
+   wersji **1.5.3**.
+2. **Home Assistant:** restart after the HACS update, then run
+   `hoymiles_hit_modbus.install_assets` with `overwrite: true` if Home Assistant
+   still reports stale managed assets. Restart once more when requested and
+   hard-refresh every open Hoymiles dashboard tab to load frontend revision 17.
+   **PL:** po aktualizacji HACS uruchom Home Assistant ponownie. Jeżeli nadal
+   zgłasza stare zarządzane zasoby, uruchom akcję
+   `hoymiles_hit_modbus.install_assets` z `overwrite: true`, wykonaj wymagany
+   restart i twardo odśwież każdą otwartą kartę dashboardu Hoymiles, aby
+   wczytać rewizję frontendu 17.
+3. **ESP32 / ESPHome:** v1.5.3 does not change inverter firmware behaviour.
+   Systems already running the required v1.5.2 FC03-readback firmware do not
+   need another flash solely for this Home Assistant/frontend hotfix. A fresh
+   build should use the top-level file pinned to **v1.5.3**.
+   **PL:** v1.5.3 nie zmienia działania firmware falownika. Instalacje z
+   wymaganym firmware v1.5.2 z odczytami FC03 nie wymagają ponownego wgrywania
+   wyłącznie z powodu tej poprawki Home Assistant/frontendu. Nowa kompilacja
+   powinna korzystać z głównego pliku przypiętego do **v1.5.3**.
+4. **Verification / Weryfikacja:** keep RCEm in shadow mode and automatic RCE
+   and tariff writes disabled during the restart. Verify `result_current`, the
+   physical freshness/readback diagnostics and the complete Aurora dashboard
+   before restoring the previous automation policy.
+   **PL:** podczas restartu pozostaw RCEm w trybie shadow, a automatyczne zapisy
+   RCE i taryfy wyłączone. Przed przywróceniem dotychczasowej polityki sprawdź
+   `result_current`, diagnostykę fizycznej świeżości/readback oraz pełny
+   dashboard Aurora.
+
+### Corrective candidate / Kandydat poprawkowy
+
+- Make the 2064-scenario automation matrix exercise nominal, non-zero BMS
+  charge and discharge capability. It now reports joint-solver and controlled
+  export coverage for every representative model, while missing, stale,
+  future-dated and exact-zero BMS inputs remain separate fail-closed contracts.
+- Reject an optimizer result if any consumed Home Assistant input changes while
+  its executor job is running. RCE, tariff and RCEm publish
+  `result_current: false` before recalculation; scheduler start/update writes
+  require a current result, without diagnostic ping-pong between planners.
+- Restore the complete Aurora dashboard after a live strategy-registration
+  timeout. Frontend revision 17 removes duplicate/legacy bootstrap resources
+  through Lovelace's live collection and upgrades a bootstrap-first strategy
+  in place. PL, EN and bootstrap-first validation each produce 42 Aurora frames.
+
+### Polski
+
+- Macierz 2064 scenariuszy korzysta teraz z nominalnych, niezerowych i świeżych
+  limitów BMS oraz raportuje rzeczywiste uruchomienia wspólnego solvera i
+  planowanego eksportu dla każdego modelu. Brakujące, nieświeże, przyszłe i
+  zerowe dane BMS pozostają osobnymi testami fail-closed.
+- Wynik RCE, taryfy lub RCEm jest odrzucany, jeżeli podczas pracy w executorze
+  zmieni się którekolwiek używane wejście. Nowy zapis lub start wymaga
+  `result_current: true`, bez wzajemnej pętli publikacji planerów.
+- Rewizja frontendu 17 przywraca pełny dashboard Aurora, usuwa z aktywnej
+  kolekcji Lovelace stare/zdublowane bootstrapy i aktualizuje nawet strategię
+  zarejestrowaną wcześniej przez stary bootstrap. Walidacja PL, EN i ścieżki
+  bootstrap-first potwierdza 42 ramki Aurora.
+
 ## [1.5.2] - 2026-08-13
 
 ### User update steps / Kroki po aktualizacji

@@ -390,7 +390,7 @@ użytkownika.
 RCEm domyślnie uruchamia się w **trybie obserwacji (shadow)**. Oblicza wtedy
 plany i diagnostykę, ale nie wykonuje żadnych zapisów do falownika, dlatego może
 zbierać dane testowe obok sterowania RCE lub taryfowego. Podczas publicznych
-testów v1.5.2 nie wyłączaj trybu obserwacji. RCEm nie wyłącza certyfikowanych
+testów v1.5.3 nie wyłączaj trybu obserwacji. RCEm nie wyłącza certyfikowanych
 zabezpieczeń, nie zmienia progów ochronnych, nie włącza GCF i nie modyfikuje
 ustawienia asymetrii trójfazowej. Pozostaje funkcją eksperymentalną i przed
 użyciem zapisów wymaga osobnej walidacji terenowej oraz uruchomienia próbnego na
@@ -417,7 +417,7 @@ Konwerter Modbus ESP32 podłącz do falownika **Master** przez zewnętrzną
 magistralę RS485 przewidzianą dla instalacji. Monitorowanie, prognozy i analiza
 RCEm w trybie shadow pozostają dostępne dla wykrytej instalacji równoległej.
 
-W publicznym teście v1.5.2 chronione zapisy EMS są dostępne wyłącznie dla
+W publicznym teście v1.5.3 chronione zapisy EMS są dostępne wyłącznie dla
 zweryfikowanej topologii z jednym falownikiem. Zewnętrzny port Mastera nie daje
 niezależnego potwierdzenia FC03 z każdego Slave po poleceniu rozgłoszeniowym,
 dlatego RCE, tanie ładowanie, harmonogramy ręczne, balansowanie i aktywny RCEm

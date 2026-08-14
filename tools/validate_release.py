@@ -34,6 +34,35 @@ def load_json(path: Path) -> dict | list:
         return json.load(json_file)
 
 
+def iter_mappings(value):
+    """Yield every mapping in a nested dashboard payload."""
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from iter_mappings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from iter_mappings(child)
+
+
+def dashboard_structure(value, parent_key: str = ""):
+    """Return a locale-neutral dashboard structure signature."""
+    if isinstance(value, dict):
+        return {
+            key: dashboard_structure(child, key)
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [dashboard_structure(child, parent_key) for child in value]
+    if isinstance(value, str) and (
+        parent_key in {"type", "entity", "action", "service"}
+        or parent_key.endswith("_entity")
+        or re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", value)
+    ):
+        return value
+    return type(value).__name__
+
+
 def load_localization_module():
     """Load the standalone localization module without Home Assistant."""
     path = COMPONENT / "localization.py"
@@ -279,6 +308,10 @@ script:
             self.data[item["id"]] = item
             return item
 
+        async def async_delete_item(self, item_id: str) -> None:
+            require(self.loaded, "Resource was deleted before lazy loading")
+            del self.data[item_id]
+
     def fake_hass(
         collection: FakeResourceCollection,
         mode: str = "storage",
@@ -314,6 +347,54 @@ script:
         "Live Lovelace resource setup is not idempotent",
     )
 
+    bootstrap_only = FakeResourceCollection(
+        [
+            {
+                "id": "legacy-bootstrap",
+                "url": (
+                    "/local/hoymiles-dashboard-strategy.js"
+                    "?v=1.5.2.15"
+                ),
+                "type": "module",
+            }
+        ]
+    )
+    require(
+        asyncio.run(
+            assets._async_sync_lovelace_resource(fake_hass(bootstrap_only))
+        )
+        and bootstrap_only.async_items()
+        == [
+            {
+                "id": "legacy-bootstrap",
+                "url": assets.FRONTEND_RESOURCE_URL,
+                "type": "module",
+            }
+        ],
+        "A lone legacy bootstrap was not upgraded to the full module",
+    )
+
+    yaml_collection = FakeResourceCollection(
+        [
+            {
+                "id": "yaml-bootstrap",
+                "url": "/local/hoymiles-dashboard-strategy.js?v=old",
+                "type": "module",
+            }
+        ]
+    )
+    require(
+        not asyncio.run(
+            assets._async_sync_lovelace_resource(
+                fake_hass(yaml_collection, mode="yaml")
+            )
+        )
+        and not yaml_collection.loaded
+        and yaml_collection.data["yaml-bootstrap"]["url"]
+        == "/local/hoymiles-dashboard-strategy.js?v=old",
+        "YAML resource mode was mutated instead of using the global module",
+    )
+
     with tempfile.TemporaryDirectory(prefix="hoymiles_storage_upgrade_") as tmp:
         config_path = Path(tmp)
         storage_path = config_path / ".storage"
@@ -326,7 +407,20 @@ script:
             "data": {
                 "items": [
                     {
-                        "id": "legacy-hoymiles-resource",
+                        "id": "legacy-hoymiles-bootstrap",
+                        "url": (
+                            "/api/hoymiles_hit_modbus/static-r2/"
+                            "hoymiles-dashboard-strategy.js?v=1.5.2.15"
+                        ),
+                        "type": "module",
+                    },
+                    {
+                        "id": "canonical-hoymiles-resource",
+                        "url": assets.FRONTEND_RESOURCE_URL,
+                        "type": "module",
+                    },
+                    {
+                        "id": "duplicate-hoymiles-resource",
                         "url": (
                             "/api/hoymiles_hit_modbus/static-r2/"
                             "hoymiles-rce-chart-card.js?v=1.5.2.15"
@@ -465,10 +559,11 @@ script:
         )
         migrated_resources = collection.async_items()
         require(
-            migrated_resources[0]["url"] == assets.FRONTEND_RESOURCE_URL
+            migrated_resources[0]["id"] == "canonical-hoymiles-resource"
+            and migrated_resources[0]["url"] == assets.FRONTEND_RESOURCE_URL
             and migrated_resources[0]["type"] == "module"
             and migrated_resources[1]["url"] == "/local/user-card.js",
-            "Managed Lovelace resource was not cache-busted safely",
+            "Managed Lovelace resources were not reduced to one full module",
         )
         require(
             not asyncio.run(
@@ -492,13 +587,13 @@ script:
         )
 
     require(
-        assets.FRONTEND_RESOURCE_URL.startswith(
-            "/local/hoymiles-rce-chart-card.js?v="
-        )
-        and assets.FRONTEND_BOOTSTRAP_URL.startswith(
-            "/local/hoymiles-dashboard-strategy.js?v="
-        ),
-        "Frontend entry points must use Home Assistant's always-available /local route",
+        assets.FRONTEND_RESOURCE_URL
+        == f"/local/hoymiles-rce-chart-card.js?v={assets.VERSION}.17"
+        and assets.FRONTEND_BOOTSTRAP_URL
+        == f"/local/hoymiles-dashboard-strategy.js?v={assets.VERSION}.17"
+        and "/local/hoymiles-dashboard-strategy.js"
+        in assets.MANAGED_FRONTEND_RESOURCE_PATHS,
+        "Frontend revision 17 or legacy-bootstrap migration paths changed",
     )
 
 
@@ -965,8 +1060,10 @@ def main() -> int:
         not in dashboard_source[rce_details_index:rce_details_end],
         "RCE details must remain in the main column below the discharge plan",
     )
+    dashboard_payloads = []
     for dashboard_json in required_assets[-2:]:
         dashboard_data = load_json(dashboard_json)
+        dashboard_payloads.append(dashboard_data)
         require(
             isinstance(dashboard_data, dict)
             and isinstance(dashboard_data.get("views"), list)
@@ -983,6 +1080,20 @@ def main() -> int:
             f"{dashboard_json.name} does not use all "
             f"{expected_zebra_cards} zebra entity cards",
         )
+        require(
+            sum(
+                item.get("type")
+                == "custom:hoymiles-aurora-frame-card"
+                for item in iter_mappings(dashboard_data)
+            )
+            == 4,
+            f"{dashboard_json.name} must contain four authored Aurora frames",
+        )
+    require(
+        dashboard_structure(dashboard_payloads[0])
+        == dashboard_structure(dashboard_payloads[1]),
+        "English and Polish strategy payloads have different card structure",
+    )
 
     card_source = required_assets[4].read_text(encoding="utf-8")
     require(
@@ -1001,6 +1112,19 @@ def main() -> int:
         and "/api/hoymiles_hit_modbus/static-r2/" not in bootstrap_source
         and "import.meta" not in bootstrap_source,
         "Classic dashboard bootstrap is missing or uses ES-module-only syntax",
+    )
+    require(
+        card_source
+        == (ROOT / "home_assistant" / "www" / "hoymiles-rce-chart-card.js")
+        .read_text(encoding="utf-8")
+        and bootstrap_source
+        == (
+            ROOT
+            / "home_assistant"
+            / "www"
+            / "hoymiles-dashboard-strategy.js"
+        ).read_text(encoding="utf-8"),
+        "Generated frontend resources differ from their canonical sources",
     )
     require(
         "futureNoData" in card_source

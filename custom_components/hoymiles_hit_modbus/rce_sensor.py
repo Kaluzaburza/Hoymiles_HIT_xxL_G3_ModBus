@@ -34,6 +34,13 @@ from .forecast_model import (
     uncertainty_risk_weight,
 )
 from .models import RuntimeData
+from .optimizer_revision import (
+    INPUT_RECALCULATION_DELAY_SECONDS,
+    MAX_IMMEDIATE_RECALCULATIONS,
+    OptimizerInputRevision,
+    TARIFF_PRICE_BROKER_ATTRIBUTES,
+    optimizer_input_fingerprint,
+)
 from .rce_history import (
     LOAD_PHASE_ENERGY_ENTITIES,
     LoadHistorySummary,
@@ -532,12 +539,16 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._startup_warmup_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
         self._optimizer_lock = asyncio.Lock()
+        self._input_revision = OptimizerInputRevision()
         self._current_slot_continue_eligible: bool | None = None
         self._current_slot_continue_changed_at: datetime | None = None
         self._attributes: dict[str, Any] = {
             "status_code": "missing_data",
             "missing_entities": [],
             "planned_slots": [],
+            "result_current": False,
+            "recalculation_pending": True,
+            "input_revision": 0,
         }
 
     @property
@@ -626,6 +637,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         try:
             await self._async_refresh_load_history(force_full=True)
             await self._async_refresh_forecast_accuracy(force=True)
+            self._invalidate_internal_inputs()
             await self._recalculate_and_write()
         except asyncio.CancelledError:
             raise
@@ -636,6 +648,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         """Refresh recorder-backed LOAD history once per hour."""
         await self._async_refresh_load_history()
         await self._async_refresh_forecast_accuracy()
+        self._invalidate_internal_inputs()
         await self._recalculate_and_write()
 
     async def _async_refresh_load_history(self, *, force_full: bool = False) -> None:
@@ -846,18 +859,86 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             self._forecast_refresh_running = False
 
     @callback
+    def _current_input_fingerprint(self) -> tuple[Any, ...]:
+        """Return the exact watched snapshot used to certify publication."""
+        return optimizer_input_fingerprint(
+            self.hass,
+            WATCHED_ENTITIES,
+            attribute_projections={
+                "sensor.hoymiles_hit_tariff_charge_plan": (
+                    TARIFF_PRICE_BROKER_ATTRIBUTES
+                ),
+            },
+        )
+
+    @callback
+    def _invalidate_input_event(
+        self,
+        event: Event[EventStateChangedData],
+    ) -> bool:
+        """Invalidate only when a value consumed by this optimizer changed."""
+        entity_id = event.data["entity_id"]
+        counterpart = entity_id == "sensor.hoymiles_hit_tariff_charge_plan"
+        changed = self._input_revision.invalidate_state_change(
+            event.data.get("old_state"),
+            event.data.get("new_state"),
+            attributes=(TARIFF_PRICE_BROKER_ATTRIBUTES if counterpart else None),
+            include_state=not counterpart,
+            include_last_updated=not counterpart,
+        )
+        if changed:
+            self._mark_recalculation_pending()
+        return changed
+
+    @callback
+    def _invalidate_internal_inputs(self) -> None:
+        """Invalidate after recorder/clock-backed inputs change."""
+        self._input_revision.invalidate()
+        self._mark_recalculation_pending()
+
+    @callback
+    def _mark_recalculation_pending(self) -> None:
+        """Withdraw execution authority once, without publication ping-pong."""
+        if (
+            self._attributes.get("result_current") is False
+            and self._attributes.get("recalculation_pending") is True
+        ):
+            return
+        self._attributes = {
+            **self._attributes,
+            "result_current": False,
+            "recalculation_pending": True,
+        }
+        self.async_write_ha_state()
+
+    @callback
+    def _mark_result_current(self) -> None:
+        """Mark the committed plan as matching the latest input revision."""
+        self._attributes = {
+            **self._attributes,
+            "result_current": True,
+            "recalculation_pending": False,
+            "input_revision": self._input_revision.value,
+        }
+
+    @callback
     def _async_input_changed(
         self,
         event: Event[EventStateChangedData],
     ) -> None:
         """Coalesce fast ESPHome updates into one optimizer refresh."""
-        if self._recalculate_cancel is not None:
-            self._recalculate_cancel()
-        self._recalculate_cancel = async_call_later(
-            self.hass,
-            5,
-            self._async_debounced_recalculate,
-        )
+        if not self._invalidate_input_event(event):
+            return
+        # Leading-edge coalescing bounds the fail-closed pending interval even
+        # when ESPHome telemetry changes continuously. A solver already in
+        # flight observes the revision and immediately retries the latest
+        # snapshot under the same single-flight lock.
+        if self._recalculate_cancel is None:
+            self._recalculate_cancel = async_call_later(
+                self.hass,
+                INPUT_RECALCULATION_DELAY_SECONDS,
+                self._async_debounced_recalculate,
+            )
 
     async def _async_debounced_recalculate(self, now: datetime) -> None:
         self._recalculate_cancel = None
@@ -868,6 +949,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         if self._recalculate_cancel is not None:
             self._recalculate_cancel()
             self._recalculate_cancel = None
+        self._invalidate_internal_inputs()
         await self._recalculate_and_write()
 
     async def _recalculate_and_write(self) -> None:
@@ -875,7 +957,16 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         async with self._optimizer_lock:
             previous_state = self.native_value
             previous_attributes = self._attributes
-            await self._recalculate_locked()
+            committed = False
+            for _attempt in range(MAX_IMMEDIATE_RECALCULATIONS):
+                if await self._recalculate_locked():
+                    committed = True
+                    break
+            if committed:
+                self._mark_result_current()
+                if self._recalculate_cancel is not None:
+                    self._recalculate_cancel()
+                    self._recalculate_cancel = None
             if (
                 previous_state != self.native_value
                 or previous_attributes != self._attributes
@@ -885,9 +976,14 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     async def _recalculate(self) -> None:
         """Serialize startup and event-driven optimizer runs."""
         async with self._optimizer_lock:
-            await self._recalculate_locked()
+            for _attempt in range(MAX_IMMEDIATE_RECALCULATIONS):
+                if await self._recalculate_locked():
+                    self._mark_result_current()
+                    return
 
-    async def _recalculate_locked(self) -> None:
+    async def _recalculate_locked(self) -> bool:
+        captured_revision = self._input_revision.value
+        captured_fingerprint = self._current_input_fingerprint()
         try:
             settings, metadata = self._optimizer_input()
             if settings is None:
@@ -898,8 +994,14 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     "planned_slots": [],
                     **metadata,
                 }
-                return
+                return True
             result = await self.hass.async_add_executor_job(optimize_rce, settings)
+            if (
+                not self._input_revision.is_current(captured_revision)
+                or captured_fingerprint != self._current_input_fingerprint()
+            ):
+                self._mark_recalculation_pending()
+                return False
             self._result = result
             now = dt_util.now().astimezone(ZoneInfo(self.hass.config.time_zone))
             current_slot_continue_eligible = bool(
@@ -1267,7 +1369,14 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 "planned_slots": planned_slots,
                 **metadata,
             }
+            return True
         except Exception:  # noqa: BLE001 - fail closed in the automation entity
+            if (
+                not self._input_revision.is_current(captured_revision)
+                or captured_fingerprint != self._current_input_fingerprint()
+            ):
+                self._mark_recalculation_pending()
+                return False
             _LOGGER.exception("Cannot calculate the optimized RCE plan")
             self._result = None
             self._attributes = {
@@ -1275,6 +1384,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 "missing_entities": [],
                 "planned_slots": [],
             }
+            return True
 
     def _optimizer_input(
         self,
