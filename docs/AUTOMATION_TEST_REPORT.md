@@ -2,12 +2,12 @@
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.3 corrective candidate
-full offline validation**
-Accepted live runtime candidate:
-**`7ce13155533bfa0bf9752a0fd201224dac1a7393`**
-Current status: **v1.5.3 corrective candidate offline PASS; exact-SHA CI and live
-deployment are pending. RC6 remains the last live-tested runtime/frontend.**
+Last completed offline baseline in this report: **v1.5.3 full validation**
+Accepted live runtime merge:
+**`ce4afc614a691ce70c67da2439613de90e0c61c2`**
+(implementation commit **`915337fa34529c5197ad581a41d351b78bfb1d33`**)
+Current status: **v1.5.3 offline, exact-SHA CI and local Home Assistant live
+acceptance PASS.**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -37,7 +37,7 @@ commit `7ce13155533bfa0bf9752a0fd201224dac1a7393` then passed push CI and
 parallel-installation live frontend audit. The later v1.5.0 section is retained
 only as an explicitly archived live baseline.
 
-## v1.5.3 corrective candidate — offline PASS, live pending
+## v1.5.3 corrective release — offline and live PASS
 
 A later audit found that the published 2064-scenario matrix had inherited
 fail-closed defaults for BMS availability/freshness and omitted maximum charge
@@ -65,14 +65,36 @@ and only a result matching the latest revision is published with
 `result_current: true`. Cross-optimizer fingerprints include only attributes
 actually consumed, preventing RCE/tariff diagnostic ping-pong.
 
-A live browser check also reproduced a five-second Lovelace timeout waiting for
+A live browser check on the preceding candidate reproduced a five-second
+Lovelace timeout waiting for
 `ll-strategy-dashboard-hoymiles-hit-xxl-g3`. Frontend revision 17 publishes one
 canonical full module, removes duplicate and legacy bootstrap resources via
 the live Lovelace collection, and upgrades a bootstrap-first constructor in
 place. Offline PL, EN and bootstrap-first execution each render exactly 42
-Aurora frames. Exact-SHA CI, installation, restart, hard refresh and live
-browser verification of revision 17 remain pending and must not be inferred
-from the earlier RC6 live evidence.
+Aurora frames. The exact v1.5.3 merge then passed push, pull-request and
+workflow-dispatch CI, including the exhaustive matrix, and was installed on
+the local Home Assistant test system. Two configuration-checked restarts and a
+fresh browser session confirmed revision 17 without strategy/configuration
+errors on any of the 17 dashboard paths.
+
+### v1.5.3 exact-SHA live evidence — 2026-08-14
+
+| Check | Result |
+|---|---|
+| Runtime traceability | Implementation `915337fa34529c5197ad581a41d351b78bfb1d33`; tested `main` merge `ce4afc614a691ce70c67da2439613de90e0c61c2` |
+| GitHub CI | Push run `31771450198`, PR run `31771472055`, exhaustive dispatch run `31771487285`, and post-merge `main` run `31771971876`: PASS |
+| Deployment archive | SHA-256 `85881F64BBD6AFD66114C8944BADAABBF0F83BD70380D0B661F376560D0D7C22` |
+| Home Assistant | Two `ha core check` runs and two required restarts succeeded; package **1.5.3**, setup **Ready** |
+| Optimizer authority | RCE, tariff and RCEm `result_current: true` after restart |
+| Control safety | Self-Use; every execution owner/cycle off; RCE and balancing off; tariff inactive; RCEm enabled in shadow mode |
+| Frontend assets | Revision-17 card, PL/EN JSON and image returned HTTP 200; exactly one managed Hoymiles module resource; no relevant Repair issue |
+| Aurora browser audit | All 17 authoritative paths rendered in a fresh session without strategy/configuration errors or relevant console warnings |
+| Aurora structure | PL, EN and bootstrap-first deterministic configurations each contain exactly 42 non-nested Aurora frames; live DOM count is conditional by design |
+| Firmware action | None; this release does not require another ESPHome flash on a system already running the v1.5.2 FC03-readback firmware |
+
+The final release/tag commit is expected to differ only by this live-evidence
+documentation. Its delta from the tested runtime merge must remain
+documentation-only.
 
 ## Representative systems
 
