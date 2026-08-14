@@ -1671,11 +1671,9 @@ def main() -> int:
             f"Parallel EMS safety marker missing: {marker}",
         )
     require(
-        settings_source.count("send_raw(payload)") == 2
-        and settings_source.count("0x00, 0x10, 0x10, 0xCC") == 2
-        and "bez pośredniej kolejki skryptu" in settings_source,
-        "Parallel EMS must keep the field-proven direct mode writer and the "
-        "generic complete-block settings writer",
+        settings_source.count("send_raw(payload)") == 1
+        and settings_source.count("0x00, 0x10, 0x10, 0xCC") == 1,
+        "Parallel EMS broadcast must have one canonical complete-block writer",
     )
     require(
         'name: "Hoymiles Direct Register Execution Ready"' in ems_package_source
