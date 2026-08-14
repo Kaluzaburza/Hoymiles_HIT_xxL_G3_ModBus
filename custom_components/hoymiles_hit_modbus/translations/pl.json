@@ -703,6 +703,9 @@
       "ems_verified_hardware_readback_supported": {
         "name": "Obsługa potwierdzonego odczytu sprzętowego EMS"
       },
+      "direct_register_verified_readback_supported": {
+        "name": "Obsługa potwierdzonego odczytu rejestrów bezpośrednich"
+      },
       "machines_type": {
         "name": "Rola urządzenia w sieci równoległej"
       },

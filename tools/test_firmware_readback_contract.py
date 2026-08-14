@@ -19,6 +19,14 @@ def platform_block(source: str, component_id: str) -> str:
     return source[block_start:] if block_end < 0 else source[block_start:block_end]
 
 
+def script_block(source: str, component_id: str) -> str:
+    marker = f"  - id: {component_id}\n"
+    start = source.index(marker)
+    block_end = source.find("\nsensor:\n", start)
+    assert block_end >= 0, component_id
+    return source[start:block_end]
+
+
 def main() -> None:
     settings = (ROOT / "packages" / "settings.yaml").read_text(encoding="utf-8")
     parallel = (ROOT / "packages" / "parallel_network.yaml").read_text(
@@ -73,14 +81,29 @@ def main() -> None:
         assert publish in poll_block, generation_id
 
     mode_block = platform_block(settings, "ems_mode_4300")
+    ems_writer = script_block(settings, "ems_write_complete_block_4300_4306")
     assert "update_interval: never" in mode_block
     assert "optimistic:" not in mode_block
     assert ".publish_state(x)" not in mode_block
-    assert "id(ems_verified_hardware_readback_supported).state" in mode_block
-    assert mode_block.index("ems_verified_hardware_readback_supported") < mode_block.index(
-        "create_write_multiple_command"
+    assert "id(ems_write_complete_block_4300_4306)->execute(" in mode_block
+    assert "create_write_multiple_command" not in mode_block
+    assert "send_raw" not in mode_block
+
+    # Every EMS edit is composed from the complete physical 4300-4306
+    # snapshot. A Master gets the same FC16 frame on the system broadcast
+    # address 0; a single inverter keeps the addressed controller path.
+    assert "mode: queued" in ems_writer
+    assert "id(ems_verified_hardware_readback_supported).state" in ems_writer
+    assert ems_writer.index("ems_verified_hardware_readback_supported") < ems_writer.index(
+        "send_raw(payload)"
     )
-    assert "static_cast<uint32_t>(millis() - ems_snapshot_ms) > 15000U" in mode_block
+    assert "static_cast<uint32_t>(millis() - ems_snapshot_ms) > 15000U" in ems_writer
+    assert "if (machine_type == 1)" in ems_writer
+    assert "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E" in ems_writer
+    assert "id(modbus_1).send_raw(payload);" in ems_writer
+    assert "create_write_multiple_command" in ems_writer
+    assert "controller, 4300, values.size(), values" in ems_writer
+    assert ".publish_state(" not in ems_writer
     ems_last_poll = platform_block(settings, "maximum_discharge_power_readback_4306")
     assert "id(ems_control_last_readback_ms) = millis();" in ems_last_poll
     assert "id(ems_control_last_readback_ms) = millis();" not in platform_block(
@@ -94,45 +117,54 @@ def main() -> None:
         "force_discharge_soc_readback_4305",
         "maximum_discharge_power_readback_4306",
     ):
-        assert f"id({mirror_id}).has_state()" in mode_block, mirror_id
         assert f"id({mirror_id}).state" in mode_block, mirror_id
     for range_marker in (
-        "id(self_used_soc_readback_4301).state, 10.0f, 100.0f",
-        "id(backup_soc_raw_4302).state, 60.0f, 100.0f",
-        "id(force_charge_soc_readback_4303).state, 10.0f, 100.0f",
-        "id(maximum_charge_power_readback_4304).state, 0.0f, 100.0f",
-        "id(force_discharge_soc_readback_4305).state, 0.0f, 100.0f",
-        "id(maximum_discharge_power_readback_4306).state, 0.0f, 100.0f",
+        "valid_range(self_use_soc, 10.0f, 100.0f)",
+        "valid_range(backup_soc, 60.0f, 100.0f)",
+        "valid_range(force_charge_soc, 10.0f, 100.0f)",
+        "valid_range(maximum_charge_power, 0.0f, 100.0f)",
+        "valid_range(force_discharge_soc, 0.0f, 100.0f)",
+        "valid_range(maximum_discharge_power, 0.0f, 100.0f)",
     ):
-        assert range_marker in mode_block, range_marker
-    assert "std::isfinite(value)" in mode_block
-    assert mode_block.index("snapshot 4301-4306 ma wartość poza zakresem") < mode_block.index(
-        "create_write_multiple_command"
-    )
+        assert range_marker in ems_writer, range_marker
+    assert "std::isfinite(value)" in ems_writer
     assert "encode(id(self_used_soc_4301).state" not in mode_block
     assert "encode(id(force_charge_soc_4303).state" not in mode_block
     assert "encode(id(maximum_charge_power_4304).state" not in mode_block
     assert "encode(id(force_discharge_soc_4305).state" not in mode_block
     assert "encode(id(maximum_discharge_power_4306).state" not in mode_block
 
-    guarded_actuators = (
-        "gcf_enable_258",
-        "gcf_export_soft_limit_ratio_259",
-        "battery_max_charge_power_306",
+    ems_actuators = (
         "self_used_soc_4301",
         "force_charge_soc_4303",
         "maximum_charge_power_4304",
         "force_discharge_soc_4305",
         "maximum_discharge_power_4306",
     )
-    for component_id in guarded_actuators:
+    for component_id in ems_actuators:
         block = platform_block(settings, component_id)
         assert "write_lambda:" in block, component_id
         assert "id(ems_verified_hardware_readback_supported).has_state()" in block, component_id
         assert "id(ems_verified_hardware_readback_supported).state" in block, component_id
         assert ".state < 0.5f" in block, component_id
+        assert "id(ems_write_complete_block_4300_4306)->execute(" in block, component_id
         assert "return {};" in block, component_id
         assert "readback_generation).publish_state" not in block, component_id
+
+    direct_actuators = (
+        "gcf_enable_258",
+        "gcf_export_soft_limit_ratio_259",
+        "battery_max_charge_power_306",
+    )
+    for component_id in direct_actuators:
+        block = platform_block(settings, component_id)
+        assert "write_lambda:" in block, component_id
+        assert (
+            "id(direct_register_verified_readback_supported).has_state()" in block
+        ), component_id
+        assert "id(direct_register_verified_readback_supported).state" in block, component_id
+        assert ".state < 0.5f" in block, component_id
+        assert "ems_write_complete_block_4300_4306" not in block, component_id
 
     # A ModbusNumber/ModbusSelect command echo is not a physical acknowledgement.
     number_source = settings.split("\nnumber:\n", 1)[1]
@@ -168,13 +200,24 @@ def main() -> None:
     assert "accuracy_decimals: 0" in capability
     assert "update_interval: 1s" in capability
     assert "static_cast<uint32_t>(millis() - last_readback) > 60000U" in capability
-    assert "return machine_type == 0 ? 1.0f : 0.0f;" in capability
-    assert "\nbinary_sensor:\n" not in parallel
-    assert "Zablokowane - brak FC03 dla każdego Slave" in parallel
+    assert "if (machine_type == 0) return 1.0f;" in capability
+    assert "machine_type != 1" in capability
+    assert "return count >= 2 && count <= 10 ? 1.0f : 0.0f;" in capability
+    assert "communication_address_" not in capability
 
-    # A no-response broadcast can never satisfy the public acknowledgement contract.
-    assert "send_raw(payload)" not in settings
-    assert "0x00, 0x10, 0x10, 0xCC" not in settings
+    direct_capability = platform_block(
+        parallel, "direct_register_verified_readback_supported"
+    )
+    assert 'name: "Direct Register Verified Readback Supported"' in direct_capability
+    assert "static_cast<uint32_t>(millis() - last_readback) > 60000U" in direct_capability
+    assert "return machine_type == 0 ? 1.0f : 0.0f;" in direct_capability
+    assert "\nbinary_sensor:\n" not in parallel
+    assert "Gotowe - broadcast EMS, odczyt Mastera" in parallel
+
+    # The broadcast itself has no Modbus response. HA must therefore certify
+    # completion only from the later physical Master FC03 generation.
+    assert settings.count("send_raw(payload)") == 1
+    assert settings.count("0x00, 0x10, 0x10, 0xCC") == 1
 
     # Operational overview timestamps must prove a physical FC03 response.
     # A periodic template may keep publishing its cached value after Modbus
@@ -222,6 +265,18 @@ def main() -> None:
     soc_source = platform_block(battery, "battery_soc_1909")
     assert "modbus_controller_id: ${modbus_fast_controller_id}" in soc_source
 
+    # Unchanged BMS limits are still successful physical FC03 samples.  They
+    # must reach HA as reports so the signed-age fail-closed contract does not
+    # confuse a stable limit with a dead Modbus source.
+    for component_id in (
+        "battery_voltage_1911",
+        "max_charge_current_1916",
+        "max_discharge_current_1917",
+    ):
+        block = platform_block(battery, component_id)
+        assert "platform: modbus_controller" in block, component_id
+        assert "force_update: true" in block, component_id
+
     for public_id, source_id in (
         ("inv_active_power_30007", "inv_active_power_master_30007"),
         ("battery_power_30009", "battery_power_master_30009"),
@@ -268,6 +323,7 @@ def main() -> None:
         "Battery Max Charge Power Readback",
         "Parallel Topology Readback Generation",
         "EMS Verified Hardware Readback Supported",
+        "Direct Register Verified Readback Supported",
     ):
         assert source_name in catalog_names, source_name
     capability_records = [
@@ -278,6 +334,15 @@ def main() -> None:
     assert len(capability_records) == 1
     assert capability_records[0]["domain"] == "sensor"
     assert capability_records[0]["source_component"] == "sensor"
+    direct_capability_records = [
+        record
+        for record in catalog
+        if record.get("source_name")
+        == "Direct Register Verified Readback Supported"
+    ]
+    assert len(direct_capability_records) == 1
+    assert direct_capability_records[0]["domain"] == "sensor"
+    assert direct_capability_records[0]["source_component"] == "sensor"
 
     print("Firmware FC03 readback contract: PASS")
 

@@ -4,6 +4,41 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Restored parallel Master/Slave control for the complete EMS register block
+  `4300–4306`. A detected Master now sends one FC16 system broadcast to Modbus
+  address `0`; Home Assistant accepts the command only after a later physical
+  FC03 from the Master reports the exact requested block.
+- Split hardware readiness into two capabilities. RCE, tariff charging, manual
+  schedules and battery balancing may use the verified EMS-block broadcast,
+  while writes to GCF/export/charge registers `258`, `259` and `306` remain
+  fail-closed on Master/Slave until their broadcast semantics are proven.
+- Kept internal addresses `6050–6095` as topology diagnostics only. They are
+  not required for address-`0` broadcast and are never polled as external
+  Modbus devices through the Master's port.
+- Marked physical BMS voltage and maximum charge/discharge current polls as
+  force-updating reports. Stable limits now refresh Home Assistant provenance
+  instead of expiring after 300 seconds, while a genuinely silent FC03 source
+  still makes RCE fail closed. The Safe BMS helper now mirrors the current
+  optimizer limit and exposes its freshness and age.
+
+### Polski
+
+- Przywrócono sterowanie równoległym układem Master/Slave dla pełnego bloku EMS
+  `4300–4306`. Master wysyła jeden broadcast FC16 na wspólny adres Modbus `0`,
+  a Home Assistant uznaje polecenie dopiero po późniejszym fizycznym FC03 z
+  Mastera zawierającym dokładnie żądany blok.
+- Rozdzielono gotowość sprzętową: RCE, taryfa, harmonogramy ręczne i
+  balansowanie korzystają z potwierdzonego broadcastu EMS, natomiast zapisy
+  rejestrów `258`, `259` i `306` pozostają w układzie Master/Slave fail-closed.
+- Adresy `6050–6095` pozostają wyłącznie diagnostyką wewnętrznej topologii i nie
+  blokują wspólnego broadcastu na adres `0`.
+- Fizyczne odczyty napięcia BMS oraz maksymalnego prądu ładowania i rozładowania
+  raportują teraz także niezmienioną wartość. Stabilny limit odświeża więc
+  źródłowy znacznik czasu, a rzeczywisty brak FC03 nadal blokuje RCE. Wskaźnik
+  Safe BMS pokazuje dokładnie bieżący limit planera wraz z wiekiem danych.
+
 ## [1.5.3] - 2026-08-14
 
 ### User update steps / Kroki po aktualizacji

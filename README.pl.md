@@ -417,13 +417,19 @@ Konwerter Modbus ESP32 podłącz do falownika **Master** przez zewnętrzną
 magistralę RS485 przewidzianą dla instalacji. Monitorowanie, prognozy i analiza
 RCEm w trybie shadow pozostają dostępne dla wykrytej instalacji równoległej.
 
-W publicznym teście v1.5.3 chronione zapisy EMS są dostępne wyłącznie dla
-zweryfikowanej topologii z jednym falownikiem. Zewnętrzny port Mastera nie daje
-niezależnego potwierdzenia FC03 z każdego Slave po poleceniu rozgłoszeniowym,
-dlatego RCE, tanie ładowanie, harmonogramy ręczne, balansowanie i aktywny RCEm
-blokują zapisy w układzie Master/Slave. Panel pokazuje tę przyczynę wprost. Nie
-wyłączaj bramki odczytu zwrotnego. Sterowanie równoległe wróci dopiero po
-potwierdzeniu odczytu każdego urządzenia na obsługiwanym sprzęcie.
+Firmware po v1.5.3 przywraca polecenie systemowe zweryfikowane wcześniej na
+testowej instalacji 2×HIT: każda zmiana rejestrów EMS `4300–4306` jest wysyłana
+jako jeden broadcast FC16 na adres Modbus `0`. RCE, tanie ładowanie,
+harmonogramy ręczne i balansowanie baterii mogą dzięki temu sterować wykrytym
+układem z Masterem. Broadcast nie odpowiada; Home Assistant uznaje polecenie
+dopiero wtedy, gdy późniejszy fizyczny FC03 z Mastera zawiera dokładnie żądany
+blok. Jest to potwierdzenie polecenia systemowego, a nie niezależny ACK każdego
+Slave.
+
+Rejestry `258`, `259` i `306` leżą poza wspólnym blokiem EMS i nie mają jeszcze
+osobno potwierdzonej semantyki broadcastu Master/Slave. Aktywne działania RCEm,
+które ich wymagają, pozostają w układzie równoległym fail-closed; analiza RCEm
+shadow nadal działa. Nie wyłączaj żadnej z dwóch bramek gotowości.
 
 Panel Aurora automatycznie korzysta z systemowych rejestrów mocy producenta dla
 PV, baterii, zużycia domu i sieci. Adresy widoczne w rejestrach topologii są

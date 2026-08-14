@@ -7,6 +7,137 @@ globals:
     restore_value: no
     initial_value: "0"
 
+# Każda zmiana jednego pola EMS zapisuje cały spójny blok 4300-4306. Dla
+# pojedynczego falownika jest to zwykły adresowany FC16. Master wysyła ten sam
+# blok jako Modbus broadcast 0, który został wcześniej zweryfikowany w układzie
+# 2×HIT. Broadcast nie odpowiada, dlatego niczego tu nie publikujemy
+# optymistycznie; Home Assistant czeka na późniejszą generację FC03 Mastera.
+script:
+  - id: ems_write_complete_block_4300_4306
+    mode: queued
+    max_runs: 4
+    parameters:
+      mode_code: float
+      self_use_soc: float
+      backup_soc: float
+      force_charge_soc: float
+      maximum_charge_power: float
+      force_discharge_soc: float
+      maximum_discharge_power: float
+    then:
+      - lambda: |-
+          if (!id(ems_verified_hardware_readback_supported).has_state() ||
+              id(ems_verified_hardware_readback_supported).state < 0.5f) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: brak gotowości sprzętowej EMS");
+            return;
+          }
+          auto valid_range = [](float value, float minimum, float maximum) {
+            return std::isfinite(value) && value >= minimum && value <= maximum;
+          };
+          if (!std::isfinite(mode_code)) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: brak fizycznego trybu EMS");
+            return;
+          }
+          const int32_t requested_mode = static_cast<int32_t>(std::lround(mode_code));
+          if ((requested_mode != 0 && requested_mode != 3 && requested_mode != 4 &&
+               requested_mode != 5) ||
+              !valid_range(self_use_soc, 10.0f, 100.0f) ||
+              !valid_range(backup_soc, 60.0f, 100.0f) ||
+              !valid_range(force_charge_soc, 10.0f, 100.0f) ||
+              !valid_range(maximum_charge_power, 0.0f, 100.0f) ||
+              !valid_range(force_discharge_soc, 0.0f, 100.0f) ||
+              !valid_range(maximum_discharge_power, 0.0f, 100.0f)) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: niekompletny snapshot lub wartość poza zakresem");
+            return;
+          }
+          const uint32_t ems_snapshot_ms = id(ems_control_last_readback_ms);
+          if (ems_snapshot_ms == 0 ||
+              static_cast<uint32_t>(millis() - ems_snapshot_ms) > 15000U) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: snapshot FC03 jest nieaktualny");
+            return;
+          }
+          if (!id(machines_type_6048).has_state()) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: brak topologii 6048");
+            return;
+          }
+
+          const float machine_type_raw = id(machines_type_6048).state;
+          if (!std::isfinite(machine_type_raw)) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: nieprawidłowa topologia");
+            return;
+          }
+          const int machine_type = static_cast<int>(std::lround(machine_type_raw));
+          if (std::fabs(machine_type_raw - machine_type) > 0.01f) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: niecałkowita topologia");
+            return;
+          }
+          if (machine_type == 2) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: ESP32 jest podłączone do Slave");
+            return;
+          }
+          if (machine_type > 2) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: nieprawidłowa topologia %d",
+                     machine_type);
+            return;
+          }
+
+          auto encode = [](float value, float scale) -> uint16_t {
+            return static_cast<uint16_t>(std::lround(value * scale));
+          };
+          std::vector<uint16_t> values = {
+              static_cast<uint16_t>(requested_mode),
+              encode(self_use_soc, 1.0f),
+              encode(backup_soc, 1.0f),
+              encode(force_charge_soc, 1.0f),
+              encode(maximum_charge_power, 10.0f),
+              encode(force_discharge_soc, 1.0f),
+              encode(maximum_discharge_power, 10.0f),
+          };
+
+          if (machine_type == 1) {
+            if (!id(number_of_machines_master_and_slave_6049).has_state()) {
+              ESP_LOGE("ems", "Broadcast EMS zablokowany: brak liczby falowników");
+              return;
+            }
+            const float machine_count_raw =
+                id(number_of_machines_master_and_slave_6049).state;
+            if (!std::isfinite(machine_count_raw)) {
+              ESP_LOGE("ems", "Broadcast EMS zablokowany: nieprawidłowa liczba falowników");
+              return;
+            }
+            const int machine_count =
+                static_cast<int>(std::lround(machine_count_raw));
+            if (std::fabs(machine_count_raw - machine_count) > 0.01f) {
+              ESP_LOGE("ems", "Broadcast EMS zablokowany: niecałkowita liczba falowników");
+              return;
+            }
+            if (machine_count < 2 || machine_count > 10) {
+              ESP_LOGE("ems", "Broadcast EMS zablokowany: liczba falowników=%d",
+                       machine_count);
+              return;
+            }
+            std::vector<uint8_t> payload = {
+                0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E,
+            };
+            for (const uint16_t value : values) {
+              payload.push_back(static_cast<uint8_t>(value >> 8));
+              payload.push_back(static_cast<uint8_t>(value & 0xFF));
+            }
+            id(modbus_1).send_raw(payload);
+            ESP_LOGI("ems",
+                     "Wysłano systemowy broadcast EMS 4300-4306; tryb=%d, falowniki=%d",
+                     requested_mode, machine_count);
+            return;
+          }
+
+          auto *controller = id(${modbus_control_controller_id});
+          auto command =
+              esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
+                  controller, 4300, values.size(), values);
+          controller->queue_command(command);
+          ESP_LOGI("ems", "Wysłano adresowany FC16 EMS 4300-4306; tryb=%d",
+                   requested_mode);
+
 sensor:
   # Autorytatywna generacja odczytu bloku EMS. Jest inkrementowana wyłącznie
   # przez cykliczny odczyt FC03 rejestru 4300, nigdy przez lokalny zapis.
@@ -244,117 +375,18 @@ select:
       }
     set_action:
       - lambda: |-
-          if (!id(ems_verified_hardware_readback_supported).has_state() ||
-              id(ems_verified_hardware_readback_supported).state < 0.5f) {
-            ESP_LOGE(
-                "ems",
-                "Zapis EMS zablokowany: brak świeżego, weryfikowalnego FC03");
-            return;
-          }
-          if (!id(ems_control_readback_generation).has_state() ||
-              !id(self_used_soc_readback_4301).has_state() ||
-              !id(backup_soc_raw_4302).has_state() ||
-              !id(force_charge_soc_readback_4303).has_state() ||
-              !id(maximum_charge_power_readback_4304).has_state() ||
-              !id(force_discharge_soc_readback_4305).has_state() ||
-              !id(maximum_discharge_power_readback_4306).has_state()) {
-            ESP_LOGE("ems", "Zapis EMS zablokowany: brak kompletnego snapshotu 4300-4306");
-            return;
-          }
-          const uint32_t ems_snapshot_ms = id(ems_control_last_readback_ms);
-          if (ems_snapshot_ms == 0 ||
-              static_cast<uint32_t>(millis() - ems_snapshot_ms) > 15000U) {
-            ESP_LOGE("ems", "Zapis EMS zablokowany: snapshot 4300-4306 jest nieaktualny");
-            return;
-          }
-          auto valid_range = [](float value, float minimum, float maximum) {
-            return std::isfinite(value) && value >= minimum && value <= maximum;
-          };
-          if (!valid_range(id(self_used_soc_readback_4301).state, 10.0f, 100.0f) ||
-              !valid_range(id(backup_soc_raw_4302).state, 60.0f, 100.0f) ||
-              !valid_range(id(force_charge_soc_readback_4303).state, 10.0f, 100.0f) ||
-              !valid_range(id(maximum_charge_power_readback_4304).state, 0.0f, 100.0f) ||
-              !valid_range(id(force_discharge_soc_readback_4305).state, 0.0f, 100.0f) ||
-              !valid_range(id(maximum_discharge_power_readback_4306).state, 0.0f, 100.0f)) {
-            ESP_LOGE(
-                "ems",
-                "Zapis EMS zablokowany: snapshot 4301-4306 ma wartość poza zakresem");
-            return;
-          }
-          // Rejestr 6048: 0 = pojedynczy, 1 = Master, 2 = Slave.
-          // Dla pojedynczego falownika używany jest standardowy adres Modbus.
-          // Master nie udostępnia zewnętrznego FC03 dla każdego Slave, więc
-          // broadcastu bez odpowiedzi nie wolno uznać za wykonaną transakcję.
-          if (!id(machines_type_6048).has_state()) {
-            ESP_LOGE("ems", "Zapis EMS zablokowany: nie wykryto jeszcze topologii 6048");
-            return;
-          }
-
-          const uint16_t machine_type =
-              static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
-          uint16_t machine_count = 1;
-          if (machine_type == 2) {
-            ESP_LOGE(
-                "ems",
-                "Zapis EMS zablokowany: ESP32 jest podłączone do Slave; podłącz Modbus do Mastera");
-            return;
-          }
-          if (machine_type > 2) {
-            ESP_LOGE("ems", "Zapis EMS zablokowany: nieprawidłowa wartość rejestru 6048=%u",
-                     machine_type);
-            return;
-          }
-          if (machine_type == 1) {
-            if (!id(number_of_machines_master_and_slave_6049).has_state()) {
-              ESP_LOGE("ems", "Zapis EMS zablokowany: Master nie podał jeszcze liczby urządzeń");
-              return;
-            }
-            machine_count = static_cast<uint16_t>(
-                std::lround(id(number_of_machines_master_and_slave_6049).state));
-            if (machine_count < 2 || machine_count > 10) {
-              ESP_LOGE(
-                  "ems",
-                  "Zapis EMS zablokowany: nieprawidłowa liczba urządzeń w sieci=%u",
-                  machine_count);
-              return;
-            }
-            ESP_LOGE(
-                "ems",
-                "Zapis EMS zablokowany: Master nie pozwala potwierdzić FC03 na każdym Slave");
-            return;
-          }
-
           uint16_t mode = 0;
           if (x == "Off-Grid") mode = 3;
           else if (x == "Ładowanie z sieci") mode = 4;
           else if (x == "Rozładowanie do sieci") mode = 5;
-
-          auto encode = [](float value, float scale,
-                           uint16_t minimum, uint16_t maximum) -> uint16_t {
-            int32_t raw = static_cast<int32_t>(std::lround(value * scale));
-            if (raw < minimum) raw = minimum;
-            if (raw > maximum) raw = maximum;
-            return static_cast<uint16_t>(raw);
-          };
-
-          // Rejestry 4304 i 4306 mają mnożnik 10: 50% jest zapisywane jako 500.
-          std::vector<uint16_t> values = {
-            mode,
-            encode(id(self_used_soc_readback_4301).state, 1.0f, 10, 100),
-            encode(id(backup_soc_raw_4302).state, 1.0f, 60, 100),
-            encode(id(force_charge_soc_readback_4303).state, 1.0f, 10, 100),
-            encode(id(maximum_charge_power_readback_4304).state, 10.0f, 0, 1000),
-            encode(id(force_discharge_soc_readback_4305).state, 1.0f, 0, 100),
-            encode(id(maximum_discharge_power_readback_4306).state, 10.0f, 0, 1000),
-          };
-
-          auto *controller = id(${modbus_control_controller_id});
-          auto command =
-              esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
-                  controller, 4300, values.size(), values);
-          controller->queue_command(command);
-          ESP_LOGI("ems", "Zapisano atomowo EMS 4300-4306, tryb=%u, falownik pojedynczy",
-                   mode);
+          id(ems_write_complete_block_4300_4306)->execute(
+              mode,
+              id(self_used_soc_readback_4301).state,
+              id(backup_soc_raw_4302).state,
+              id(force_charge_soc_readback_4303).state,
+              id(maximum_charge_power_readback_4304).state,
+              id(force_discharge_soc_readback_4305).state,
+              id(maximum_discharge_power_readback_4306).state);
 
   # Generation Control Function (GCF), sekcja Safety Parameters.
   # Rejestr 257 (GCF_FuncCode) pozostaje ustawieniem serwisowym producenta.
@@ -370,8 +402,8 @@ select:
       "Disabled": 0
       "Enabled": 1
     write_lambda: |-
-      if (!id(ems_verified_hardware_readback_supported).has_state() ||
-          id(ems_verified_hardware_readback_supported).state < 0.5f) {
+      if (!id(direct_register_verified_readback_supported).has_state() ||
+          id(direct_register_verified_readback_supported).state < 0.5f) {
         ESP_LOGE("ems", "Zapis 258 zablokowany: brak świeżego, weryfikowalnego FC03");
         return {};
       }
@@ -491,8 +523,8 @@ number:
     step: 0.1
     lambda: return x * 0.1f;
     write_lambda: |-
-      if (!id(ems_verified_hardware_readback_supported).has_state() ||
-          id(ems_verified_hardware_readback_supported).state < 0.5f) {
+      if (!id(direct_register_verified_readback_supported).has_state() ||
+          id(direct_register_verified_readback_supported).state < 0.5f) {
         ESP_LOGE("ems", "Zapis 259 zablokowany: brak świeżego, weryfikowalnego FC03");
         return {};
       }
@@ -514,8 +546,8 @@ number:
     # wartość użytkownika 75% musi zostać zapisana jako surowe 750.
     lambda: return x * 0.1f;
     write_lambda: |-
-      if (!id(ems_verified_hardware_readback_supported).has_state() ||
-          id(ems_verified_hardware_readback_supported).state < 0.5f) {
+      if (!id(direct_register_verified_readback_supported).has_state() ||
+          id(direct_register_verified_readback_supported).state < 0.5f) {
         ESP_LOGE("ems", "Zapis 306 zablokowany: brak świeżego, weryfikowalnego FC03");
         return {};
       }
@@ -611,7 +643,16 @@ number:
         ESP_LOGE("ems", "Zapis 4301 zablokowany: brak świeżego, weryfikowalnego FC03");
         return {};
       }
-      return x > 100.0f ? 100.0f : (x < 10.0f ? 10.0f : x);
+      const float safe = x > 100.0f ? 100.0f : (x < 10.0f ? 10.0f : x);
+      id(ems_write_complete_block_4300_4306)->execute(
+          id(ems_mode_raw_4300).state,
+          safe,
+          id(backup_soc_raw_4302).state,
+          id(force_charge_soc_readback_4303).state,
+          id(maximum_charge_power_readback_4304).state,
+          id(force_discharge_soc_readback_4305).state,
+          id(maximum_discharge_power_readback_4306).state);
+      return {};
     entity_category: config
 
   - platform: modbus_controller
@@ -630,7 +671,16 @@ number:
         ESP_LOGE("ems", "Zapis 4303 zablokowany: brak świeżego, weryfikowalnego FC03");
         return {};
       }
-      return x > 100.0f ? 100.0f : (x < 10.0f ? 10.0f : x);
+      const float safe = x > 100.0f ? 100.0f : (x < 10.0f ? 10.0f : x);
+      id(ems_write_complete_block_4300_4306)->execute(
+          id(ems_mode_raw_4300).state,
+          id(self_used_soc_readback_4301).state,
+          id(backup_soc_raw_4302).state,
+          safe,
+          id(maximum_charge_power_readback_4304).state,
+          id(force_discharge_soc_readback_4305).state,
+          id(maximum_discharge_power_readback_4306).state);
+      return {};
     entity_category: config
 
   - platform: modbus_controller
@@ -651,7 +701,15 @@ number:
         return {};
       }
       const float safe = x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
-      return safe * 10.0f;
+      id(ems_write_complete_block_4300_4306)->execute(
+          id(ems_mode_raw_4300).state,
+          id(self_used_soc_readback_4301).state,
+          id(backup_soc_raw_4302).state,
+          id(force_charge_soc_readback_4303).state,
+          safe,
+          id(force_discharge_soc_readback_4305).state,
+          id(maximum_discharge_power_readback_4306).state);
+      return {};
     entity_category: config
 
   - platform: modbus_controller
@@ -670,7 +728,16 @@ number:
         ESP_LOGE("ems", "Zapis 4305 zablokowany: brak świeżego, weryfikowalnego FC03");
         return {};
       }
-      return x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
+      const float safe = x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
+      id(ems_write_complete_block_4300_4306)->execute(
+          id(ems_mode_raw_4300).state,
+          id(self_used_soc_readback_4301).state,
+          id(backup_soc_raw_4302).state,
+          id(force_charge_soc_readback_4303).state,
+          id(maximum_charge_power_readback_4304).state,
+          safe,
+          id(maximum_discharge_power_readback_4306).state);
+      return {};
     entity_category: config
 
   - platform: modbus_controller
@@ -691,5 +758,13 @@ number:
         return {};
       }
       const float safe = x > 100.0f ? 100.0f : (x < 0.0f ? 0.0f : x);
-      return safe * 10.0f;
+      id(ems_write_complete_block_4300_4306)->execute(
+          id(ems_mode_raw_4300).state,
+          id(self_used_soc_readback_4301).state,
+          id(backup_soc_raw_4302).state,
+          id(force_charge_soc_readback_4303).state,
+          id(maximum_charge_power_readback_4304).state,
+          id(force_discharge_soc_readback_4305).state,
+          safe);
+      return {};
     entity_category: config

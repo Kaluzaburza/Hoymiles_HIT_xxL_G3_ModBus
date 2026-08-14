@@ -96,6 +96,44 @@ The final release/tag commit is expected to differ only by this live-evidence
 documentation. Its delta from the tested runtime merge must remain
 documentation-only.
 
+## Unreleased parallel EMS broadcast candidate - offline PASS, live pending
+
+The post-v1.5.3 candidate restores the previously proven Modbus address-0
+FC16 write for the complete EMS block 4300-4306 on a Master/Slave plant. The
+write is assembled only from a fresh, complete physical Master snapshot and
+never publishes optimistic state. Success requires a later Master FC03
+generation with all seven registers exactly matching the requested block.
+This is deliberately described as **system broadcast with Master FC03
+confirmation**, not as an acknowledgement from every Slave.
+
+The capability split remains fail-closed: RCE, tariff control, manual cycles
+and battery balancing may use the verified 4300-4306 broadcast, while direct
+registers 258, 259 and 306 remain blocked on Master/Slave. Consequently active
+RCEm voltage control is still unavailable there; RCEm shadow mode remains
+available. Internal addresses 6050/6055/... remain diagnostic and are not used
+as prerequisites for the address-0 broadcast.
+
+Fresh offline evidence for this candidate:
+
+- ESPHome 2026.7.1 configuration and full ESP-IDF 5.5.5 compile: **PASS**;
+  application image 972,995 bytes, 47% of the app partition free, RAM 43.4%.
+- Firmware FC03/readback source contract: **PASS**.
+- Release validator: **PASS**, 292 localized entities.
+- Automation matrix: quick **488/488** and exhaustive **2064/2064**; the
+  scheduler files were unchanged by the final firmware-only numeric hardening.
+- Aurora card/strategy validator: **PASS**; PL, EN and bootstrap-first paths
+  each render exactly 42 Aurora frames.
+- Stable BMS voltage/current FC03 reports are now forced through ESPHome so
+  their Home Assistant `last_reported` provenance remains current. The RCE
+  Safe BMS diagnostic consumes the optimizer's authoritative
+  `bms_discharge_power_limit_kw` and the same freshness/age contract instead
+  of recomputing a misleading value from stale raw states.
+
+No firmware was flashed and no Home Assistant package was deployed during this
+offline change. A configuration-checked flash and live Master/Slave mode-change
+test are still required before this candidate can be promoted or described as
+field-accepted.
+
 ## Representative systems
 
 | System | Inverters | Battery | Daily PV | Home/day | Home/night | BMS current |

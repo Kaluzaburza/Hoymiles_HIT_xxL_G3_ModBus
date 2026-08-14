@@ -111,6 +111,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
     - multiply: 0.1
 
@@ -152,6 +153,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
     - multiply: 0.1
 
@@ -166,6 +168,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
     - multiply: 0.1
 

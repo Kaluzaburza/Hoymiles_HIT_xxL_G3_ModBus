@@ -74,6 +74,9 @@ PHRASE_TRANSLATIONS = {
     "Parallel EMS Control Status": "Stan sterowania EMS sieci równoległej",
     "Parallel Topology Readback Generation": "Generacja odczytu topologii równoległej",
     "EMS Verified Hardware Readback Supported": "Obsługa potwierdzonego odczytu sprzętowego EMS",
+    "Direct Register Verified Readback Supported": (
+        "Obsługa potwierdzonego odczytu rejestrów bezpośrednich"
+    ),
     "EMS Control Readback Generation": "Generacja odczytu sterowania EMS",
     "GCF Control Readback Generation": "Generacja odczytu sterowania GCF",
     "Battery Charge Power Readback Generation": "Generacja odczytu mocy ładowania baterii",
@@ -2458,6 +2461,12 @@ ENGLISH_REPLACEMENTS.update(
         ),
         "Brak obsługi zweryfikowanego odczytu sprzętowego": (
             "Verified hardware readback is not supported"
+        ),
+        "Blok EMS 4300-4306 nie jest gotowy": (
+            "The EMS 4300-4306 block is not ready"
+        ),
+        "Rejestry 258/259/306 nie mają potwierdzonego broadcastu Master/Slave": (
+            "Registers 258/259/306 have no verified Master/Slave broadcast"
         ),
         "Brak fizycznego odczytu trybu EMS": "Physical EMS-mode readback is unavailable",
         "Brak aktualnego SOC magazynu": "Current battery SOC is unavailable",

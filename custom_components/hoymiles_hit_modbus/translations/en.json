@@ -703,6 +703,9 @@
       "ems_verified_hardware_readback_supported": {
         "name": "EMS Verified Hardware Readback Supported"
       },
+      "direct_register_verified_readback_supported": {
+        "name": "Direct Register Verified Readback Supported"
+      },
       "machines_type": {
         "name": "Machines Type"
       },

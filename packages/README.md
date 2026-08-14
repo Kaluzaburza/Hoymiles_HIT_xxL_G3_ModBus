@@ -54,8 +54,15 @@ włączone. Zapis EMS jest wykonywany bezpośrednio dla pojedynczego falownika a
 jako broadcast Modbus FC16 na adres `0` dla wykrytej sieci równoległej. Dzięki
 temu pełny blok `4300-4306` odbiera Master i wszystkie urządzenia Slave na
 wspólnej magistrali `RS485_2`. Broadcast jest wysyłany poza kolejką odpowiedzi,
-ponieważ adres `0` zgodnie z protokołem nie odpowiada. Gdy ESP32 zostanie
-podłączone do urządzenia zgłaszającego rolę Slave, zapis jest blokowany.
+ponieważ adres `0` zgodnie z protokołem nie odpowiada. Wynik jest uznawany
+dopiero po późniejszym fizycznym FC03 Mastera z dokładnie takim samym blokiem;
+nie jest to niezależny ACK każdego Slave. Gdy ESP32 zostanie podłączone do
+urządzenia zgłaszającego rolę Slave, zapis jest blokowany.
+
+Rejestry `258`, `259` i `306` nie należą do tego bloku i pozostają zablokowane
+na Masterze do czasu osobnego potwierdzenia ich broadcastu. Oznacza to, że RCE,
+taryfa, harmonogramy ręczne i balansowanie korzystają z broadcastu EMS, ale
+aktywny RCEm pozostaje na instalacji równoległej tylko w trybie shadow.
 
 Po wykryciu Mastera encje podglądu mocy używane przez dashboard przełączają się
 automatycznie na rejestry sumaryczne całego systemu: PV, bateria, LOAD i sieć.

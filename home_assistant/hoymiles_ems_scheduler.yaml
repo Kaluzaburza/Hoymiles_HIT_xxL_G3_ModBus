@@ -1021,9 +1021,9 @@ template:
             Brak poprawnej encji notify
           {% endif %}
 
-  # A shared execution gate used by every automatic EMS writer. The status
-  # published by ESPHome validates the detected topology and, for a parallel
-  # installation, all configured Master/Slave addresses before HA may write.
+  # Shared execution gate for the complete EMS block 4300-4306. On a parallel
+  # Master it represents the proven address-0 system broadcast followed by a
+  # newer physical FC03 from the Master; it is not a per-Slave acknowledgement.
   - binary_sensor:
       - name: "Hoymiles EMS Execution Ready"
         unique_id: hoymiles_ems_execution_ready
@@ -1068,6 +1068,12 @@ template:
             {{ states(
               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
               | float(0) > 0.5 }}
+          acknowledgement_scope: >-
+            {% if states('sensor.hoymiles_hit_machines_type') | int(-1) == 1 %}
+              system_broadcast_with_master_fc03
+            {% else %}
+              direct_fc03
+            {% endif %}
           detected_inverters: >-
             {{ states(
               'sensor.hoymiles_hit_number_of_machines_master_and_slave') }}
@@ -1099,6 +1105,30 @@ template:
               Brak sygnału żywotności ESP32
             {% elif esp_age < 0 or esp_age > 180 %}
               ESP32 nie raportował sygnału żywotności od ponad 3 minut
+            {% else %}
+              Gotowe
+            {% endif %}
+
+      # Rejestry GCF 258/259 i Battery Max Charge Power 306 nie należą do
+      # wspólnego bloku EMS. Dopóki ich broadcast nie zostanie osobno
+      # potwierdzony, aktywny RCEm pozostaje dostępny tylko dla jednego falownika.
+      - name: "Hoymiles Direct Register Execution Ready"
+        unique_id: hoymiles_direct_register_execution_ready
+        icon: mdi:shield-lock-outline
+        state: >-
+          {{ is_state('binary_sensor.hoymiles_ems_execution_ready', 'on')
+             and (states(
+               'sensor.hoymiles_hit_direct_register_verified_readback_supported')
+               | float(0)) > 0.5 }}
+        attributes:
+          protected_registers: "258, 259, 306"
+          reason: >-
+            {% if not is_state('binary_sensor.hoymiles_ems_execution_ready', 'on') %}
+              Blok EMS 4300-4306 nie jest gotowy
+            {% elif not (states(
+              'sensor.hoymiles_hit_direct_register_verified_readback_supported')
+              | float(0) > 0.5) %}
+              Rejestry 258/259/306 nie mają potwierdzonego broadcastu Master/Slave
             {% else %}
               Gotowe
             {% endif %}
@@ -1496,36 +1526,38 @@ template:
         device_class: power
         state_class: measurement
         availability: >-
-          {{ is_number(states(
-               'sensor.hoymiles_hit_maximum_discharge_current'))
-             and is_number(states(
-               'sensor.hoymiles_hit_battery_voltage_bms'))
-             and is_number(states(
-               'input_number.hoymiles_rce_export_efficiency'))
-             and (states(
-               'sensor.hoymiles_hit_maximum_discharge_current')
-               | float(0)) > 0
-             and (states(
-               'sensor.hoymiles_hit_battery_voltage_bms')
-               | float(0)) > 0 }}
+          {{ states('sensor.hoymiles_hit_rce_optimized_plan')
+               not in ['unknown', 'unavailable', 'none', '']
+             and state_attr(
+               'sensor.hoymiles_hit_rce_optimized_plan',
+               'result_current') == true
+             and state_attr(
+               'sensor.hoymiles_hit_rce_optimized_plan',
+               'bms_discharge_data_fresh') == true
+             and is_number(state_attr(
+               'sensor.hoymiles_hit_rce_optimized_plan',
+               'bms_discharge_power_limit_kw')) }}
         state: >-
-          {% set current =
-            states('sensor.hoymiles_hit_maximum_discharge_current')
-            | float(0) %}
-          {% set voltage =
-            states('sensor.hoymiles_hit_battery_voltage_bms')
-            | float(0) %}
-          {% set efficiency =
-            states('input_number.hoymiles_rce_export_efficiency')
-            | float(95) / 100 %}
-          {# 5% zapasu chroni przed zmianą napięcia i limitu BMS. #}
-          {{ (current * voltage / 1000 * efficiency * 0.95) | round(2) }}
+          {{ state_attr(
+               'sensor.hoymiles_hit_rce_optimized_plan',
+               'bms_discharge_power_limit_kw') | float(0) | round(2) }}
         attributes:
           maximum_discharge_current_a: >-
             {{ states('sensor.hoymiles_hit_maximum_discharge_current') }}
           battery_voltage_v: >-
             {{ states('sensor.hoymiles_hit_battery_voltage_bms') }}
-          bms_safety_margin_percent: 5
+          bms_data_fresh: >-
+            {{ state_attr(
+                 'sensor.hoymiles_hit_rce_optimized_plan',
+                 'bms_discharge_data_fresh') }}
+          bms_data_age_seconds: >-
+            {{ state_attr(
+                 'sensor.hoymiles_hit_rce_optimized_plan',
+                 'bms_discharge_data_age_seconds') }}
+          physical_limit_source: >-
+            {{ state_attr(
+                 'sensor.hoymiles_hit_rce_optimized_plan',
+                 'physical_limit_source') }}
 
       - name: "Hoymiles RCE Effective Discharge Power Percent"
         unique_id: hoymiles_rce_effective_discharge_power_percent
@@ -3484,7 +3516,8 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+          {{ states(
+               'sensor.hoymiles_hit_direct_register_verified_readback_supported')
                | float(0) > 0.5 }}
       - condition: template
         value_template: >-
@@ -3504,7 +3537,7 @@ script:
               'sensor.hoymiles_hit_battery_charge_power_readback_generation') }}
       - wait_template: >-
           {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+               'sensor.hoymiles_hit_direct_register_verified_readback_supported')
                | float(0) > 0.5)
              and states(
                'sensor.hoymiles_hit_battery_charge_power_readback_generation')
@@ -3533,7 +3566,8 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+          {{ states(
+               'sensor.hoymiles_hit_direct_register_verified_readback_supported')
                | float(0) > 0.5 }}
       - condition: template
         value_template: >-
@@ -3552,7 +3586,7 @@ script:
             {{ states('sensor.hoymiles_hit_gcf_control_readback_generation') }}
       - wait_template: >-
           {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+               'sensor.hoymiles_hit_direct_register_verified_readback_supported')
                | float(0) > 0.5)
              and states('sensor.hoymiles_hit_gcf_control_readback_generation')
                not in ['unknown', 'unavailable', 'none', '']
@@ -7433,6 +7467,7 @@ automation:
           - input_boolean.hoymiles_charge_cycle_active
           - sensor.hoymiles_ems_hardware_mode
           - select.hoymiles_hit_generation_control_function
+          - sensor.hoymiles_hit_direct_register_verified_readback_supported
       - trigger: numeric_state
         entity_id: sensor.hoymiles_rcem_maximum_grid_voltage
         # Trigger exactly at the emergency contract boundary. A lower crossing
@@ -7524,6 +7559,9 @@ automation:
           gcf_data_fresh: >-
             {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
                           'gcf_data_fresh') | default(false, true) }}
+          direct_register_write_ready: >-
+            {{ is_state(
+                 'binary_sensor.hoymiles_direct_register_execution_ready', 'on') }}
           export_control_requested: >-
             {{ is_state('input_boolean.hoymiles_rcm_export_control_enabled',
                         'on') }}
@@ -7547,7 +7585,8 @@ automation:
                or is_state('timer.hoymiles_discharge', 'active')
                or is_state('timer.hoymiles_charge', 'active') }}
           emergency_charge_path: >-
-            {{ charge_actuator_data_fresh
+            {{ direct_register_write_ready
+               and charge_actuator_data_fresh
                and ems_mode_data_fresh
                and system_power_data_valid
                and bms_charge_available
@@ -7556,12 +7595,14 @@ automation:
                and is_number(states(
                  'sensor.hoymiles_hit_battery_max_charge_power_readback')) }}
           emergency_export_path: >-
-            {{ export_control_requested
+            {{ direct_register_write_ready
+               and export_control_requested
                and export_control_available
                and export_actuator_data_fresh
                and recommended_export_limit >= 0 }}
           normal_export_path: >-
-            {{ export_control_requested
+            {{ direct_register_write_ready
+               and export_control_requested
                and export_control_available
                and export_actuator_data_fresh
                and recommended_export_limit >= 0 }}
@@ -7622,6 +7663,9 @@ automation:
                   - condition: template
                     value_template: >-
                       {{ emergency_charge_path
+                         and is_state(
+                           'binary_sensor.hoymiles_direct_register_execution_ready',
+                           'on')
                          and is_state(
                            'input_boolean.hoymiles_rcm_active', 'off') }}
                 then:
@@ -7825,6 +7869,9 @@ automation:
                               | float(-999))
                             - (recommended_export_limit | float(0))) | abs < 1.0 %}
                       {{ emergency_export_path
+                         and is_state(
+                           'binary_sensor.hoymiles_direct_register_execution_ready',
+                           'on')
                          and (state_attr(plan, 'result_current')
                               | default(false, true))
                          and is_state('input_boolean.hoymiles_rcm_enabled', 'on')
@@ -7910,7 +7957,8 @@ automation:
                      or is_state('input_boolean.hoymiles_rcm_shadow_mode', 'on')
                       or rcm_blocked
                       or not is_state(
-                        'binary_sensor.hoymiles_ems_execution_ready', 'on')
+                        'binary_sensor.hoymiles_direct_register_execution_ready',
+                        'on')
                       or not system_power_data_valid
                      or rcm_plan_age_seconds < 0
                      or rcm_plan_age_seconds > 60
@@ -8070,7 +8118,8 @@ automation:
                   {{ not rcm_blocked
                      and result_current
                      and is_state(
-                       'binary_sensor.hoymiles_ems_execution_ready', 'on')
+                       'binary_sensor.hoymiles_direct_register_execution_ready',
+                       'on')
                      and rcm_plan_age_seconds >= 0
                      and rcm_plan_age_seconds <= 60
                      and prediction_ready
@@ -8164,7 +8213,8 @@ automation:
                            'input_boolean.hoymiles_rcm_shadow_mode', 'off')
                           and not rcm_blocked
                           and is_state(
-                            'binary_sensor.hoymiles_ems_execution_ready', 'on')
+                            'binary_sensor.hoymiles_direct_register_execution_ready',
+                            'on')
                           and state_attr(
                             'sensor.hoymiles_hit_rcm_voltage_plan',
                             'system_power_data_valid') | default(false, true)
@@ -8332,7 +8382,8 @@ automation:
                   {{ not rcm_blocked
                      and result_current
                      and is_state(
-                       'binary_sensor.hoymiles_ems_execution_ready', 'on')
+                       'binary_sensor.hoymiles_direct_register_execution_ready',
+                       'on')
                      and system_power_data_valid
                      and rcm_plan_age_seconds >= 0
                      and rcm_plan_age_seconds <= 60

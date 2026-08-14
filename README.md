@@ -394,13 +394,19 @@ Connect the ESP32 Modbus converter to the **Master** using the external RS485
 bus documented for the installation. Monitoring, forecasting, and RCEm shadow
 analytics remain available for a detected parallel system.
 
-For the v1.5.3 public test, protected EMS writes are enabled only for a verified
-single-inverter topology. The Master's external port cannot provide an
-independent FC03 confirmation from every Slave after a broadcast, so RCE,
-tariff, manual-schedule, balancing, and write-capable RCEm commands fail closed
-on Master/Slave installations. The dashboard reports this limitation
-explicitly. Do not disable the readback gate. Parallel write support will
-return only after per-node acknowledgement can be proved on supported hardware.
+The post-v1.5.3 firmware restores the system command verified earlier on the
+two-inverter HIT test installation: every change to EMS registers `4300–4306`
+is sent as one FC16 broadcast to Modbus address `0`. RCE, tariff charging,
+manual schedules, and battery balancing may therefore control a detected
+Master system. The command has no Modbus reply; Home Assistant accepts it only
+after a newer physical FC03 from the Master contains the exact requested block.
+This is a system-broadcast confirmation, not an independent acknowledgement
+from every Slave.
+
+Registers `258`, `259`, and `306` are outside that complete EMS block and do
+not yet have separately proven Master/Slave broadcast semantics. Active RCEm
+actions that need those registers remain fail-closed on a parallel system;
+RCEm shadow analytics remain available. Do not disable either readiness gate.
 
 The Aurora dashboard automatically uses the manufacturer's system-wide power
 registers for PV, battery, household load, and grid power. The addresses listed

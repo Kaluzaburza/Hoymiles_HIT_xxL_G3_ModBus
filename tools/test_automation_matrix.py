@@ -649,6 +649,23 @@ def assert_automation_interlocks() -> None:
     )
     for marker in required_markers:
         assert marker in source, f"Missing automation interlock marker: {marker}"
+    safe_bms = source.split(
+        'name: "Hoymiles RCE BMS Safe Discharge Power"', 1
+    )[1].split(
+        'name: "Hoymiles RCE Effective Discharge Power Percent"', 1
+    )[0]
+    for marker in (
+        "sensor.hoymiles_hit_rce_optimized_plan",
+        "'result_current') == true",
+        "'bms_discharge_data_fresh') == true",
+        "'bms_discharge_power_limit_kw'",
+        "bms_data_age_seconds",
+        "physical_limit_source",
+    ):
+        assert marker in safe_bms, f"Safe BMS helper lacks {marker}"
+    assert "current * voltage" not in safe_bms, (
+        "Safe BMS helper must not present stale raw telemetry as executable power"
+    )
     rce_ready = source.split(
         'name: "Hoymiles RCE Control Data Ready"', 1
     )[1].split('name: "Hoymiles Tariff', 1)[0]
@@ -1609,7 +1626,16 @@ def assert_rcm_execution_contracts() -> None:
             body.index("action: select.select_option")
             < body.index("generation_after_write")
         )
-        assert "ems_verified_hardware_readback_supported" in body
+        capability = (
+            "direct_register_verified_readback_supported"
+            if helper
+            in {
+                "hoymiles_verified_set_battery_max_charge_power",
+                "hoymiles_verified_set_gcf_export_limit",
+            }
+            else "ems_verified_hardware_readback_supported"
+        )
+        assert capability in body
     pre = scheduler.split(
         "id: hoymiles_rcm_pre_discharge_control",
         1,
@@ -1687,7 +1713,7 @@ def assert_rcm_execution_contracts() -> None:
         "bms_charge_data_fresh",
         "bms_charge_available",
         "system_power_data_valid",
-        "binary_sensor.hoymiles_ems_execution_ready",
+        "binary_sensor.hoymiles_direct_register_execution_ready",
         "# Final normal-control interlock",
         "last_reported",
         "age >= 0 and age <= 60",
@@ -1702,6 +1728,7 @@ def assert_rcm_execution_contracts() -> None:
         "emergency_export_path: >-", 1
     )[0]
     assert "system_power_data_valid" in charge_path
+    assert "direct_register_write_ready" in charge_path
     export_path = main.split("emergency_export_path: >-", 1)[1].split(
         "normal_export_path: >-", 1
     )[0]
@@ -1711,6 +1738,7 @@ def assert_rcm_execution_contracts() -> None:
     assert "system_power_data_valid" not in export_path, (
         "A live export clamp must remain independent of kW-to-percent topology"
     )
+    assert "direct_register_write_ready" in export_path
     emergency_final = emergency.split("# Final emergency interlocks", 1)[1]
     charge_final, export_final = emergency_final.split(
         "# Export emergency finalization (independent actuator path).", 1
@@ -1947,7 +1975,16 @@ def assert_physical_hardware_readback_contracts() -> None:
         assert generation in body[capture_pos:]
         assert mirror in body[wait_pos:]
         assert "mode: restart" in body
-        assert "sensor.hoymiles_hit_ems_verified_hardware_readback_supported" in body
+        capability = (
+            "sensor.hoymiles_hit_direct_register_verified_readback_supported"
+            if helper
+            in {
+                "hoymiles_verified_set_battery_max_charge_power",
+                "hoymiles_verified_set_gcf_export_limit",
+            }
+            else "sensor.hoymiles_hit_ems_verified_hardware_readback_supported"
+        )
+        assert capability in body
         assert "| float(0) > 0.5" in body[wait_pos:]
         assert f"action: script.{helper}" not in body
 
@@ -1999,6 +2036,9 @@ def assert_physical_hardware_readback_contracts() -> None:
     )[1].split('- name: "Hoymiles RCE Control Data Ready"', 1)[0]
     for marker in (
         "ems_verified_hardware_readback_supported",
+        "direct_register_verified_readback_supported",
+        "Hoymiles Direct Register Execution Ready",
+        "system_broadcast_with_master_fc03",
         "ems_mode_readback_code",
         "ems_control_readback_generation",
         "parallel_topology_readback_generation",

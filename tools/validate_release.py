@@ -1644,8 +1644,10 @@ def main() -> int:
         'name: "Parallel EMS Control Status"',
         'name: "Parallel Topology Readback Generation"',
         'name: "EMS Verified Hardware Readback Supported"',
+        'name: "Direct Register Verified Readback Supported"',
         "count < 2 || count > 10",
-        "Zablokowane - brak FC03 dla każdego Slave",
+        "return count >= 2 && count <= 10 ? 1.0f : 0.0f;",
+        "Gotowe - broadcast EMS, odczyt Mastera",
     ):
         require(
             marker in parallel_source,
@@ -1658,16 +1660,27 @@ def main() -> int:
         'name: "GCF Control Readback Generation"',
         'name: "Battery Charge Power Readback Generation"',
         "id(ems_verified_hardware_readback_supported).state",
-        "Master nie pozwala potwierdzić FC03 na każdym Slave",
+        "id(direct_register_verified_readback_supported).state",
+        "id: ems_write_complete_block_4300_4306",
+        "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E",
+        "id(modbus_1).send_raw(payload);",
+        "create_write_multiple_command",
     ):
         require(
             marker in settings_source,
             f"Parallel EMS safety marker missing: {marker}",
         )
     require(
-        "send_raw(payload)" not in settings_source
-        and "0x00, 0x10, 0x10, 0xCC" not in settings_source,
-        "Unacknowledged parallel EMS broadcast must remain disabled",
+        settings_source.count("send_raw(payload)") == 1
+        and settings_source.count("0x00, 0x10, 0x10, 0xCC") == 1,
+        "Parallel EMS broadcast must have one canonical complete-block writer",
+    )
+    require(
+        'name: "Hoymiles Direct Register Execution Ready"' in ems_package_source
+        and "sensor.hoymiles_hit_direct_register_verified_readback_supported"
+        in ems_package_source
+        and "system_broadcast_with_master_fc03" in ems_package_source,
+        "HA package does not separate broadcast EMS from direct registers",
     )
     require(
         "hoymiles_modbus_slave_" not in parallel_source
