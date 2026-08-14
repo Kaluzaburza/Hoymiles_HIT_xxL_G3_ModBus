@@ -19,6 +19,16 @@ SENSORS = {
     "tariff_sensor.py": "HoymilesTariffOptimizerSensor",
     "rcm_sensor.py": "HoymilesRCMOptimizerSensor",
 }
+DYNAMIC_FORECAST_SENSORS = {
+    "rce_sensor.py": (
+        "HoymilesRCEOptimizerSensor",
+        "WATCHED_ENTITIES",
+    ),
+    "tariff_sensor.py": (
+        "HoymilesTariffOptimizerSensor",
+        "WATCHED_TARIFF_ENTITIES",
+    ),
+}
 SLOW_STARTUP_CALLS = {
     "_async_refresh_load_history",
     "_async_refresh_forecast_accuracy",
@@ -207,6 +217,124 @@ async def _assert_warmup_single_flight(
         pass
     else:
         raise AssertionError(f"{label} warmup was not cancelled on removal")
+
+
+def _assert_dynamic_forecast_listener_runtime(
+    path: Path,
+    class_name: str,
+    watched_name: str,
+) -> None:
+    """Exercise custom-source rebinding, self-denial and unload cleanup."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    class_node = _class_node(tree, class_name)
+    method_names = (
+        "_configured_forecast_source_ids",
+        "_refresh_dynamic_forecast_listener",
+        "_remove_dynamic_forecast_listener",
+        "_current_input_fingerprint",
+    )
+    methods = [deepcopy(_method(class_node, name)) for name in method_names]
+    for method in methods:
+        method.decorator_list = []
+
+    registrations: list[tuple[str, ...]] = []
+    unsubscriptions: list[tuple[str, ...]] = []
+
+    def track_dynamic(_hass: Any, entity_ids: Any, _handler: Any) -> Any:
+        registration = tuple(entity_ids)
+        registrations.append(registration)
+
+        def unsubscribe() -> None:
+            unsubscriptions.append(registration)
+
+        return unsubscribe
+
+    watched = frozenset({"sensor.static_forecast"})
+    namespace: dict[str, Any] = {
+        "Any": Any,
+        "RCE_LOAD_BROKER_ATTRIBUTES": (),
+        "TARIFF_PRICE_BROKER_ATTRIBUTES": (),
+        "WATCHED_ENTITIES": frozenset(),
+        "WATCHED_TARIFF_ENTITIES": frozenset(),
+        "_configured_forecast_entity_ids": (
+            lambda hass: frozenset(hass["configured"])
+        ),
+        "async_track_state_change_event": track_dynamic,
+        "optimizer_input_fingerprint": (
+            lambda _hass, entity_ids, attribute_projections=None: tuple(
+                sorted(entity_ids)
+            )
+        ),
+    }
+    assert watched_name in namespace
+    namespace[watched_name] = watched
+    probe_class = ast.ClassDef(
+        name="DynamicForecastProbe",
+        bases=[],
+        keywords=[],
+        decorator_list=[],
+        body=methods,
+    )
+    exec(
+        compile(
+            ast.fix_missing_locations(
+                ast.Module(body=[probe_class], type_ignores=[])
+            ),
+            f"<{path.name}-dynamic-forecast>",
+            "exec",
+        ),
+        namespace,
+    )
+    probe = namespace["DynamicForecastProbe"]()
+    probe.entity_id = "sensor.own_optimizer_plan"
+    probe.hass = {
+        "configured": {
+            "sensor.custom_forecast_a",
+            "sensor.static_forecast",
+        }
+    }
+    probe._async_input_changed = object()
+    probe._dynamic_forecast_entities = frozenset()
+    probe._dynamic_forecast_unsub = None
+
+    probe._refresh_dynamic_forecast_listener()
+    assert registrations == [("sensor.custom_forecast_a",)]
+    assert probe._current_input_fingerprint() == (
+        "sensor.custom_forecast_a",
+        "sensor.static_forecast",
+    )
+
+    # Re-reading an unchanged helper must be a strict no-op.
+    probe._refresh_dynamic_forecast_listener()
+    assert registrations == [("sensor.custom_forecast_a",)]
+    assert unsubscriptions == []
+
+    probe.hass["configured"] = {"sensor.custom_forecast_b"}
+    probe._refresh_dynamic_forecast_listener()
+    assert unsubscriptions == [("sensor.custom_forecast_a",)]
+    assert registrations[-1] == ("sensor.custom_forecast_b",)
+
+    # A custom external sensor remains tracked without inspecting its current
+    # availability. The optimizer's own output is denied from both listener
+    # targets and its publication fingerprint, preventing a self-replan loop.
+    probe.hass["configured"] = {
+        "sensor.external_forecast_unavailable",
+        probe.entity_id,
+    }
+    probe._refresh_dynamic_forecast_listener()
+    assert unsubscriptions[-1] == ("sensor.custom_forecast_b",)
+    assert registrations[-1] == ("sensor.external_forecast_unavailable",)
+    fingerprint = probe._current_input_fingerprint()
+    assert "sensor.external_forecast_unavailable" in fingerprint
+    assert probe.entity_id not in fingerprint
+
+    probe._remove_dynamic_forecast_listener()
+    assert unsubscriptions[-1] == ("sensor.external_forecast_unavailable",)
+    assert probe._dynamic_forecast_entities == frozenset()
+    assert probe._dynamic_forecast_unsub is None
+    cleanup_count = len(unsubscriptions)
+    probe._remove_dynamic_forecast_listener()
+    assert len(unsubscriptions) == cleanup_count
 
 
 def _assert_static_sensor_contract(
@@ -442,6 +570,12 @@ async def _async_main() -> None:
         )
         contracts.append((filename, added, scheduler))
     _assert_bounded_recorder_contract()
+    for filename, (class_name, watched_name) in DYNAMIC_FORECAST_SENSORS.items():
+        _assert_dynamic_forecast_listener_runtime(
+            COMPONENT / filename,
+            class_name,
+            watched_name,
+        )
 
     for filename, added, scheduler in contracts:
         await _assert_added_is_nonblocking(added, filename)

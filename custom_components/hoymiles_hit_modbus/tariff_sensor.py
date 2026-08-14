@@ -41,9 +41,15 @@ from .optimizer_revision import (
     optimizer_input_fingerprint,
 )
 from .rce_sensor import (
+    DAY3_FORECAST_CANDIDATES,
+    DAY3_FORECAST_ENTITY_HELPER,
+    FORECAST_ENTITY_HELPERS,
     REMAINING_TODAY_CANDIDATES,
     TODAY_FORECAST_CANDIDATES,
+    TODAY_FORECAST_ENTITY_HELPER,
     TOMORROW_FORECAST_CANDIDATES,
+    TOMORROW_FORECAST_ENTITY_HELPER,
+    _configured_forecast_entity_ids,
     _detailed_pv_map,
     _fallback_pv_map,
     _first_numeric_state,
@@ -82,12 +88,7 @@ LIVE_PV_SURPLUS_STABLE_SECONDS = 5 * 60.0
 LIVE_TELEMETRY_MAX_AGE_SECONDS = 120.0
 SLOW_TELEMETRY_MAX_AGE_SECONDS = 300.0
 LOAD_BROKER_MAX_AGE_SECONDS = 300.0
-
-DAY_3_FORECAST_CANDIDATES = (
-    "sensor.solcast_pv_forecast_forecast_day_3",
-    "sensor.solcast_pv_forecast_day_3",
-    "sensor.solcast_forecast_day_3",
-)
+FORECAST_MAX_AGE_SECONDS = 18 * 60 * 60.0
 
 WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_rce_optimized_plan",
@@ -129,12 +130,11 @@ WATCHED_TARIFF_ENTITIES = {
     "input_datetime.hoymiles_tariff_cheap_2_end",
     "input_datetime.hoymiles_tariff_medium_start",
     "input_datetime.hoymiles_tariff_medium_end",
-    "input_text.hoymiles_solcast_forecast_today_entity",
-    "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+    *FORECAST_ENTITY_HELPERS,
     "sun.sun",
     *TODAY_FORECAST_CANDIDATES,
     *TOMORROW_FORECAST_CANDIDATES,
-    *DAY_3_FORECAST_CANDIDATES,
+    *DAY3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
 
@@ -458,6 +458,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self._live_pv_surplus_started_at: datetime | None = None
         self._startup_warmup_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
+        self._dynamic_forecast_entities: frozenset[str] = frozenset()
+        self._dynamic_forecast_unsub = None
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
         self._attributes.update(
@@ -552,6 +554,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 self._async_input_changed,
             )
         )
+        refresh_dynamic_forecast_listener = getattr(
+            self,
+            "_refresh_dynamic_forecast_listener",
+            None,
+        )
+        if callable(refresh_dynamic_forecast_listener):
+            refresh_dynamic_forecast_listener()
+        self.async_on_remove(
+            lambda: self._remove_dynamic_forecast_listener()
+        )
         self.async_on_remove(
             async_track_time_interval(
                 self.hass,
@@ -597,11 +609,52 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             _LOGGER.exception("Cannot complete the tariff optimizer startup warmup")
 
     @callback
+    def _configured_forecast_source_ids(self) -> frozenset[str]:
+        """Return configured sources without allowing a self-reference."""
+        targets = _configured_forecast_entity_ids(self.hass)
+        own_entity_id = getattr(self, "entity_id", None)
+        return (
+            targets - {own_entity_id}
+            if isinstance(own_entity_id, str) and own_entity_id
+            else targets
+        )
+
+    @callback
+    def _refresh_dynamic_forecast_listener(self) -> None:
+        """Follow configured forecast sources outside the built-in candidates."""
+        targets = frozenset(
+            self._configured_forecast_source_ids() - WATCHED_TARIFF_ENTITIES
+        )
+        if targets == self._dynamic_forecast_entities:
+            return
+        if self._dynamic_forecast_unsub is not None:
+            self._dynamic_forecast_unsub()
+            self._dynamic_forecast_unsub = None
+        self._dynamic_forecast_entities = targets
+        if targets:
+            self._dynamic_forecast_unsub = async_track_state_change_event(
+                self.hass,
+                sorted(targets),
+                self._async_input_changed,
+            )
+
+    @callback
+    def _remove_dynamic_forecast_listener(self) -> None:
+        """Release the current dynamic forecast subscription."""
+        if self._dynamic_forecast_unsub is not None:
+            self._dynamic_forecast_unsub()
+            self._dynamic_forecast_unsub = None
+        self._dynamic_forecast_entities = frozenset()
+
+    @callback
     def _current_input_fingerprint(self) -> tuple[Any, ...]:
         """Return the exact watched snapshot used to certify publication."""
         return optimizer_input_fingerprint(
             self.hass,
-            WATCHED_TARIFF_ENTITIES,
+            (
+                WATCHED_TARIFF_ENTITIES
+                | self._configured_forecast_source_ids()
+            ),
             attribute_projections={
                 "sensor.hoymiles_hit_rce_optimized_plan": (
                     RCE_LOAD_BROKER_ATTRIBUTES
@@ -661,6 +714,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
 
     @callback
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
+        if event.data["entity_id"] in FORECAST_ENTITY_HELPERS:
+            self._refresh_dynamic_forecast_listener()
         # Solcast may finish loading a few seconds after this integration.
         # When the first startup calibration found no forecast entity, retry
         # as soon as any watched source becomes available instead of keeping
@@ -811,7 +866,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         """Return whether the configured Solcast today source is numeric."""
         configured = _state_text(
             self.hass,
-            "input_text.hoymiles_solcast_forecast_today_entity",
+            TODAY_FORECAST_ENTITY_HELPER,
         )
         _, forecast_state = _first_numeric_state(
             self.hass,
@@ -859,7 +914,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         try:
             configured = _state_text(
                 self.hass,
-                "input_text.hoymiles_solcast_forecast_today_entity",
+                TODAY_FORECAST_ENTITY_HELPER,
             )
             forecast_entity, forecast_state = _first_numeric_state(
                 self.hass,
@@ -1828,11 +1883,15 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
 
         today_configured = _state_text(
             self.hass,
-            "input_text.hoymiles_solcast_forecast_today_entity",
+            TODAY_FORECAST_ENTITY_HELPER,
         )
         tomorrow_configured = _state_text(
             self.hass,
-            "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+            TOMORROW_FORECAST_ENTITY_HELPER,
+        )
+        day_3_configured = _state_text(
+            self.hass,
+            DAY3_FORECAST_ENTITY_HELPER,
         )
         today_entity, today_state = _first_numeric_state(
             self.hass,
@@ -1850,38 +1909,71 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         )
         day_3_entity, day_3_state = _first_numeric_state(
             self.hass,
-            DAY_3_FORECAST_CANDIDATES,
+            DAY3_FORECAST_CANDIDATES,
+            day_3_configured,
         )
-        def state_age_minutes(state: State | None) -> float | None:
-            age = _state_age_seconds(state, now=now)
-            return age / 60.0 if age is not None else None
-
-        today_forecast_age = state_age_minutes(today_state)
-        tomorrow_forecast_age = state_age_minutes(tomorrow_state)
-        remaining_forecast_age = state_age_minutes(remaining_state)
-        day_3_forecast_age = state_age_minutes(day_3_state)
-        forecast_fresh = all(
-            age is not None and -(5.0 / 60.0) <= age <= 18 * 60
-            for age in (today_forecast_age, tomorrow_forecast_age)
+        today_forecast_sample = numeric_state_sample(
+            today_state,
+            now,
+            max_age_seconds=FORECAST_MAX_AGE_SECONDS,
+            minimum=0.0,
         )
-        remaining_forecast_fresh = bool(
-            remaining_forecast_age is not None
-            and -(5.0 / 60.0) <= remaining_forecast_age <= 18 * 60
+        tomorrow_forecast_sample = numeric_state_sample(
+            tomorrow_state,
+            now,
+            max_age_seconds=FORECAST_MAX_AGE_SECONDS,
+            minimum=0.0,
+        )
+        remaining_forecast_sample = numeric_state_sample(
+            remaining_state,
+            now,
+            max_age_seconds=FORECAST_MAX_AGE_SECONDS,
+            minimum=0.0,
+        )
+        day_3_forecast_sample = numeric_state_sample(
+            day_3_state,
+            now,
+            max_age_seconds=FORECAST_MAX_AGE_SECONDS,
+            minimum=0.0,
+        )
+        forecast_fresh = bool(
+            today_forecast_sample.fresh
+            and tomorrow_forecast_sample.fresh
+        )
+        remaining_forecast_fresh = remaining_forecast_sample.fresh
+        today_forecast_age = (
+            today_forecast_sample.age_seconds / 60.0
+            if today_forecast_sample.age_seconds is not None
+            else None
+        )
+        tomorrow_forecast_age = (
+            tomorrow_forecast_sample.age_seconds / 60.0
+            if tomorrow_forecast_sample.age_seconds is not None
+            else None
+        )
+        remaining_forecast_age = (
+            remaining_forecast_sample.age_seconds / 60.0
+            if remaining_forecast_sample.age_seconds is not None
+            else None
+        )
+        day_3_forecast_age = (
+            day_3_forecast_sample.age_seconds / 60.0
+            if day_3_forecast_sample.age_seconds is not None
+            else None
         )
         if not forecast_fresh:
             required["Solcast forecast freshness"] = None
         if day_3_state is None:
             day_3_status = "missing"
-        elif not (
-            day_3_forecast_age is not None
-            and -(5.0 / 60.0) <= day_3_forecast_age <= 18 * 60
-        ):
-            day_3_status = "stale"
-        else:
+        elif day_3_forecast_sample.fresh:
             day_3_status = "fresh"
-        if day_3_status == "stale":
-            # Day 3 is optional.  A stale optional forecast reduces the horizon
-            # to two days instead of blocking otherwise safe tariff charging.
+        else:
+            day_3_status = "stale"
+        day_3_data_available = day_3_state is not None
+        if day_3_status != "fresh":
+            # Day 3 is optional.  Missing, stale, invalid or implausibly future
+            # data reduces the horizon to two days instead of blocking an
+            # otherwise safe tariff plan.
             day_3_state = None
         selected_horizon_days = 3 if day_3_status == "fresh" else 2
         (
@@ -2064,9 +2156,46 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             "forecast_tomorrow_entity": tomorrow_entity or "none",
             "forecast_remaining_today_entity": remaining_entity or "fallback",
             "forecast_day_3_entity": day_3_entity or "not_available",
+            "forecast_day_3_configured_entity": (
+                day_3_configured or "automatic"
+            ),
             "forecast_day_3_available": day_3_state is not None,
+            "forecast_day_3_source_available": day_3_data_available,
             "forecast_day_3_status": day_3_status,
+            "forecast_day_3_data_fresh": day_3_forecast_sample.fresh,
+            "forecast_day_3_data_complete": day_3_status == "fresh",
+            "forecast_day_3_data_reason": day_3_forecast_sample.reason,
+            "forecast_day_3_age_seconds": (
+                round(day_3_forecast_sample.age_seconds, 1)
+                if day_3_forecast_sample.age_seconds is not None
+                else None
+            ),
             "forecast_data_fresh": forecast_fresh,
+            "forecast_today_data_fresh": today_forecast_sample.fresh,
+            "forecast_today_data_reason": today_forecast_sample.reason,
+            "forecast_today_age_seconds": (
+                round(today_forecast_sample.age_seconds, 1)
+                if today_forecast_sample.age_seconds is not None
+                else None
+            ),
+            "forecast_tomorrow_data_fresh": tomorrow_forecast_sample.fresh,
+            "forecast_tomorrow_data_reason": tomorrow_forecast_sample.reason,
+            "forecast_tomorrow_age_seconds": (
+                round(tomorrow_forecast_sample.age_seconds, 1)
+                if tomorrow_forecast_sample.age_seconds is not None
+                else None
+            ),
+            "forecast_remaining_today_data_fresh": (
+                remaining_forecast_sample.fresh
+            ),
+            "forecast_remaining_today_data_reason": (
+                remaining_forecast_sample.reason
+            ),
+            "forecast_remaining_today_age_seconds": (
+                round(remaining_forecast_sample.age_seconds, 1)
+                if remaining_forecast_sample.age_seconds is not None
+                else None
+            ),
             "forecast_today_age_minutes": (
                 round(today_forecast_age, 1)
                 if today_forecast_age is not None

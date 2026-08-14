@@ -54,7 +54,10 @@ Official references:
   protection thresholds, Q(U), P(U), power factor or three-phase unbalance.
 - **Idempotent commands and acknowledgement:** a command is written only when
   the requested value differs; the controller verifies the state read back
-  from the inverter before treating a mode as active.
+  from the inverter before treating a mode as active. In a parallel system the
+  current FC03 acknowledgement proves the Master block only; each Slave still
+  requires a shared physical external RS485 connection and commissioning
+  evidence.
 - **Stable decisions:** 30-minute RCE slot latching, tariff target/window
   latching, minimum dwell times and notification fingerprinting prevent rapid
   mode oscillation and notification storms.
@@ -62,6 +65,14 @@ Official references:
   respects the existing export cap and rate-limits normal corrections.
 - **Manual recovery:** every automatic module can be disabled independently;
   the clear-fault function and direct Self-Use control remain visible.
+- **Off-Grid precedence:** mode code `3` is a user/inverter-owned island state.
+  Automatic engines yield and restore only their owned limits without forcing
+  Self-Use.
+- **Parallel evidence boundary:** a newer matching Master FC03 acknowledges
+  the configuration, while commissioning still requires separate evidence for
+  every inverter. Aggregate power-based physical-response acknowledgement is
+  not implemented and remains deferred; aggregate response could not by itself
+  prove execution by each Slave.
 - **Traceability:** the optimizer state includes data age, model source,
   reserve, power constraints, selected windows and the calculated financial
   result; the support ZIP provides a redacted diagnostic snapshot.
@@ -86,7 +97,10 @@ updates as part of the complete installation.
    power limit, including the return to Self-Use.
 5. Verify the configured battery capacity, SOC reserve, BMS current limits,
    system power, GCF/export cap and parallel topology.
-6. Keep the automated test report and the site-specific acceptance protocol.
+6. For a parallel plant, record the external multidrop RS485 wiring and its
+   termination, then capture the requested mode and power separately on the
+   Master and every Slave during Grid Discharge and return to Self-Use.
+7. Keep the automated test report and the site-specific acceptance protocol.
 
 ## Polish summary / Podsumowanie po polsku
 
@@ -102,3 +116,14 @@ potwierdzić dokumentacją producentów oraz protokołem odbioru kompletnego
 systemu. Integracja nie zmienia certyfikowanych nastaw ochrony sieci.
 Ta matryca nie potwierdza kwalifikowalności instalacji do dotacji i nie
 zastępuje oceny operatora programu.
+
+W instalacji równoległej broadcast EMS działa tylko na wspólnej fizycznej
+magistrali zewnętrznego Modbus/RS485 obejmującej Mastera i każdego Slave'a.
+FC03 Mastera nie jest potwierdzeniem Slave'ów, dlatego protokół odbioru musi
+zawierać osobny dowód trybu i mocy każdej jednostki.
+
+Kod trybu `3` ma pierwszeństwo jako stan Off-Grid należący do
+użytkownika/falownika. Automatyczne silniki ustępują i przywracają wyłącznie
+własne limity, bez wymuszania Self-Use. Potwierdzanie odpowiedzi fizycznej na
+podstawie mocy sumarycznej nie jest jeszcze zaimplementowane; sama odpowiedź
+sumaryczna nie dowodzi wykonania przez każdego Slave'a.

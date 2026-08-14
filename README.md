@@ -58,6 +58,11 @@ run beside another controller because shadow mode performs no writes.
 
 Forecast-based planning for RCE optimization, tariff charging, and RCEm requires
 [BJReplay Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar).
+Solcast Day 3 is optional and is commonly disabled by default. Enable it when
+available; known current and legacy entity IDs are detected automatically,
+while a renamed or custom source can be selected with the Day 3 entity helper.
+Missing or stale Day 3 is reported explicitly and does not disable the
+conservative shorter-horizon fallback.
 RCE prices require internet access to the public PSE API. Home Assistant
 Recorder must retain the history of the relevant power and energy entities; this is enabled
 by default in a standard installation. An additional household energy meter is
@@ -281,6 +286,10 @@ integration registers its versioned frontend module automatically.
 - Automatic control is optional and disabled until configured by the user.
 - RCE, tariff charging, and write-capable RCEm control are mutually exclusive.
   RCEm shadow analytics may remain enabled because they perform no writes.
+- Off-Grid is a user/inverter-owned physical mode. Automatic controllers do not
+  start or update writes while it is active, and cleanup does not force a return
+  to Self-Use. The owner diagnostic describes an active transaction, not merely
+  an enabled policy.
 - A LiFePO4 balancing cycle temporarily has higher priority than other plans.
 - Every source has a signed age. Missing, stale, or future-dated critical data
   block automatic writes and, when necessary, trigger a controlled return to
@@ -367,8 +376,9 @@ export budget, the current inverter setting, and the user-defined cap.
 
 RCEm starts in **observation-only (shadow) mode**. In this mode it calculates
 plans and diagnostics but performs no inverter writes, so it can collect public
-test evidence alongside RCE or tariff control. Do not disable shadow mode during
-the v1.5.3 public test. RCEm does not disable certified protection, change
+test evidence alongside RCE or tariff control. Keep shadow mode enabled until
+write-capable RCEm has passed separate commissioning on the target plant. RCEm
+does not disable certified protection, change
 protection thresholds, enable GCF, or alter three-phase imbalance. It remains
 experimental and requires separate field validation and commissioning before
 write-capable use. It is not intended to bypass applicable grid-code or
@@ -381,8 +391,10 @@ sunrise, normal Self-Use operation lets PV charge the battery first. After
 sunset, the cycle can supply the missing energy from the grid. Between 99% and
 100% SOC it targets approximately 2 kW of battery charging, adjusted for the
 household demand that shares the Grid Charge limit. The hold timer begins only
-after full SOC is confirmed. Previous charge settings and EMS mode are restored
-when the cycle ends or is canceled.
+after full SOC is confirmed. The configured hold counts only while SOC remains
+at least `99.9%`; a lower reading cancels the timer and requires a new complete
+hold. Previous charge settings and EMS mode are restored when the cycle ends or
+is canceled.
 
 ## Parallel inverter systems
 
@@ -390,18 +402,38 @@ The standard ESPHome configuration reads topology registers `6048–6095` and
 distinguishes a single inverter, Master, and Slave automatically. No manual
 inverter-count setting is required.
 
-Connect the ESP32 Modbus converter to the **Master** using the external RS485
-bus documented for the installation. Monitoring, forecasting, and RCEm shadow
-analytics remain available for a detected parallel system.
+For parallel EMS control, the ESP32 converter, the Master and **every Slave**
+must share one physical external Modbus/RS485 multidrop bus. On the verified
+two-inverter HIT installation this is the `RS485_2` bus. Carry A, B and the
+reference/GND required by the manufacturer to every inverter; connecting the
+ESP32 only to the Master is not sufficient.
 
-The post-v1.5.3 firmware restores the system command verified earlier on the
+```text
+ESP32 -> isolated RS485 converter -> Master external Modbus -> Slave 1 external Modbus -> ... -> Slave N
+```
+
+Wire this as a line/daisy chain, not a star, and terminate only the physical
+ends as specified by the inverter and converter manuals. The external Modbus
+bus used by the ESP32 is separate from the inverter's dedicated internal
+Parallel/DTS communication bus; do not bridge the two buses.
+
+The v1.5.4 firmware restores the system command verified earlier on the
 two-inverter HIT test installation: every change to EMS registers `4300–4306`
 is sent as one FC16 broadcast to Modbus address `0`. RCE, tariff charging,
 manual schedules, and battery balancing may therefore control a detected
-Master system. The command has no Modbus reply; Home Assistant accepts it only
-after a newer physical FC03 from the Master contains the exact requested block.
-This is a system-broadcast confirmation, not an independent acknowledgement
-from every Slave.
+Master system **only when every inverter is physically present on that same
+external RS485 bus**. Address `0` is broadcast on the wire where the frame is
+sent; the Master does not relay an external Modbus command to Slaves through
+the internal parallel network. The command has no Modbus reply; Home Assistant
+accepts it only after a newer physical FC03 from the Master contains the exact
+requested block. This confirms the Master block, not receipt or execution by
+each Slave.
+
+During commissioning, verify Grid Discharge and the return to Self-Use on the
+Master and on every Slave separately in the manufacturer application. A
+`Ready` installation status, correct system-wide telemetry and a matching
+Master FC03 can all remain present when the ESP32 cable reaches only the
+Master, so none of them proves the physical Slave branch.
 
 Registers `258`, `259`, and `306` are outside that complete EMS block and do
 not yet have separately proven Master/Slave broadcast semantics. Active RCEm

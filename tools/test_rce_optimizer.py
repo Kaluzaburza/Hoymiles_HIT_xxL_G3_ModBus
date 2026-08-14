@@ -888,6 +888,37 @@ def test_sensor_exposes_terminal_and_gain_contract() -> None:
     assert "return age / 60.0 if age is not None else None" in sensor_source
 
 
+def test_dynamic_solcast_sources_and_day3_freshness_contract() -> None:
+    """Configured sources invalidate plans and optional Day 3 fails soft."""
+    sensor_source = (
+        ROOT
+        / "custom_components"
+        / "hoymiles_hit_modbus"
+        / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    for marker in (
+        '"input_text.hoymiles_solcast_forecast_day_3_entity"',
+        '"sensor.solcast_pv_forecast_prognoza_na_dzien_3"',
+        '"sensor.solcast_pv_forecast_forecast_d3"',
+        "def _configured_forecast_entity_ids(",
+        "def _configured_forecast_source_ids(",
+        "def _refresh_dynamic_forecast_listener(",
+        "WATCHED_ENTITIES | self._configured_forecast_source_ids()",
+        'if event.data["entity_id"] in FORECAST_ENTITY_HELPERS:',
+        "day3_forecast_sample = numeric_state_sample(",
+        "max_age_seconds=_DAY3_FORECAST_MAX_AGE_SECONDS",
+        "day3_forecast_state if forecast_day3_data_fresh else None",
+        '"forecast_day3_data_fresh"',
+        '"forecast_day3_data_complete"',
+        '"forecast_day3_age_seconds"',
+        '"forecast_day3_data_reason"',
+    ):
+        assert marker in sensor_source
+    # Day 3 improves the terminal diagnostic when fresh, but can never block
+    # an otherwise safe today/tomorrow plan merely because it is disabled.
+    assert 'required["Solcast Forecast Day 3"]' not in sensor_source
+
+
 def test_shared_forecast_model_is_conservative_and_robust() -> None:
     """Live underproduction and an outlier cannot make PV optimistic."""
     factor, ratio, confidence = FORECAST.adaptive_forecast_factor(
@@ -2992,6 +3023,7 @@ def main() -> None:
         test_whole_soc_control_reserve_does_not_overstate_export,
         test_gross_and_net_optimization_gain_are_unambiguous,
         test_sensor_exposes_terminal_and_gain_contract,
+        test_dynamic_solcast_sources_and_day3_freshness_contract,
         test_shared_forecast_model_is_conservative_and_robust,
         test_house_energy_model_applies_charge_and_discharge_losses,
         test_load_and_grid_share_the_same_bms_discharge_budget,

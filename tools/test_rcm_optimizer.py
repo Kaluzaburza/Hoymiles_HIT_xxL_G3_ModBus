@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import ast
+from collections.abc import Callable
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
+import re
 import sys
+from typing import Any
 from zoneinfo import ZoneInfo
 
 
@@ -1056,7 +1061,209 @@ def main() -> None:
     )[1].split(")", 1)[0]
     assert "discharge_registers_data_fresh" in pre_discharge_freshness_block
     assert "battery_soc_fresh" in pre_discharge_freshness_block
-    assert "battery_capacity_fresh" in pre_discharge_freshness_block
+    assert "battery_capacity_fresh" not in pre_discharge_freshness_block
+    assert "battery_capacity is not None" in pre_discharge_freshness_block
+
+    # Capacity is a stable configured property: an unchanged-but-valid value
+    # remains usable without a 300 s telemetry gate.  The direct 4102 entity
+    # is preferred and Total Capacity retains the firmware's 1907 fallback;
+    # zero, missing and non-finite values still collapse to fail-closed None.
+    capacity_adapter_block = sensor_source.split(
+        "def _stable_battery_capacity(", 1
+    )[1].split("\n\nclass HoymilesRCMOptimizerSensor", 1)[0]
+    assert '"sensor.hoymiles_hit_battery_capacity"' in sensor_source
+    assert '"sensor.hoymiles_hit_total_capacity"' in sensor_source
+    assert "numeric_state_sample" not in capacity_adapter_block
+    assert "isfinite(value)" in capacity_adapter_block
+    assert "value > 0.0" in capacity_adapter_block
+    assert 'return None, ""' in capacity_adapter_block
+    assert (
+        'required["sensor.hoymiles_hit_battery_capacity"] = battery_capacity'
+        in sensor_source
+    )
+    sensor_tree = ast.parse(sensor_source)
+    capacity_function = next(
+        node
+        for node in sensor_tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_stable_battery_capacity"
+    )
+    capacity_namespace = {
+        "HomeAssistant": object,
+        "BATTERY_CAPACITY_ENTITIES": (
+            "sensor.hoymiles_hit_battery_capacity",
+            "sensor.hoymiles_hit_total_capacity",
+        ),
+        "_state_number": lambda hass, entity_id: hass.get(entity_id),
+        "isfinite": isfinite,
+    }
+    exec(
+        compile(
+            ast.fix_missing_locations(
+                ast.Module(body=[capacity_function], type_ignores=[])
+            ),
+            "<rcm-capacity-adapter>",
+            "exec",
+        ),
+        capacity_namespace,
+    )
+    stable_capacity = capacity_namespace["_stable_battery_capacity"]
+    primary = "sensor.hoymiles_hit_battery_capacity"
+    fallback = "sensor.hoymiles_hit_total_capacity"
+    # No report-age field participates: a stable unchanged setting is valid.
+    assert stable_capacity({primary: 230.0, fallback: 460.0}) == (230.0, primary)
+    assert stable_capacity({primary: 0.0, fallback: 21.0}) == (21.0, fallback)
+    assert stable_capacity({primary: float("nan"), fallback: 21.0}) == (
+        21.0,
+        fallback,
+    )
+    assert stable_capacity({primary: 0.0, fallback: 0.0}) == (None, "")
+    assert stable_capacity({}) == (None, "")
+    bms_charge_freshness_block = sensor_source.split(
+        "bms_charge_fresh = ", 1
+    )[1].split("\n", 1)[0]
+    bms_discharge_freshness_block = sensor_source.split(
+        "bms_discharge_fresh = (", 1
+    )[1].split(")", 1)[0]
+    assert "battery_voltage_fresh" in bms_charge_freshness_block
+    assert "bms_charge_current_fresh" in bms_charge_freshness_block
+    assert "battery_voltage_fresh" in bms_discharge_freshness_block
+    assert "bms_discharge_current_fresh" in bms_discharge_freshness_block
+
+    # Arbitrary forecast entities selected through input_text participate in
+    # both event invalidation and the executor publication fingerprint.
+    assert "def _configured_forecast_entities(" in sensor_source
+    assert "def _refresh_dynamic_forecast_listener(" in sensor_source
+    assert "self._refresh_dynamic_forecast_listener()" in sensor_source
+    fingerprint_block = sensor_source.split(
+        "def _current_input_fingerprint(", 1
+    )[1].split("\n    @callback", 1)[0]
+    assert "self._watched_rcm_entities()" in fingerprint_block
+    dynamic_listener_block = sensor_source.split(
+        "def _refresh_dynamic_forecast_listener(", 1
+    )[1].split("\n    @callback", 1)[0]
+    assert "async_track_state_change_event(" in dynamic_listener_block
+    assert "self._async_input_changed" in dynamic_listener_block
+    rcm_class = next(
+        node
+        for node in sensor_tree.body
+        if isinstance(node, ast.ClassDef)
+        and node.name == "HoymilesRCMOptimizerSensor"
+    )
+    dynamic_method_names = {
+        "_configured_forecast_entities",
+        "_watched_rcm_entities",
+        "_remove_dynamic_forecast_listener",
+        "_refresh_dynamic_forecast_listener",
+        "_current_input_fingerprint",
+    }
+    dynamic_methods = [
+        node
+        for node in rcm_class.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in dynamic_method_names
+    ]
+    assert {node.name for node in dynamic_methods} == dynamic_method_names
+    dynamic_registrations: list[tuple[str, ...]] = []
+    dynamic_unsubscribed: list[tuple[str, ...]] = []
+
+    def track_dynamic(_hass, entity_ids, _handler):
+        registration = tuple(entity_ids)
+        dynamic_registrations.append(registration)
+
+        def unsubscribe() -> None:
+            dynamic_unsubscribed.append(registration)
+
+        return unsubscribe
+
+    dynamic_namespace = {
+        "Any": Any,
+        "Callable": Callable,
+        "FORECAST_ENTITY_HELPERS": (
+            "input_text.hoymiles_solcast_forecast_today_entity",
+            "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+        ),
+        "_FORECAST_ENTITY_ID": re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$"),
+        "RCE_LOAD_BROKER_ATTRIBUTES": (),
+        "WATCHED_RCM_ENTITIES": {"sensor.static_forecast"},
+        "_state_text": lambda hass, entity_id: hass.get(entity_id, ""),
+        "async_track_state_change_event": track_dynamic,
+        "callback": lambda function: function,
+        "optimizer_input_fingerprint": (
+            lambda _hass, entity_ids, attribute_projections=None: tuple(
+                sorted(entity_ids)
+            )
+        ),
+    }
+    dynamic_probe_class = ast.ClassDef(
+        name="DynamicProbe",
+        bases=[],
+        keywords=[],
+        decorator_list=[],
+        body=dynamic_methods,
+    )
+    exec(
+        compile(
+            ast.fix_missing_locations(
+                ast.Module(body=[dynamic_probe_class], type_ignores=[])
+            ),
+            "<rcm-dynamic-forecast-watch>",
+            "exec",
+        ),
+        dynamic_namespace,
+    )
+    dynamic_probe = dynamic_namespace["DynamicProbe"]()
+    dynamic_probe.entity_id = "sensor.hoymiles_hit_rcm_voltage_control"
+    dynamic_probe.hass = {
+        "input_text.hoymiles_solcast_forecast_today_entity": (
+            "sensor.hoymiles_hit_rcm_voltage_control"
+        ),
+        "input_text.hoymiles_solcast_forecast_tomorrow_entity": (
+            "sensor.static_forecast"
+        ),
+    }
+    dynamic_probe._async_input_changed = object()
+    dynamic_probe._dynamic_forecast_listener_entities = frozenset()
+    dynamic_probe._dynamic_forecast_listener_unsub = None
+    # A malformed helper pointing back at the optimizer output must not create
+    # a publish -> invalidate -> publish loop or enter the certification
+    # fingerprint.
+    dynamic_probe._refresh_dynamic_forecast_listener()
+    assert dynamic_registrations == []
+    assert dynamic_probe.entity_id not in dynamic_probe._current_input_fingerprint()
+    dynamic_probe.hass[
+        "input_text.hoymiles_solcast_forecast_today_entity"
+    ] = "sensor.custom_solcast_today"
+    dynamic_probe._refresh_dynamic_forecast_listener()
+    assert dynamic_registrations == [("sensor.custom_solcast_today",)]
+    assert "sensor.custom_solcast_today" in dynamic_probe._current_input_fingerprint()
+    # The 15 s control timer refreshes this binding repeatedly.  An unchanged
+    # helper value must therefore be a strict no-op, without another listener
+    # registration or an unnecessary unsubscribe/subscribe cycle.
+    dynamic_probe._refresh_dynamic_forecast_listener()
+    assert dynamic_registrations == [("sensor.custom_solcast_today",)]
+    assert dynamic_unsubscribed == []
+    dynamic_probe.hass[
+        "input_text.hoymiles_solcast_forecast_today_entity"
+    ] = "sensor.custom_solcast_today_v2"
+    dynamic_probe._refresh_dynamic_forecast_listener()
+    assert dynamic_unsubscribed == [("sensor.custom_solcast_today",)]
+    assert dynamic_registrations[-1] == ("sensor.custom_solcast_today_v2",)
+    assert (
+        "sensor.custom_solcast_today_v2"
+        in dynamic_probe._current_input_fingerprint()
+    )
+    # Entity removal/unload must release whichever dynamically rebound source
+    # is current, and repeated cleanup must remain idempotent.
+    dynamic_probe._remove_dynamic_forecast_listener()
+    assert dynamic_unsubscribed == [
+        ("sensor.custom_solcast_today",),
+        ("sensor.custom_solcast_today_v2",),
+    ]
+    assert dynamic_probe._dynamic_forecast_listener_entities == frozenset()
+    assert dynamic_probe._dynamic_forecast_listener_unsub is None
+    dynamic_probe._remove_dynamic_forecast_listener()
+    assert len(dynamic_unsubscribed) == 2
     forecast_fresh_block = sensor_source.split(
         "forecast_data_fresh = bool(", 1
     )[1].split(")", 1)[0]
@@ -1101,6 +1308,9 @@ def main() -> None:
         "pre_discharge_transaction_ready",
         "pre_discharge_deadline",
         "discharge_registers_data_fresh",
+        "battery_capacity_data_available",
+        "battery_capacity_source_entity_id",
+        "battery_capacity_data_fresh",
         "data_freshness",
         "data_age_seconds",
     ):

@@ -3,6 +3,9 @@
 # Read the README wiring section before connecting the converter:
 # automatic-direction modules need TX/RX/GND, while MAX3485/MAX485 modules
 # with DE and /RE need an additional GPIO and a UART flow_control_pin override.
+# For parallel EMS, continue the same external RS485 A/B bus from the converter
+# to the Master and every Slave; address-0 broadcast is not relayed by a
+# Master-only connection.
 
 substitutions:
   name: "hoymiles-hit-g3"
@@ -51,7 +54,7 @@ logger:
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.5.3
+    ref: v1.5.4
     refresh: 1d
     files:
       - packages/core.yaml

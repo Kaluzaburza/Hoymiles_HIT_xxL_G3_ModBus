@@ -6,6 +6,9 @@
 # Wiring: use a 3.3 V logic-compatible UART/TTL <-> RS485 converter.
 # Automatic-direction converters need TX, RX and GND. MAX3485/MAX485 modules
 # with DE and /RE need an additional GPIO and the UART override from README.
+# Parallel EMS control additionally requires this same external RS485 A/B bus
+# to reach the Master and every Slave; a cable ending at the Master cannot
+# deliver Modbus address-0 broadcasts to a disconnected Slave.
 # Protocol: Modbus RTU, 115200 8N1. FC03 read holding, FC04 read input, FC06/FC10 write.
 
 substitutions:
@@ -68,7 +71,7 @@ logger:
 packages:
   hoymiles_hit_g3:
     url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.5.3
+    ref: v1.5.4
     refresh: 1d
     files:
       - packages/core.yaml

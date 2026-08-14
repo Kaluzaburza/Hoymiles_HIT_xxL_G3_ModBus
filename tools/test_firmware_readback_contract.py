@@ -28,6 +28,10 @@ def script_block(source: str, component_id: str) -> str:
 
 
 def main() -> None:
+    core = (ROOT / "packages" / "core.yaml").read_text(encoding="utf-8")
+    modbus_connection = (ROOT / "packages" / "modbus_connection.yaml").read_text(
+        encoding="utf-8"
+    )
     settings = (ROOT / "packages" / "settings.yaml").read_text(encoding="utf-8")
     parallel = (ROOT / "packages" / "parallel_network.yaml").read_text(
         encoding="utf-8"
@@ -264,6 +268,32 @@ def main() -> None:
 
     soc_source = platform_block(battery, "battery_soc_1909")
     assert "modbus_controller_id: ${modbus_fast_controller_id}" in soc_source
+
+    # Capacity is stable, but every successful FC03 cycle must still publish a
+    # physical report.  This prevents an unchanged 4102 setting from looking
+    # stale to HA and keeps it off the slow diagnostic controller.
+    capacity_source = platform_block(battery, "battery_capacity_4102")
+    assert (
+        "modbus_controller_id: ${modbus_settings_controller_id}"
+        in capacity_source
+    )
+    assert "register_type: holding" in capacity_source
+    assert "address: 4102" in capacity_source
+    assert "force_update: true" in capacity_source
+    assert "skip_updates:" not in capacity_source
+    assert "settings_update_interval: 20s" in core
+    settings_controller_start = modbus_connection.index(
+        "  - id: ${modbus_settings_controller_id}\n"
+    )
+    settings_controller_end = modbus_connection.find(
+        "\n  - id:", settings_controller_start + 1
+    )
+    settings_controller = (
+        modbus_connection[settings_controller_start:]
+        if settings_controller_end < 0
+        else modbus_connection[settings_controller_start:settings_controller_end]
+    )
+    assert "update_interval: ${settings_update_interval}" in settings_controller
 
     # Unchanged BMS limits are still successful physical FC03 samples.  They
     # must reach HA as reports so the signed-age fail-closed contract does not

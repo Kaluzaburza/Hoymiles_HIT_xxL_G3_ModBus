@@ -160,6 +160,8 @@ views:
               name: Custom Solcast entity — today
             - entity: input_text.hoymiles_solcast_forecast_tomorrow_entity
               name: Custom Solcast entity — tomorrow
+            - entity: input_text.hoymiles_solcast_forecast_day_3_entity
+              name: Custom Solcast entity — Day 3
             - entity: input_number.hoymiles_rce_fallback_daily_load
               name: Daily consumption before history is available
       - type: custom:hoymiles-zebra-entities-card
@@ -337,6 +339,26 @@ views:
           {{ plan.attributes.forecast_tomorrow_p10_kwh | default('—', true) }} /
           {{ plan.attributes.forecast_tomorrow_kwh | default('—', true) }} /
           {{ plan.attributes.forecast_tomorrow_p90_kwh | default('—', true) }} kWh<br>
+          {% set day3_entity = plan.attributes.forecast_day3_entity | default(none) %}
+          {% set day3_configured = plan.attributes.forecast_day3_configured_entity
+             | default(none) %}
+          {% set day3_status = plan.attributes.forecast_day3_status | default(none) %}
+          {% set day3_fresh = plan.attributes.forecast_day3_data_fresh | default(none) %}
+          {% set day3_age = plan.attributes.forecast_day3_age_seconds | default(none) %}
+          {% set day3_reason = plan.attributes.forecast_day3_data_reason | default(none) %}
+          **Day 3 — entity:**
+          {{ day3_entity if day3_entity not in [none, '', 'not_enabled',
+             'not_available', 'unknown', 'unavailable'] else 'no detected entity' }} ·
+          configuration:
+          {{ day3_configured if day3_configured not in [none, '', 'automatic',
+             'unknown', 'unavailable'] else 'automatic' }}<br>
+          **Day 3 — status / fresh:**
+          {{ day3_status if day3_status not in [none, ''] else 'no status' }} /
+          {% if day3_fresh is none %}data unavailable{% elif day3_fresh %}yes{% else %}no{% endif %}<br>
+          **Day 3 — signed age:**
+          {{ ((day3_age | float(0)) | round(1)) ~ ' s'
+             if day3_age is number else 'no timestamp' }} · reason:
+          {{ day3_reason if day3_reason not in [none, ''] else 'no information' }}<br>
           **Forecast confidence / conservative-case share:**
           {{ plan.attributes.forecast_confidence_percent | default(0) }}% /
           {{ ((plan.attributes.forecast_uncertainty_risk_weight | default(0))
@@ -853,6 +875,26 @@ views:
           **Day 3 forecast:** {{ plan.attributes.forecast_day_3_kwh
              | default('unavailable — safe fallback reserve', true) }}
           {{ 'kWh' if plan.attributes.forecast_day_3_kwh is number else '' }}<br>
+          {% set day3_entity = plan.attributes.forecast_day_3_entity | default(none) %}
+          {% set day3_configured = plan.attributes.forecast_day_3_configured_entity
+             | default(none) %}
+          {% set day3_status = plan.attributes.forecast_day_3_status | default(none) %}
+          {% set day3_fresh = plan.attributes.forecast_day_3_data_fresh | default(none) %}
+          {% set day3_age = plan.attributes.forecast_day_3_age_seconds | default(none) %}
+          {% set day3_reason = plan.attributes.forecast_day_3_data_reason | default(none) %}
+          **Day 3 — entity:**
+          {{ day3_entity if day3_entity not in [none, '', 'not_enabled',
+             'not_available', 'unknown', 'unavailable'] else 'no detected entity' }} ·
+          configuration:
+          {{ day3_configured if day3_configured not in [none, '', 'automatic',
+             'unknown', 'unavailable'] else 'automatic' }}<br>
+          **Day 3 — status / fresh:**
+          {{ day3_status if day3_status not in [none, ''] else 'no status' }} /
+          {% if day3_fresh is none %}data unavailable{% elif day3_fresh %}yes{% else %}no{% endif %}<br>
+          **Day 3 — signed age:**
+          {{ ((day3_age | float(0)) | round(1)) ~ ' s'
+             if day3_age is number else 'no timestamp' }} · reason:
+          {{ day3_reason if day3_reason not in [none, ''] else 'no information' }}<br>
           **Grid Charge power budget:** requested
           {{ plan.attributes.requested_charge_power_kw | default(0) }} kW · effective
           {{ plan.attributes.effective_charge_power_kw | default(0) }} kW ·
@@ -958,6 +1000,8 @@ views:
             name: Custom Solcast entity — today
           - entity: input_text.hoymiles_solcast_forecast_tomorrow_entity
             name: Custom Solcast entity — tomorrow
+          - entity: input_text.hoymiles_solcast_forecast_day_3_entity
+            name: Custom Solcast entity — Day 3
           - entity: input_number.hoymiles_rce_fallback_daily_load
             name: Daily consumption before history is available
           - entity: input_number.hoymiles_tariff_minimum_saving

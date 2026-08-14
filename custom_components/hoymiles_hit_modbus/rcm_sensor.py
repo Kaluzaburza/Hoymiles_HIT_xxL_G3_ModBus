@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
+from math import isfinite
+import re
 from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -67,20 +70,29 @@ FORECAST_MAX_AGE_SECONDS = 12 * 60 * 60.0
 RCE_PLAN_MAX_AGE_SECONDS = 300.0
 HISTORY_MAX_AGE_SECONDS = 2 * 60 * 60.0
 
+BATTERY_CAPACITY_ENTITIES = (
+    "sensor.hoymiles_hit_battery_capacity",
+    "sensor.hoymiles_hit_total_capacity",
+)
+FORECAST_ENTITY_HELPERS = (
+    "input_text.hoymiles_solcast_forecast_today_entity",
+    "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+)
+_FORECAST_ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+
 WATCHED_RCM_ENTITIES = {
     *GRID_VOLTAGE_ENTITIES,
     "sensor.hoymiles_hit_overview_pv_total_power",
     "sensor.hoymiles_actual_load_power",
     "sensor.hoymiles_rce_grid_export_power",
-    "sensor.hoymiles_hit_battery_capacity",
+    *BATTERY_CAPACITY_ENTITIES,
     "sensor.hoymiles_hit_overview_battery_soc",
     "sensor.hoymiles_hit_battery_voltage_bms",
     "sensor.hoymiles_hit_maximum_charge_current",
     "sensor.hoymiles_hit_maximum_discharge_current",
     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
     "sensor.hoymiles_hit_rce_optimized_plan",
-    "input_text.hoymiles_solcast_forecast_today_entity",
-    "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+    *FORECAST_ENTITY_HELPERS,
     *TODAY_FORECAST_CANDIDATES,
     *TOMORROW_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
@@ -209,6 +221,23 @@ def _number_sample(
     return sample.value, sample.fresh, sample.age_seconds
 
 
+def _stable_battery_capacity(
+    hass: HomeAssistant,
+) -> tuple[float | None, str]:
+    """Return the positive configured/effective capacity without an age gate.
+
+    Capacity is a stable installation property, unlike dynamic BMS voltage and
+    current limits.  Prefer register 4102 and retain the published Total
+    Capacity entity as the same 1907-backed fallback used by the firmware.
+    Missing, non-finite and non-positive values remain fail-closed.
+    """
+    for entity_id in BATTERY_CAPACITY_ENTITIES:
+        value = _state_number(hass, entity_id)
+        if value is not None and isfinite(value) and value > 0.0:
+            return value, entity_id
+    return None, ""
+
+
 class HoymilesRCMOptimizerSensor(SensorEntity):
     """Expose voltage history, battery headroom and a safe charge setpoint."""
 
@@ -241,6 +270,8 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         self._startup_warmup_task: asyncio.Task[None] | None = None
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
+        self._dynamic_forecast_listener_entities: frozenset[str] = frozenset()
+        self._dynamic_forecast_listener_unsub: Callable[[], None] | None = None
         self._attributes: dict[str, Any] = {
             "status_code": "missing_data",
             "missing_entities": [],
@@ -284,6 +315,14 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 self._async_input_changed,
             )
         )
+        refresh_dynamic_forecast_listener = getattr(
+            self,
+            "_refresh_dynamic_forecast_listener",
+            None,
+        )
+        if callable(refresh_dynamic_forecast_listener):
+            refresh_dynamic_forecast_listener()
+        self.async_on_remove(lambda: self._remove_dynamic_forecast_listener())
         self.async_on_remove(
             async_track_time_interval(
                 self.hass,
@@ -300,6 +339,53 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         )
         self.async_write_ha_state()
         self._schedule_startup_warmup()
+
+    @callback
+    def _configured_forecast_entities(self) -> frozenset[str]:
+        """Resolve arbitrary forecast entity IDs selected by the helpers."""
+        configured: set[str] = set()
+        for helper_entity_id in FORECAST_ENTITY_HELPERS:
+            entity_id = _state_text(self.hass, helper_entity_id).strip().lower()
+            if entity_id and _FORECAST_ENTITY_ID.fullmatch(entity_id):
+                configured.add(entity_id)
+        own_entity_id = getattr(self, "entity_id", None)
+        if isinstance(own_entity_id, str) and own_entity_id:
+            configured.discard(own_entity_id)
+        return frozenset(configured)
+
+    @callback
+    def _watched_rcm_entities(self) -> frozenset[str]:
+        """Return static inputs plus the exact configured forecast sources."""
+        return frozenset(WATCHED_RCM_ENTITIES).union(
+            self._configured_forecast_entities()
+        )
+
+    @callback
+    def _remove_dynamic_forecast_listener(self) -> None:
+        """Remove the current custom-forecast listener, if one is installed."""
+        if self._dynamic_forecast_listener_unsub is not None:
+            self._dynamic_forecast_listener_unsub()
+            self._dynamic_forecast_listener_unsub = None
+        self._dynamic_forecast_listener_entities = frozenset()
+
+    @callback
+    def _refresh_dynamic_forecast_listener(self) -> None:
+        """Rebind state tracking when a configured forecast entity changes."""
+        desired = self._configured_forecast_entities().difference(
+            WATCHED_RCM_ENTITIES
+        )
+        if desired == self._dynamic_forecast_listener_entities:
+            return
+        self._remove_dynamic_forecast_listener()
+        self._dynamic_forecast_listener_entities = frozenset(desired)
+        if desired:
+            self._dynamic_forecast_listener_unsub = (
+                async_track_state_change_event(
+                    self.hass,
+                    sorted(desired),
+                    self._async_input_changed,
+                )
+            )
 
     @callback
     def _schedule_startup_warmup(self) -> None:
@@ -333,7 +419,7 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         """Return the exact watched snapshot used to certify publication."""
         return optimizer_input_fingerprint(
             self.hass,
-            WATCHED_RCM_ENTITIES,
+            self._watched_rcm_entities(),
             attribute_projections={
                 "sensor.hoymiles_hit_rce_optimized_plan": (
                     RCE_LOAD_BROKER_ATTRIBUTES
@@ -392,6 +478,8 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         }
 
     async def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
+        if event.data["entity_id"] in FORECAST_ENTITY_HELPERS:
+            self._refresh_dynamic_forecast_listener()
         if not self._invalidate_input_event(event):
             return
         if event.data["entity_id"] in GRID_VOLTAGE_ENTITIES:
@@ -399,6 +487,7 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         await self._recalculate_and_write()
 
     async def _async_control_timer(self, now: datetime) -> None:
+        self._refresh_dynamic_forecast_listener()
         self._append_voltage_sample(now)
         self._invalidate_internal_inputs()
         await self._recalculate_and_write()
@@ -1052,7 +1141,6 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                     *GRID_VOLTAGE_ENTITIES,
                     "sensor.hoymiles_hit_overview_pv_total_power",
                     "sensor.hoymiles_actual_load_power",
-                    "sensor.hoymiles_hit_battery_capacity",
                     "sensor.hoymiles_hit_overview_battery_soc",
                     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
                     "sensor.hoymiles_hit_ems_self_use_soc_readback",
@@ -1062,6 +1150,10 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                     "input_number.hoymiles_rcm_export_cap_percent",
                 )
             }
+            battery_capacity, battery_capacity_source = (
+                _stable_battery_capacity(self.hass)
+            )
+            required["sensor.hoymiles_hit_battery_capacity"] = battery_capacity
             required["sensor.hoymiles_hit_ems_self_use_soc_readback"] = (
                 self_use_soc_value if self_use_soc_fresh else None
             )
@@ -1139,6 +1231,28 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 freshness[entity_id] = fresh
                 ages[entity_id] = round(age, 1) if age is not None else None
                 return value, fresh
+
+            for capacity_entity_id in BATTERY_CAPACITY_ENTITIES:
+                capacity_state = self.hass.states.get(capacity_entity_id)
+                capacity_age = _state_age_seconds(capacity_state, now)
+                capacity_value = _state_number(self.hass, capacity_entity_id)
+                capacity_report_fresh = bool(
+                    capacity_value is not None
+                    and isfinite(capacity_value)
+                    and capacity_value > 0.0
+                    and capacity_age is not None
+                    and -5.0 <= capacity_age <= SLOW_TELEMETRY_MAX_AGE_SECONDS
+                )
+                freshness[capacity_entity_id] = capacity_report_fresh
+                ages[capacity_entity_id] = (
+                    round(capacity_age, 1)
+                    if capacity_age is not None
+                    else None
+                )
+            battery_capacity_report_fresh = bool(
+                battery_capacity_source
+                and freshness.get(battery_capacity_source, False)
+            )
 
             voltage_samples = {
                 entity_id: sample(entity_id, LIVE_TELEMETRY_MAX_AGE_SECONDS)
@@ -1395,10 +1509,6 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
             )
             live_power_data_fresh = pv_power_fresh and load_power_fresh
             battery_soc = battery_soc_value
-            battery_capacity, battery_capacity_fresh = sample(
-                "sensor.hoymiles_hit_battery_capacity",
-                SLOW_TELEMETRY_MAX_AGE_SECONDS,
-            )
             _max_discharge, max_discharge_fresh = sample(
                 "sensor.hoymiles_hit_ems_maximum_discharge_power_readback",
                 ACTUATOR_MAX_AGE_SECONDS,
@@ -1429,7 +1539,7 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
             pre_discharge_actuator_fresh = bool(
                 discharge_registers_data_fresh
                 and battery_soc_fresh
-                and battery_capacity_fresh
+                and battery_capacity is not None
             )
             result = await self.hass.async_add_executor_job(
                 optimize_rcm,
@@ -1813,7 +1923,11 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                 "maximum_discharge_power_data_fresh": max_discharge_fresh,
                 "force_discharge_soc_data_fresh": force_discharge_fresh,
                 "battery_soc_data_fresh": battery_soc_fresh,
-                "battery_capacity_data_fresh": battery_capacity_fresh,
+                "battery_capacity_data_available": battery_capacity is not None,
+                "battery_capacity_source_entity_id": (
+                    battery_capacity_source or None
+                ),
+                "battery_capacity_data_fresh": battery_capacity_report_fresh,
                 "data_freshness": freshness,
                 "data_age_seconds": ages,
                 "actuators": [

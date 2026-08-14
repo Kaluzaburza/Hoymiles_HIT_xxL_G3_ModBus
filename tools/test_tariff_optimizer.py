@@ -867,6 +867,15 @@ def main() -> None:
         '"load_profile_broker_fresh"',
         '"load_profile_age_seconds"',
         '"live_power_data_fresh"',
+        '"forecast_day_3_configured_entity"',
+        '"forecast_day_3_source_available"',
+        '"forecast_day_3_data_fresh"',
+        '"forecast_day_3_data_complete"',
+        '"forecast_day_3_age_seconds"',
+        '"forecast_day_3_data_reason"',
+        '"forecast_today_data_reason"',
+        '"forecast_tomorrow_data_reason"',
+        '"forecast_remaining_today_data_reason"',
         "from .energy_data import numeric_state_sample, state_age_seconds",
         "return state_age_seconds(state, now or dt_util.utcnow())",
         "sample = numeric_state_sample(",
@@ -882,6 +891,18 @@ def main() -> None:
     assert "max_age_seconds=max_age_seconds" in tariff_sensor_source
     assert "rce_state_raw is None" in tariff_sensor_source
     assert "and load_profile_broker_fresh" in tariff_sensor_source
+    for marker in (
+        "FORECAST_ENTITY_HELPERS",
+        "def _configured_forecast_source_ids(",
+        "def _refresh_dynamic_forecast_listener(",
+        "_configured_forecast_entity_ids(self.hass)",
+        'if event.data["entity_id"] in FORECAST_ENTITY_HELPERS:',
+        "day_3_forecast_sample = numeric_state_sample(",
+        "max_age_seconds=FORECAST_MAX_AGE_SECONDS",
+        'if day_3_status != "fresh":',
+    ):
+        assert marker in tariff_sensor_source
+    assert 'required["Solcast Forecast Day 3"]' not in tariff_sensor_source
 
     # The reserve is dynamic.  With Self-Use 25% and a 2-point correction the
     # optimizer restores 27%; changing the user threshold changes the target.

@@ -61,6 +61,11 @@ w trybie obserwacji nie wykonuje żadnych zapisów.
 Planowanie optymalizacji RCE, ładowania taryfowego i RCEm z uwzględnieniem prognozy wymaga
 skonfigurowanej integracji
 [BJReplay Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar).
+Prognoza Solcast na Dzień 3 jest opcjonalna i często domyślnie wyłączona. Włącz
+ją, jeśli jest dostępna; znane bieżące i starsze identyfikatory są wykrywane
+automatycznie, a własną lub przemianowaną encję można wskazać helperem Dnia 3.
+Brak albo nieświeżość Dnia 3 jest jawnie raportowana i nie wyłącza
+konserwatywnego planowania na krótszym horyzoncie.
 Ceny RCE wymagają dostępu do publicznego API PSE. Home Assistant Recorder musi
 przechowywać historię stanów odpowiednich encji mocy i energii; w standardowej
 instalacji jest włączony domyślnie. Dodatkowy licznik zużycia domu nie jest
@@ -295,6 +300,10 @@ wersjonowany moduł interfejsu.
 - RCE, ładowanie taryfowe i aktywne sterowanie RCEm wzajemnie się wykluczają.
   Analityka RCEm może pozostać włączona w trybie obserwacji, bo nie wykonuje
   żadnych zapisów.
+- Off-Grid jest fizycznym trybem należącym do użytkownika/falownika.
+  Automatyczne sterowniki nie rozpoczynają ani nie aktualizują zapisów podczas
+  jego pracy, a sprzątanie nie wymusza powrotu do Self-Use. Diagnostyka
+  właściciela opisuje aktywną transakcję, a nie samo włączenie polityki.
 - Cykl wyrównywania LiFePO4 ma tymczasowo wyższy priorytet niż pozostałe plany.
 - Wiek danych każdego źródła jest liczony ze znakiem. Brak krytycznych danych,
   ich nieaktualność lub znacznik czasu z przyszłości blokują automatyczne zapisy
@@ -389,8 +398,9 @@ użytkownika.
 
 RCEm domyślnie uruchamia się w **trybie obserwacji (shadow)**. Oblicza wtedy
 plany i diagnostykę, ale nie wykonuje żadnych zapisów do falownika, dlatego może
-zbierać dane testowe obok sterowania RCE lub taryfowego. Podczas publicznych
-testów v1.5.3 nie wyłączaj trybu obserwacji. RCEm nie wyłącza certyfikowanych
+zbierać dane testowe obok sterowania RCE lub taryfowego. Pozostaw tryb
+obserwacji włączony, dopóki RCEm z prawem zapisu nie przejdzie osobnego odbioru
+na docelowej instalacji. RCEm nie wyłącza certyfikowanych
 zabezpieczeń, nie zmienia progów ochronnych, nie włącza GCF i nie modyfikuje
 ustawienia asymetrii trójfazowej. Pozostaje funkcją eksperymentalną i przed
 użyciem zapisów wymaga osobnej walidacji terenowej oraz uruchomienia próbnego na
@@ -404,8 +414,10 @@ Po wschodzie słońca pozostawia normalny tryb Self-Use, aby w pierwszej kolejno
 wykorzystać PV. Po zachodzie może uzupełnić brakującą energię z sieci. Między
 99% a 100% SOC dąży do uzyskania około 2 kW mocy ładowania baterii, uwzględniając
 zużycie domu korzystające ze wspólnego limitu Grid Charge. Czas podtrzymania
-zaczyna odmierzać dopiero po potwierdzeniu pełnego SOC. Po zakończeniu albo
-anulowaniu cyklu przywraca wcześniejsze ustawienia ładowania i tryb EMS.
+zaczyna odmierzać dopiero po potwierdzeniu pełnego SOC i liczy go tylko przy SOC
+co najmniej `99,9%`; niższy odczyt anuluje licznik i wymaga nowego pełnego
+podtrzymania. Po zakończeniu albo anulowaniu cyklu przywraca wcześniejsze
+ustawienia ładowania i tryb EMS.
 
 ## Instalacje z falownikami połączonymi równolegle
 
@@ -413,18 +425,38 @@ Standardowa konfiguracja ESPHome odczytuje rejestry topologii `6048–6095` i
 automatycznie rozpoznaje pojedynczy falownik, Master oraz Slave. Użytkownik nie
 musi ręcznie podawać liczby falowników.
 
-Konwerter Modbus ESP32 podłącz do falownika **Master** przez zewnętrzną
-magistralę RS485 przewidzianą dla instalacji. Monitorowanie, prognozy i analiza
-RCEm w trybie shadow pozostają dostępne dla wykrytej instalacji równoległej.
+W układzie równoległym konwerter ESP32, Master i **każdy Slave** muszą być
+podłączone do jednej wspólnej fizycznej magistrali zewnętrznego Modbus/RS485.
+W zweryfikowanej instalacji 2×HIT jest to magistrala `RS485_2`. Doprowadź A, B
+oraz wymagane przez producenta odniesienie/GND do każdego falownika;
+podłączenie ESP32 wyłącznie do Mastera nie wystarcza.
 
-Firmware po v1.5.3 przywraca polecenie systemowe zweryfikowane wcześniej na
+```text
+ESP32 -> izolowany konwerter RS485 -> zewnętrzny Modbus Mastera -> zewnętrzny Modbus Slave 1 -> ... -> Slave N
+```
+
+Prowadź przewód liniowo/magistralowo, nie w gwiazdę, a terminację stosuj tylko
+na fizycznych końcach zgodnie z instrukcją falownika i konwertera. Zewnętrzny
+Modbus ESP32 jest inną magistralą niż dedykowana wewnętrzna komunikacja
+Parallel/DTS falowników — nie mostkuj tych dwóch magistral.
+
+Firmware v1.5.4 przywraca polecenie systemowe zweryfikowane wcześniej na
 testowej instalacji 2×HIT: każda zmiana rejestrów EMS `4300–4306` jest wysyłana
 jako jeden broadcast FC16 na adres Modbus `0`. RCE, tanie ładowanie,
 harmonogramy ręczne i balansowanie baterii mogą dzięki temu sterować wykrytym
-układem z Masterem. Broadcast nie odpowiada; Home Assistant uznaje polecenie
-dopiero wtedy, gdy późniejszy fizyczny FC03 z Mastera zawiera dokładnie żądany
-blok. Jest to potwierdzenie polecenia systemowego, a nie niezależny ACK każdego
-Slave.
+układem z Masterem **tylko wtedy, gdy każdy falownik jest fizycznie obecny na
+tej samej zewnętrznej magistrali RS485**. Adres `0` jest rozgłoszeniem na
+przewodzie, którym wysłano ramkę; Master nie przekazuje zewnętrznego polecenia
+Modbus do Slave'ów przez wewnętrzną sieć równoległą. Broadcast nie odpowiada;
+Home Assistant uznaje polecenie dopiero wtedy, gdy późniejszy fizyczny FC03 z
+Mastera zawiera dokładnie żądany blok. Potwierdza to blok Mastera, a nie odbiór
+lub wykonanie polecenia przez każdego Slave'a.
+
+Podczas odbioru sprawdź Grid Discharge i powrót do Self-Use osobno na Masterze
+i na każdym Slave w aplikacji producenta. Stan instalacji `Gotowe`, poprawna
+telemetria sumaryczna i zgodny FC03 Mastera mogą pozostać widoczne także wtedy,
+gdy przewód ESP32 dochodzi tylko do Mastera, więc nie dowodzą fizycznego
+podłączenia Slave'a.
 
 Rejestry `258`, `259` i `306` leżą poza wspólnym blokiem EMS i nie mają jeszcze
 osobno potwierdzonej semantyki broadcastu Master/Slave. Aktywne działania RCEm,

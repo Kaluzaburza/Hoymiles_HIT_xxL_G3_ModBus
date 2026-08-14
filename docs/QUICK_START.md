@@ -8,7 +8,9 @@ variants and advanced troubleshooting.
 1. **Wire the powered-off system.** Connect ESP32 GPIO17 (TX) to the RS485
    converter input, GPIO16 (RX) to its output and GND to GND. Connect converter
    A/B/GND to the inverter's supported Modbus port. Do not connect ESP32 3.3 V
-   to the inverter.
+   to the inverter. On a parallel plant, the same external Modbus bus must
+   physically continue to the Master and every Slave; a Master-only cable does
+   not carry address-`0` broadcast commands to the Slaves.
 2. **Install from HACS.** Add this repository as an Integration, install
    **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
 3. **Flash ESP32.** Copy `hoymiles-inverter.yaml` to ESPHome, add the five keys
@@ -42,8 +44,11 @@ check is complete:
    compared once with the inverter display or manufacturer application.
 3. Battery capacity, inverter power, BMS charge/discharge limits and the
    Self-Use outage reserve match the physical installation.
-4. Solcast today/tomorrow sensors are available before forecast-based planning
-   is enabled. RCE additionally needs current PSE price data.
+4. Confirm Solcast Today and Tomorrow before forecast-based planning is
+   enabled. Day 3 is optional and may be disabled by the Solcast integration;
+   enable it if available and verify that its planner diagnostic becomes
+   `fresh`. Custom forecast entity IDs take effect without a Home Assistant
+   restart. RCE additionally needs current PSE price data.
 5. Leave RCEm in **observation-only** mode until its voltage history and proposed
    actions have been reviewed on the target site.
 6. Open each **Advanced data** switch once, verify controller ownership, data
@@ -51,6 +56,10 @@ check is complete:
    supporting diagnostic attachment to the site-specific acceptance protocol.
    The ZIP is not an official acceptance protocol. For a formal process, use
    the [safety and audit matrix](SAFETY_AND_COMPLIANCE.md).
+7. On a parallel plant, command one conservative Grid Discharge test and then
+   Self-Use. Confirm the mode and power separately for the Master and every
+   Slave in the manufacturer application. `Ready` and a matching Master FC03
+   do not prove that the external RS485 bus reaches a Slave.
 
 The integration interlocks automatic owners, but correct physical limits and
 credible source data must be confirmed by the installer or user.
@@ -74,6 +83,9 @@ credible source data must be confirmed by the installer or user.
 1. **Podłącz wyłączony układ.** GPIO17 (TX) ESP32 połącz z wejściem konwertera
    RS485, GPIO16 (RX) z jego wyjściem, a GND z GND. A/B/GND konwertera podłącz do
    obsługiwanego portu Modbus falownika. Nie podłączaj 3,3 V ESP32 do falownika.
+   W instalacji równoległej ta sama zewnętrzna magistrala Modbus musi fizycznie
+   prowadzić do Mastera i każdego Slave'a; przewód tylko do Mastera nie przenosi
+   broadcastu na adres `0` do Slave'ów.
 2. **Zainstaluj przez HACS.** Dodaj repozytorium jako **Integration**, zainstaluj
    **Hoymiles HIT xxL G3 Modbus** i uruchom Home Assistant ponownie.
 3. **Wgraj ESP32.** Skopiuj `hoymiles-inverter.yaml` do ESPHome, dodaj pięć
@@ -111,8 +123,12 @@ zakończenia krótkiej kontroli:
    aplikacją producenta.
 3. Pojemność magazynu, moc falownika, limity ładowania/rozładowania BMS i rezerwa
    awaryjna Self-Use odpowiadają fizycznej instalacji.
-4. Encje Solcast dla dzisiaj i jutra są dostępne przed uruchomieniem planowania
-   zależnego od prognozy. RCE wymaga również aktualnych cen PSE.
+4. Przed uruchomieniem planowania zależnego od prognozy potwierdź encje Solcast
+   dla Dzisiaj i Jutro. Dzień 3 jest opcjonalny i może być wyłączony przez
+   integrację Solcast; włącz go, jeśli jest dostępny, i sprawdź, czy jego status
+   diagnostyczny zmieni się na `fresh`. Własne identyfikatory encji prognozy
+   zaczynają działać bez restartu Home Assistanta. RCE wymaga również aktualnych
+   cen PSE.
 5. Pozostaw RCEm w trybie **tylko obserwacja**, dopóki nie sprawdzisz historii
    napięć i proponowanych działań na docelowej instalacji.
 6. Otwórz kolejno przełączniki **Dane zaawansowane**, sprawdź właściciela
@@ -120,6 +136,10 @@ zakończenia krótkiej kontroli:
    diagnostyczny ZIP jako pomocniczy załącznik do protokołu odbioru konkretnej
    instalacji. ZIP nie jest urzędowym protokołem. Przy formalnym odbiorze
    wykorzystaj [matrycę bezpieczeństwa i audytu](SAFETY_AND_COMPLIANCE.md).
+7. W instalacji równoległej wykonaj ostrożny test Grid Discharge, a następnie
+   Self-Use. Potwierdź tryb i moc osobno dla Mastera oraz każdego Slave'a w
+   aplikacji producenta. `Gotowe` i zgodny FC03 Mastera nie dowodzą, że
+   zewnętrzna magistrala RS485 fizycznie dochodzi do Slave'a.
 
 Integracja blokuje konflikt właścicieli EMS, ale poprawne limity fizyczne i
 wiarygodność danych wejściowych musi potwierdzić instalator albo użytkownik.

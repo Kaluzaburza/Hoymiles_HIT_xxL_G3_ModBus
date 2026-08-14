@@ -4,9 +4,12 @@
 # adresów urządzeń Slave. Rejestry 6050/6055/... opisują wewnętrzną sieć
 # równoległą, ale nie są dodatkowymi urządzeniami na zewnętrznej magistrali
 # RS485. Dla bloku EMS 4300-4306 używamy sprawdzonego systemowego broadcastu
-# pod adresem 0, a wynik potwierdzamy późniejszym fizycznym FC03 z Mastera.
-# Jest to potwierdzenie wykonania polecenia systemowego, nie osobny ACK każdego
-# Slave. Pozostałe rejestry 258/259/306 pozostają fail-closed na Master/Slave.
+# pod adresem 0. Konwerter ESP32, Master i każdy Slave muszą jednak fizycznie
+# korzystać z tej samej zewnętrznej pary A/B; wewnętrzna sieć równoległa nie
+# przekazuje broadcastu z przewodu dochodzącego wyłącznie do Mastera. Wynik
+# potwierdzamy późniejszym fizycznym FC03 z Mastera. Jest to potwierdzenie bloku
+# Mastera, nie osobny ACK każdego Slave. Pozostałe rejestry 258/259/306
+# pozostają fail-closed na Master/Slave.
 
 globals:
   # Lokalny znacznik pochodzi tylko z odpowiedzi FC03 obejmującej 6048-6049.
@@ -59,9 +62,9 @@ sensor:
       if (!std::isfinite(count_raw)) return 0.0f;
       const int count = static_cast<int>(std::lround(count_raw));
       if (std::fabs(count_raw - count) > 0.01f) return 0.0f;
-      // Broadcast Modbus address 0 is shared by the complete system.  The
-      // internal 6050/6055/... addresses are diagnostic topology data and are
-      // deliberately not required for a system-wide EMS command.
+      // Modbus address 0 reaches every unit physically attached to this
+      // external bus.  The internal 6050/6055/... addresses are diagnostic
+      // topology data and do not replace the required shared A/B wiring.
       return count >= 2 && count <= 10 ? 1.0f : 0.0f;
 
   # Ustawienia spoza wspólnego bloku EMS nie mają potwierdzonej semantyki

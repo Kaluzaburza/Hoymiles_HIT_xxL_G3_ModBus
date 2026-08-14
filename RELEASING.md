@@ -51,6 +51,14 @@ does not flash the ESP32. Users must use the top-level ESPHome file and the
 compatible remote-package tag named in that release's notes. When firmware is
 unchanged, retain and document the last compatible ESPHome tag.
 
+When a release changes both Home Assistant control logic and firmware source
+freshness or actuator semantics, update Home Assistant first while every
+automatic writer is disabled and observation-only modes remain enabled. Verify
+that the physical EMS mode and controlled registers did not change across the
+required Home Assistant restart(s). Only then rebuild and upload ESPHome from
+the matching immutable tag, and repeat the no-write verification before
+restoring the previous automation policy.
+
 ## Frontend asset startup contract
 
 When a release changes managed dashboard or frontend assets:

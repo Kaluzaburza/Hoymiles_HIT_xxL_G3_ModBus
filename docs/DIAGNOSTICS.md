@@ -32,6 +32,28 @@ Hoymiles states, calculation attributes and 24 hours of significant control
 changes. Fast telemetry history is deliberately omitted so the report remains
 small and does not overload Recorder.
 
+### Planner readiness
+
+Execution authority comes from the optimizer entity itself: `result_current`,
+plan report age and source-freshness attributes. A recently updated derived
+proxy does not make an old plan executable. For RCEm, battery capacity is a
+stable property and its report age is diagnostic; live BMS voltage and current
+limits remain fail-closed freshness inputs. `owner_code` reports actual
+actuator ownership, while the `*_policy_enabled` attributes show configuration
+only. Optional Solcast Day 3 exposes its selected entity, signed age, freshness
+and fallback reason in the planner attributes.
+
+### Master changes mode but a Slave does not
+
+First inspect the physical external Modbus/RS485 bus. The ESP32 converter,
+Master and every Slave must share the same A/B/reference bus; address `0` is a
+wire-level broadcast and the Master does not relay it over the inverter's
+internal parallel network. Check polarity, continuity and end termination
+against the manufacturer manual. A fresh topology, system-wide telemetry and
+a matching Master FC03 do not verify the Slave branch. During a conservative
+Grid Discharge and return-to-Self-Use test, record each inverter separately in
+the manufacturer application.
+
 ## Extended terminal archive
 
 In the **Terminal & SSH** add-on run:
@@ -87,6 +109,28 @@ Raport zawiera wersje integracji i firmware, kompletność encji, bieżące stan
 Hoymiles, parametry obliczeń oraz 24 godziny istotnych zmian sterowania. Historia
 szybkiej telemetrii jest celowo pomijana, aby raport pozostał mały i nie
 obciążał bazy Recorder.
+
+### Gotowość planera
+
+Uprawnienie do wykonania pochodzi z samej encji optymalizatora:
+`result_current`, wieku raportu planu i atrybutów świeżości źródeł. Niedawno
+odświeżona encja pośrednia nie nadaje staremu planowi prawa wykonania. W RCEm
+pojemność baterii jest stabilną cechą, a wiek jej raportu ma znaczenie
+diagnostyczne; bieżące napięcie i limity prądowe BMS nadal działają fail-closed.
+`owner_code` pokazuje rzeczywistą własność aktuatora, natomiast atrybuty
+`*_policy_enabled` opisują wyłącznie konfigurację. Opcjonalny Dzień 3 Solcast
+publikuje wybraną encję, wiek ze znakiem, świeżość i przyczynę fallbacku.
+
+### Master zmienia tryb, a Slave nie
+
+Najpierw sprawdź fizyczną zewnętrzną magistralę Modbus/RS485. Konwerter ESP32,
+Master i każdy Slave muszą korzystać z tej samej pary A/B i odniesienia;
+adres `0` jest rozgłoszeniem na przewodzie, a Master nie przekazuje go przez
+wewnętrzną sieć równoległą falowników. Sprawdź polaryzację, ciągłość oraz
+terminację końców według instrukcji producenta. Świeża topologia, telemetria
+sumaryczna i zgodny FC03 Mastera nie weryfikują odgałęzienia do Slave'a. Podczas
+ostrożnego testu Grid Discharge i powrotu do Self-Use zapisz stan każdego
+falownika osobno w aplikacji producenta.
 
 ## Rozszerzona paczka z terminala
 

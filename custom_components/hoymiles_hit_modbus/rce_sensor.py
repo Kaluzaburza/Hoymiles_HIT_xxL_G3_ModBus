@@ -61,6 +61,23 @@ _NUMBER = re.compile(r"-?\d+(?:[.,]\d+)?")
 _RCE_PRICE_MAX_AGE_SECONDS = 20 * 60.0
 _TODAY_FORECAST_MAX_AGE_SECONDS = 6 * 60 * 60.0
 _TOMORROW_FORECAST_MAX_AGE_SECONDS = 12 * 60 * 60.0
+_DAY3_FORECAST_MAX_AGE_SECONDS = 18 * 60 * 60.0
+_ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+
+TODAY_FORECAST_ENTITY_HELPER = (
+    "input_text.hoymiles_solcast_forecast_today_entity"
+)
+TOMORROW_FORECAST_ENTITY_HELPER = (
+    "input_text.hoymiles_solcast_forecast_tomorrow_entity"
+)
+DAY3_FORECAST_ENTITY_HELPER = (
+    "input_text.hoymiles_solcast_forecast_day_3_entity"
+)
+FORECAST_ENTITY_HELPERS = (
+    TODAY_FORECAST_ENTITY_HELPER,
+    TOMORROW_FORECAST_ENTITY_HELPER,
+    DAY3_FORECAST_ENTITY_HELPER,
+)
 
 TODAY_FORECAST_CANDIDATES = (
     "sensor.solcast_pv_forecast_forecast_today",
@@ -74,9 +91,13 @@ TOMORROW_FORECAST_CANDIDATES = (
 )
 DAY3_FORECAST_CANDIDATES = (
     "sensor.solcast_pv_forecast_forecast_day_3",
+    "sensor.solcast_pv_forecast_forecast_d3",
     "sensor.solcast_pv_forecast_day_3",
+    "sensor.solcast_pv_forecast_d3",
     "sensor.solcast_pv_forecast_prognoza_na_dzien_3",
+    "sensor.solcast_pv_forecast_prognoza_d3",
     "sensor.solcast_forecast_day_3",
+    "sensor.solcast_forecast_d3",
 )
 REMAINING_TODAY_CANDIDATES = (
     "sensor.solcast_pv_forecast_forecast_remaining_today",
@@ -130,8 +151,7 @@ WATCHED_ENTITIES = {
     "input_number.hoymiles_tariff_charge_efficiency",
     "input_number.hoymiles_tariff_discharge_efficiency",
     "input_select.hoymiles_rce_inverter_rated_power",
-    "input_text.hoymiles_solcast_forecast_today_entity",
-    "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+    *FORECAST_ENTITY_HELPERS,
     "sun.sun",
     *TODAY_FORECAST_CANDIDATES,
     *TOMORROW_FORECAST_CANDIDATES,
@@ -233,6 +253,24 @@ def _first_numeric_state(
             continue
         return entity_id, state
     return "", None
+
+
+def _configured_forecast_entity_ids(hass: HomeAssistant) -> frozenset[str]:
+    """Return valid source entity IDs selected through forecast helpers.
+
+    The helpers may point at user-created template sensors whose IDs cannot be
+    known when the integration is loaded.  Keeping these IDs in both the event
+    subscription and optimizer fingerprint prevents a published plan from
+    remaining execution-current after its real source changes.
+    """
+    return frozenset(
+        entity_id
+        for helper in FORECAST_ENTITY_HELPERS
+        if (
+            (entity_id := _state_text(hass, helper).strip().lower())
+            and _ENTITY_ID.fullmatch(entity_id)
+        )
+    )
 
 
 def _parse_datetime(value: Any, timezone: ZoneInfo) -> datetime | None:
@@ -538,6 +576,8 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._forecast_refresh_date: date | None = None
         self._startup_warmup_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
+        self._dynamic_forecast_entities: frozenset[str] = frozenset()
+        self._dynamic_forecast_unsub = None
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
         self._current_slot_continue_eligible: bool | None = None
@@ -598,6 +638,16 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 sorted(WATCHED_ENTITIES),
                 self._async_input_changed,
             )
+        )
+        refresh_dynamic_forecast_listener = getattr(
+            self,
+            "_refresh_dynamic_forecast_listener",
+            None,
+        )
+        if callable(refresh_dynamic_forecast_listener):
+            refresh_dynamic_forecast_listener()
+        self.async_on_remove(
+            lambda: self._remove_dynamic_forecast_listener()
         )
         self.async_on_remove(
             async_track_time_interval(
@@ -792,7 +842,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         try:
             configured = _state_text(
                 self.hass,
-                "input_text.hoymiles_solcast_forecast_today_entity",
+                TODAY_FORECAST_ENTITY_HELPER,
             )
             forecast_entity, forecast_state = _first_numeric_state(
                 self.hass,
@@ -859,11 +909,49 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             self._forecast_refresh_running = False
 
     @callback
+    def _configured_forecast_source_ids(self) -> frozenset[str]:
+        """Return configured sources without allowing a self-reference."""
+        targets = _configured_forecast_entity_ids(self.hass)
+        own_entity_id = getattr(self, "entity_id", None)
+        return (
+            targets - {own_entity_id}
+            if isinstance(own_entity_id, str) and own_entity_id
+            else targets
+        )
+
+    @callback
+    def _refresh_dynamic_forecast_listener(self) -> None:
+        """Follow configured forecast sources outside the built-in candidates."""
+        targets = frozenset(
+            self._configured_forecast_source_ids() - WATCHED_ENTITIES
+        )
+        if targets == self._dynamic_forecast_entities:
+            return
+        if self._dynamic_forecast_unsub is not None:
+            self._dynamic_forecast_unsub()
+            self._dynamic_forecast_unsub = None
+        self._dynamic_forecast_entities = targets
+        if targets:
+            self._dynamic_forecast_unsub = async_track_state_change_event(
+                self.hass,
+                sorted(targets),
+                self._async_input_changed,
+            )
+
+    @callback
+    def _remove_dynamic_forecast_listener(self) -> None:
+        """Release the current dynamic forecast subscription."""
+        if self._dynamic_forecast_unsub is not None:
+            self._dynamic_forecast_unsub()
+            self._dynamic_forecast_unsub = None
+        self._dynamic_forecast_entities = frozenset()
+
+    @callback
     def _current_input_fingerprint(self) -> tuple[Any, ...]:
         """Return the exact watched snapshot used to certify publication."""
         return optimizer_input_fingerprint(
             self.hass,
-            WATCHED_ENTITIES,
+            WATCHED_ENTITIES | self._configured_forecast_source_ids(),
             attribute_projections={
                 "sensor.hoymiles_hit_tariff_charge_plan": (
                     TARIFF_PRICE_BROKER_ATTRIBUTES
@@ -927,6 +1015,8 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         event: Event[EventStateChangedData],
     ) -> None:
         """Coalesce fast ESPHome updates into one optimizer refresh."""
+        if event.data["entity_id"] in FORECAST_ENTITY_HELPERS:
+            self._refresh_dynamic_forecast_listener()
         if not self._invalidate_input_event(event):
             return
         # Leading-edge coalescing bounds the fail-closed pending interval even
@@ -1667,11 +1757,15 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
 
         today_configured = _state_text(
             self.hass,
-            "input_text.hoymiles_solcast_forecast_today_entity",
+            TODAY_FORECAST_ENTITY_HELPER,
         )
         tomorrow_configured = _state_text(
             self.hass,
-            "input_text.hoymiles_solcast_forecast_tomorrow_entity",
+            TOMORROW_FORECAST_ENTITY_HELPER,
+        )
+        day3_configured = _state_text(
+            self.hass,
+            DAY3_FORECAST_ENTITY_HELPER,
         )
         today_entity, today_forecast_state = _first_numeric_state(
             self.hass,
@@ -1690,6 +1784,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         day3_entity, day3_forecast_state = _first_numeric_state(
             self.hass,
             DAY3_FORECAST_CANDIDATES,
+            day3_configured,
         )
         today_forecast_sample = numeric_state_sample(
             today_forecast_state,
@@ -1703,8 +1798,24 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             max_age_seconds=_TOMORROW_FORECAST_MAX_AGE_SECONDS,
             minimum=0.0,
         )
+        day3_forecast_sample = numeric_state_sample(
+            day3_forecast_state,
+            now,
+            max_age_seconds=_DAY3_FORECAST_MAX_AGE_SECONDS,
+            minimum=0.0,
+        )
         forecast_today_data_fresh = today_forecast_sample.fresh
         forecast_tomorrow_data_fresh = tomorrow_forecast_sample.fresh
+        forecast_day3_data_fresh = day3_forecast_sample.fresh
+        if day3_forecast_state is None:
+            forecast_day3_status = "missing"
+        elif forecast_day3_data_fresh:
+            forecast_day3_status = "fresh"
+        else:
+            forecast_day3_status = "stale"
+        usable_day3_forecast_state = (
+            day3_forecast_state if forecast_day3_data_fresh else None
+        )
         if not forecast_today_data_fresh:
             required["Solcast Forecast Today"] = None
         # Tomorrow is optional. Use it only when both the price day and its
@@ -1807,6 +1918,17 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             "forecast_tomorrow_entity": tomorrow_entity or "none",
             "forecast_remaining_today_entity": remaining_entity or "fallback",
             "forecast_day3_entity": day3_entity or "not_enabled",
+            "forecast_day3_configured_entity": day3_configured or "automatic",
+            "forecast_day3_status": forecast_day3_status,
+            "forecast_day3_data_available": day3_forecast_state is not None,
+            "forecast_day3_data_fresh": forecast_day3_data_fresh,
+            "forecast_day3_data_complete": forecast_day3_data_fresh,
+            "forecast_day3_age_seconds": (
+                round(day3_forecast_sample.age_seconds, 1)
+                if day3_forecast_sample.age_seconds is not None
+                else None
+            ),
+            "forecast_day3_data_reason": day3_forecast_sample.reason,
             "rce_today_periods": len(today_rows) if isinstance(today_rows, list) else 0,
             "rce_today_half_hours": today_half_hours,
             "rce_today_expected_half_hours": today_expected_half_hours,
@@ -2266,8 +2388,8 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             risk_weight,
         )
 
-        day3_raw = _forecast_total(day3_forecast_state, "p50")
-        day3_p10_raw = _forecast_total(day3_forecast_state, "p10")
+        day3_raw = _forecast_total(usable_day3_forecast_state, "p50")
+        day3_p10_raw = _forecast_total(usable_day3_forecast_state, "p10")
         day3_expected = (
             day3_raw * self._forecast_accuracy_factor
             if day3_raw is not None
