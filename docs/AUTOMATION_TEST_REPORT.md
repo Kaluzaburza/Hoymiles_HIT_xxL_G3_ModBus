@@ -2,12 +2,12 @@
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.2 RC6 full offline
-validation**
+Last completed offline baseline in this report: **v1.5.3 corrective candidate
+full offline validation**
 Accepted live runtime candidate:
 **`7ce13155533bfa0bf9752a0fd201224dac1a7393`**
-Current status: **v1.5.2 RC6 Home Assistant runtime/frontend — offline,
-exact-SHA CI and both-installation live audit PASS**
+Current status: **v1.5.3 corrective candidate offline PASS; exact-SHA CI and live
+deployment are pending. RC6 remains the last live-tested runtime/frontend.**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -36,6 +36,43 @@ commit `7ce13155533bfa0bf9752a0fd201224dac1a7393` then passed push CI and
 `workflow_dispatch`, including the exhaustive matrix, and passed the local and
 parallel-installation live frontend audit. The later v1.5.0 section is retained
 only as an explicitly archived live baseline.
+
+## v1.5.3 corrective candidate — offline PASS, live pending
+
+A later audit found that the published 2064-scenario matrix had inherited
+fail-closed defaults for BMS availability/freshness and omitted maximum charge
+current. All 696 RCE matrix cases therefore had zero controlled capability and
+never reached the joint solver. This invalidates the old matrix as evidence of
+nominal RCE execution, but not the independent 68-scenario RCE optimizer suite
+or the runtime's fail-closed behaviour.
+
+The corrected matrix now supplies complete nominal BMS contracts and retains
+four explicit missing/stale/future/zero fail-closed cases outside the scenario
+count. Fresh results on the current workspace are:
+
+- **Quick:** 488/488; all four models have positive power, joint-solver calls
+  and controlled export plans.
+- **Exhaustive:** 2064/2064; 220 joint-solver calls and 160 controlled export
+  plans in the 576 main RCE cases, plus 58/49 respectively in the 120 random
+  boundary cases; BMS fail-closed contracts 4/4.
+- **RCE optimizer:** 68/68; tariff, RCEm, history, shared energy/LOAD/power,
+  startup and executor contracts passed.
+
+The same candidate adds a monotonic input revision and a direct before/after
+fingerprint around every executor-backed optimizer. A changed input withdraws
+execution authority before recalculation, stale executor output is discarded,
+and only a result matching the latest revision is published with
+`result_current: true`. Cross-optimizer fingerprints include only attributes
+actually consumed, preventing RCE/tariff diagnostic ping-pong.
+
+A live browser check also reproduced a five-second Lovelace timeout waiting for
+`ll-strategy-dashboard-hoymiles-hit-xxl-g3`. Frontend revision 17 publishes one
+canonical full module, removes duplicate and legacy bootstrap resources via
+the live Lovelace collection, and upgrades a bootstrap-first constructor in
+place. Offline PL, EN and bootstrap-first execution each render exactly 42
+Aurora frames. Exact-SHA CI, installation, restart, hard refresh and live
+browser verification of revision 17 remain pending and must not be inferred
+from the earlier RC6 live evidence.
 
 ## Representative systems
 

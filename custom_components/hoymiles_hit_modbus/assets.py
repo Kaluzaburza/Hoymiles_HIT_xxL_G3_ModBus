@@ -33,7 +33,7 @@ ASSET_STORAGE_KEY = f"{DOMAIN}.assets"
 LOVELACE_RESOURCES_KEY = "lovelace_resources"
 LOVELACE_STORAGE_PREFIX = "lovelace."
 ZEBRA_CARD_TYPE = "custom:hoymiles-zebra-entities-card"
-FRONTEND_ASSET_REVISION = 16
+FRONTEND_ASSET_REVISION = 17
 FRONTEND_STATIC_ROUTE = "static-r2"
 FRONTEND_RESOURCE_URL = (
     "/local/hoymiles-rce-chart-card.js"
@@ -52,8 +52,11 @@ LOCAL_FRONTEND_ASSETS = (
 )
 MANAGED_FRONTEND_RESOURCE_PATHS = {
     "/local/hoymiles-rce-chart-card.js",
+    "/local/hoymiles-dashboard-strategy.js",
     f"/api/{DOMAIN}/static/hoymiles-rce-chart-card.js",
+    f"/api/{DOMAIN}/static/hoymiles-dashboard-strategy.js",
     f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-rce-chart-card.js",
+    f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}/hoymiles-dashboard-strategy.js",
 }
 HOYMILES_DASHBOARD_MARKERS = (
     "hoymiles_hit_overview_pv_total_power",
@@ -257,7 +260,7 @@ def _is_hoymiles_dashboard(config: Any) -> bool:
 
 
 async def _async_sync_lovelace_resource(hass: HomeAssistant) -> bool:
-    """Install or cache-bust the module through Lovelace's live collection."""
+    """Publish exactly one full module through Lovelace's live collection."""
     lovelace_data = hass.data.get(LOVELACE_DATA)
     if lovelace_data is None or lovelace_data.resource_mode != MODE_STORAGE:
         return False
@@ -268,7 +271,8 @@ async def _async_sync_lovelace_resource(hass: HomeAssistant) -> bool:
     # versions. Mutating via the same collection used by the websocket API
     # keeps memory and delayed storage writes consistent.
     await resources.async_get_info()
-    matched = False
+    managed_items: list[dict[str, Any]] = []
+    canonical_item: dict[str, Any] | None = None
     changed = False
     for item in list(resources.async_items()):
         if not isinstance(item, dict):
@@ -278,23 +282,45 @@ async def _async_sync_lovelace_resource(hass: HomeAssistant) -> bool:
             continue
         if url.partition("?")[0] not in MANAGED_FRONTEND_RESOURCE_PATHS:
             continue
-        if url == FRONTEND_RESOURCE_URL and item.get(CONF_TYPE) == "module":
-            matched = True
-            continue
         resource_id = item.get(CONF_ID)
         if not isinstance(resource_id, str):
             continue
-        matched = True
-        await resources.async_update_item(
-            resource_id,
-            {
-                CONF_URL: FRONTEND_RESOURCE_URL,
-                CONF_RESOURCE_TYPE_WS: "module",
-            },
-        )
-        changed = True
+        managed_items.append(item)
+        if (
+            canonical_item is None
+            and url == FRONTEND_RESOURCE_URL
+            and item.get(CONF_TYPE) == "module"
+        ):
+            canonical_item = item
 
-    if not matched:
+    if canonical_item is None and managed_items:
+        canonical_item = managed_items[0]
+
+    if canonical_item is not None:
+        canonical_id = canonical_item[CONF_ID]
+        if (
+            canonical_item.get(CONF_URL) != FRONTEND_RESOURCE_URL
+            or canonical_item.get(CONF_TYPE) != "module"
+        ):
+            await resources.async_update_item(
+                canonical_id,
+                {
+                    CONF_URL: FRONTEND_RESOURCE_URL,
+                    CONF_RESOURCE_TYPE_WS: "module",
+                },
+            )
+            changed = True
+        # Older releases could publish the classic strategy bootstrap. If it
+        # loads first, its undecorated strategy owns the immutable custom
+        # element name for that page. Remove that resource, plus duplicate card
+        # entries, through the same live collection used by Lovelace.
+        for item in managed_items:
+            resource_id = item[CONF_ID]
+            if resource_id == canonical_id:
+                continue
+            await resources.async_delete_item(resource_id)
+            changed = True
+    else:
         await resources.async_create_item(
             {
                 CONF_URL: FRONTEND_RESOURCE_URL,
@@ -302,6 +328,7 @@ async def _async_sync_lovelace_resource(hass: HomeAssistant) -> bool:
             }
         )
         changed = True
+
     return changed
 
 

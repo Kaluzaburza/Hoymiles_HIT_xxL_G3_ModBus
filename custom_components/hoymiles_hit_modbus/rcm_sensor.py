@@ -22,6 +22,12 @@ from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
 from .energy_data import numeric_state_sample, state_age_seconds
 from .models import RuntimeData
+from .optimizer_revision import (
+    MAX_IMMEDIATE_RECALCULATIONS,
+    OptimizerInputRevision,
+    RCE_LOAD_BROKER_ATTRIBUTES,
+    optimizer_input_fingerprint,
+)
 from .rcm_history import (
     GRID_VOLTAGE_ENTITIES,
     SLOTS_PER_DAY,
@@ -234,10 +240,14 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         self._history_refreshed_at: datetime | None = None
         self._startup_warmup_task: asyncio.Task[None] | None = None
         self._optimizer_lock = asyncio.Lock()
+        self._input_revision = OptimizerInputRevision()
         self._attributes: dict[str, Any] = {
             "status_code": "missing_data",
             "missing_entities": [],
             "risk_windows": [],
+            "result_current": False,
+            "recalculation_pending": True,
+            "input_revision": 0,
         }
 
     @property
@@ -311,24 +321,91 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         """Warm Recorder models after the fail-closed entity is registered."""
         try:
             await self._async_refresh_voltage_history()
+            self._invalidate_internal_inputs()
             await self._recalculate_and_write()
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - retain the fail-closed initial state
             _LOGGER.exception("Cannot complete the RCEm optimizer startup warmup")
 
+    @callback
+    def _current_input_fingerprint(self) -> tuple[Any, ...]:
+        """Return the exact watched snapshot used to certify publication."""
+        return optimizer_input_fingerprint(
+            self.hass,
+            WATCHED_RCM_ENTITIES,
+            attribute_projections={
+                "sensor.hoymiles_hit_rce_optimized_plan": (
+                    RCE_LOAD_BROKER_ATTRIBUTES
+                ),
+            },
+        )
+
+    @callback
+    def _invalidate_input_event(
+        self,
+        event: Event[EventStateChangedData],
+    ) -> bool:
+        """Invalidate only when a value consumed by this optimizer changed."""
+        entity_id = event.data["entity_id"]
+        counterpart = entity_id == "sensor.hoymiles_hit_rce_optimized_plan"
+        changed = self._input_revision.invalidate_state_change(
+            event.data.get("old_state"),
+            event.data.get("new_state"),
+            attributes=(RCE_LOAD_BROKER_ATTRIBUTES if counterpart else None),
+            include_state=not counterpart,
+            include_last_updated=not counterpart,
+        )
+        if changed:
+            self._mark_recalculation_pending()
+        return changed
+
+    @callback
+    def _invalidate_internal_inputs(self) -> None:
+        """Invalidate after recorder/clock-backed inputs change."""
+        self._input_revision.invalidate()
+        self._mark_recalculation_pending()
+
+    @callback
+    def _mark_recalculation_pending(self) -> None:
+        """Withdraw execution authority once while a replacement is pending."""
+        if (
+            self._attributes.get("result_current") is False
+            and self._attributes.get("recalculation_pending") is True
+        ):
+            return
+        self._attributes = {
+            **self._attributes,
+            "result_current": False,
+            "recalculation_pending": True,
+        }
+        self.async_write_ha_state()
+
+    @callback
+    def _mark_result_current(self) -> None:
+        """Mark the committed plan as matching the latest input revision."""
+        self._attributes = {
+            **self._attributes,
+            "result_current": True,
+            "recalculation_pending": False,
+            "input_revision": self._input_revision.value,
+        }
+
     async def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
+        if not self._invalidate_input_event(event):
+            return
         if event.data["entity_id"] in GRID_VOLTAGE_ENTITIES:
             self._append_voltage_sample()
-            return
         await self._recalculate_and_write()
 
     async def _async_control_timer(self, now: datetime) -> None:
         self._append_voltage_sample(now)
+        self._invalidate_internal_inputs()
         await self._recalculate_and_write()
 
     async def _async_history_timer(self, now: datetime) -> None:
         await self._async_refresh_voltage_history()
+        self._invalidate_internal_inputs()
         await self._recalculate_and_write()
 
     async def _recalculate_and_write(self) -> None:
@@ -336,7 +413,13 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
         async with self._optimizer_lock:
             previous_state = self.native_value
             previous_attributes = self._attributes
-            await self._recalculate_locked()
+            committed = False
+            for _attempt in range(MAX_IMMEDIATE_RECALCULATIONS):
+                if await self._recalculate_locked():
+                    committed = True
+                    break
+            if committed:
+                self._mark_result_current()
             if (
                 previous_state != self.native_value
                 or previous_attributes != self._attributes
@@ -346,7 +429,10 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
     async def _recalculate(self) -> None:
         """Serialize startup and event-driven optimizer runs."""
         async with self._optimizer_lock:
-            await self._recalculate_locked()
+            for _attempt in range(MAX_IMMEDIATE_RECALCULATIONS):
+                if await self._recalculate_locked():
+                    self._mark_result_current()
+                    return
 
     def _append_voltage_sample(self, now: datetime | None = None) -> None:
         timestamp = now or dt_util.now()
@@ -931,7 +1017,9 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
             window_forecasts=tuple(window_forecasts),
         )
 
-    async def _recalculate_locked(self) -> None:
+    async def _recalculate_locked(self) -> bool:
+        captured_revision = self._input_revision.value
+        captured_fingerprint = self._current_input_fingerprint()
         try:
             now = dt_util.now().astimezone(ZoneInfo(self.hass.config.time_zone))
             (
@@ -1447,6 +1535,12 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                     system_power_data_valid=system_power_data_valid,
                 ),
             )
+            if (
+                not self._input_revision.is_current(captured_revision)
+                or captured_fingerprint != self._current_input_fingerprint()
+            ):
+                self._mark_recalculation_pending()
+                return False
             risk_window_details = [
                 {
                     "start": (
@@ -1734,10 +1828,18 @@ class HoymilesRCMOptimizerSensor(SensorEntity):
                     "grid_protection_settings",
                 ],
             }
+            return True
         except Exception:  # noqa: BLE001 - automation must fail closed
+            if (
+                not self._input_revision.is_current(captured_revision)
+                or captured_fingerprint != self._current_input_fingerprint()
+            ):
+                self._mark_recalculation_pending()
+                return False
             _LOGGER.exception("Cannot calculate the RCEm voltage plan")
             self._attributes = {
                 "status_code": "optimizer_error",
                 "missing_entities": [],
                 "risk_windows": [],
             }
+            return True

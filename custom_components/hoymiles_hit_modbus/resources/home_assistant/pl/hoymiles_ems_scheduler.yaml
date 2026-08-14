@@ -931,7 +931,7 @@ template:
       - name: "Hoymiles EMS Package Version"
         unique_id: hoymiles_ems_package_version
         icon: mdi:package-variant-closed-check
-        state: "1.5.2"
+        state: "1.5.3"
 
       - name: "Hoymiles EMS Hardware Mode"
         unique_id: hoymiles_ems_hardware_mode
@@ -1126,6 +1126,8 @@ template:
             - as_timestamp(source_reported, 0) %}
           {{ is_state('binary_sensor.hoymiles_ems_execution_ready', 'on')
              and is_state('binary_sensor.hoymiles_ems_export_allowed', 'on')
+             and state_attr('sensor.hoymiles_hit_rce_optimized_plan',
+                            'result_current') is sameas true
              and status in ['ready', 'waiting_for_market', 'home_protected']
              and price_age >= -5 and price_age <= 300
              and plan_age >= -5 and plan_age <= 300
@@ -1287,6 +1289,8 @@ template:
           {% set forecast_age = as_timestamp(now())
             - as_timestamp(forecast_reported, 0) %}
           {{ is_state('binary_sensor.hoymiles_ems_execution_ready', 'on')
+             and state_attr('sensor.hoymiles_hit_tariff_charge_plan',
+                            'result_current') is sameas true
              and status in [
                'ready',
                'insufficient_cheap_window',
@@ -7443,6 +7447,9 @@ automation:
           plan_status: >-
             {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
                           'status_code') | default('missing_data', true) }}
+          result_current: >-
+            {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
+                          'result_current') | default(false, true) }}
           recommended_limit: >-
             {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
                           'recommended_charge_limit_percent') | float(0) }}
@@ -7573,6 +7580,7 @@ automation:
               - condition: template
                 value_template: >-
                   {{ not rcm_blocked
+                     and result_current
                      and rcm_plan_age_seconds >= 0
                      and rcm_plan_age_seconds <= 60
                      and live_emergency
@@ -7720,6 +7728,8 @@ automation:
                               | float(-999))
                             - (recommended_limit | float(0))) | abs < 1.0 %}
                       {{ emergency_charge_path
+                         and (state_attr(plan, 'result_current')
+                              | default(false, true))
                          and is_state('input_boolean.hoymiles_rcm_enabled', 'on')
                          and is_state(
                            'input_boolean.hoymiles_rcm_shadow_mode', 'off')
@@ -7815,6 +7825,8 @@ automation:
                               | float(-999))
                             - (recommended_export_limit | float(0))) | abs < 1.0 %}
                       {{ emergency_export_path
+                         and (state_attr(plan, 'result_current')
+                              | default(false, true))
                          and is_state('input_boolean.hoymiles_rcm_enabled', 'on')
                          and is_state(
                            'input_boolean.hoymiles_rcm_shadow_mode', 'off')
@@ -8056,6 +8068,7 @@ automation:
               - condition: template
                 value_template: >-
                   {{ not rcm_blocked
+                     and result_current
                      and is_state(
                        'binary_sensor.hoymiles_ems_execution_ready', 'on')
                      and rcm_plan_age_seconds >= 0
@@ -8317,6 +8330,7 @@ automation:
               - condition: template
                 value_template: >-
                   {{ not rcm_blocked
+                     and result_current
                      and is_state(
                        'binary_sensor.hoymiles_ems_execution_ready', 'on')
                      and system_power_data_valid
@@ -8572,6 +8586,9 @@ automation:
           plan_status: >-
             {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
                           'status_code') | default('missing_data', true) }}
+          result_current: >-
+            {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
+                          'result_current') | default(false, true) }}
           pre_discharge_ready: >-
             {{ state_attr('sensor.hoymiles_hit_rcm_voltage_plan',
                           'pre_discharge_ready') | default(false, true) }}
@@ -8821,6 +8838,7 @@ automation:
               - condition: template
                 value_template: >-
                   {{ not pre_discharge_blocked
+                     and result_current
                      and rcm_plan_age_seconds >= 0
                      and rcm_plan_age_seconds <= 60
                      and pre_discharge_start_eligible
@@ -8922,6 +8940,9 @@ automation:
                       {% set age = as_timestamp(now())
                            - as_timestamp(reported, 0) %}
                       {{ age >= 0 and age <= 60
+                         and state_attr(
+                           'sensor.hoymiles_hit_rcm_voltage_plan',
+                           'result_current') | default(false, true)
                          and is_state('input_boolean.hoymiles_rcm_enabled', 'on')
                          and is_state(
                            'input_boolean.hoymiles_rcm_shadow_mode', 'off')

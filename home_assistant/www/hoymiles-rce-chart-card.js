@@ -42,12 +42,26 @@ class HoymilesHitDashboardStrategy extends HTMLElement {
   }
 }
 
-// Register the dashboard strategy before the larger custom-card bundle.  A
-// frontend card error must never prevent Lovelace from discovering the
-// strategy and turning the whole dashboard into a timeout page.
-if (!customElements.get("ll-strategy-dashboard-hoymiles-hit-xxl-g3")) {
+// Register the dashboard strategy before the larger custom-card bundle. A
+// frontend card error must never prevent Lovelace from discovering it. If an
+// older classic bootstrap claimed the immutable custom-element name first,
+// upgrade that constructor in place so its generate() path still applies the
+// complete Aurora decorator once this canonical module arrives.
+const HOYMILES_DASHBOARD_STRATEGY_ELEMENT =
+  "ll-strategy-dashboard-hoymiles-hit-xxl-g3";
+const hoymilesExistingDashboardStrategy = customElements.get(
+  HOYMILES_DASHBOARD_STRATEGY_ELEMENT
+);
+if (hoymilesExistingDashboardStrategy) {
+  hoymilesExistingDashboardStrategy.noEditor =
+    HoymilesHitDashboardStrategy.noEditor;
+  hoymilesExistingDashboardStrategy.getCreateSuggestions =
+    HoymilesHitDashboardStrategy.getCreateSuggestions;
+  hoymilesExistingDashboardStrategy.generate =
+    HoymilesHitDashboardStrategy.generate;
+} else {
   customElements.define(
-    "ll-strategy-dashboard-hoymiles-hit-xxl-g3",
+    HOYMILES_DASHBOARD_STRATEGY_ELEMENT,
     HoymilesHitDashboardStrategy
   );
 }

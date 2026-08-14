@@ -107,6 +107,10 @@ When a release changes managed dashboard or frontend assets:
    The exhaustive matrix must report 2064 passed scenarios unless its reviewed
    scenario set was intentionally changed. Record the new count in
    `docs/AUTOMATION_TEST_REPORT.md`.
+   It must also report positive RCE power for every representative model,
+   non-zero joint-solver and planned-export coverage, and all four explicit BMS
+   fail-closed contracts. A scenario count without these coverage counters is
+   not release evidence.
 5. Create the GitHub tag and release.
 6. Copy the complete version notes, including the numbered bilingual user
    steps, into the GitHub Release body visible in HACS.

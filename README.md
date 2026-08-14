@@ -368,7 +368,7 @@ export budget, the current inverter setting, and the user-defined cap.
 RCEm starts in **observation-only (shadow) mode**. In this mode it calculates
 plans and diagnostics but performs no inverter writes, so it can collect public
 test evidence alongside RCE or tariff control. Do not disable shadow mode during
-the v1.5.2 public test. RCEm does not disable certified protection, change
+the v1.5.3 public test. RCEm does not disable certified protection, change
 protection thresholds, enable GCF, or alter three-phase imbalance. It remains
 experimental and requires separate field validation and commissioning before
 write-capable use. It is not intended to bypass applicable grid-code or
@@ -394,7 +394,7 @@ Connect the ESP32 Modbus converter to the **Master** using the external RS485
 bus documented for the installation. Monitoring, forecasting, and RCEm shadow
 analytics remain available for a detected parallel system.
 
-For the v1.5.2 public test, protected EMS writes are enabled only for a verified
+For the v1.5.3 public test, protected EMS writes are enabled only for a verified
 single-inverter topology. The Master's external port cannot provide an
 independent FC03 confirmation from every Slave after a broadcast, so RCE,
 tariff, manual-schedule, balancing, and write-capable RCEm commands fail closed

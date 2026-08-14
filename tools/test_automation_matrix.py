@@ -189,7 +189,40 @@ def assert_rce_invariants(settings: OptimizerInput, result) -> None:
         assert not result.planned_exports
 
 
-def run_rce_matrix(*, exhaustive: bool = True) -> tuple[int, Counter[str]]:
+def _record_rce_coverage(coverage: Counter[str], result) -> None:
+    """Record non-vacuous evidence from one nominal RCE optimization."""
+
+    if result.maximum_export_power_kw > EPSILON:
+        coverage["positive_power"] += 1
+    # ``solver_runtime_ms`` is populated only after the joint-horizon solver
+    # returns.  Unlike ``solver_method`` (a result default), it therefore
+    # proves that the solver path really executed.
+    if result.solver_runtime_ms > 0.0:
+        assert result.solver_method == "joint_horizon_bounded_active_set"
+        coverage["joint_solver"] += 1
+    if result.planned_export_kwh > EPSILON:
+        assert result.planned_exports
+        coverage["planned_export"] += 1
+
+
+def _assert_rce_coverage(
+    coverage: Counter[str],
+    *,
+    scope: str,
+) -> None:
+    """Reject nominal RCE matrices that only exercise fail-closed previews."""
+
+    for marker in ("positive_power", "joint_solver", "planned_export"):
+        assert coverage[marker] > 0, (
+            f"Nominal RCE {scope} did not exercise {marker}; "
+            "check the complete fresh BMS fixture contract"
+        )
+
+
+def run_rce_matrix(
+    *,
+    exhaustive: bool = True,
+) -> tuple[int, Counter[str], dict[str, Counter[str]]]:
     """Exercise price selection, night protection, BMS limits and parallel power."""
 
     now = datetime(2026, 8, 10, 6, 0, tzinfo=WARSAW)
@@ -198,6 +231,7 @@ def run_rce_matrix(*, exhaustive: bool = True) -> tuple[int, Counter[str]]:
     pv_factors = (0.0, 0.25, 1.0, 1.6) if exhaustive else (0.0, 1.6)
     tomorrow_factors = (0.1, 0.7, 1.3) if exhaustive else (0.1, 1.3)
     soc_values = (18.0, 55.0, 98.0) if exhaustive else (18.0, 98.0)
+    coverage_by_model = {model.name: Counter() for model in SYSTEMS}
     for model in SYSTEMS:
         for pv_factor in pv_factors:
             for tomorrow_factor in tomorrow_factors:
@@ -226,14 +260,27 @@ def run_rce_matrix(*, exhaustive: bool = True) -> tuple[int, Counter[str]]:
                             discharge_power_percent=80.0,
                             export_efficiency_percent=94.0,
                             bms_max_discharge_current_a=model.bms_discharge_a,
+                            bms_max_charge_current_a=model.bms_charge_a,
                             battery_voltage_v=model.battery_voltage_v,
                             bms_power_safety_percent=95.0,
+                            bms_discharge_data_fresh=True,
+                            bms_discharge_data_age_seconds=15.0,
+                            bms_discharge_data_available=True,
+                            bms_charge_data_fresh=True,
+                            bms_charge_data_age_seconds=20.0,
+                            bms_charge_data_available=True,
                         )
                         result = optimize_rce(settings)
                         assert_rce_invariants(settings, result)
+                        _record_rce_coverage(
+                            coverage_by_model[model.name],
+                            result,
+                        )
                         statuses[result.status_code] += 1
                         count += 1
-    return count, statuses
+    for model_name, coverage in coverage_by_model.items():
+        _assert_rce_coverage(coverage, scope=f"model {model_name!r}")
+    return count, statuses, coverage_by_model
 
 
 def assert_tariff_invariants(settings: TariffOptimizerInput, result) -> None:
@@ -411,18 +458,26 @@ def run_rcm_matrix(*, exhaustive: bool = True) -> tuple[int, Counter[str]]:
     return count, statuses
 
 
-def run_randomized_boundary_sweep(*, samples: int = 120) -> int:
+def run_randomized_boundary_sweep(
+    *,
+    samples: int = 120,
+) -> tuple[int, Counter[str]]:
     """Add reproducible edge values not covered by the representative systems."""
 
     random = Random(20260808)
+    # Keep the established scenario stream stable while adding independent
+    # randomized values for the newly explicit BMS telemetry contract.
+    bms_random = Random(20260809)
     now = datetime(2026, 8, 10, 6, 0, tzinfo=WARSAW)
     count = 0
+    coverage: Counter[str] = Counter()
     for _ in range(samples):
         inverter_kw = random.choice((5.0, 8.0, 10.0, 12.0, 15.0, 20.0))
         inverter_count = random.randint(1, 3)
         capacity = random.uniform(5.0, 230.0)
         voltage = random.uniform(48.0, 58.0)
         discharge_a = random.uniform(50.0, 700.0)
+        charge_a = bms_random.uniform(50.0, 700.0)
         settings = OptimizerInput(
             now=now,
             price_slots=rce_prices(now, random.choice(("tomorrow_peak", "volatile", "flat"))),
@@ -442,12 +497,110 @@ def run_randomized_boundary_sweep(*, samples: int = 120) -> int:
             discharge_power_percent=random.uniform(0.0, 100.0),
             export_efficiency_percent=random.uniform(82.0, 99.0),
             bms_max_discharge_current_a=discharge_a,
+            bms_max_charge_current_a=charge_a,
             battery_voltage_v=voltage,
             bms_power_safety_percent=random.uniform(80.0, 98.0),
+            bms_discharge_data_fresh=True,
+            bms_discharge_data_age_seconds=bms_random.uniform(-5.0, 300.0),
+            bms_discharge_data_available=True,
+            bms_charge_data_fresh=True,
+            bms_charge_data_age_seconds=bms_random.uniform(-5.0, 300.0),
+            bms_charge_data_available=True,
         )
-        assert_rce_invariants(settings, optimize_rce(settings))
+        result = optimize_rce(settings)
+        assert_rce_invariants(settings, result)
+        _record_rce_coverage(coverage, result)
         count += 1
-    return count
+    _assert_rce_coverage(coverage, scope="randomized boundary family")
+    return count, coverage
+
+
+def assert_rce_bms_fail_closed_contracts() -> Counter[str]:
+    """Keep invalid BMS telemetry explicit and outside nominal coverage."""
+
+    now = datetime(2026, 8, 10, 6, 0, tzinfo=WARSAW)
+    common = {
+        "now": now,
+        "price_slots": rce_prices(now, "today_peak"),
+        "pv_by_slot_kwh": pv_profile(now, 0.0, 0.0),
+        "battery_capacity_kwh": 100.0,
+        "battery_soc_percent": 98.0,
+        "outage_reserve_soc_percent": 0.0,
+        "safety_margin_soc_percent": 0.0,
+        "manual_minimum_soc_percent": 0.0,
+        "dynamic_reserve_enabled": False,
+        "average_daily_load_kwh": 0.0,
+        "average_night_load_kwh": 0.0,
+        "night_start_minute": 20 * 60,
+        "night_end_minute": 7 * 60,
+        "inverter_power_kw": 20.0,
+        "inverter_count": 1,
+        "discharge_power_percent": 80.0,
+        "export_efficiency_percent": 94.0,
+        "bms_max_charge_current_a": 250.0,
+        "battery_voltage_v": 52.0,
+        "bms_power_safety_percent": 95.0,
+        "bms_charge_data_fresh": True,
+        "bms_charge_data_age_seconds": 20.0,
+        "bms_charge_data_available": True,
+    }
+    cases = (
+        (
+            "missing",
+            {
+                "bms_max_discharge_current_a": None,
+                "bms_discharge_data_fresh": False,
+                "bms_discharge_data_age_seconds": None,
+                "bms_discharge_data_available": False,
+            },
+            "bms_discharge_data_unavailable",
+        ),
+        (
+            "stale",
+            {
+                "bms_max_discharge_current_a": 250.0,
+                "bms_discharge_data_fresh": False,
+                "bms_discharge_data_age_seconds": 300.001,
+                "bms_discharge_data_available": True,
+            },
+            "bms_discharge_data_stale",
+        ),
+        (
+            "future",
+            {
+                "bms_max_discharge_current_a": 250.0,
+                "bms_discharge_data_fresh": False,
+                "bms_discharge_data_age_seconds": -5.001,
+                "bms_discharge_data_available": True,
+            },
+            "bms_discharge_data_stale",
+        ),
+        (
+            "zero",
+            {
+                "bms_max_discharge_current_a": 0.0,
+                "bms_discharge_data_fresh": True,
+                "bms_discharge_data_age_seconds": 0.0,
+                "bms_discharge_data_available": False,
+            },
+            "bms_discharge_limit_zero",
+        ),
+    )
+    checked: Counter[str] = Counter()
+    for label, changes, expected_reason in cases:
+        settings = OptimizerInput(**common, **changes)
+        result = optimize_rce(settings)
+        assert_rce_invariants(settings, result)
+        assert result.bms_discharge_power_limit_kw == 0.0
+        assert result.maximum_export_power_kw == 0.0
+        assert result.bms_charge_power_limit_kw > 0.0
+        assert result.solver_runtime_ms == 0.0
+        assert not result.planned_exports
+        assert not result.current_slot_start_eligible
+        assert result.current_slot_suppression_reason == expected_reason
+        checked[label] += 1
+    assert checked == Counter({label: 1 for label, _, _ in cases})
+    return checked
 
 
 def assert_automation_interlocks() -> None:
@@ -1935,10 +2088,15 @@ def main() -> None:
     )
     args = parser.parse_args()
     exhaustive = args.exhaustive
-    rce_count, rce_statuses = run_rce_matrix(exhaustive=exhaustive)
+    rce_count, rce_statuses, rce_coverage = run_rce_matrix(
+        exhaustive=exhaustive,
+    )
     tariff_count, tariff_statuses = run_tariff_matrix(exhaustive=exhaustive)
     rcm_count, rcm_statuses = run_rcm_matrix(exhaustive=exhaustive)
-    random_count = run_randomized_boundary_sweep(samples=120 if exhaustive else 40)
+    random_count, random_coverage = run_randomized_boundary_sweep(
+        samples=120 if exhaustive else 40,
+    )
+    bms_fail_closed = assert_rce_bms_fail_closed_contracts()
     assert_automation_interlocks()
     assert_manual_cycle_finalization_contracts()
     assert_tariff_startup_contracts()
@@ -1950,9 +2108,24 @@ def main() -> None:
     profile = "exhaustive" if exhaustive else "quick"
     print(f"Automation matrix ({profile}): {total} scenarios passed")
     print(f"  RCE: {rce_count} {dict(sorted(rce_statuses.items()))}")
+    print(
+        "  RCE nominal evidence by model: "
+        + "; ".join(
+            f"{model}={dict(sorted(coverage.items()))}"
+            for model, coverage in rce_coverage.items()
+        )
+    )
     print(f"  Tariff: {tariff_count} {dict(sorted(tariff_statuses.items()))}")
     print(f"  RCEm: {rcm_count} {dict(sorted(rcm_statuses.items()))}")
-    print(f"  Random RCE boundaries: {random_count}")
+    print(
+        f"  Random RCE boundaries: {random_count} "
+        f"{dict(sorted(random_coverage.items()))}"
+    )
+    print(
+        "  RCE BMS fail-closed contracts (outside scenario total): "
+        f"{sum(bms_fail_closed.values())}/4 "
+        f"{dict(sorted(bms_fail_closed.items()))}"
+    )
     print("  HA interlocks: RCE / tariff / RCEm / balancing / manual timers present")
 
 
