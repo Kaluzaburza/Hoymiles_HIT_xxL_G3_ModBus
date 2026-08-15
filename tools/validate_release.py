@@ -20,6 +20,13 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_ROOT = ROOT / "custom_components"
 COMPONENT = COMPONENT_ROOT / "hoymiles_hit_modbus"
 RESOURCES = COMPONENT / "resources"
+EXPECTED_PROJECT_NAME = "EMS for Hoymiles HIT-(5–20)L-G3"
+EXPECTED_REPOSITORY = "Kaluzaburza/hoymiles-hit-g3-ems"
+EXPECTED_DESCRIPTION = (
+    "Unofficial local EMS for Hoymiles HIT-G3 hybrid inverters — "
+    "Home Assistant, ESPHome, Modbus, RCE, tariff optimization and RCEm."
+)
+LEGACY_REPOSITORY_SLUG = "Hoymiles_HIT_xxL_G3_ModBus"
 
 
 def require(condition: bool, message: str) -> None:
@@ -791,7 +798,10 @@ def main() -> int:
     )
 
     hacs = load_json(ROOT / "hacs.json")
-    require(hacs.get("name"), "hacs.json requires a display name")
+    require(
+        hacs.get("name") == EXPECTED_PROJECT_NAME,
+        "hacs.json has the wrong public project name",
+    )
 
     manifest = load_json(COMPONENT / "manifest.json")
     required_manifest = {
@@ -808,6 +818,14 @@ def main() -> int:
     )
     require(manifest["domain"] == "hoymiles_hit_modbus", "Unexpected domain")
     require(
+        manifest["name"] == EXPECTED_PROJECT_NAME
+        and manifest["documentation"]
+        == f"https://github.com/{EXPECTED_REPOSITORY}"
+        and manifest["issue_tracker"]
+        == f"https://github.com/{EXPECTED_REPOSITORY}/issues",
+        "Manifest project metadata does not match the public rename contract",
+    )
+    require(
         re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"]) is not None,
         "Release version must use semantic MAJOR.MINOR.PATCH format",
     )
@@ -823,6 +841,10 @@ def main() -> int:
         "const.py VERSION does not match manifest.json",
     )
     require(
+        f'NAME = "{EXPECTED_PROJECT_NAME}"' in const_source,
+        "const.py NAME does not match the public project name",
+    )
+    require(
         "async_track_state_report_event" in entity_source
         and "EventStateReportedData" in entity_source
         and "_async_source_state_reported" in entity_source,
@@ -834,6 +856,10 @@ def main() -> int:
     require(
         f'version: "{manifest["version"]}"' in firmware_core_source,
         "ESPHome project version in packages/core.yaml does not match manifest.json",
+    )
+    require(
+        'name: "hoymiles.energy-storage-modbus"' in firmware_core_source,
+        "Stable ESPHome project.name must not change during a marketing rename",
     )
     ems_package_version_match = re.search(
         r'^EMS_PACKAGE_VERSION = "([^"]+)"$', const_source, re.MULTILINE
@@ -1495,6 +1521,20 @@ def main() -> int:
         f"CHANGELOG lacks the {manifest['version']} release section",
     )
     release_notes = release_match.group(1)
+    normalized_readme = " ".join(readme.split())
+    require(
+        readme.startswith(f"# {EXPECTED_PROJECT_NAME}\n")
+        and readme_pl.startswith(f"# {EXPECTED_PROJECT_NAME}\n")
+        and EXPECTED_DESCRIPTION in normalized_readme,
+        "README project title or exact GitHub description is inconsistent",
+    )
+    translations_en = load_json(COMPONENT / "translations" / "en.json")
+    translations_pl = load_json(COMPONENT / "translations" / "pl.json")
+    require(
+        translations_en.get("title") == EXPECTED_PROJECT_NAME
+        and translations_pl.get("title") == EXPECTED_PROJECT_NAME,
+        "Localized integration titles do not match the public project name",
+    )
     require(
         "### User update steps / Kroki po aktualizacji" in release_notes,
         "Release changelog lacks the HACS-visible user update steps",
@@ -1595,6 +1635,34 @@ def main() -> int:
         for path in (ROOT / "packages").glob("*.yaml")
         if not path.name.startswith("optional_")
     }
+    workflow_source = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
+        encoding="utf-8"
+    )
+    firmware_ci_path = ROOT / "tools" / "esphome_verify_ci.yaml"
+    firmware_ci_source = firmware_ci_path.read_text(encoding="utf-8")
+    require(
+        "firmware-compile:" in workflow_source
+        and "github.event_name == 'workflow_dispatch'" in workflow_source
+        and "startsWith(github.ref, 'refs/tags/v')" in workflow_source
+        and '"esphome==2026.7.2"' in workflow_source
+        and "esphome config tools/esphome_verify_ci.yaml" in workflow_source
+        and "esphome compile tools/esphome_verify_ci.yaml" in workflow_source,
+        "Release workflow lacks the pinned full ESPHome compile gate",
+    )
+    require(
+        "CI-only full firmware fixture" in firmware_ci_source
+        and 'wifi_ssid: "ci-placeholder-network"' in firmware_ci_source
+        and 'wifi_password: "ci-placeholder-password"' in firmware_ci_source
+        and 'ota_password: "ci-placeholder-ota"' in firmware_ci_source,
+        "Firmware CI fixture must contain only documented placeholder credentials",
+    )
+    firmware_ci_packages = set(
+        re.findall(r"!include ../(packages/[a-z0-9_]+\.yaml)", firmware_ci_source)
+    )
+    require(
+        firmware_ci_packages == required_esphome_packages,
+        "Firmware CI fixture does not compile the complete required package set",
+    )
     for entry_file in esphome_entry_files:
         entry_text = entry_file.read_text(encoding="utf-8")
         require(
@@ -1602,7 +1670,7 @@ def main() -> int:
             f"Public ESPHome entry point uses local includes: {entry_file.name}",
         )
         require(
-            "url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
+            f"url: https://github.com/{EXPECTED_REPOSITORY}"
             in entry_text,
             f"Public ESPHome entry point has no remote package: {entry_file.name}",
         )
@@ -1613,8 +1681,8 @@ def main() -> int:
         )
         require(
             "dashboard_import:" in entry_text
-            and "package_import_url: github://Kaluzaburza/"
-            "Hoymiles_HIT_xxL_G3_ModBus/" in entry_text
+            and f"package_import_url: github://{EXPECTED_REPOSITORY}/"
+            in entry_text
             and "import_full_config: true" in entry_text,
             f"ESPHome adoption/update metadata is missing in {entry_file.name}",
         )
@@ -1631,6 +1699,27 @@ def main() -> int:
             f"Parallel topology must load before EMS settings in {entry_file.name}",
         )
 
+    active_repository_files = [
+        ROOT / "README.md",
+        ROOT / "README.pl.md",
+        ROOT / "NOTICE",
+        ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml",
+        COMPONENT / "manifest.json",
+        COMPONENT / "__init__.py",
+        ROOT / "home_assistant" / "www" / "hoymiles-dashboard-strategy.js",
+        ROOT / "home_assistant" / "www" / "hoymiles-rce-chart-card.js",
+        RESOURCES / "www" / "hoymiles-dashboard-strategy.js",
+        RESOURCES / "www" / "hoymiles-rce-chart-card.js",
+        *esphome_entry_files,
+    ]
+    for active_repository_file in active_repository_files:
+        require(
+            LEGACY_REPOSITORY_SLUG
+            not in active_repository_file.read_text(encoding="utf-8"),
+            f"Active file still references the legacy repository slug: "
+            f"{active_repository_file.relative_to(ROOT)}",
+        )
+
     parallel_source = (ROOT / "packages" / "parallel_network.yaml").read_text(
         encoding="utf-8"
     )
@@ -1644,8 +1733,10 @@ def main() -> int:
         'name: "Parallel EMS Control Status"',
         'name: "Parallel Topology Readback Generation"',
         'name: "EMS Verified Hardware Readback Supported"',
+        'name: "Direct Register Verified Readback Supported"',
         "count < 2 || count > 10",
-        "Zablokowane - brak FC03 dla każdego Slave",
+        "return count >= 2 && count <= 10 ? 1.0f : 0.0f;",
+        "Gotowe - broadcast EMS, odczyt Mastera",
     ):
         require(
             marker in parallel_source,
@@ -1658,16 +1749,27 @@ def main() -> int:
         'name: "GCF Control Readback Generation"',
         'name: "Battery Charge Power Readback Generation"',
         "id(ems_verified_hardware_readback_supported).state",
-        "Master nie pozwala potwierdzić FC03 na każdym Slave",
+        "id(direct_register_verified_readback_supported).state",
+        "id: ems_write_complete_block_4300_4306",
+        "0x00, 0x10, 0x10, 0xCC, 0x00, 0x07, 0x0E",
+        "id(modbus_1).send_raw(payload);",
+        "create_write_multiple_command",
     ):
         require(
             marker in settings_source,
             f"Parallel EMS safety marker missing: {marker}",
         )
     require(
-        "send_raw(payload)" not in settings_source
-        and "0x00, 0x10, 0x10, 0xCC" not in settings_source,
-        "Unacknowledged parallel EMS broadcast must remain disabled",
+        settings_source.count("send_raw(payload)") == 1
+        and settings_source.count("0x00, 0x10, 0x10, 0xCC") == 1,
+        "Parallel EMS broadcast must have one canonical complete-block writer",
+    )
+    require(
+        'name: "Hoymiles Direct Register Execution Ready"' in ems_package_source
+        and "sensor.hoymiles_hit_direct_register_verified_readback_supported"
+        in ems_package_source
+        and "system_broadcast_with_master_fc03" in ems_package_source,
+        "HA package does not separate broadcast EMS from direct registers",
     )
     require(
         "hoymiles_modbus_slave_" not in parallel_source
@@ -2183,6 +2285,7 @@ def main() -> int:
         "python tools/test_tariff_optimizer.py",
         "python tools/test_rcm_history.py",
         "python tools/test_rcm_optimizer.py",
+        "python tools/test_diagnostic_analyzer.py",
         "python tools/test_optimizer_startup_contract.py",
         "python tools/test_automation_matrix.py",
         "python tools/test_automation_matrix.py --exhaustive",

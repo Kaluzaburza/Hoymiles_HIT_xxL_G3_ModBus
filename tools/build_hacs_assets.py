@@ -74,6 +74,9 @@ PHRASE_TRANSLATIONS = {
     "Parallel EMS Control Status": "Stan sterowania EMS sieci równoległej",
     "Parallel Topology Readback Generation": "Generacja odczytu topologii równoległej",
     "EMS Verified Hardware Readback Supported": "Obsługa potwierdzonego odczytu sprzętowego EMS",
+    "Direct Register Verified Readback Supported": (
+        "Obsługa potwierdzonego odczytu rejestrów bezpośrednich"
+    ),
     "EMS Control Readback Generation": "Generacja odczytu sterowania EMS",
     "GCF Control Readback Generation": "Generacja odczytu sterowania GCF",
     "Battery Charge Power Readback Generation": "Generacja odczytu mocy ładowania baterii",
@@ -1630,6 +1633,39 @@ ENGLISH_REPLACEMENTS = {
     "EMS RCE — encja prognozy Solcast na jutro": (
         "EMS RCE — Solcast tomorrow forecast entity"
     ),
+    "EMS RCE — encja prognozy Solcast na trzeci dzień": (
+        "EMS RCE — Solcast Day 3 forecast entity"
+    ),
+    "Plan RCE oczekuje na ponowne przeliczenie": (
+        "The RCE plan is waiting to be recalculated"
+    ),
+    "Plan RCE nie był raportowany od ponad 5 minut": (
+        "The RCE plan has not been reported for more than 5 minutes"
+    ),
+    "Plan taryfowy oczekuje na ponowne przeliczenie": (
+        "The tariff plan is waiting to be recalculated"
+    ),
+    "Prognoza taryfowa jest nieświeża lub niepełna": (
+        "The tariff forecast is stale or incomplete"
+    ),
+    "Wyrównywanie przerwane przed kolejnym zapisem operacyjnym": (
+        "Balancing stopped before the next operational write"
+    ),
+    "Wyrównywanie przerwane przed zmianą trybu Grid Charge": (
+        "Balancing stopped before switching to Grid Charge"
+    ),
+    "Start taryfowy przerwany przed kolejnym zapisem operacyjnym": (
+        "Tariff start stopped before the next operational write"
+    ),
+    "Aktualizacja taryfowa przerwana przed wydłużeniem okna": (
+        "Tariff update stopped before extending the window"
+    ),
+    "Aktualizacja taryfowa przerwana przed kolejnym zapisem operacyjnym": (
+        "Tariff update stopped before the next operational write"
+    ),
+    "Start RCE przerwany przed kolejnym zapisem operacyjnym": (
+        "RCE start stopped before the next operational write"
+    ),
     "EMS RCE — moc znamionowa jednego falownika": (
         "EMS RCE — rated power of one inverter"
     ),
@@ -2061,7 +2097,30 @@ ENGLISH_REPLACEMENTS = {
     "RCE — konfiguracja zaawansowana": "RCE — advanced configuration",
     "Własna encja Solcast — dzisiaj": "Custom Solcast entity — today",
     "Własna encja Solcast — jutro": "Custom Solcast entity — tomorrow",
+    "Własna encja Solcast — dzień 3": "Custom Solcast entity — Day 3",
+    "**Day 3 — encja:**": "**Day 3 — entity:**",
+    "'brak wykrytej encji'": "'no detected entity'",
+    "konfiguracja:": "configuration:",
+    "'automatyczna'": "'automatic'",
+    "**Day 3 — status / świeża:**": "**Day 3 — status / fresh:**",
+    "'brak statusu'": "'no status'",
+    "{% if day3_fresh is none %}brak danych{% elif day3_fresh %}tak{% else %}nie{% endif %}": (
+        "{% if day3_fresh is none %}data unavailable{% elif day3_fresh %}yes{% else %}no{% endif %}"
+    ),
+    "**Day 3 — wiek ze znakiem:**": "**Day 3 — signed age:**",
+    "'brak znacznika czasu'": "'no timestamp'",
+    " · powód:": " · reason:",
+    "'brak informacji'": "'no information'",
     "RCE — decyzja automatyki": "RCE — automation decision",
+    "Aktywne RCE utraciło autoryzację przed zapisem limitu mocy": (
+        "Active RCE lost authorization before writing the power limit"
+    ),
+    "Aktywne RCE utraciło autoryzację przed wydłużeniem okna": (
+        "Active RCE lost authorization before extending the execution window"
+    ),
+    "Aktywne RCE utraciło autoryzację przed zapisem progu SOC": (
+        "Active RCE lost authorization before writing the SOC threshold"
+    ),
     "Decyzja optymalizatora": "Optimizer decision",
     "Cena RCE teraz": "Current RCE price",
     "Cena graniczna planu": "Plan price floor",
@@ -2459,6 +2518,12 @@ ENGLISH_REPLACEMENTS.update(
         "Brak obsługi zweryfikowanego odczytu sprzętowego": (
             "Verified hardware readback is not supported"
         ),
+        "Blok EMS 4300-4306 nie jest gotowy": (
+            "The EMS 4300-4306 block is not ready"
+        ),
+        "Rejestry 258/259/306 nie mają potwierdzonego broadcastu Master/Slave": (
+            "Registers 258/259/306 have no verified Master/Slave broadcast"
+        ),
         "Brak fizycznego odczytu trybu EMS": "Physical EMS-mode readback is unavailable",
         "Brak aktualnego SOC magazynu": "Current battery SOC is unavailable",
         "Eksport zablokowany przez GCF lub limit 0%": (
@@ -2728,7 +2793,7 @@ def static_translations(language: str) -> dict:
     """Return config-flow and service translations."""
     if language == "pl":
         return {
-            "title": "Hoymiles HIT xxL G3 Modbus",
+            "title": "EMS for Hoymiles HIT-(5–20)L-G3",
             "config": {
                 "step": {
                     "user": {
@@ -2824,7 +2889,7 @@ def static_translations(language: str) -> dict:
         }
 
     return {
-        "title": "Hoymiles HIT xxL G3 Modbus",
+        "title": "EMS for Hoymiles HIT-(5–20)L-G3",
         "config": {
             "step": {
                 "user": {

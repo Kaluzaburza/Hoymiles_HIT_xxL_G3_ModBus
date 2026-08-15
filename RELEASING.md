@@ -51,6 +51,14 @@ does not flash the ESP32. Users must use the top-level ESPHome file and the
 compatible remote-package tag named in that release's notes. When firmware is
 unchanged, retain and document the last compatible ESPHome tag.
 
+When a release changes both Home Assistant control logic and firmware source
+freshness or actuator semantics, update Home Assistant first while every
+automatic writer is disabled and observation-only modes remain enabled. Verify
+that the physical EMS mode and controlled registers did not change across the
+required Home Assistant restart(s). Only then rebuild and upload ESPHome from
+the matching immutable tag, and repeat the no-write verification before
+restoring the previous automation policy.
+
 ## Frontend asset startup contract
 
 When a release changes managed dashboard or frontend assets:
@@ -73,6 +81,45 @@ When a release changes managed dashboard or frontend assets:
   release/tag SHA differs, record it separately, verify that the delta contains
   no runtime changes, and never describe that later SHA as the deployed
   candidate.
+
+## Repository rename cutover completed with v1.5.5
+
+The v1.5.5 coordinated cutover establishes these exact public metadata values:
+
+- **Repository:** `Kaluzaburza/hoymiles-hit-g3-ems`
+- **Project:** `EMS for Hoymiles HIT-(5–20)L-G3`
+- **GitHub description:** `Unofficial local EMS for Hoymiles HIT-G3 hybrid
+  inverters — Home Assistant, ESPHome, Modbus, RCE, tariff optimization and
+  RCEm.`
+
+The description is also the English README tagline. Treat the repository
+rename, metadata changes, release tag and HACS publication as one cutover: the
+ESPHome remote package and `dashboard_import` URLs must remain fetchable at
+every point.
+
+The v1.5.5 cutover contract is:
+
+1. Rename the GitHub repository and set its About/description field to the
+   exact text above. Do not create a different repository under the old slug;
+   GitHub's redirect must continue protecting installed configurations.
+2. Update the local `origin` and every current repository URL, including HACS
+   badges/instructions, manifest documentation and issue tracker, Repairs and
+   dashboard links, issue templates, `NOTICE`, ESPHome `dashboard_import` and
+   remote-package URLs, and their release-validator expectations.
+3. Change the user-facing HACS/Home Assistant/dashboard project title to the
+   exact project value above, update the canonical asset-generator sources,
+   and regenerate all localized/bundled copies.
+4. Keep all technical identities unchanged: the Home Assistant domain and
+   component directory `hoymiles_hit_modbus`, entity/service/unique IDs,
+   storage keys, dashboard strategy type `hoymiles-hit-xxl-g3`, ESPHome node
+   names, and ESPHome `project.name: hoymiles.energy-storage-modbus`.
+5. Run the complete release gate, then verify the new repository with HTTP,
+   `git ls-remote`, HACS/hassfest, ESPHome `dashboard_import`, and a clean
+   remote-package compile from the immutable v1.5.5 release tag.
+
+Keep the old slug unclaimed after the cutover so GitHub's redirect continues
+to protect existing HACS and ESPHome configurations. Never rename the stable
+technical identities listed above as part of a later branding change.
 
 ## Release checklist
 

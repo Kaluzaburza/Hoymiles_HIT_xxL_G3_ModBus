@@ -1,8 +1,11 @@
-# Public ESPHome entry point for Hoymiles HIT xxL G3 Modbus.
+# Public ESPHome entry point for EMS for Hoymiles HIT-(5–20)L-G3.
 # Copy this file to your ESPHome directory and adjust substitutions/secrets.
 # Read the README wiring section before connecting the converter:
 # automatic-direction modules need TX/RX/GND, while MAX3485/MAX485 modules
 # with DE and /RE need an additional GPIO and a UART flow_control_pin override.
+# For parallel EMS, continue the same external RS485 A/B bus from the converter
+# to the Master and every Slave; address-0 broadcast is not relayed by a
+# Master-only connection.
 
 substitutions:
   name: "hoymiles-hit-g3"
@@ -39,7 +42,7 @@ esp32:
       sram1_as_iram: true
 
 dashboard_import:
-  package_import_url: github://Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/examples/esphome/hoymiles-hit-g3.yaml@main
+  package_import_url: github://Kaluzaburza/hoymiles-hit-g3-ems/examples/esphome/hoymiles-hit-g3.yaml@main
   import_full_config: true
 
 logger:
@@ -50,8 +53,8 @@ logger:
 
 packages:
   hoymiles_hit_g3:
-    url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.5.3
+    url: https://github.com/Kaluzaburza/hoymiles-hit-g3-ems
+    ref: v1.5.5
     refresh: 1d
     files:
       - packages/core.yaml

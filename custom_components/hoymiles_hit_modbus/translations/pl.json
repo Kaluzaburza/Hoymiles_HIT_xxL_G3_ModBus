@@ -1,5 +1,5 @@
 {
-  "title": "Hoymiles HIT xxL G3 Modbus",
+  "title": "EMS for Hoymiles HIT-(5–20)L-G3",
   "config": {
     "step": {
       "user": {
@@ -702,6 +702,9 @@
       },
       "ems_verified_hardware_readback_supported": {
         "name": "Obsługa potwierdzonego odczytu sprzętowego EMS"
+      },
+      "direct_register_verified_readback_supported": {
+        "name": "Obsługa potwierdzonego odczytu rejestrów bezpośrednich"
       },
       "machines_type": {
         "name": "Rola urządzenia w sieci równoległej"

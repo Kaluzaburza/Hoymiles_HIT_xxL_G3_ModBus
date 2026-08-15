@@ -2,12 +2,12 @@
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.3 full validation**
-Accepted live runtime merge:
+Last completed offline baseline in this report: **v1.5.5 release-candidate validation**
+Last accepted live runtime merge:
 **`ce4afc614a691ce70c67da2439613de90e0c61c2`**
 (implementation commit **`915337fa34529c5197ad581a41d351b78bfb1d33`**)
-Current status: **v1.5.3 offline, exact-SHA CI and local Home Assistant live
-acceptance PASS.**
+Current status: **v1.5.5 exact-workspace offline PASS; exact-SHA GitHub CI,
+public HACS release and shared-bus Master/Slave acceptance pending.**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -43,7 +43,7 @@ A later audit found that the published 2064-scenario matrix had inherited
 fail-closed defaults for BMS availability/freshness and omitted maximum charge
 current. All 696 RCE matrix cases therefore had zero controlled capability and
 never reached the joint solver. This invalidates the old matrix as evidence of
-nominal RCE execution, but not the independent 68-scenario RCE optimizer suite
+nominal RCE execution, but not the independent 69-scenario RCE optimizer suite
 or the runtime's fail-closed behaviour.
 
 The corrected matrix now supplies complete nominal BMS contracts and retains
@@ -55,7 +55,7 @@ count. Fresh results on the current workspace are:
 - **Exhaustive:** 2064/2064; 220 joint-solver calls and 160 controlled export
   plans in the 576 main RCE cases, plus 58/49 respectively in the 120 random
   boundary cases; BMS fail-closed contracts 4/4.
-- **RCE optimizer:** 68/68; tariff, RCEm, history, shared energy/LOAD/power,
+- **RCE optimizer:** 69/69; tariff, RCEm, history, shared energy/LOAD/power,
   startup and executor contracts passed.
 
 The same candidate adds a monotonic input revision and a direct before/after
@@ -95,6 +95,115 @@ errors on any of the 17 dashboard paths.
 The final release/tag commit is expected to differ only by this live-evidence
 documentation. Its delta from the tested runtime merge must remain
 documentation-only.
+
+## v1.5.5 consolidated EMS safety release — offline PASS; exact publication and full shared-bus acceptance pending
+
+The v1.5.5 release consolidates the previously unpublished v1.5.4 candidate
+and restores the previously proven Modbus address-0
+FC16 write for the complete EMS block 4300-4306 on a Master/Slave plant. The
+write is assembled only from a fresh, complete physical Master snapshot and
+never publishes optimistic state. Success requires a later Master FC03
+generation with all seven registers exactly matching the requested block.
+This is deliberately described as **system broadcast with Master FC03
+confirmation**, not as an acknowledgement from every Slave. The broadcast
+reaches only inverters physically connected to the same external Modbus/RS485
+bus as the ESP32 converter; the internal parallel network does not relay it.
+
+The capability split remains fail-closed: RCE, tariff control, manual cycles
+and battery balancing may use the verified 4300-4306 broadcast, while direct
+registers 258, 259 and 306 remain blocked on Master/Slave. Consequently active
+RCEm voltage control is still unavailable there; RCEm shadow mode remains
+available. Internal addresses 6050/6055/... remain diagnostic and are not used
+as prerequisites for the address-0 broadcast.
+
+Fresh offline evidence for this candidate:
+
+- ESPHome 2026.7.2 configuration and full clean compile with ESP-IDF 5.5.5
+  from the complete local verification fixture: **PASS** (`Configuration is
+  valid!` and `Successfully compiled program`). The resulting image used
+  **973,135 / 1,835,008 bytes (53.0%)** of the application flash budget and
+  **78,376 / 180,736 bytes (43.4%)** of DRAM; the fixture and all 19 package
+  inputs remained byte-identical before and after the build.
+- Firmware FC03/readback source contract: **PASS**.
+- Release validator: **PASS**, 292 localized entities.
+- Automation matrix with PyYAML structural checks: quick **488/488** and
+  exhaustive **2064/2064**. The exhaustive set contains 576 RCE, 720 tariff,
+  648 RCEm and 120 randomized RCE boundary scenarios, including four explicit
+  BMS fail-closed cases. Both the implementation author and an independent
+  read-only reviewer obtained the same result. After the v1.5.5 package marker
+  was applied, the exact scheduler hash was
+  `82689208546C2CA080ABB187EB30FA63FA5F712A31557C89B4AFEBAEF3379BCB` and
+  the matrix hash was
+  `A7F8CDB898D2A3980C2B9B9CDB47541AD0A9A20C21659B8C6DA45DBDA7B88871`.
+- Core optimizer and integration contracts from `RELEASING.md`: **13/13 runs
+  PASS**, including 69 deterministic RCE scenarios, RCE/RCEm history, tariff
+  profiles and solver, RCEm solver, startup/listener lifecycle, executor
+  serialization, parallel power balance, shared freshness/load models,
+  physical FC03 and source-device rebind. `validate_release.py` and
+  `py_compile` and `compileall` for all 66 Python files also passed on the exact
+  v1.5.5 workspace.
+- Aurora card/strategy validator: **PASS**; PL, EN and bootstrap-first paths
+  each render exactly 42 Aurora frames.
+- Asset generator: **PASS**, 292 localized entities and zero tracked-content
+  differences in an isolated rebuild (147 tracked files compared).
+- Diagnostic identity: **PASS** for first-start UUID v4 generation, persistent
+  reload, concurrent first access, multi-entry reuse, save-failure retry,
+  schema enforcement and exact redaction preservation.
+- Batch diagnostic analyzer: **PASS** for 100 ZIP archives, bounded hostile-ZIP
+  handling, semantic/history deduplication, RCE/RCEm/tariff rules,
+  deterministic transactional output and default UUID/path privacy.
+- Stable BMS voltage/current FC03 reports are now forced through ESPHome so
+  their Home Assistant `last_reported` provenance remains current. The RCE
+  Safe BMS diagnostic consumes the optimizer's authoritative
+  `bms_discharge_power_limit_kw` and the same freshness/age contract instead
+  of recomputing a misleading value from stale raw states.
+
+On 2026-08-14 exact firmware commit
+`11ee7c7306a2435059bf820b10bdf0a6be90c65d` was configuration-checked, flashed
+and exercised at miernik.com.pl. The Master accepted Grid Discharge and its
+physical FC03 readback changed accordingly; the later return to Self-Use was
+also physically visible. No Home Assistant writer issued that later mode
+change, so it was not caused by the restored queued FC16 path.
+
+The test installation's ESP32 external RS485 cable was then found to reach the
+Master only. That wiring can still expose valid topology, system-wide telemetry
+and Master FC03, but it cannot deliver a wire-level address-`0` frame to the
+Slave. The run therefore validates the Master path only and neither proves nor
+disproves Slave execution.
+
+The archived working setup is stronger evidence: the 2026-07-29 test connected
+one ESP32 to the `RS485_2` ports of both inverters on one A/B/GND multidrop bus.
+At an 80% discharge setting it reached **34.86 kW export** and **516.8 A** after
+about 27 seconds, then returned to Self-Use without alarms. Commit
+`25d3bbeaeac87976ac5b59266af61f35c33cb91b` preserved that exact address-`0`
+FC16 implementation and explicitly documented every Slave on the shared
+`RS485_2` bus.
+
+Formal parallel acceptance remains pending until the shared external bus is
+restored and Grid Discharge plus Self-Use are observed separately on the
+Master and every Slave. Master FC03 alone is not per-node acknowledgement.
+Aggregate physical-response acknowledgement discussed for future parallel
+validation is outside this candidate and outside the reported test claims. It
+has not been implemented, and aggregate power alone could not prove execution
+by every individual Slave.
+
+During the 2026-08-14 live audit,
+`sensor.solcast_pv_forecast_prognoza_na_dzien_3` was initially disabled in the
+Miernik entity registry and was then enabled by the user. The native source
+reported `146.9107 kWh`, a 14-second signed age and 48 detailed half-hour rows
+at the verification point. The currently deployed older RCE sensor selected
+that entity, while the older tariff sensor still reported Day 3 as `missing`
+and retained its two-day horizon. Exact-snapshot live acceptance therefore
+remains pending after deployment: both new planner diagnostics must report the
+same entity as `fresh`, and tariff must select its three-day horizon. Missing or
+stale Day 3 continues to use the safe shorter-horizon fallback.
+
+Off-Grid operation was also observed as functional on the local inverter. That
+observation proves the physical inverter mode, not yet the arbitration changes
+in this v1.5.5 Home Assistant package. The final quick and exhaustive matrices
+prove that automatic starts, active updates, timer recovery and cleanup yield
+to physical mode code `3`; exact-snapshot live acceptance remains pending after
+deployment.
 
 ## Representative systems
 

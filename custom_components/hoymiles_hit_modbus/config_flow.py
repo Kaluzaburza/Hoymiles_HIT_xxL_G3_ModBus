@@ -1,4 +1,4 @@
-"""Config flow for Hoymiles HIT xxL G3 Modbus."""
+"""Config flow for EMS for Hoymiles HIT-(5–20)L-G3."""
 
 from __future__ import annotations
 

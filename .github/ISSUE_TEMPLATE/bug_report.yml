@@ -42,7 +42,7 @@ body:
       description: >-
         Drag the native diagnostics JSON or terminal .tar.gz archive here.
         Review it before publishing. Instructions:
-        https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/blob/main/docs/DIAGNOSTICS.md
+        https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/blob/main/docs/DIAGNOSTICS.md
       placeholder: Drag and drop the diagnostic file here.
     validations:
       required: true

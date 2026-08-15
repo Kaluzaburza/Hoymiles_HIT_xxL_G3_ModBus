@@ -26,6 +26,11 @@ Nazwy encji używają oznaczeń `L1`, `L2`, `L3` dla faz oraz `L1n`, `L2n`, `L3n
 dla pomiarów faza–neutralny. Nazwy przepływów są rozdzielone, np. `PV to Grid`,
 `PV to Load` i `PV to Battery`.
 
+Rejestr pojemności baterii `4102` jest odpytywany przez kontroler ustawień co
+20 sekund i raportuje również niezmienioną wartość. RCEm wykorzystuje dodatnią
+pojemność jako stabilną cechę instalacji, ale nie rozluźnia kontroli świeżości
+bieżącego napięcia ani limitów prądowych BMS.
+
 ## Bezpieczna zmiana trybu EMS
 
 Encja `Tryb EMS` udostępnia wyłącznie tryby używane w tej instalacji:
@@ -53,9 +58,22 @@ pozostaje w wolnym kontrolerze diagnostycznym.
 włączone. Zapis EMS jest wykonywany bezpośrednio dla pojedynczego falownika albo
 jako broadcast Modbus FC16 na adres `0` dla wykrytej sieci równoległej. Dzięki
 temu pełny blok `4300-4306` odbiera Master i wszystkie urządzenia Slave na
-wspólnej magistrali `RS485_2`. Broadcast jest wysyłany poza kolejką odpowiedzi,
-ponieważ adres `0` zgodnie z protokołem nie odpowiada. Gdy ESP32 zostanie
-podłączone do urządzenia zgłaszającego rolę Slave, zapis jest blokowany.
+wspólnej magistrali `RS485_2`. Warunkiem jest fizyczne doprowadzenie tej samej
+pary A/B i wymaganego odniesienia/GND z konwertera ESP32 do Mastera oraz każdego
+Slave'a. Adres `0` rozgłasza wyłącznie na tej magistrali; połączenie ESP32 tylko
+z Masterem nie jest przekazywane do Slave'ów przez wewnętrzną sieć równoległą.
+Broadcast trafia do wspólnej kolejki huba Modbus, lecz zgodnie z protokołem nie
+oczekuje odpowiedzi z adresu `0`; po czasie `send_wait_time` hub przechodzi do
+następnej ramki i nie ponawia broadcastu. Wynik jest uznawany dopiero po
+późniejszym fizycznym FC03 Mastera z dokładnie takim samym blokiem;
+potwierdza on wyłącznie Mastera i nie wykrywa brakującego przewodu do Slave'a.
+Gdy ESP32 zostanie podłączone do
+urządzenia zgłaszającego rolę Slave, zapis jest blokowany.
+
+Rejestry `258`, `259` i `306` nie należą do tego bloku i pozostają zablokowane
+na Masterze do czasu osobnego potwierdzenia ich broadcastu. Oznacza to, że RCE,
+taryfa, harmonogramy ręczne i balansowanie korzystają z broadcastu EMS, ale
+aktywny RCEm pozostaje na instalacji równoległej tylko w trybie shadow.
 
 Po wykryciu Mastera encje podglądu mocy używane przez dashboard przełączają się
 automatycznie na rejestry sumaryczne całego systemu: PV, bateria, LOAD i sieć.
@@ -64,6 +82,6 @@ falowników. Napięcie baterii pozostaje fizycznym pomiarem na złączu DC Maste
 a prąd baterii jest wyliczany z sumarycznej mocy baterii.
 
 Adresy komunikacyjne z rejestrów `6050-6095` opisują wewnętrzną sieć równoległą
-falownika. Port RS485 Mastera nie przekazuje do nich zewnętrznych zapytań
-Modbus, dlatego są używane tylko do diagnostyki topologii, a nie jako osobne
-adresy odpytywane przez ESP32.
+falownika. Są używane tylko do diagnostyki topologii, a nie jako osobne adresy
+Modbus odpytywane przez ESP32, i nie zastępują fizycznej wspólnej magistrali
+zewnętrznego Modbus prowadzącej do wszystkich falowników.

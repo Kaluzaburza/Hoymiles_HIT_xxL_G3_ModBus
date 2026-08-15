@@ -4,6 +4,203 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-08-15
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** before updating, keep RCEm in shadow mode and disable every
+   automatic or scheduled EMS writer. Update
+   **EMS for Hoymiles HIT-(5–20)L-G3** to **v1.5.5**.
+   **PL:** przed aktualizacją pozostaw RCEm w trybie shadow i wyłącz wszystkie
+   automatyczne oraz harmonogramowe zapisy EMS. Zaktualizuj integrację
+   **EMS for Hoymiles HIT-(5–20)L-G3** w HACS do **v1.5.5**.
+2. **Home Assistant:** restart after the HACS update. The integration installs
+   managed EMS package **1.5.5** during startup, so validate the configuration
+   and restart once more when the Repair notification requests it. Keep the
+   writers disabled throughout both restarts and hard-refresh every open
+   Hoymiles dashboard tab to load frontend URL `v=1.5.5.17`.
+   **PL:** po aktualizacji HACS uruchom Home Assistant ponownie. Integracja
+   instaluje zarządzany pakiet EMS **1.5.5** podczas startu, dlatego sprawdź
+   konfigurację i wykonaj jeszcze jeden restart, gdy zażąda tego komunikat
+   Napraw. Podczas obu restartów pozostaw zapisy wyłączone i twardo odśwież każdą
+   otwartą kartę dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.5.17`.
+3. **ESP32 / ESPHome:** only after the Home Assistant no-write verification,
+   rebuild and upload firmware from the top-level ESPHome file pinned to
+   immutable ref **v1.5.5**. HACS does not flash the ESP32. This firmware step
+   is required because v1.5.5 consolidates the previously unpublished firmware
+   and managed-package candidate; it does not replace the separate shared-bus
+   Master/Slave acceptance test.
+   **PL:** dopiero po odczytowej weryfikacji Home Assistanta skompiluj i wgraj
+   firmware z głównego pliku ESPHome przypiętego do niezmiennego ref
+   **v1.5.5**. HACS nie wgrywa firmware ESP32. Ten krok jest wymagany, ponieważ
+   v1.5.5 konsoliduje wcześniej nieopublikowanego kandydata firmware i pakietu
+   zarządzanego; nie zastępuje osobnego testu Master/Slave na wspólnej magistrali.
+4. **Verification / Weryfikacja:** confirm that the physical EMS mode and the
+   complete `4300–4306` block did not change during the update, no execution
+   owner became active, the managed package reports **1.5.5 / Ready**, RCE,
+   tariff and RCEm publish a current result or an explicit fail-closed reason,
+   Solcast Day 3 is fresh when enabled, and all Aurora views render. After the
+   firmware upload also confirm repeated fresh register-4102 reports and create
+   two diagnostic ZIPs to verify that their anonymous installation ID is
+   unchanged. Do not claim per-Slave acknowledgement: every inverter must be
+   connected to the same external RS485 bus and observed separately.
+   **PL:** potwierdź, że podczas aktualizacji nie zmieniły się fizyczny tryb EMS
+   ani pełny blok `4300–4306`, nie pojawił się aktywny właściciel, pakiet
+   zarządzany pokazuje **1.5.5 / Gotowe**, RCE, taryfa i RCEm publikują aktualny
+   wynik albo jawny bezpieczny powód blokady, opcjonalny Dzień 3 Solcast jest
+   świeży, a wszystkie widoki Aurora działają. Po wgraniu firmware potwierdź
+   także powtarzające się świeże raporty rejestru 4102 i utwórz dwie paczki
+   diagnostyczne, aby sprawdzić niezmienność anonimowego ID instalacji. Nie
+   deklaruj potwierdzenia każdego Slave'a: wszystkie falowniki muszą być
+   podłączone do tej samej zewnętrznej magistrali RS485 i sprawdzone osobno.
+
+### Added
+
+- Added one random, persistent `anonymous_installation_id` (UUID v4) for the
+  entire Home Assistant installation. Schema version `1` is stored in Home
+  Assistant Store and the same validated ID is preserved by redaction in native
+  diagnostics, `environment.json`, and successive diagnostic ZIPs. It is never
+  derived from a device or user configuration and is not exposed as an entity.
+- Added a bounded, offline analyzer for up to 100 diagnostic ZIPs. It correlates
+  packages by the anonymous installation ID and extracts comparable RCE, RCEm,
+  tariff-charging, control-run, data-quality, and log-cluster evidence without
+  uploading archives or exposing source paths by default.
+- Added regression coverage for first-start identity creation, persistence
+  across restarts and packages, UUID v4 format, redaction preservation,
+  multi-entry reuse, source independence, hostile archives, deterministic
+  analysis, privacy defaults, and transactional output.
+
+### Changed
+
+- Restored parallel Master/Slave control for the complete EMS register block
+  `4300–4306`. A detected Master now sends one FC16 system broadcast to Modbus
+  address `0`; Home Assistant accepts the command only after a later physical
+  FC03 from the Master reports the exact requested block.
+- Documented the required parallel wiring: the ESP32 converter, Master and
+  every Slave must share one physical external Modbus/RS485 bus. Address `0`
+  is broadcast only on that wire; a Master-only connection can still report
+  topology and Master FC03 but cannot command a disconnected Slave.
+- Split hardware readiness into two capabilities. RCE, tariff charging, manual
+  schedules and battery balancing may use the verified EMS-block broadcast,
+  while writes to GCF/export/charge registers `258`, `259` and `306` remain
+  fail-closed on Master/Slave until their broadcast semantics are proven.
+- Kept internal addresses `6050–6095` as topology diagnostics only. They are
+  not required for address-`0` broadcast and are never polled as external
+  Modbus devices through the Master's port.
+- Marked physical BMS voltage and maximum charge/discharge current polls as
+  force-updating reports. Stable limits now refresh Home Assistant provenance
+  instead of expiring after 300 seconds, while a genuinely silent FC03 source
+  still makes RCE fail closed. The Safe BMS helper now mirrors the current
+  optimizer limit and exposes its freshness and age.
+- RCE and tariff execution readiness now follows the optimizer's authoritative
+  `result_current`, plan age and source-freshness attributes instead of a
+  derived proxy timestamp. Active tariff writes require the same readiness,
+  while the frozen action and SOC target survive Home Assistant restarts.
+- Register `4102` now uses the 20-second settings controller and reports
+  unchanged values. RCEm treats positive capacity as a stable installation
+  property, with Total Capacity as fallback, while live BMS voltage and current
+  limits remain strictly freshness-gated.
+- Battery balancing completes only after SOC remains at least `99.9%` for the
+  complete hold interval; a drop resets the hold. The EMS owner diagnostic now
+  reports actual active execution rather than an enabled policy.
+- EMS mode code `3` is recognized as Off-Grid. Automatic engines yield while
+  Off-Grid is active, and cleanup restores owned registers without forcing
+  Self-Use.
+- Forecast-aware planners dynamically track configured Solcast entities.
+  Current and legacy optional Day 3 identifiers are supported; missing or stale
+  Day 3 remains diagnostic and uses the conservative shorter-horizon fallback.
+- Hardened every delayed command step against state changes during Modbus ACK
+  waits. RCE, tariff charging, balancing and RCEm now revalidate current policy,
+  ownership/conflict, execution readiness, physical mode and the committed plan
+  or recommendation immediately before each subsequent register write and
+  after mode acknowledgement. RCEm emergency charge/export paths retain
+  independent actuator-local guards and rollback, while manual handover releases
+  an RCEm owner before claiming control.
+- Aggregate physical-response acknowledgement for parallel broadcasts is not
+  implemented in this release. Shared-bus Master/Slave tests and field data
+  remain pending; after review, physical aggregate acknowledgement will be
+  completed in a separate hotfix. It must not be described as per-Slave
+  acknowledgement, because Master FC03 verifies the Master only.
+- Renamed the repository to `Kaluzaburza/hoymiles-hit-g3-ems` and the public
+  project title to **EMS for Hoymiles HIT-(5–20)L-G3**, while preserving the Home
+  Assistant domain, entities, services, storage keys, dashboard strategy type,
+  and ESPHome technical identities.
+- Updated the diagnostic frontend privacy text so the longitudinal purpose and
+  non-identifying origin of the anonymous installation ID are explicit.
+
+### Polski
+
+- Dodano jeden losowy i trwały `anonymous_installation_id` (UUID v4) dla całej
+  instalacji Home Assistant. Wersja schematu `1` i identyfikator są przechowywane
+  w HA Store, trafiają do natywnej diagnostyki, `environment.json` i kolejnych
+  paczek ZIP, a redakcja zachowuje wyłącznie poprawny UUID. ID nie pochodzi z
+  urządzenia ani konfiguracji użytkownika i nie jest encją.
+- Dodano ograniczony, działający lokalnie analizator maksymalnie 100 paczek ZIP.
+  Porównuje zachowanie RCE, RCEm i ładowania taryfowego oraz dane przebiegów
+  sterowania, jakości wejść i klastrów logów, bez wysyłania archiwów i bez
+  ujawniania ścieżek źródłowych w trybie domyślnym.
+- Repozytorium otrzymało adres `Kaluzaburza/hoymiles-hit-g3-ems`, a publiczna
+  nazwa projektu to **EMS for Hoymiles HIT-(5–20)L-G3**. Stabilne identyfikatory
+  techniczne pozostały bez zmian, a tekst prywatności frontendu wyjaśnia
+  wyłącznie diagnostyczny, longitudinalny cel anonimowego ID.
+- Przywrócono sterowanie równoległym układem Master/Slave dla pełnego bloku EMS
+  `4300–4306`. Master wysyła jeden broadcast FC16 na wspólny adres Modbus `0`,
+  a Home Assistant uznaje polecenie dopiero po późniejszym fizycznym FC03 z
+  Mastera zawierającym dokładnie żądany blok.
+- Opisano wymagane okablowanie równoległe: konwerter ESP32, Master i każdy Slave
+  muszą korzystać z jednej fizycznej magistrali zewnętrznego Modbus/RS485.
+  Adres `0` rozgłasza tylko na tym przewodzie; połączenie wyłącznie z Masterem
+  może nadal pokazywać topologię i FC03 Mastera, lecz nie steruje odłączonym
+  Slave'em.
+- Rozdzielono gotowość sprzętową: RCE, taryfa, harmonogramy ręczne i
+  balansowanie korzystają z potwierdzonego broadcastu EMS, natomiast zapisy
+  rejestrów `258`, `259` i `306` pozostają w układzie Master/Slave fail-closed.
+- Adresy `6050–6095` pozostają wyłącznie diagnostyką wewnętrznej topologii i nie
+  blokują wspólnego broadcastu na adres `0`.
+- Fizyczne odczyty napięcia BMS oraz maksymalnego prądu ładowania i rozładowania
+  raportują teraz także niezmienioną wartość. Stabilny limit odświeża więc
+  źródłowy znacznik czasu, a rzeczywisty brak FC03 nadal blokuje RCE. Wskaźnik
+  Safe BMS pokazuje dokładnie bieżący limit planera wraz z wiekiem danych.
+- Gotowość wykonawcza RCE i taryfy korzysta teraz z autorytatywnych atrybutów
+  planera: `result_current`, wieku planu i świeżości źródeł, zamiast czasu encji
+  proxy. Aktywna taryfa może aktualizować sprzęt tylko przy tej samej gotowości,
+  a zamrożone działanie i cel SOC przetrwają restart Home Assistanta.
+- Rejestr `4102` jest odczytywany przez 20-sekundowy kontroler ustawień i
+  raportuje także niezmienione wartości. RCEm traktuje dodatnią pojemność jako
+  stabilną cechę instalacji, z Total Capacity jako fallbackiem, natomiast
+  bieżące napięcie i limity prądowe BMS nadal wymagają świeżych danych.
+- Balansowanie kończy się dopiero po utrzymaniu SOC co najmniej `99,9%` przez
+  cały wymagany czas; każdy spadek zeruje podtrzymanie. Diagnostyka właściciela
+  EMS pokazuje rzeczywiście aktywne sterowanie, a nie samo włączenie polityki.
+- Kod trybu EMS `3` jest rozpoznawany jako Off-Grid. Automatyczne silniki
+  ustępują w tym trybie, a sprzątanie przywraca własne rejestry bez wymuszania
+  Self-Use.
+- Planery dynamicznie śledzą skonfigurowane encje Solcast. Obsługiwane są
+  bieżące i starsze identyfikatory opcjonalnego Dnia 3; jego brak lub
+  nieświeżość pozostaje diagnostyką i uruchamia konserwatywny fallback.
+- Utwardzono każdy opóźniony etap polecenia na zmianę stanu podczas oczekiwania
+  na ACK Modbus. RCE, taryfa, balansowanie i RCEm ponownie sprawdzają bieżącą
+  politykę, właściciela/konflikt, gotowość wykonawczą, tryb fizyczny oraz
+  zatwierdzony plan lub zalecenie bezpośrednio przed każdym kolejnym zapisem i
+  po potwierdzeniu trybu. Awaryjne tory ładowania/eksportu RCEm zachowują
+  niezależne bramki aktuatorów i rollback, a ręczne przejęcie najpierw zwalnia
+  właściciela RCEm.
+- Potwierdzanie broadcastu na podstawie sumarycznej odpowiedzi fizycznej nie
+  jest zaimplementowane w tym wydaniu. Testy Master/Slave na wspólnej magistrali
+  i dane terenowe pozostają do zebrania; po ich przeglądzie potwierdzenie
+  sumarycznej odpowiedzi fizycznej zostanie uzupełnione w osobnym hotfiksie.
+  FC03 Mastera potwierdza wyłącznie Mastera, a nie każdego Slave'a.
+
+### Validation / Walidacja
+
+- Automation matrix: **2064/2064** exhaustive scenarios, including nominal
+  joint-solver/export coverage and all four explicit BMS fail-closed contracts.
+- Diagnostics: identity persistence/redaction tests and the bounded 100-archive
+  analyzer suite pass; generated results are deterministic and privacy-safe by
+  default.
+- Aurora: Polish, English and bootstrap-first validation each render exactly
+  **42** frames; generated assets pass the release consistency gate.
+
 ## [1.5.3] - 2026-08-14
 
 ### User update steps / Kroki po aktualizacji

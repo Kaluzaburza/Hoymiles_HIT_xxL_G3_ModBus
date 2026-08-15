@@ -1,13 +1,13 @@
-# Hoymiles HIT xxL G3 Modbus
+# EMS for Hoymiles HIT-(5–20)L-G3
 
 [English](README.md) · [Polski](README.pl.md)
 
-Local monitoring and automated energy management for Hoymiles HIT xxL G3
-hybrid inverters in Home Assistant.
+Unofficial local EMS for Hoymiles HIT-G3 hybrid inverters — Home Assistant,
+ESPHome, Modbus, RCE, tariff optimization and RCEm.
 
-[![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
-[![Latest release](https://img.shields.io/github/v/release/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus?label=release)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/releases/latest)
-[![Validate](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml)
+[![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=hoymiles-hit-g3-ems&category=integration)
+[![Latest release](https://img.shields.io/github/v/release/Kaluzaburza/hoymiles-hit-g3-ems?label=release)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/releases/latest)
+[![Validate](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 The project connects an ESP32 to the inverter over Modbus RTU and adds a
@@ -58,6 +58,11 @@ run beside another controller because shadow mode performs no writes.
 
 Forecast-based planning for RCE optimization, tariff charging, and RCEm requires
 [BJReplay Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar).
+Solcast Day 3 is optional and is commonly disabled by default. Enable it when
+available; known current and legacy entity IDs are detected automatically,
+while a renamed or custom source can be selected with the Day 3 entity helper.
+Missing or stale Day 3 is reported explicitly and does not disable the
+conservative shorter-horizon fallback.
 RCE prices require internet access to the public PSE API. Home Assistant
 Recorder must retain the history of the relevant power and energy entities; this is enabled
 by default in a standard installation. An additional household energy meter is
@@ -116,9 +121,9 @@ eligibility for any subsidy program. See the
 1. Use the **Open this repository in HACS** button at the top of this page.
 2. If adding it manually, open **HACS → three-dot menu → Custom repositories**,
    enter
-   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus`, and select
+   `https://github.com/Kaluzaburza/hoymiles-hit-g3-ems`, and select
    **Integration**.
-3. Install **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
+3. Install **EMS for Hoymiles HIT-(5–20)L-G3** and restart Home Assistant.
 
 HACS installs the Home Assistant component. ESPHome firmware is configured in
 a separate step and downloads its own versioned packages from this repository.
@@ -216,7 +221,7 @@ inverter port, and Modbus address—in that order.
 1. Add the discovered ESP32 through Home Assistant's standard **ESPHome**
    integration.
 2. Open **Settings → Devices & services → Add integration**.
-3. Select **Hoymiles HIT xxL G3 Modbus** and choose the ESPHome device.
+3. Select **EMS for Hoymiles HIT-(5–20)L-G3** and choose the ESPHome device.
 
 The integration automatically installs and registers:
 
@@ -240,7 +245,7 @@ configuration and restart Home Assistant.
 ### 5. Add the Aurora dashboard and verify the installation
 
 1. Open **Settings → Dashboards → Add dashboard**.
-2. Select the community dashboard **Hoymiles HIT xxL G3**.
+2. Select the community dashboard **EMS for Hoymiles HIT-(5–20)L-G3**.
 3. Open the integration and confirm **Installation status = Ready**.
 4. Review **Settings → System → Repairs** before enabling automatic writes.
 
@@ -281,6 +286,10 @@ integration registers its versioned frontend module automatically.
 - Automatic control is optional and disabled until configured by the user.
 - RCE, tariff charging, and write-capable RCEm control are mutually exclusive.
   RCEm shadow analytics may remain enabled because they perform no writes.
+- Off-Grid is a user/inverter-owned physical mode. Automatic controllers do not
+  start or update writes while it is active, and cleanup does not force a return
+  to Self-Use. The owner diagnostic describes an active transaction, not merely
+  an enabled policy.
 - A LiFePO4 balancing cycle temporarily has higher priority than other plans.
 - Every source has a signed age. Missing, stale, or future-dated critical data
   block automatic writes and, when necessary, trigger a controlled return to
@@ -367,8 +376,9 @@ export budget, the current inverter setting, and the user-defined cap.
 
 RCEm starts in **observation-only (shadow) mode**. In this mode it calculates
 plans and diagnostics but performs no inverter writes, so it can collect public
-test evidence alongside RCE or tariff control. Do not disable shadow mode during
-the v1.5.3 public test. RCEm does not disable certified protection, change
+test evidence alongside RCE or tariff control. Keep shadow mode enabled until
+write-capable RCEm has passed separate commissioning on the target plant. RCEm
+does not disable certified protection, change
 protection thresholds, enable GCF, or alter three-phase imbalance. It remains
 experimental and requires separate field validation and commissioning before
 write-capable use. It is not intended to bypass applicable grid-code or
@@ -381,8 +391,10 @@ sunrise, normal Self-Use operation lets PV charge the battery first. After
 sunset, the cycle can supply the missing energy from the grid. Between 99% and
 100% SOC it targets approximately 2 kW of battery charging, adjusted for the
 household demand that shares the Grid Charge limit. The hold timer begins only
-after full SOC is confirmed. Previous charge settings and EMS mode are restored
-when the cycle ends or is canceled.
+after full SOC is confirmed. The configured hold counts only while SOC remains
+at least `99.9%`; a lower reading cancels the timer and requires a new complete
+hold. Previous charge settings and EMS mode are restored when the cycle ends or
+is canceled.
 
 ## Parallel inverter systems
 
@@ -390,17 +402,49 @@ The standard ESPHome configuration reads topology registers `6048–6095` and
 distinguishes a single inverter, Master, and Slave automatically. No manual
 inverter-count setting is required.
 
-Connect the ESP32 Modbus converter to the **Master** using the external RS485
-bus documented for the installation. Monitoring, forecasting, and RCEm shadow
-analytics remain available for a detected parallel system.
+For parallel EMS control, the ESP32 converter, the Master and **every Slave**
+must share one physical external Modbus/RS485 multidrop bus. On the verified
+two-inverter HIT installation this is the `RS485_2` bus. Carry A, B and the
+reference/GND required by the manufacturer to every inverter; connecting the
+ESP32 only to the Master is not sufficient.
 
-For the v1.5.3 public test, protected EMS writes are enabled only for a verified
-single-inverter topology. The Master's external port cannot provide an
-independent FC03 confirmation from every Slave after a broadcast, so RCE,
-tariff, manual-schedule, balancing, and write-capable RCEm commands fail closed
-on Master/Slave installations. The dashboard reports this limitation
-explicitly. Do not disable the readback gate. Parallel write support will
-return only after per-node acknowledgement can be proved on supported hardware.
+```text
+ESP32 -> isolated RS485 converter -> Master external Modbus -> Slave 1 external Modbus -> ... -> Slave N
+```
+
+Wire this as a line/daisy chain, not a star, and terminate only the physical
+ends as specified by the inverter and converter manuals. The external Modbus
+bus used by the ESP32 is separate from the inverter's dedicated internal
+Parallel/DTS communication bus; do not bridge the two buses.
+
+The v1.5.5 firmware carries forward the system command verified earlier on a
+two-inverter HIT shared-bus test configuration: every change to EMS registers
+`4300–4306` is sent as one FC16 broadcast to Modbus address `0`. RCE, tariff
+charging, manual schedules, and battery balancing may therefore control a detected
+Master system **only when every inverter is physically present on that same
+external RS485 bus**. Address `0` is broadcast on the wire where the frame is
+sent; the Master does not relay an external Modbus command to Slaves through
+the internal parallel network. The command has no Modbus reply; Home Assistant
+accepts it only after a newer physical FC03 from the Master contains the exact
+requested block. This confirms the Master block, not receipt or execution by
+each Slave.
+
+During commissioning, verify Grid Discharge and the return to Self-Use on the
+Master and on every Slave separately in the manufacturer application. A
+`Ready` installation status, correct system-wide telemetry and a matching
+Master FC03 can all remain present when the ESP32 cable reaches only the
+Master, so none of them proves the physical Slave branch.
+
+That earlier result is not a claim of current field acceptance. A complete
+shared-bus test and aggregate physical-response acknowledgement are deferred
+while installation data is collected. After review, they will be completed in
+a separate hotfix. Until then, Master FC03 must never be described as
+per-Slave acknowledgement.
+
+Registers `258`, `259`, and `306` are outside that complete EMS block and do
+not yet have separately proven Master/Slave broadcast semantics. Active RCEm
+actions that need those registers remain fail-closed on a parallel system;
+RCEm shadow analytics remain available. Do not disable either readiness gate.
 
 The Aurora dashboard automatically uses the manufacturer's system-wide power
 registers for PV, battery, household load, and grid power. The addresses listed
@@ -443,10 +487,18 @@ For ESPHome, Modbus, startup, or automation-loop problems, the extended terminal
 collector is also available. The exact contents and anonymization rules are
 documented in [Diagnostics](docs/DIAGNOSTICS.md).
 
+Each Home Assistant installation also receives one random, persistent UUID v4
+used only to correlate successive diagnostic packages from that installation.
+It is not derived from an inverter, network, account, config entry, or other
+user data. The privacy-preserving offline
+[diagnostic analyzer](docs/DIAGNOSTICS_ANALYZER.md) can process up to 100 ZIP
+packages at once and compare RCE, RCEm, and tariff-charging behavior without
+contacting an external service.
+
 Review every archive before attaching it to a public issue. Automated filtering
 does not replace a manual check for credentials and personal data.
 
-Open a [GitHub issue](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/issues)
+Open a [GitHub issue](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/issues)
 or send the report with a problem description to
 [info@kaluzaaa.com](mailto:info@kaluzaaa.com).
 
@@ -461,6 +513,7 @@ entities continue to update, close duplicate log streams, wait approximately
 |---|---|
 | [Quick start](docs/QUICK_START.md) | Short installation path for new users |
 | [Diagnostics](docs/DIAGNOSTICS.md) | Report collection, anonymization, and troubleshooting |
+| [Diagnostic analyzer](docs/DIAGNOSTICS_ANALYZER.md) | Offline comparison of up to 100 diagnostic ZIP packages |
 | [Safety and functional mapping](docs/SAFETY_AND_COMPLIANCE.md) | Implemented safeguards, boundaries, and audit evidence |
 | [Automation test report](docs/AUTOMATION_TEST_REPORT.md) | Simulation scope, static control checks, and field-test limits |
 | [Changelog](CHANGELOG.md) | Release history and required update steps |

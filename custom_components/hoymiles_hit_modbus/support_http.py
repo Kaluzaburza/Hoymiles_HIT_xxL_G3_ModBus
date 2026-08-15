@@ -16,6 +16,7 @@ from homeassistant.exceptions import Unauthorized
 from .const import DOMAIN
 from .diagnostic_bundle import build_support_archive
 from .diagnostics import async_get_config_entry_diagnostics
+from .installation_identity import async_get_or_create_installation_identity
 
 
 SUPPORT_BUNDLE_URL = f"/api/{DOMAIN}/support-bundle"
@@ -39,6 +40,9 @@ class HoymilesSupportBundleView(HomeAssistantView):
         if not entries:
             raise web.HTTPNotFound(text="Hoymiles integration is not configured")
 
+        installation_identity = (
+            await async_get_or_create_installation_identity(hass)
+        )
         reports = [
             await async_get_config_entry_diagnostics(hass, entry)
             for entry in entries
@@ -50,6 +54,7 @@ class HoymilesSupportBundleView(HomeAssistantView):
             log_path=Path(hass.config.path("home-assistant.log")),
             generated_at=now.isoformat(),
             home_assistant_version=HOME_ASSISTANT_VERSION,
+            **installation_identity.as_dict(),
         )
         archive = await hass.async_add_executor_job(build_archive)
         filename = f"hoymiles_diagnostics_{now:%Y%m%dT%H%M%SZ}.zip"

@@ -1,13 +1,13 @@
-# Hoymiles HIT xxL G3 Modbus
+# EMS for Hoymiles HIT-(5–20)L-G3
 
 [English](README.md) · [Polski](README.pl.md)
 
-Lokalne monitorowanie i automatyczne zarządzanie energią falowników
-hybrydowych Hoymiles HIT xxL G3 w Home Assistant.
+Nieoficjalny, lokalny EMS dla hybrydowych falowników Hoymiles HIT-G3 — Home
+Assistant, ESPHome, Modbus, RCE, optymalizacja taryfowa i RCEm.
 
-[![Otwórz repozytorium w HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
-[![Najnowsze wydanie](https://img.shields.io/github/v/release/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus?label=release)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/releases/latest)
-[![Walidacja](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml)
+[![Otwórz repozytorium w HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=hoymiles-hit-g3-ems&category=integration)
+[![Najnowsze wydanie](https://img.shields.io/github/v/release/Kaluzaburza/hoymiles-hit-g3-ems?label=release)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/releases/latest)
+[![Walidacja](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml)
 [![Licencja: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Projekt łączy ESP32 z falownikiem przez Modbus RTU oraz dodaje integrację Home
@@ -61,6 +61,11 @@ w trybie obserwacji nie wykonuje żadnych zapisów.
 Planowanie optymalizacji RCE, ładowania taryfowego i RCEm z uwzględnieniem prognozy wymaga
 skonfigurowanej integracji
 [BJReplay Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar).
+Prognoza Solcast na Dzień 3 jest opcjonalna i często domyślnie wyłączona. Włącz
+ją, jeśli jest dostępna; znane bieżące i starsze identyfikatory są wykrywane
+automatycznie, a własną lub przemianowaną encję można wskazać helperem Dnia 3.
+Brak albo nieświeżość Dnia 3 jest jawnie raportowana i nie wyłącza
+konserwatywnego planowania na krótszym horyzoncie.
 Ceny RCE wymagają dostępu do publicznego API PSE. Home Assistant Recorder musi
 przechowywać historię stanów odpowiednich encji mocy i energii; w standardowej
 instalacji jest włączony domyślnie. Dodatkowy licznik zużycia domu nie jest
@@ -120,9 +125,9 @@ dotacyjnego. Szczegóły opisuje
 1. Użyj przycisku **Otwórz repozytorium w HACS** na początku tej strony.
 2. Aby dodać repozytorium ręcznie, otwórz **HACS → menu z trzema kropkami →
    Niestandardowe repozytoria**, wpisz
-   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus` i wybierz
+   `https://github.com/Kaluzaburza/hoymiles-hit-g3-ems` i wybierz
    kategorię **Integracja**.
-3. Zainstaluj **Hoymiles HIT xxL G3 Modbus** i uruchom Home Assistant ponownie.
+3. Zainstaluj **EMS for Hoymiles HIT-(5–20)L-G3** i uruchom Home Assistant ponownie.
 
 HACS instaluje komponent Home Assistant. Firmware ESPHome konfiguruje się w
 osobnym kroku i pobiera on własne wersjonowane pakiety z tego repozytorium.
@@ -222,7 +227,7 @@ wspólne odniesienie/GND, polaryzację `A/B`, port falownika oraz adres Modbus.
 1. Dodaj wykryty ESP32 przez standardową integrację **ESPHome** w Home
    Assistant.
 2. Otwórz **Ustawienia → Urządzenia oraz usługi → Dodaj integrację**.
-3. Wybierz **Hoymiles HIT xxL G3 Modbus** i wskaż urządzenie ESPHome.
+3. Wybierz **EMS for Hoymiles HIT-(5–20)L-G3** i wskaż urządzenie ESPHome.
 
 Integracja automatycznie instaluje i rejestruje:
 
@@ -248,7 +253,7 @@ ponownie.
 ### 5. Dodaj panel Aurora i sprawdź instalację
 
 1. Otwórz **Ustawienia → Panele → Dodaj panel**.
-2. Wybierz panel społecznościowy **Hoymiles HIT xxL G3**.
+2. Wybierz panel społecznościowy **EMS for Hoymiles HIT-(5–20)L-G3**.
 3. Otwórz integrację i sprawdź, czy **Stan instalacji = Gotowe**.
 4. Przed włączeniem automatycznych zapisów sprawdź sekcję **Ustawienia → System
    → Naprawy**.
@@ -295,6 +300,10 @@ wersjonowany moduł interfejsu.
 - RCE, ładowanie taryfowe i aktywne sterowanie RCEm wzajemnie się wykluczają.
   Analityka RCEm może pozostać włączona w trybie obserwacji, bo nie wykonuje
   żadnych zapisów.
+- Off-Grid jest fizycznym trybem należącym do użytkownika/falownika.
+  Automatyczne sterowniki nie rozpoczynają ani nie aktualizują zapisów podczas
+  jego pracy, a sprzątanie nie wymusza powrotu do Self-Use. Diagnostyka
+  właściciela opisuje aktywną transakcję, a nie samo włączenie polityki.
 - Cykl wyrównywania LiFePO4 ma tymczasowo wyższy priorytet niż pozostałe plany.
 - Wiek danych każdego źródła jest liczony ze znakiem. Brak krytycznych danych,
   ich nieaktualność lub znacznik czasu z przyszłości blokują automatyczne zapisy
@@ -389,8 +398,9 @@ użytkownika.
 
 RCEm domyślnie uruchamia się w **trybie obserwacji (shadow)**. Oblicza wtedy
 plany i diagnostykę, ale nie wykonuje żadnych zapisów do falownika, dlatego może
-zbierać dane testowe obok sterowania RCE lub taryfowego. Podczas publicznych
-testów v1.5.3 nie wyłączaj trybu obserwacji. RCEm nie wyłącza certyfikowanych
+zbierać dane testowe obok sterowania RCE lub taryfowego. Pozostaw tryb
+obserwacji włączony, dopóki RCEm z prawem zapisu nie przejdzie osobnego odbioru
+na docelowej instalacji. RCEm nie wyłącza certyfikowanych
 zabezpieczeń, nie zmienia progów ochronnych, nie włącza GCF i nie modyfikuje
 ustawienia asymetrii trójfazowej. Pozostaje funkcją eksperymentalną i przed
 użyciem zapisów wymaga osobnej walidacji terenowej oraz uruchomienia próbnego na
@@ -404,8 +414,10 @@ Po wschodzie słońca pozostawia normalny tryb Self-Use, aby w pierwszej kolejno
 wykorzystać PV. Po zachodzie może uzupełnić brakującą energię z sieci. Między
 99% a 100% SOC dąży do uzyskania około 2 kW mocy ładowania baterii, uwzględniając
 zużycie domu korzystające ze wspólnego limitu Grid Charge. Czas podtrzymania
-zaczyna odmierzać dopiero po potwierdzeniu pełnego SOC. Po zakończeniu albo
-anulowaniu cyklu przywraca wcześniejsze ustawienia ładowania i tryb EMS.
+zaczyna odmierzać dopiero po potwierdzeniu pełnego SOC i liczy go tylko przy SOC
+co najmniej `99,9%`; niższy odczyt anuluje licznik i wymaga nowego pełnego
+podtrzymania. Po zakończeniu albo anulowaniu cyklu przywraca wcześniejsze
+ustawienia ładowania i tryb EMS.
 
 ## Instalacje z falownikami połączonymi równolegle
 
@@ -413,17 +425,49 @@ Standardowa konfiguracja ESPHome odczytuje rejestry topologii `6048–6095` i
 automatycznie rozpoznaje pojedynczy falownik, Master oraz Slave. Użytkownik nie
 musi ręcznie podawać liczby falowników.
 
-Konwerter Modbus ESP32 podłącz do falownika **Master** przez zewnętrzną
-magistralę RS485 przewidzianą dla instalacji. Monitorowanie, prognozy i analiza
-RCEm w trybie shadow pozostają dostępne dla wykrytej instalacji równoległej.
+W układzie równoległym konwerter ESP32, Master i **każdy Slave** muszą być
+podłączone do jednej wspólnej fizycznej magistrali zewnętrznego Modbus/RS485.
+W zweryfikowanej instalacji 2×HIT jest to magistrala `RS485_2`. Doprowadź A, B
+oraz wymagane przez producenta odniesienie/GND do każdego falownika;
+podłączenie ESP32 wyłącznie do Mastera nie wystarcza.
 
-W publicznym teście v1.5.3 chronione zapisy EMS są dostępne wyłącznie dla
-zweryfikowanej topologii z jednym falownikiem. Zewnętrzny port Mastera nie daje
-niezależnego potwierdzenia FC03 z każdego Slave po poleceniu rozgłoszeniowym,
-dlatego RCE, tanie ładowanie, harmonogramy ręczne, balansowanie i aktywny RCEm
-blokują zapisy w układzie Master/Slave. Panel pokazuje tę przyczynę wprost. Nie
-wyłączaj bramki odczytu zwrotnego. Sterowanie równoległe wróci dopiero po
-potwierdzeniu odczytu każdego urządzenia na obsługiwanym sprzęcie.
+```text
+ESP32 -> izolowany konwerter RS485 -> zewnętrzny Modbus Mastera -> zewnętrzny Modbus Slave 1 -> ... -> Slave N
+```
+
+Prowadź przewód liniowo/magistralowo, nie w gwiazdę, a terminację stosuj tylko
+na fizycznych końcach zgodnie z instrukcją falownika i konwertera. Zewnętrzny
+Modbus ESP32 jest inną magistralą niż dedykowana wewnętrzna komunikacja
+Parallel/DTS falowników — nie mostkuj tych dwóch magistral.
+
+Firmware v1.5.5 zawiera polecenie systemowe zweryfikowane wcześniej w
+testowej konfiguracji 2×HIT na wspólnej magistrali: każda zmiana rejestrów EMS
+`4300–4306` jest wysyłana jako jeden broadcast FC16 na adres Modbus `0`. RCE,
+tanie ładowanie, harmonogramy ręczne i balansowanie baterii mogą dzięki temu sterować wykrytym
+układem z Masterem **tylko wtedy, gdy każdy falownik jest fizycznie obecny na
+tej samej zewnętrznej magistrali RS485**. Adres `0` jest rozgłoszeniem na
+przewodzie, którym wysłano ramkę; Master nie przekazuje zewnętrznego polecenia
+Modbus do Slave'ów przez wewnętrzną sieć równoległą. Broadcast nie odpowiada;
+Home Assistant uznaje polecenie dopiero wtedy, gdy późniejszy fizyczny FC03 z
+Mastera zawiera dokładnie żądany blok. Potwierdza to blok Mastera, a nie odbiór
+lub wykonanie polecenia przez każdego Slave'a.
+
+Podczas odbioru sprawdź Grid Discharge i powrót do Self-Use osobno na Masterze
+i na każdym Slave w aplikacji producenta. Stan instalacji `Gotowe`, poprawna
+telemetria sumaryczna i zgodny FC03 Mastera mogą pozostać widoczne także wtedy,
+gdy przewód ESP32 dochodzi tylko do Mastera, więc nie dowodzą fizycznego
+podłączenia Slave'a.
+
+Ten wcześniejszy wynik nie jest deklaracją bieżącego odbioru terenowego. Pełny
+test wspólnej magistrali i potwierdzenie sumarycznej odpowiedzi fizycznej są
+odroczone na czas zbierania danych z instalacji. Po ich przeglądzie zostaną
+uzupełnione w osobnym hotfiksie. Do tego czasu FC03 Mastera nie wolno opisywać
+jako potwierdzenia każdego Slave'a.
+
+Rejestry `258`, `259` i `306` leżą poza wspólnym blokiem EMS i nie mają jeszcze
+osobno potwierdzonej semantyki broadcastu Master/Slave. Aktywne działania RCEm,
+które ich wymagają, pozostają w układzie równoległym fail-closed; analiza RCEm
+shadow nadal działa. Nie wyłączaj żadnej z dwóch bramek gotowości.
 
 Panel Aurora automatycznie korzysta z systemowych rejestrów mocy producenta dla
 PV, baterii, zużycia domu i sieci. Adresy widoczne w rejestrach topologii są
@@ -468,10 +512,18 @@ ESPHome, Modbus, uruchamianiem lub pętlą automatyzacji możesz także skorzyst
 rozszerzonego skryptu terminalowego. Zakres raportów i sposób anonimizacji
 opisuje dokument [Diagnostyka](docs/DIAGNOSTICS.md).
 
+Każda instalacja Home Assistant otrzymuje też jeden losowy i trwały UUID v4,
+używany wyłącznie do łączenia kolejnych paczek diagnostycznych z tej samej
+instalacji. Identyfikator nie pochodzi z falownika, sieci, konta, config entry
+ani innych danych użytkownika. Działający lokalnie, bez wysyłania danych
+[analizator diagnostyczny](docs/DIAGNOSTICS_ANALYZER.md) może jednocześnie
+przetworzyć do 100 paczek ZIP i porównać zachowanie RCE, RCEm oraz ładowania
+taryfowego.
+
 Przed dołączeniem archiwum do publicznego zgłoszenia przejrzyj jego zawartość.
 Automatyczne filtrowanie nie zastępuje ręcznej kontroli haseł i danych osobowych.
 
-Utwórz [zgłoszenie na GitHubie](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/issues)
+Utwórz [zgłoszenie na GitHubie](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/issues)
 albo wyślij raport wraz z opisem problemu na adres
 [info@kaluzaaa.com](mailto:info@kaluzaaa.com).
 
@@ -487,6 +539,7 @@ Przed ponownym wgraniem firmware sprawdź
 |---|---|
 | [Szybki start](docs/QUICK_START.md) | Krótka ścieżka instalacji dla nowych użytkowników |
 | [Diagnostyka](docs/DIAGNOSTICS.md) | Tworzenie raportów, anonimizacja i rozwiązywanie problemów |
+| [Analizator diagnostyczny](docs/DIAGNOSTICS_ANALYZER.md) | Lokalne porównywanie maksymalnie 100 paczek diagnostycznych ZIP |
 | [Bezpieczeństwo i mapowanie funkcji](docs/SAFETY_AND_COMPLIANCE.md) | Zaimplementowane zabezpieczenia, granice projektu i materiały do audytu |
 | [Raport testów automatyzacji](docs/AUTOMATION_TEST_REPORT.md) | Zakres symulacji, statyczne kontrole sterowania i ograniczenia testów terenowych |
 | [Historia zmian](CHANGELOG.md) | Zmiany w wydaniach i wymagane kroki aktualizacji |

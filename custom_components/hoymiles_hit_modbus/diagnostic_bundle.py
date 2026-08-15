@@ -52,16 +52,29 @@ def build_support_archive(
     log_path: Path,
     generated_at: str,
     home_assistant_version: str,
+    anonymous_installation_id: str,
+    installation_id_schema_version: int,
 ) -> bytes:
     """Return a ZIP with diagnostic JSON and redacted relevant Core logs."""
-    safe_reports = sanitize_diagnostic_value(list(reports))
+    reports_with_identity = [
+        {
+            **report,
+            "anonymous_installation_id": anonymous_installation_id,
+            "installation_id_schema_version": installation_id_schema_version,
+        }
+        for report in reports
+    ]
+    safe_reports = sanitize_diagnostic_value(reports_with_identity)
     metadata = {
         "generated_at": generated_at,
         "home_assistant_version": home_assistant_version,
         "report_count": len(safe_reports),
+        "anonymous_installation_id": anonymous_installation_id,
+        "installation_id_schema_version": installation_id_schema_version,
     }
+    safe_metadata = sanitize_diagnostic_value(metadata)
     readme = (
-        "Hoymiles HIT xxL G3 Modbus diagnostic archive\n\n"
+        "EMS for Hoymiles HIT-(5–20)L-G3 diagnostic archive\n\n"
         "Attach this ZIP together with the exact local date/time of the fault "
         "and a short description of the expected behaviour. Send the complete "
         "report to info@kaluzaaa.com.\n"
@@ -69,16 +82,22 @@ def build_support_archive(
         "significant control history and relevant Home Assistant Core logs.\n"
         "ESPHome device runtime logs are not exposed to Home Assistant Core; "
         "for low-level UART/Modbus faults attach an ESPHome log excerpt too.\n\n"
-        "Paczka diagnostyczna Hoymiles HIT xxL G3 Modbus\n\n"
+        "Paczka diagnostyczna EMS for Hoymiles HIT-(5–20)L-G3\n\n"
         "Dołącz ZIP wraz z dokładną lokalną datą i godziną błędu oraz opisem "
         "oczekiwanego zachowania i wyślij całość na info@kaluzaaa.com. "
         "Paczka zawiera bieżący stan integracji, "
         "24 godziny istotnych zmian sterowania i powiązane logi HA Core.\n"
         "Logi pracy urządzenia ESPHome nie są udostępniane procesowi HA Core; "
         "przy błędach UART/Modbus dołącz również fragment logu ESPHome.\n\n"
-        "Secrets and installation identifiers are automatically masked. "
+        "Device, account and configuration identifiers are automatically "
+        "masked. A random anonymous installation ID is intentionally kept "
+        "only to correlate support archives from this Home Assistant over "
+        "time. "
         "Review the files before posting them publicly.\n"
-        "Sekrety i identyfikatory instalacji są automatycznie maskowane. "
+        "Identyfikatory urządzeń, kont i konfiguracji są automatycznie "
+        "maskowane. Losowy anonimowy identyfikator instalacji pozostaje "
+        "wyłącznie do łączenia kolejnych paczek wsparcia z tego Home "
+        "Assistanta. "
         "Przejrzyj pliki przed ich publicznym udostępnieniem.\n"
     )
 
@@ -87,7 +106,7 @@ def build_support_archive(
         archive.writestr("README.txt", readme)
         archive.writestr(
             "environment.json",
-            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(safe_metadata, ensure_ascii=False, indent=2) + "\n",
         )
         archive.writestr(
             "hoymiles_diagnostics.json",

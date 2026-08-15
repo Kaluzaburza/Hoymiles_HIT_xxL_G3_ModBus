@@ -3206,6 +3206,24 @@
   {
     "domain": "sensor",
     "source_component": "sensor",
+    "translation_key": "direct_register_verified_readback_supported",
+    "source_name": "Direct Register Verified Readback Supported",
+    "source_id": "direct_register_verified_readback_supported",
+    "source_object_id": "direct_register_verified_readback_supported",
+    "entity_category": "diagnostic",
+    "name": {
+      "en": "Direct Register Verified Readback Supported",
+      "pl": "Obsługa potwierdzonego odczytu rejestrów bezpośrednich"
+    },
+    "description": {
+      "en": "Hoymiles HIT xxL G3 Modbus value: Direct Register Verified Readback Supported.",
+      "pl": "Wartość Modbus falownika Hoymiles HIT xxL G3: Obsługa potwierdzonego odczytu rejestrów bezpośrednich."
+    },
+    "options": []
+  },
+  {
+    "domain": "sensor",
+    "source_component": "sensor",
     "translation_key": "machines_type",
     "source_name": "Machines Type",
     "source_id": "machines_type_6048",

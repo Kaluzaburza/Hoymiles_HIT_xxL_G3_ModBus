@@ -7,6 +7,7 @@ from datetime import date, datetime
 import math
 import re
 from typing import Any
+from uuid import RFC_4122, UUID
 
 
 REDACTED = "[REDACTED]"
@@ -51,6 +52,25 @@ _SECRET_VALUE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_ANONYMOUS_INSTALLATION_ID_KEY = "anonymous_installation_id"
+
+
+def _safe_anonymous_installation_id(value: Any) -> str | None:
+    """Allow only the deliberately exported canonical UUID v4."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = UUID(value)
+    except (AttributeError, ValueError):
+        return None
+    if (
+        parsed.version != 4
+        or parsed.variant != RFC_4122
+        or str(parsed) != value
+    ):
+        return None
+    return value
+
 
 def _key_is_sensitive(key: str) -> bool:
     """Return whether a mapping key identifies private installation data."""
@@ -85,6 +105,8 @@ def sanitize_diagnostic_value(
     _depth: int = 0,
 ) -> Any:
     """Return a JSON-safe value with secrets and personal data masked."""
+    if key_hint == _ANONYMOUS_INSTALLATION_ID_KEY:
+        return _safe_anonymous_installation_id(value) or REDACTED
     if _key_is_sensitive(key_hint):
         return REDACTED
     if _depth >= MAX_DEPTH:

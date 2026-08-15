@@ -1,4 +1,4 @@
-"""Diagnostics support for Hoymiles HIT xxL G3 Modbus."""
+"""Diagnostics support for EMS for Hoymiles HIT-(5–20)L-G3."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from .const import (
     VERSION,
 )
 from .diagnostic_redaction import REDACTED, sanitize_diagnostic_value
+from .installation_identity import async_get_or_create_installation_identity
 from .models import RuntimeData
 
 
@@ -176,6 +177,9 @@ async def async_get_config_entry_diagnostics(
     entry: ConfigEntry,
 ) -> dict[str, Any]:
     """Return a privacy-safe report downloadable from Home Assistant."""
+    installation_identity = await async_get_or_create_installation_identity(
+        hass
+    )
     runtime: RuntimeData | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     entity_registry = er.async_get(hass)
     proxy_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
@@ -257,10 +261,11 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "report_schema": REPORT_SCHEMA_VERSION,
+        **installation_identity.as_dict(),
         "generated_at": dt_util.utcnow().isoformat(),
         "integration_version": VERSION,
         "config_entry": {
-            "title": "Hoymiles HIT xxL G3 Modbus",
+            "title": "EMS for Hoymiles HIT-(5–20)L-G3",
             "data": async_redact_data(dict(entry.data), ENTRY_REDACT_KEYS),
             "options": async_redact_data(dict(entry.options), ENTRY_REDACT_KEYS),
         },

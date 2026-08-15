@@ -3,9 +3,13 @@
 # Port Modbus Mastera nie przekazuje zapytań kierowanych bezpośrednio do
 # adresów urządzeń Slave. Rejestry 6050/6055/... opisują wewnętrzną sieć
 # równoległą, ale nie są dodatkowymi urządzeniami na zewnętrznej magistrali
-# RS485. Master może rozsyłać ustawienia wewnętrznie, lecz jego zewnętrzny
-# port nie umożliwia niezależnego potwierdzenia FC03 z każdego Slave. Dlatego
-# chronione zapisy EMS pozostają fail-closed w topologii Master/Slave.
+# RS485. Dla bloku EMS 4300-4306 używamy sprawdzonego systemowego broadcastu
+# pod adresem 0. Konwerter ESP32, Master i każdy Slave muszą jednak fizycznie
+# korzystać z tej samej zewnętrznej pary A/B; wewnętrzna sieć równoległa nie
+# przekazuje broadcastu z przewodu dochodzącego wyłącznie do Mastera. Wynik
+# potwierdzamy późniejszym fizycznym FC03 z Mastera. Jest to potwierdzenie bloku
+# Mastera, nie osobny ACK każdego Slave. Pozostałe rejestry 258/259/306
+# pozostają fail-closed na Master/Slave.
 
 globals:
   # Lokalny znacznik pochodzi tylko z odpowiedzi FC03 obejmującej 6048-6049.
@@ -44,8 +48,45 @@ sensor:
           static_cast<uint32_t>(millis() - last_readback) > 60000U) {
         return 0.0f;
       }
-      const uint16_t machine_type =
-          static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+      const float machine_type_raw = id(machines_type_6048).state;
+      if (!std::isfinite(machine_type_raw)) return 0.0f;
+      const int machine_type = static_cast<int>(std::lround(machine_type_raw));
+      if (std::fabs(machine_type_raw - machine_type) > 0.01f) return 0.0f;
+      if (machine_type == 0) return 1.0f;
+      if (machine_type != 1 ||
+          !id(number_of_machines_master_and_slave_6049).has_state()) {
+        return 0.0f;
+      }
+
+      const float count_raw = id(number_of_machines_master_and_slave_6049).state;
+      if (!std::isfinite(count_raw)) return 0.0f;
+      const int count = static_cast<int>(std::lround(count_raw));
+      if (std::fabs(count_raw - count) > 0.01f) return 0.0f;
+      // Modbus address 0 reaches every unit physically attached to this
+      // external bus.  The internal 6050/6055/... addresses are diagnostic
+      // topology data and do not replace the required shared A/B wiring.
+      return count >= 2 && count <= 10 ? 1.0f : 0.0f;
+
+  # Ustawienia spoza wspólnego bloku EMS nie mają potwierdzonej semantyki
+  # broadcastu. Ta osobna zdolność chroni zapisy GCF 258/259 i limitu 306.
+  - platform: template
+    name: "Direct Register Verified Readback Supported"
+    id: direct_register_verified_readback_supported
+    accuracy_decimals: 0
+    update_interval: 1s
+    force_update: true
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(machines_type_6048).has_state()) return 0.0f;
+      const uint32_t last_readback = id(parallel_topology_last_readback_ms);
+      if (last_readback == 0 ||
+          static_cast<uint32_t>(millis() - last_readback) > 60000U) {
+        return 0.0f;
+      }
+      const float machine_type_raw = id(machines_type_6048).state;
+      if (!std::isfinite(machine_type_raw)) return 0.0f;
+      const int machine_type = static_cast<int>(std::lround(machine_type_raw));
+      if (std::fabs(machine_type_raw - machine_type) > 0.01f) return 0.0f;
       return machine_type == 0 ? 1.0f : 0.0f;
 
   - platform: modbus_controller
@@ -189,8 +230,14 @@ text_sensor:
       if (!id(machines_type_6048).has_state()) {
         return std::string("Oczekiwanie na wykrycie sieci");
       }
-      const uint16_t machine_type =
-          static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+      const float machine_type_raw = id(machines_type_6048).state;
+      if (!std::isfinite(machine_type_raw)) {
+        return std::string("Nieprawidłowa topologia");
+      }
+      const int machine_type = static_cast<int>(std::lround(machine_type_raw));
+      if (std::fabs(machine_type_raw - machine_type) > 0.01f) {
+        return std::string("Nieprawidłowa topologia");
+      }
       if (machine_type == 0) return std::string("Falownik pojedynczy");
       if (machine_type == 1) return std::string("Master");
       if (machine_type == 2) return std::string("Slave");
@@ -206,8 +253,14 @@ text_sensor:
         return std::string("Oczekiwanie na wykrycie sieci");
       }
 
-      const uint16_t machine_type =
-          static_cast<uint16_t>(std::lround(id(machines_type_6048).state));
+      const float machine_type_raw = id(machines_type_6048).state;
+      if (!std::isfinite(machine_type_raw)) {
+        return std::string("Nieznana topologia");
+      }
+      const int machine_type = static_cast<int>(std::lround(machine_type_raw));
+      if (std::fabs(machine_type_raw - machine_type) > 0.01f) {
+        return std::string("Nieznana topologia");
+      }
       if (machine_type == 0) {
         if (!id(ems_verified_hardware_readback_supported).has_state() ||
             id(ems_verified_hardware_readback_supported).state < 0.5f) {
@@ -225,9 +278,19 @@ text_sensor:
         return std::string("Oczekiwanie na wykrycie sieci");
       }
 
-      const int count = static_cast<int>(
-          std::lround(id(number_of_machines_master_and_slave_6049).state));
+      const float count_raw = id(number_of_machines_master_and_slave_6049).state;
+      if (!std::isfinite(count_raw)) {
+        return std::string("Nieprawidłowa liczba falowników");
+      }
+      const int count = static_cast<int>(std::lround(count_raw));
+      if (std::fabs(count_raw - count) > 0.01f) {
+        return std::string("Nieprawidłowa liczba falowników");
+      }
       if (count < 2 || count > 10) {
         return std::string("Nieprawidłowa liczba falowników");
       }
-      return std::string("Zablokowane - brak FC03 dla każdego Slave");
+      if (!id(ems_verified_hardware_readback_supported).has_state() ||
+          id(ems_verified_hardware_readback_supported).state < 0.5f) {
+        return std::string("Zablokowane - nieaktualna topologia broadcastu EMS");
+      }
+      return std::string("Gotowe - broadcast EMS, odczyt Mastera");

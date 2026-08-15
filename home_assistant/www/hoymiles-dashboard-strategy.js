@@ -69,11 +69,11 @@
     window.customStrategies.push({
       type: "hoymiles-hit-xxl-g3",
       strategyType: "dashboard",
-      name: "Hoymiles HIT xxL G3",
+      name: "EMS for Hoymiles HIT-(5–20)L-G3",
       description:
-        "Always-current dashboard for the Hoymiles HIT xxL G3 Modbus integration.",
+        "Unofficial local EMS for Hoymiles HIT-G3 hybrid inverters — Home Assistant, ESPHome, Modbus, RCE, tariff optimization and RCEm.",
       documentationURL:
-        "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus",
+        "https://github.com/Kaluzaburza/hoymiles-hit-g3-ems",
     });
   }
 })();

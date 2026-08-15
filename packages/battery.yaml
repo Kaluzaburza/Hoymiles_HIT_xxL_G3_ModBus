@@ -4,7 +4,11 @@ sensor:
   # falownika i aplikacja S-Miles dla baterii litowej traktują tę wartość jako
   # pojemność magazynu w kWh (np. ustawienie 21 daje odczyt 21,0 kWh).
   - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
+    # 4102 is a stable setting, but HA still needs a fresh physical-report
+    # timestamp so unchanged capacity is distinguishable from a dead bus.
+    # Keep it on the dedicated 20 s settings controller instead of the slow
+    # diagnostic scan.
+    modbus_controller_id: ${modbus_settings_controller_id}
     name: "Battery Capacity"
     id: battery_capacity_4102
     register_type: holding
@@ -14,9 +18,9 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
       - multiply: 0.1
-    skip_updates: 9
   # Pojemność raportowana przez klaster BMS. Niektóre baterie Pylontech
   # zwracają tu 0 mimo aktywnej komunikacji, dlatego surowy odczyt nie jest
   # bezpośrednio publikowany w Home Assistant.
@@ -111,6 +115,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
     - multiply: 0.1
 
@@ -152,6 +157,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
     - multiply: 0.1
 
@@ -166,6 +172,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     value_type: U_WORD
+    force_update: true
     filters:
     - multiply: 0.1
 
