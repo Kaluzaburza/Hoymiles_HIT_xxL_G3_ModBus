@@ -1,13 +1,13 @@
-# Hoymiles HIT xxL G3 Modbus
+# EMS for Hoymiles HIT-(5–20)L-G3
 
 [English](README.md) · [Polski](README.pl.md)
 
-Lokalne monitorowanie i automatyczne zarządzanie energią falowników
-hybrydowych Hoymiles HIT xxL G3 w Home Assistant.
+Nieoficjalny, lokalny EMS dla hybrydowych falowników Hoymiles HIT-G3 — Home
+Assistant, ESPHome, Modbus, RCE, optymalizacja taryfowa i RCEm.
 
-[![Otwórz repozytorium w HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
-[![Najnowsze wydanie](https://img.shields.io/github/v/release/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus?label=release)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/releases/latest)
-[![Walidacja](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml)
+[![Otwórz repozytorium w HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=hoymiles-hit-g3-ems&category=integration)
+[![Najnowsze wydanie](https://img.shields.io/github/v/release/Kaluzaburza/hoymiles-hit-g3-ems?label=release)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/releases/latest)
+[![Walidacja](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml)
 [![Licencja: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Projekt łączy ESP32 z falownikiem przez Modbus RTU oraz dodaje integrację Home
@@ -125,9 +125,9 @@ dotacyjnego. Szczegóły opisuje
 1. Użyj przycisku **Otwórz repozytorium w HACS** na początku tej strony.
 2. Aby dodać repozytorium ręcznie, otwórz **HACS → menu z trzema kropkami →
    Niestandardowe repozytoria**, wpisz
-   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus` i wybierz
+   `https://github.com/Kaluzaburza/hoymiles-hit-g3-ems` i wybierz
    kategorię **Integracja**.
-3. Zainstaluj **Hoymiles HIT xxL G3 Modbus** i uruchom Home Assistant ponownie.
+3. Zainstaluj **EMS for Hoymiles HIT-(5–20)L-G3** i uruchom Home Assistant ponownie.
 
 HACS instaluje komponent Home Assistant. Firmware ESPHome konfiguruje się w
 osobnym kroku i pobiera on własne wersjonowane pakiety z tego repozytorium.
@@ -227,7 +227,7 @@ wspólne odniesienie/GND, polaryzację `A/B`, port falownika oraz adres Modbus.
 1. Dodaj wykryty ESP32 przez standardową integrację **ESPHome** w Home
    Assistant.
 2. Otwórz **Ustawienia → Urządzenia oraz usługi → Dodaj integrację**.
-3. Wybierz **Hoymiles HIT xxL G3 Modbus** i wskaż urządzenie ESPHome.
+3. Wybierz **EMS for Hoymiles HIT-(5–20)L-G3** i wskaż urządzenie ESPHome.
 
 Integracja automatycznie instaluje i rejestruje:
 
@@ -253,7 +253,7 @@ ponownie.
 ### 5. Dodaj panel Aurora i sprawdź instalację
 
 1. Otwórz **Ustawienia → Panele → Dodaj panel**.
-2. Wybierz panel społecznościowy **Hoymiles HIT xxL G3**.
+2. Wybierz panel społecznościowy **EMS for Hoymiles HIT-(5–20)L-G3**.
 3. Otwórz integrację i sprawdź, czy **Stan instalacji = Gotowe**.
 4. Przed włączeniem automatycznych zapisów sprawdź sekcję **Ustawienia → System
    → Naprawy**.
@@ -440,10 +440,10 @@ na fizycznych końcach zgodnie z instrukcją falownika i konwertera. Zewnętrzny
 Modbus ESP32 jest inną magistralą niż dedykowana wewnętrzna komunikacja
 Parallel/DTS falowników — nie mostkuj tych dwóch magistral.
 
-Firmware v1.5.4 przywraca polecenie systemowe zweryfikowane wcześniej na
-testowej instalacji 2×HIT: każda zmiana rejestrów EMS `4300–4306` jest wysyłana
-jako jeden broadcast FC16 na adres Modbus `0`. RCE, tanie ładowanie,
-harmonogramy ręczne i balansowanie baterii mogą dzięki temu sterować wykrytym
+Firmware v1.5.5 zawiera polecenie systemowe zweryfikowane wcześniej w
+testowej konfiguracji 2×HIT na wspólnej magistrali: każda zmiana rejestrów EMS
+`4300–4306` jest wysyłana jako jeden broadcast FC16 na adres Modbus `0`. RCE,
+tanie ładowanie, harmonogramy ręczne i balansowanie baterii mogą dzięki temu sterować wykrytym
 układem z Masterem **tylko wtedy, gdy każdy falownik jest fizycznie obecny na
 tej samej zewnętrznej magistrali RS485**. Adres `0` jest rozgłoszeniem na
 przewodzie, którym wysłano ramkę; Master nie przekazuje zewnętrznego polecenia
@@ -457,6 +457,12 @@ i na każdym Slave w aplikacji producenta. Stan instalacji `Gotowe`, poprawna
 telemetria sumaryczna i zgodny FC03 Mastera mogą pozostać widoczne także wtedy,
 gdy przewód ESP32 dochodzi tylko do Mastera, więc nie dowodzą fizycznego
 podłączenia Slave'a.
+
+Ten wcześniejszy wynik nie jest deklaracją bieżącego odbioru terenowego. Pełny
+test wspólnej magistrali i potwierdzenie sumarycznej odpowiedzi fizycznej są
+odroczone na czas zbierania danych z instalacji. Po ich przeglądzie zostaną
+uzupełnione w osobnym hotfiksie. Do tego czasu FC03 Mastera nie wolno opisywać
+jako potwierdzenia każdego Slave'a.
 
 Rejestry `258`, `259` i `306` leżą poza wspólnym blokiem EMS i nie mają jeszcze
 osobno potwierdzonej semantyki broadcastu Master/Slave. Aktywne działania RCEm,
@@ -506,10 +512,18 @@ ESPHome, Modbus, uruchamianiem lub pętlą automatyzacji możesz także skorzyst
 rozszerzonego skryptu terminalowego. Zakres raportów i sposób anonimizacji
 opisuje dokument [Diagnostyka](docs/DIAGNOSTICS.md).
 
+Każda instalacja Home Assistant otrzymuje też jeden losowy i trwały UUID v4,
+używany wyłącznie do łączenia kolejnych paczek diagnostycznych z tej samej
+instalacji. Identyfikator nie pochodzi z falownika, sieci, konta, config entry
+ani innych danych użytkownika. Działający lokalnie, bez wysyłania danych
+[analizator diagnostyczny](docs/DIAGNOSTICS_ANALYZER.md) może jednocześnie
+przetworzyć do 100 paczek ZIP i porównać zachowanie RCE, RCEm oraz ładowania
+taryfowego.
+
 Przed dołączeniem archiwum do publicznego zgłoszenia przejrzyj jego zawartość.
 Automatyczne filtrowanie nie zastępuje ręcznej kontroli haseł i danych osobowych.
 
-Utwórz [zgłoszenie na GitHubie](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/issues)
+Utwórz [zgłoszenie na GitHubie](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/issues)
 albo wyślij raport wraz z opisem problemu na adres
 [info@kaluzaaa.com](mailto:info@kaluzaaa.com).
 
@@ -525,6 +539,7 @@ Przed ponownym wgraniem firmware sprawdź
 |---|---|
 | [Szybki start](docs/QUICK_START.md) | Krótka ścieżka instalacji dla nowych użytkowników |
 | [Diagnostyka](docs/DIAGNOSTICS.md) | Tworzenie raportów, anonimizacja i rozwiązywanie problemów |
+| [Analizator diagnostyczny](docs/DIAGNOSTICS_ANALYZER.md) | Lokalne porównywanie maksymalnie 100 paczek diagnostycznych ZIP |
 | [Bezpieczeństwo i mapowanie funkcji](docs/SAFETY_AND_COMPLIANCE.md) | Zaimplementowane zabezpieczenia, granice projektu i materiały do audytu |
 | [Raport testów automatyzacji](docs/AUTOMATION_TEST_REPORT.md) | Zakres symulacji, statyczne kontrole sterowania i ograniczenia testów terenowych |
 | [Historia zmian](CHANGELOG.md) | Zmiany w wydaniach i wymagane kroki aktualizacji |

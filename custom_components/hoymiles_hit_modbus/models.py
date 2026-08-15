@@ -1,4 +1,4 @@
-"""Data models for the Hoymiles HIT xxL G3 Modbus integration."""
+"""Data models for EMS for Hoymiles HIT-(5–20)L-G3."""
 
 from __future__ import annotations
 

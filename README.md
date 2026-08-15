@@ -1,13 +1,13 @@
-# Hoymiles HIT xxL G3 Modbus
+# EMS for Hoymiles HIT-(5–20)L-G3
 
 [English](README.md) · [Polski](README.pl.md)
 
-Local monitoring and automated energy management for Hoymiles HIT xxL G3
-hybrid inverters in Home Assistant.
+Unofficial local EMS for Hoymiles HIT-G3 hybrid inverters — Home Assistant,
+ESPHome, Modbus, RCE, tariff optimization and RCEm.
 
-[![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=Hoymiles_HIT_xxL_G3_ModBus&category=integration)
-[![Latest release](https://img.shields.io/github/v/release/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus?label=release)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/releases/latest)
-[![Validate](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/actions/workflows/validate.yml)
+[![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Kaluzaburza&repository=hoymiles-hit-g3-ems&category=integration)
+[![Latest release](https://img.shields.io/github/v/release/Kaluzaburza/hoymiles-hit-g3-ems?label=release)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/releases/latest)
+[![Validate](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml/badge.svg)](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 The project connects an ESP32 to the inverter over Modbus RTU and adds a
@@ -121,9 +121,9 @@ eligibility for any subsidy program. See the
 1. Use the **Open this repository in HACS** button at the top of this page.
 2. If adding it manually, open **HACS → three-dot menu → Custom repositories**,
    enter
-   `https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus`, and select
+   `https://github.com/Kaluzaburza/hoymiles-hit-g3-ems`, and select
    **Integration**.
-3. Install **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
+3. Install **EMS for Hoymiles HIT-(5–20)L-G3** and restart Home Assistant.
 
 HACS installs the Home Assistant component. ESPHome firmware is configured in
 a separate step and downloads its own versioned packages from this repository.
@@ -221,7 +221,7 @@ inverter port, and Modbus address—in that order.
 1. Add the discovered ESP32 through Home Assistant's standard **ESPHome**
    integration.
 2. Open **Settings → Devices & services → Add integration**.
-3. Select **Hoymiles HIT xxL G3 Modbus** and choose the ESPHome device.
+3. Select **EMS for Hoymiles HIT-(5–20)L-G3** and choose the ESPHome device.
 
 The integration automatically installs and registers:
 
@@ -245,7 +245,7 @@ configuration and restart Home Assistant.
 ### 5. Add the Aurora dashboard and verify the installation
 
 1. Open **Settings → Dashboards → Add dashboard**.
-2. Select the community dashboard **Hoymiles HIT xxL G3**.
+2. Select the community dashboard **EMS for Hoymiles HIT-(5–20)L-G3**.
 3. Open the integration and confirm **Installation status = Ready**.
 4. Review **Settings → System → Repairs** before enabling automatic writes.
 
@@ -417,10 +417,10 @@ ends as specified by the inverter and converter manuals. The external Modbus
 bus used by the ESP32 is separate from the inverter's dedicated internal
 Parallel/DTS communication bus; do not bridge the two buses.
 
-The v1.5.4 firmware restores the system command verified earlier on the
-two-inverter HIT test installation: every change to EMS registers `4300–4306`
-is sent as one FC16 broadcast to Modbus address `0`. RCE, tariff charging,
-manual schedules, and battery balancing may therefore control a detected
+The v1.5.5 firmware carries forward the system command verified earlier on a
+two-inverter HIT shared-bus test configuration: every change to EMS registers
+`4300–4306` is sent as one FC16 broadcast to Modbus address `0`. RCE, tariff
+charging, manual schedules, and battery balancing may therefore control a detected
 Master system **only when every inverter is physically present on that same
 external RS485 bus**. Address `0` is broadcast on the wire where the frame is
 sent; the Master does not relay an external Modbus command to Slaves through
@@ -434,6 +434,12 @@ Master and on every Slave separately in the manufacturer application. A
 `Ready` installation status, correct system-wide telemetry and a matching
 Master FC03 can all remain present when the ESP32 cable reaches only the
 Master, so none of them proves the physical Slave branch.
+
+That earlier result is not a claim of current field acceptance. A complete
+shared-bus test and aggregate physical-response acknowledgement are deferred
+while installation data is collected. After review, they will be completed in
+a separate hotfix. Until then, Master FC03 must never be described as
+per-Slave acknowledgement.
 
 Registers `258`, `259`, and `306` are outside that complete EMS block and do
 not yet have separately proven Master/Slave broadcast semantics. Active RCEm
@@ -481,10 +487,18 @@ For ESPHome, Modbus, startup, or automation-loop problems, the extended terminal
 collector is also available. The exact contents and anonymization rules are
 documented in [Diagnostics](docs/DIAGNOSTICS.md).
 
+Each Home Assistant installation also receives one random, persistent UUID v4
+used only to correlate successive diagnostic packages from that installation.
+It is not derived from an inverter, network, account, config entry, or other
+user data. The privacy-preserving offline
+[diagnostic analyzer](docs/DIAGNOSTICS_ANALYZER.md) can process up to 100 ZIP
+packages at once and compare RCE, RCEm, and tariff-charging behavior without
+contacting an external service.
+
 Review every archive before attaching it to a public issue. Automated filtering
 does not replace a manual check for credentials and personal data.
 
-Open a [GitHub issue](https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/issues)
+Open a [GitHub issue](https://github.com/Kaluzaburza/hoymiles-hit-g3-ems/issues)
 or send the report with a problem description to
 [info@kaluzaaa.com](mailto:info@kaluzaaa.com).
 
@@ -499,6 +513,7 @@ entities continue to update, close duplicate log streams, wait approximately
 |---|---|
 | [Quick start](docs/QUICK_START.md) | Short installation path for new users |
 | [Diagnostics](docs/DIAGNOSTICS.md) | Report collection, anonymization, and troubleshooting |
+| [Diagnostic analyzer](docs/DIAGNOSTICS_ANALYZER.md) | Offline comparison of up to 100 diagnostic ZIP packages |
 | [Safety and functional mapping](docs/SAFETY_AND_COMPLIANCE.md) | Implemented safeguards, boundaries, and audit evidence |
 | [Automation test report](docs/AUTOMATION_TEST_REPORT.md) | Simulation scope, static control checks, and field-test limits |
 | [Changelog](CHANGELOG.md) | Release history and required update steps |

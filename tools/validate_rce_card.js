@@ -16,7 +16,7 @@ if (!source.includes("import.meta.url")) {
 // executes classic scripts, so inject the same deterministic module URL while
 // retaining an explicit assertion above that production code uses import.meta.
 const canonicalModuleUrl =
-  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.4.17";
+  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.5.17";
 const executableSource = source.replaceAll(
   "import.meta.url",
   JSON.stringify(canonicalModuleUrl),
@@ -172,7 +172,7 @@ const bootstrapFirstContext = {
     currentScript: {
       src: (
         "https://homeassistant.example/local/"
-        + "hoymiles-dashboard-strategy.js?v=1.5.4.17"
+        + "hoymiles-dashboard-strategy.js?v=1.5.5.17"
       ),
     },
   },

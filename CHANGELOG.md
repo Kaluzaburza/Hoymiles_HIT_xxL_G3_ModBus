@@ -4,52 +4,71 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-## [1.5.4] - 2026-08-14
+## [1.5.5] - 2026-08-15
 
 ### User update steps / Kroki po aktualizacji
 
 1. **HACS:** before updating, keep RCEm in shadow mode and disable every
-   automatic or scheduled EMS writer. Update **Hoymiles HIT xxL G3 Modbus** to
-   **v1.5.4**.
+   automatic or scheduled EMS writer. Update
+   **EMS for Hoymiles HIT-(5–20)L-G3** to **v1.5.5**.
    **PL:** przed aktualizacją pozostaw RCEm w trybie shadow i wyłącz wszystkie
    automatyczne oraz harmonogramowe zapisy EMS. Zaktualizuj integrację
-   **Hoymiles HIT xxL G3 Modbus** w HACS do **v1.5.4**.
+   **EMS for Hoymiles HIT-(5–20)L-G3** w HACS do **v1.5.5**.
 2. **Home Assistant:** restart after the HACS update. The integration installs
-   the managed EMS package during startup, so validate the configuration and
-   restart once more when the Repair notification requests it. Keep the
+   managed EMS package **1.5.5** during startup, so validate the configuration
+   and restart once more when the Repair notification requests it. Keep the
    writers disabled throughout both restarts and hard-refresh every open
-   Hoymiles dashboard tab to load frontend URL `v=1.5.4.17`.
+   Hoymiles dashboard tab to load frontend URL `v=1.5.5.17`.
    **PL:** po aktualizacji HACS uruchom Home Assistant ponownie. Integracja
-   instaluje zarządzany pakiet EMS podczas startu, dlatego sprawdź konfigurację
-   i wykonaj jeszcze jeden restart, gdy zażąda tego komunikat Napraw. Podczas
-   obu restartów pozostaw zapisy wyłączone i twardo odśwież każdą otwartą kartę
-   dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.4.17`.
+   instaluje zarządzany pakiet EMS **1.5.5** podczas startu, dlatego sprawdź
+   konfigurację i wykonaj jeszcze jeden restart, gdy zażąda tego komunikat
+   Napraw. Podczas obu restartów pozostaw zapisy wyłączone i twardo odśwież każdą
+   otwartą kartę dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.5.17`.
 3. **ESP32 / ESPHome:** only after the Home Assistant no-write verification,
    rebuild and upload firmware from the top-level ESPHome file pinned to
-   **v1.5.4**. HACS does not flash the ESP32. This firmware step is required for
-   the new physical BMS/capacity reporting contract; it does not replace the
-   separate shared-bus Master/Slave acceptance test.
+   immutable ref **v1.5.5**. HACS does not flash the ESP32. This firmware step
+   is required because v1.5.5 consolidates the previously unpublished firmware
+   and managed-package candidate; it does not replace the separate shared-bus
+   Master/Slave acceptance test.
    **PL:** dopiero po odczytowej weryfikacji Home Assistanta skompiluj i wgraj
-   firmware z głównego pliku ESPHome przypiętego do **v1.5.4**. HACS nie wgrywa
-   firmware ESP32. Ten krok jest wymagany dla nowego kontraktu raportowania
-   fizycznego BMS/pojemności, lecz nie zastępuje osobnego testu Master/Slave na
-   wspólnej magistrali.
+   firmware z głównego pliku ESPHome przypiętego do niezmiennego ref
+   **v1.5.5**. HACS nie wgrywa firmware ESP32. Ten krok jest wymagany, ponieważ
+   v1.5.5 konsoliduje wcześniej nieopublikowanego kandydata firmware i pakietu
+   zarządzanego; nie zastępuje osobnego testu Master/Slave na wspólnej magistrali.
 4. **Verification / Weryfikacja:** confirm that the physical EMS mode and the
    complete `4300–4306` block did not change during the update, no execution
-   owner became active, the managed package reports **1.5.4 / Ready**, RCE,
+   owner became active, the managed package reports **1.5.5 / Ready**, RCE,
    tariff and RCEm publish a current result or an explicit fail-closed reason,
    Solcast Day 3 is fresh when enabled, and all Aurora views render. After the
-   firmware upload also confirm repeated fresh register-4102 reports. Do not
-   claim per-Slave acknowledgement until every inverter is connected to the
-   same external RS485 bus and observed separately.
+   firmware upload also confirm repeated fresh register-4102 reports and create
+   two diagnostic ZIPs to verify that their anonymous installation ID is
+   unchanged. Do not claim per-Slave acknowledgement: every inverter must be
+   connected to the same external RS485 bus and observed separately.
    **PL:** potwierdź, że podczas aktualizacji nie zmieniły się fizyczny tryb EMS
    ani pełny blok `4300–4306`, nie pojawił się aktywny właściciel, pakiet
-   zarządzany pokazuje **1.5.4 / Gotowe**, RCE, taryfa i RCEm publikują aktualny
+   zarządzany pokazuje **1.5.5 / Gotowe**, RCE, taryfa i RCEm publikują aktualny
    wynik albo jawny bezpieczny powód blokady, opcjonalny Dzień 3 Solcast jest
    świeży, a wszystkie widoki Aurora działają. Po wgraniu firmware potwierdź
-   także powtarzające się świeże raporty rejestru 4102. Nie deklaruj
-   potwierdzenia każdego Slave'a, dopóki wszystkie falowniki nie są podłączone
-   do tej samej zewnętrznej magistrali RS485 i sprawdzone osobno.
+   także powtarzające się świeże raporty rejestru 4102 i utwórz dwie paczki
+   diagnostyczne, aby sprawdzić niezmienność anonimowego ID instalacji. Nie
+   deklaruj potwierdzenia każdego Slave'a: wszystkie falowniki muszą być
+   podłączone do tej samej zewnętrznej magistrali RS485 i sprawdzone osobno.
+
+### Added
+
+- Added one random, persistent `anonymous_installation_id` (UUID v4) for the
+  entire Home Assistant installation. Schema version `1` is stored in Home
+  Assistant Store and the same validated ID is preserved by redaction in native
+  diagnostics, `environment.json`, and successive diagnostic ZIPs. It is never
+  derived from a device or user configuration and is not exposed as an entity.
+- Added a bounded, offline analyzer for up to 100 diagnostic ZIPs. It correlates
+  packages by the anonymous installation ID and extracts comparable RCE, RCEm,
+  tariff-charging, control-run, data-quality, and log-cluster evidence without
+  uploading archives or exposing source paths by default.
+- Added regression coverage for first-start identity creation, persistence
+  across restarts and packages, UUID v4 format, redaction preservation,
+  multi-entry reuse, source independence, hostile archives, deterministic
+  analysis, privacy defaults, and transactional output.
 
 ### Changed
 
@@ -98,12 +117,32 @@ All notable changes to this project are documented in this file.
   independent actuator-local guards and rollback, while manual handover releases
   an RCEm owner before claiming control.
 - Aggregate physical-response acknowledgement for parallel broadcasts is not
-  implemented in this snapshot. It remains deferred until shared-bus
-  Master/Slave field tests and must not be described as per-Slave
-  acknowledgement.
+  implemented in this release. Shared-bus Master/Slave tests and field data
+  remain pending; after review, physical aggregate acknowledgement will be
+  completed in a separate hotfix. It must not be described as per-Slave
+  acknowledgement, because Master FC03 verifies the Master only.
+- Renamed the repository to `Kaluzaburza/hoymiles-hit-g3-ems` and the public
+  project title to **EMS for Hoymiles HIT-(5–20)L-G3**, while preserving the Home
+  Assistant domain, entities, services, storage keys, dashboard strategy type,
+  and ESPHome technical identities.
+- Updated the diagnostic frontend privacy text so the longitudinal purpose and
+  non-identifying origin of the anonymous installation ID are explicit.
 
 ### Polski
 
+- Dodano jeden losowy i trwały `anonymous_installation_id` (UUID v4) dla całej
+  instalacji Home Assistant. Wersja schematu `1` i identyfikator są przechowywane
+  w HA Store, trafiają do natywnej diagnostyki, `environment.json` i kolejnych
+  paczek ZIP, a redakcja zachowuje wyłącznie poprawny UUID. ID nie pochodzi z
+  urządzenia ani konfiguracji użytkownika i nie jest encją.
+- Dodano ograniczony, działający lokalnie analizator maksymalnie 100 paczek ZIP.
+  Porównuje zachowanie RCE, RCEm i ładowania taryfowego oraz dane przebiegów
+  sterowania, jakości wejść i klastrów logów, bez wysyłania archiwów i bez
+  ujawniania ścieżek źródłowych w trybie domyślnym.
+- Repozytorium otrzymało adres `Kaluzaburza/hoymiles-hit-g3-ems`, a publiczna
+  nazwa projektu to **EMS for Hoymiles HIT-(5–20)L-G3**. Stabilne identyfikatory
+  techniczne pozostały bez zmian, a tekst prywatności frontendu wyjaśnia
+  wyłącznie diagnostyczny, longitudinalny cel anonimowego ID.
 - Przywrócono sterowanie równoległym układem Master/Slave dla pełnego bloku EMS
   `4300–4306`. Master wysyła jeden broadcast FC16 na wspólny adres Modbus `0`,
   a Home Assistant uznaje polecenie dopiero po późniejszym fizycznym FC03 z
@@ -147,9 +186,20 @@ All notable changes to this project are documented in this file.
   niezależne bramki aktuatorów i rollback, a ręczne przejęcie najpierw zwalnia
   właściciela RCEm.
 - Potwierdzanie broadcastu na podstawie sumarycznej odpowiedzi fizycznej nie
-  jest zaimplementowane w tym snapshocie. Pozostaje odroczone do testów
-  Master/Slave na wspólnej magistrali i nie może być opisywane jako ACK każdego
-  Slave'a.
+  jest zaimplementowane w tym wydaniu. Testy Master/Slave na wspólnej magistrali
+  i dane terenowe pozostają do zebrania; po ich przeglądzie potwierdzenie
+  sumarycznej odpowiedzi fizycznej zostanie uzupełnione w osobnym hotfiksie.
+  FC03 Mastera potwierdza wyłącznie Mastera, a nie każdego Slave'a.
+
+### Validation / Walidacja
+
+- Automation matrix: **2064/2064** exhaustive scenarios, including nominal
+  joint-solver/export coverage and all four explicit BMS fail-closed contracts.
+- Diagnostics: identity persistence/redaction tests and the bounded 100-archive
+  analyzer suite pass; generated results are deterministic and privacy-safe by
+  default.
+- Aurora: Polish, English and bootstrap-first validation each render exactly
+  **42** frames; generated assets pass the release consistency gate.
 
 ## [1.5.3] - 2026-08-14
 

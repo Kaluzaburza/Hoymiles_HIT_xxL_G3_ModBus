@@ -1,4 +1,4 @@
-# Public ESPHome entry point for Hoymiles HIT xxL G3 Modbus.
+# Public ESPHome entry point for EMS for Hoymiles HIT-(5–20)L-G3.
 # This file is self-contained: ESPHome downloads all register packages from
 # the versioned GitHub release. Only this file and the required secrets need
 # to be copied to the user's ESPHome configuration directory.
@@ -56,7 +56,7 @@ esp32:
 # dashboard. Firmware changes still require an explicit build and upload.
 # Secrets remain local and are never downloaded from or uploaded to GitHub.
 dashboard_import:
-  package_import_url: github://Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus/hoymiles-inverter.yaml@main
+  package_import_url: github://Kaluzaburza/hoymiles-hit-g3-ems/hoymiles-inverter.yaml@main
   import_full_config: true
 
 # Ograniczamy szczegółowe logi magistrali, zachowując komunikaty INFO potrzebne
@@ -70,8 +70,8 @@ logger:
 
 packages:
   hoymiles_hit_g3:
-    url: https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus
-    ref: v1.5.4
+    url: https://github.com/Kaluzaburza/hoymiles-hit-g3-ems
+    ref: v1.5.5
     refresh: 1d
     files:
       - packages/core.yaml

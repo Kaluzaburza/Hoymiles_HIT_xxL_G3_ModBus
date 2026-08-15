@@ -2,12 +2,12 @@
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.4 candidate validation**
+Last completed offline baseline in this report: **v1.5.5 release-candidate validation**
 Last accepted live runtime merge:
 **`ce4afc614a691ce70c67da2439613de90e0c61c2`**
 (implementation commit **`915337fa34529c5197ad581a41d351b78bfb1d33`**)
-Current status: **v1.5.4 exact-workspace offline PASS; exact-SHA GitHub CI,
-Miernik no-write deployment and shared-bus Master/Slave acceptance pending.**
+Current status: **v1.5.5 exact-workspace offline PASS; exact-SHA GitHub CI,
+public HACS release and shared-bus Master/Slave acceptance pending.**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -96,9 +96,10 @@ The final release/tag commit is expected to differ only by this live-evidence
 documentation. Its delta from the tested runtime merge must remain
 documentation-only.
 
-## v1.5.4 EMS safety candidate — offline PASS; exact deployment and full shared-bus acceptance pending
+## v1.5.5 consolidated EMS safety release — offline PASS; exact publication and full shared-bus acceptance pending
 
-The v1.5.4 candidate restores the previously proven Modbus address-0
+The v1.5.5 release consolidates the previously unpublished v1.5.4 candidate
+and restores the previously proven Modbus address-0
 FC16 write for the complete EMS block 4300-4306 on a Master/Slave plant. The
 write is assembled only from a fresh, complete physical Master snapshot and
 never publishes optimistic state. Success requires a later Master FC03
@@ -117,21 +118,21 @@ as prerequisites for the address-0 broadcast.
 
 Fresh offline evidence for this candidate:
 
-- ESPHome 2026.7.2 configuration with ESP-IDF 5.5.5 and the complete local
-  verification fixture: **PASS** (`Configuration is valid!`). A new full
-  compile is deliberately not claimed for this snapshot: the isolated local
-  ESP-IDF Python environment stopped before C++/Ninja component compilation
-  because its environment lacked `yaml`. This is an inconclusive toolchain
-  result, not firmware evidence.
+- ESPHome 2026.7.2 configuration and full clean compile with ESP-IDF 5.5.5
+  from the complete local verification fixture: **PASS** (`Configuration is
+  valid!` and `Successfully compiled program`). The resulting image used
+  **973,135 / 1,835,008 bytes (53.0%)** of the application flash budget and
+  **78,376 / 180,736 bytes (43.4%)** of DRAM; the fixture and all 19 package
+  inputs remained byte-identical before and after the build.
 - Firmware FC03/readback source contract: **PASS**.
 - Release validator: **PASS**, 292 localized entities.
 - Automation matrix with PyYAML structural checks: quick **488/488** and
   exhaustive **2064/2064**. The exhaustive set contains 576 RCE, 720 tariff,
   648 RCEm and 120 randomized RCE boundary scenarios, including four explicit
   BMS fail-closed cases. Both the implementation author and an independent
-  read-only reviewer obtained the same result. After the v1.5.4 package marker
+  read-only reviewer obtained the same result. After the v1.5.5 package marker
   was applied, the exact scheduler hash was
-  `576162785FB41FD64155E7DA0851AAF7CDDA9D3CD5610F3893130B6F9E10C8BE` and
+  `82689208546C2CA080ABB187EB30FA63FA5F712A31557C89B4AFEBAEF3379BCB` and
   the matrix hash was
   `A7F8CDB898D2A3980C2B9B9CDB47541AD0A9A20C21659B8C6DA45DBDA7B88871`.
 - Core optimizer and integration contracts from `RELEASING.md`: **13/13 runs
@@ -139,11 +140,18 @@ Fresh offline evidence for this candidate:
   profiles and solver, RCEm solver, startup/listener lifecycle, executor
   serialization, parallel power balance, shared freshness/load models,
   physical FC03 and source-device rebind. `validate_release.py` and
-  `compileall` for all 55 Python files also passed on the exact v1.5.4 workspace.
+  `py_compile` and `compileall` for all 66 Python files also passed on the exact
+  v1.5.5 workspace.
 - Aurora card/strategy validator: **PASS**; PL, EN and bootstrap-first paths
   each render exactly 42 Aurora frames.
 - Asset generator: **PASS**, 292 localized entities and zero tracked-content
   differences in an isolated rebuild (147 tracked files compared).
+- Diagnostic identity: **PASS** for first-start UUID v4 generation, persistent
+  reload, concurrent first access, multi-entry reuse, save-failure retry,
+  schema enforcement and exact redaction preservation.
+- Batch diagnostic analyzer: **PASS** for 100 ZIP archives, bounded hostile-ZIP
+  handling, semantic/history deduplication, RCE/RCEm/tariff rules,
+  deterministic transactional output and default UUID/path privacy.
 - Stable BMS voltage/current FC03 reports are now forced through ESPHome so
   their Home Assistant `last_reported` provenance remains current. The RCE
   Safe BMS diagnostic consumes the optimizer's authoritative
@@ -192,7 +200,7 @@ stale Day 3 continues to use the safe shorter-horizon fallback.
 
 Off-Grid operation was also observed as functional on the local inverter. That
 observation proves the physical inverter mode, not yet the arbitration changes
-in this v1.5.4 Home Assistant package. The final quick and exhaustive matrices
+in this v1.5.5 Home Assistant package. The final quick and exhaustive matrices
 prove that automatic starts, active updates, timer recovery and cleanup yield
 to physical mode code `3`; exact-snapshot live acceptance remains pending after
 deployment.

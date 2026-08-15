@@ -2793,7 +2793,7 @@ def static_translations(language: str) -> dict:
     """Return config-flow and service translations."""
     if language == "pl":
         return {
-            "title": "Hoymiles HIT xxL G3 Modbus",
+            "title": "EMS for Hoymiles HIT-(5–20)L-G3",
             "config": {
                 "step": {
                     "user": {
@@ -2889,7 +2889,7 @@ def static_translations(language: str) -> dict:
         }
 
     return {
-        "title": "Hoymiles HIT xxL G3 Modbus",
+        "title": "EMS for Hoymiles HIT-(5–20)L-G3",
         "config": {
             "step": {
                 "user": {

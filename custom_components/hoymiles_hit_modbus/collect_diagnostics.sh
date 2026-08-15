@@ -40,7 +40,7 @@ capture_command() {
 }
 
 {
-  printf '%s\n' "Hoymiles HIT xxL G3 Modbus support archive"
+  printf '%s\n' "EMS for Hoymiles HIT-(5–20)L-G3 support archive"
   printf 'Generated UTC: %s\n' "$STAMP"
   printf '%s\n' "The archive was automatically redacted. Review it before posting publicly."
   printf '%s\n' "Also include the exact local time of the fault and what the inverter did."

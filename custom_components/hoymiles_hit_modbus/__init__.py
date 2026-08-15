@@ -1,4 +1,4 @@
-"""Hoymiles HIT xxL G3 Modbus localized Home Assistant integration."""
+"""EMS for Hoymiles HIT-(5–20)L-G3 Home Assistant integration."""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ from .const import (
     SERVICE_INSTALL_ASSETS,
     VERSION,
 )
+from .installation_identity import async_get_or_create_installation_identity
 from .models import RuntimeData
 from .source_device import (
     async_resolve_source_device,
@@ -54,8 +55,8 @@ INSTALL_ASSETS_SCHEMA = vol.Schema(
     }
 )
 EMS_PACKAGE_DOCS_URL = (
-    "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus"
-    "#4-dashboard-and-ems-automation"
+    "https://github.com/Kaluzaburza/hoymiles-hit-g3-ems"
+    "#ems-automation"
 )
 FRONTEND_ASSETS_RESTART_ISSUE_ID = "frontend_assets_restart_required"
 FRONTEND_ASSETS_INSTALL_FAILED_ISSUE_ID = "frontend_assets_install_failed"
@@ -237,6 +238,16 @@ def _async_reconcile_entity_registry(
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Register integration-wide services."""
     hass.data.setdefault(DOMAIN, {})
+
+    try:
+        # One installation-wide random UUID, persisted before any diagnostic
+        # report can expose it. It is intentionally independent of entries and
+        # device, network or user identifiers.
+        await async_get_or_create_installation_identity(hass)
+    except Exception:  # noqa: BLE001 - diagnostics must not disable devices
+        _LOGGER.exception(
+            "Cannot initialize the anonymous diagnostics installation ID"
+        )
 
     # Materialize every /local frontend dependency before publishing its URL.
     # Availability is restart-gated: frontend registers /local only when www

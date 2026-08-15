@@ -931,7 +931,7 @@ class HoymilesDiagnosticsDownloadCard extends HTMLElement {
         description:
           "Jednym kliknięciem zbierz stan integracji, historię sterowania z 24 godzin i odfiltrowane logi Home Assistanta.",
         privacy:
-          "Sekrety i identyfikatory instalacji są maskowane. Przejrzyj ZIP przed publicznym udostępnieniem.",
+          "Identyfikatory urządzeń i konfiguracji są maskowane. Losowy anonimowy ID pozostaje wyłącznie do łączenia kolejnych paczek wsparcia. Przejrzyj ZIP przed publicznym udostępnieniem.",
         contact:
           "W razie błędu pobierz ZIP i wyślij go wraz z opisem problemu oraz dokładną datą i godziną wystąpienia na:",
         button: "Zbierz dane i pobierz ZIP",
@@ -946,7 +946,7 @@ class HoymilesDiagnosticsDownloadCard extends HTMLElement {
       description:
         "Collect integration state, 24 hours of control history and filtered Home Assistant logs with one click.",
       privacy:
-        "Secrets and installation identifiers are masked. Review the ZIP before sharing it publicly.",
+        "Device and configuration identifiers are masked. A random anonymous ID is retained only to correlate later support archives. Review the ZIP before sharing it publicly.",
       contact:
         "If an error occurs, download the ZIP and email it with a problem description and the exact date and time to:",
       button: "Collect data and download ZIP",
@@ -3390,10 +3390,10 @@ if (
   window.customStrategies.push({
     type: "hoymiles-hit-xxl-g3",
     strategyType: "dashboard",
-    name: "Hoymiles HIT xxL G3",
+    name: "EMS for Hoymiles HIT-(5–20)L-G3",
     description:
-      "Always-current dashboard for the Hoymiles HIT xxL G3 Modbus integration.",
+      "Unofficial local EMS for Hoymiles HIT-G3 hybrid inverters — Home Assistant, ESPHome, Modbus, RCE, tariff optimization and RCEm.",
     documentationURL:
-      "https://github.com/Kaluzaburza/Hoymiles_HIT_xxL_G3_ModBus",
+      "https://github.com/Kaluzaburza/hoymiles-hit-g3-ems",
   });
 }

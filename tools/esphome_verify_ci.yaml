@@ -1,0 +1,51 @@
+# CI-only full firmware fixture. All credentials below are non-secret placeholders.
+# Local includes ensure that a release tag validates its own exact package tree.
+substitutions:
+  name: "hoymiles-ci-verify"
+  friendly_name: "Hoymiles CI Verify"
+  device_description: "Hoymiles release compile verification"
+  modbus_controller_id: hoymiles_modbus
+  modbus_fast_controller_id: hoymiles_modbus_fast
+  modbus_control_controller_id: hoymiles_modbus_control
+  modbus_settings_controller_id: hoymiles_modbus_settings
+  modbus_inverter_address: "1"
+  baud_rate: "115200"
+  fast_update_interval: "13s"
+  control_update_interval: "5s"
+  settings_update_interval: "20s"
+  update_interval: "150s"
+  uart_tx_pin: "GPIO17"
+  uart_rx_pin: "GPIO16"
+  board: "esp32dev"
+  wifi_ssid: "ci-placeholder-network"
+  wifi_password: "ci-placeholder-password"
+  fallback_password: "ci-placeholder-fallback"
+  api_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ota_password: "ci-placeholder-ota"
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.1"
+      sram1_as_iram: true
+
+packages:
+  core: !include ../packages/core.yaml
+  network: !include ../packages/network.yaml
+  modbus_connection: !include ../packages/modbus_connection.yaml
+  parallel_network: !include ../packages/parallel_network.yaml
+  settings: !include ../packages/settings.yaml
+  system: !include ../packages/system.yaml
+  states_alarms: !include ../packages/states_alarms.yaml
+  inverter: !include ../packages/inverter.yaml
+  grid: !include ../packages/grid.yaml
+  backup_load: !include ../packages/backup_load.yaml
+  generator: !include ../packages/generator.yaml
+  pv: !include ../packages/pv.yaml
+  battery: !include ../packages/battery.yaml
+  energy_flow: !include ../packages/energy_flow.yaml
+  meters: !include ../packages/meters.yaml
+  overview: !include ../packages/overview.yaml
+  diagnostics: !include ../packages/diagnostics.yaml

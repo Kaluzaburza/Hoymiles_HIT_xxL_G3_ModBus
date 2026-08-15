@@ -936,7 +936,7 @@ template:
       - name: "Hoymiles EMS Package Version"
         unique_id: hoymiles_ems_package_version
         icon: mdi:package-variant-closed-check
-        state: "1.5.4"
+        state: "1.5.5"
 
       - name: "Hoymiles EMS Hardware Mode"
         unique_id: hoymiles_ems_hardware_mode

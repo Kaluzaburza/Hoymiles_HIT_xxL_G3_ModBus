@@ -12,14 +12,14 @@ variants and advanced troubleshooting.
    physically continue to the Master and every Slave; a Master-only cable does
    not carry address-`0` broadcast commands to the Slaves.
 2. **Install from HACS.** Add this repository as an Integration, install
-   **Hoymiles HIT xxL G3 Modbus** and restart Home Assistant.
+   **EMS for Hoymiles HIT-(5–20)L-G3** and restart Home Assistant.
 3. **Flash ESP32.** Copy `hoymiles-inverter.yaml` to ESPHome, add the five keys
    from `secrets.yaml.example`, select **Validate**, then **Install**. ESPHome's
    dashboard-import metadata lets the dashboard recognize and adopt the
    maintained public configuration. Firmware remains under the user's control
    and is never updated without an explicit build and upload.
 4. **Add the device.** Add the discovered ESPHome device, then add
-   **Hoymiles HIT xxL G3 Modbus**. If only one compatible ESP32 exists, it is
+   **EMS for Hoymiles HIT-(5–20)L-G3**. If only one compatible ESP32 exists, it is
    preselected. Dashboard files and EMS automation are installed automatically.
 5. **Complete the displayed next step.** Open the integration device and check
    **Installation status**. If Home Assistant shows a Repair about packages,
@@ -87,7 +87,7 @@ credible source data must be confirmed by the installer or user.
    prowadzić do Mastera i każdego Slave'a; przewód tylko do Mastera nie przenosi
    broadcastu na adres `0` do Slave'ów.
 2. **Zainstaluj przez HACS.** Dodaj repozytorium jako **Integration**, zainstaluj
-   **Hoymiles HIT xxL G3 Modbus** i uruchom Home Assistant ponownie.
+   **EMS for Hoymiles HIT-(5–20)L-G3** i uruchom Home Assistant ponownie.
 3. **Wgraj ESP32.** Skopiuj `hoymiles-inverter.yaml` do ESPHome, dodaj pięć
    wartości z `secrets.yaml.example`, wybierz **Validate**, a następnie
    **Install**. Metadane dashboard-import pozwalają ESPHome rozpoznać i
@@ -95,7 +95,7 @@ credible source data must be confirmed by the installer or user.
    kontrolą użytkownika i nigdy nie aktualizuje się bez jawnej kompilacji i
    wgrania.
 4. **Dodaj urządzenie.** Dodaj wykryte ESPHome, a potem integrację
-   **Hoymiles HIT xxL G3 Modbus**. Jeżeli jest tylko jeden zgodny ESP32, zostanie
+   **EMS for Hoymiles HIT-(5–20)L-G3**. Jeżeli jest tylko jeden zgodny ESP32, zostanie
    od razu wybrany. Dashboard i automatyka EMS instalują się automatycznie.
 5. **Wykonaj wyświetlony następny krok.** Na urządzeniu integracji sprawdź
    **Stan instalacji**. Jeżeli Home Assistant pokaże Naprawę dotyczącą pakietów,
