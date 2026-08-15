@@ -363,6 +363,30 @@ sensor:
                     id(pv_total_power_8528).has_state()) {
                   id(battery_power_30009).publish_state(
                       inverter_power - id(pv_total_power_8528).state);
+                  const uint32_t committed_grid_ms = id(
+                      overview_parallel_aggregate_committed_grid_readback_ms);
+                  const uint32_t committed_pv_ms = id(
+                      overview_parallel_aggregate_committed_pv_readback_ms);
+                  if (grid_ms != committed_grid_ms &&
+                      pv_ms != committed_pv_ms) {
+                    // This generation is the authoritative completion marker
+                    // for one coherent physical-power sample. A fast LOAD poll
+                    // cannot reuse either source callback from the preceding
+                    // generation. This callback is single-threaded, so latch
+                    // the GRID/PV pair together before exposing its generation.
+                    auto *generation_sensor =
+                        id(parallel_aggregate_power_readback_generation);
+                    const float generation =
+                        generation_sensor->has_state() &&
+                                generation_sensor->state < 16000000.0f
+                            ? generation_sensor->state + 1.0f
+                            : 1.0f;
+                    id(overview_parallel_aggregate_committed_grid_readback_ms) =
+                        grid_ms;
+                    id(overview_parallel_aggregate_committed_pv_readback_ms) =
+                        pv_ms;
+                    generation_sensor->publish_state(generation);
+                  }
                 }
               }
             }

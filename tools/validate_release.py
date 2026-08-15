@@ -1062,9 +1062,68 @@ def main() -> int:
             f"in {package_path.relative_to(ROOT)}",
         )
 
+    english_package = required_assets[2].read_text(encoding="utf-8")
+    polish_package = required_assets[3].read_text(encoding="utf-8")
+    require(
+        "No active automation" in english_package
+        and "Balancing" in english_package
+        and "Manual control" in english_package
+        and "Enabled — waiting for a selected slot" in english_package
+        and "Active — grid charging" in english_package
+        and "Unavailable — initializing" in english_package
+        and "Enabled — blocked: RCE policy is enabled" in english_package,
+        "English EMS package lacks the human ownership/tariff policy states",
+    )
+    require(
+        "Brak aktywnej automatyki" in polish_package
+        and "Balansowanie" in polish_package
+        and "Sterowanie ręczne" in polish_package
+        and "Włączone — oczekuje na wybrany blok" in polish_package
+        and "Aktywne — ładowanie z sieci" in polish_package
+        and "Niedostępne — trwa inicjalizacja" in polish_package
+        and "Włączone — zablokowane: włączona polityka RCE" in polish_package,
+        "Polish EMS package lacks the human ownership/tariff policy states",
+    )
+
     dashboard_source = (
         ROOT / "dashboard_hoymiles.yaml"
     ).read_text(encoding="utf-8")
+
+    def require_owner_and_tariff_rows(text: str, label: str) -> None:
+        owner_marker = "entity: sensor.hoymiles_ems_control_owner"
+        tariff_marker = "entity: sensor.hoymiles_tariff_charge_status"
+        conflict_marker = "entity: binary_sensor.hoymiles_ems_control_conflict"
+        main_start = text.index(owner_marker)
+        main_end = text.index("\n      - type:", main_start)
+        main_card = text[main_start:main_end]
+        require(
+            main_card.index(owner_marker)
+            < main_card.index(tariff_marker)
+            < main_card.index(conflict_marker),
+            f"{label} main EMS card does not pair owner and tariff policy rows",
+        )
+        tariff_view = text.split("path: ladowanie-taryfowe", 1)[1].split(
+            "\n  - title:", 1
+        )[0]
+        require(
+            tariff_view.count(owner_marker) == 1
+            and tariff_view.count(tariff_marker) == 1
+            and tariff_view.count(conflict_marker) == 1
+            and tariff_view.index(owner_marker)
+            < tariff_view.index(tariff_marker)
+            < tariff_view.index(conflict_marker),
+            f"{label} tariff view must show one always-visible owner/policy pair",
+        )
+
+    require_owner_and_tariff_rows(dashboard_source, "Source dashboard")
+    require_owner_and_tariff_rows(
+        required_assets[0].read_text(encoding="utf-8"),
+        "English dashboard",
+    )
+    require_owner_and_tariff_rows(
+        required_assets[1].read_text(encoding="utf-8"),
+        "Polish dashboard",
+    )
     expected_zebra_cards = dashboard_source.count(
         "type: custom:hoymiles-zebra-entities-card"
     )

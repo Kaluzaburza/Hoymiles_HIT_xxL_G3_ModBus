@@ -12,8 +12,30 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: "0"
+  # The last GRID/PV pair already consumed by an aggregate generation. Both
+  # source callbacks must advance before another LOAD callback may commit.
+  - id: overview_parallel_aggregate_committed_grid_readback_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: overview_parallel_aggregate_committed_pv_readback_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
 
 sensor:
+  # Monotonic evidence counter for the parallel-system power balance.  It is
+  # deliberately event-driven: backup_load.yaml advances it only after a real
+  # Master LOAD FC03 callback can combine fresh GRID and PV replies.  A write,
+  # cached template value or partial Modbus cycle must never advance it.
+  - platform: template
+    name: "Parallel Aggregate Power Readback Generation"
+    id: parallel_aggregate_power_readback_generation
+    accuracy_decimals: 0
+    update_interval: never
+    force_update: true
+    entity_category: diagnostic
+
   - platform: modbus_controller
     modbus_controller_id: ${modbus_fast_controller_id}
     id: pv_total_power_master_30001

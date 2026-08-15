@@ -417,7 +417,7 @@ ends as specified by the inverter and converter manuals. The external Modbus
 bus used by the ESP32 is separate from the inverter's dedicated internal
 Parallel/DTS communication bus; do not bridge the two buses.
 
-The v1.5.5 firmware carries forward the system command verified earlier on a
+The v1.5.6 firmware carries forward the system command verified earlier on a
 two-inverter HIT shared-bus test configuration: every change to EMS registers
 `4300–4306` is sent as one FC16 broadcast to Modbus address `0`. RCE, tariff
 charging, manual schedules, and battery balancing may therefore control a detected
@@ -429,17 +429,53 @@ accepts it only after a newer physical FC03 from the Master contains the exact
 requested block. This confirms the Master block, not receipt or execution by
 each Slave.
 
+For Grid Discharge on a detected parallel Master, v1.5.6 adds a separate
+post-command **aggregate physical-response** diagnostic. After the Master FC03
+configuration acknowledgement it applies 20 seconds of transition grace, then
+examines five newer complete system-power generations (up to 20 seconds each)
+and requires three consecutive stable generations. The diagnostic changes from
+`pending` to `confirmed`, `not_confirmed`, or `not_evaluable`. RCE compares that
+response with the target frozen before the command, additionally requires grid
+export of at least 0.25 kW, and fails closed through the existing neutral
+rollback when it is not confirmed. Manual/manual-recovery and RCEm pre-discharge
+have no authoritative total-kW target, so they evaluate fresh stable battery-
+discharge direction without a grid-export or amplitude rejection. Return to
+Self-Use never waits for aggregate discharge evidence.
+
+The two new diagnostics are
+`sensor.hoymiles_hit_parallel_aggregate_power_readback_generation` and
+`sensor.hoymiles_parallel_aggregate_physical_response`.
+
+This signal confirms only a system-level physical response. It is not an FC03
+readback from a Slave and must not be called per-Slave acknowledgement. A sampled
+transition peak is recorded for diagnosis but is excluded from the stable
+confirmation window and is not, by itself, an execution error.
+
 During commissioning, verify Grid Discharge and the return to Self-Use on the
 Master and on every Slave separately in the manufacturer application. A
 `Ready` installation status, correct system-wide telemetry and a matching
 Master FC03 can all remain present when the ESP32 cable reaches only the
 Master, so none of them proves the physical Slave branch.
 
-That earlier result is not a claim of current field acceptance. A complete
-shared-bus test and aggregate physical-response acknowledgement are deferred
-while installation data is collected. After review, they will be completed in
-a separate hotfix. Until then, Master FC03 must never be described as
-per-Slave acknowledgement.
+On 2026-08-15 a shared-bus field run provided additional hardware and protocol
+evidence: aggregate battery discharge stabilized at 33.653 kW and 33.863 kW,
+and the operator confirmed Grid Discharge on both nodes in the manufacturer
+application. That installation was still running managed Home Assistant
+package 1.5.4 and ESP32 firmware/project 1.5.3. No per-node power, screenshot,
+exact vendor timestamp or exact manual-stop command timestamp was retained.
+Home Assistant history for this installation was also inspected over the
+8–14 August evening windows (19:00–22:00 local). It shows an approximately
+60 kW stop transient on 8 August and an approximately 60 kW start transient
+aligned with the stored mode-code change on 14 August. The 9–13 August windows
+show repeated discharge plateaus and switching impulses, although recorder
+sampling may miss their full peaks. Separately, the 15 August live trace at
+18:20 local captured 63.069 kW battery / 65.910 kW inverter during a switch.
+This date- and installation-bounded observation supports transition grace and
+a stable window; it is not a universal guarantee about all inverters.
+
+The run therefore does not accept the v1.5.5 or v1.5.6 software, does not prove
+an automatic stop and does not turn Master FC03 into per-Slave acknowledgement.
+An exact-version v1.5.6 retest remains required.
 
 Registers `258`, `259`, and `306` are outside that complete EMS block and do
 not yet have separately proven Master/Slave broadcast semantics. Active RCEm

@@ -49,14 +49,15 @@ LIMITATIONS = (
         "code": "PLANNER_HISTORY_ATTRIBUTES_UNAVAILABLE",
         "message": (
             "Historia 24 h zawiera stany i timestampy, ale nie historyczne "
-            "atrybuty planera ani szybką telemetrię."
+            "atrybuty planera ani surową szybką telemetrię. Wyjątkiem są "
+            "ograniczone atrybuty zdarzeń odpowiedzi agregatowej od v1.5.6."
         ),
     },
     {
-        "code": "PHYSICAL_RESPONSE_REQUIRES_LONGITUDINAL_EVIDENCE",
+        "code": "PHYSICAL_RESPONSE_CAPABILITY_DEPENDENT",
         "message": (
-            "Pojedyncza paczka nie potwierdza rampy lub odpowiedzi fizycznej; "
-            "potrzebne są kolejne snapshoty po czasie stabilizacji."
+            "Ocena odpowiedzi fizycznej wymaga jawnego sensora odpowiedzi "
+            "agregatowej v1.5.6; starsze paczki pozostają nieocenialne."
         ),
     },
 )
@@ -151,6 +152,7 @@ SUMMARY_NUMERIC_FIELDS: Mapping[Controller, tuple[str, ...]] = {
         "ending_battery_soc",
         "data_quality_score",
         "forecast_accuracy_factor",
+        "forecast_factor_used",
     ),
     Controller.RCEM: (
         "maximum_voltage_v",
@@ -172,6 +174,7 @@ SUMMARY_NUMERIC_FIELDS: Mapping[Controller, tuple[str, ...]] = {
         "ending_battery_soc_percent",
         "planning_horizon_hours",
         "charge_power_feedback_applied_factor",
+        "forecast_factor_used",
     ),
 }
 
@@ -755,6 +758,7 @@ def analyze_inputs(
         packages,
         observations,
         aggregated_findings,
+        control_history_metrics,
     )
     cohort = _cohort_summary(packages, installations, aggregated_findings, observations)
     rejected = sum(item["status"] == ArchiveStatus.REJECTED.value for item in packages)
@@ -937,10 +941,12 @@ def _installation_summaries(
     packages: Sequence[Mapping[str, Any]],
     observations: Sequence[ControllerObservation],
     findings: Sequence[Mapping[str, Any]],
+    control_history_metrics: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     package_groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     observation_groups: dict[str, list[ControllerObservation]] = defaultdict(list)
     finding_groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    response_metric_groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for package in packages:
         key = package.get("installation_key")
         if isinstance(key, str) and package.get("status") not in {
@@ -954,12 +960,56 @@ def _installation_summaries(
         key = finding.get("installation_key")
         if isinstance(key, str):
             finding_groups[key].append(finding)
+    for metric in control_history_metrics:
+        key = metric.get("installation_key")
+        if (
+            isinstance(key, str)
+            and metric.get("family") == "parallel_aggregate_response"
+        ):
+            response_metric_groups[key].append(metric)
 
     result: list[dict[str, Any]] = []
     for installation_key in sorted(package_groups):
         installation_packages = package_groups[installation_key]
         installation_observations = observation_groups.get(installation_key, [])
         installation_findings = finding_groups.get(installation_key, [])
+        response_metrics = response_metric_groups.get(installation_key, [])
+        response_finding_codes = {
+            str(finding.get("rule_id")) for finding in installation_findings
+        }
+        if any(
+            code.endswith("PARALLEL_AGGREGATE_RESPONSE_STALE")
+            for code in response_finding_codes
+        ):
+            physical_response_verdict = "aggregate_response_stale"
+        elif any(
+            "PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT" in code
+            for code in response_finding_codes
+        ):
+            physical_response_verdict = "aggregate_response_pending_timeout"
+        elif any(
+            code.endswith("PARALLEL_AGGREGATE_RESPONSE_NOT_CONFIRMED")
+            for code in response_finding_codes
+        ):
+            physical_response_verdict = "aggregate_response_not_confirmed"
+        elif any(
+            code.endswith("PARALLEL_AGGREGATE_RESPONSE_NOT_EVALUABLE")
+            for code in response_finding_codes
+        ):
+            physical_response_verdict = "aggregate_response_not_evaluable"
+        elif any(
+            code.endswith("PARALLEL_AGGREGATE_RESPONSE_CONFIRMED")
+            for code in response_finding_codes
+        ):
+            physical_response_verdict = "aggregate_response_confirmed"
+        elif response_metrics:
+            physical_response_verdict = "aggregate_response_pending"
+        else:
+            physical_response_verdict = (
+                "not_evaluable_from_single_capture"
+                if len(installation_packages) < 2
+                else "requires_time_aligned_active_samples"
+            )
         capture_times = [
             _parse_iso(package.get("generated_at"))
             for package in installation_packages
@@ -1003,12 +1053,10 @@ def _installation_summaries(
                 "longitudinal_confidence": confidence,
                 "coverage": {
                     "planner_history_attributes_available": False,
-                    "fast_physical_telemetry_history_available": False,
-                    "physical_response_verdict": (
-                        "not_evaluable_from_single_capture"
-                        if len(installation_packages) < 2
-                        else "requires_time_aligned_active_samples"
+                    "fast_physical_telemetry_history_available": bool(
+                        response_metrics
                     ),
+                    "physical_response_verdict": physical_response_verdict,
                 },
                 "severity_counts": dict(sorted(severity_counts.items())),
                 "controller_summary": controller_summary,

@@ -91,6 +91,10 @@
               "name": "Current controller"
             },
             {
+              "entity": "sensor.hoymiles_tariff_charge_status",
+              "name": "Low-cost charging"
+            },
+            {
               "entity": "binary_sensor.hoymiles_ems_control_conflict",
               "name": "Control conflict"
             },
@@ -596,6 +600,18 @@
           "state_color": true,
           "entities": [
             {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Current controller"
+            },
+            {
+              "entity": "sensor.hoymiles_tariff_charge_status",
+              "name": "Low-cost charging"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Control conflict"
+            },
+            {
               "entity": "input_boolean.hoymiles_tariff_charge_enabled",
               "name": "Enable automatic grid top-up"
             },
@@ -707,10 +723,6 @@
           "state_color": true,
           "entities": [
             {
-              "entity": "sensor.hoymiles_tariff_charge_status",
-              "name": "Automation status"
-            },
-            {
               "entity": "sensor.hoymiles_tariff_current_zone",
               "name": "Current period"
             },
@@ -760,14 +772,6 @@
             "show_header_toggle": false,
             "state_color": true,
             "entities": [
-              {
-                "entity": "sensor.hoymiles_ems_control_owner",
-                "name": "Current controller"
-              },
-              {
-                "entity": "binary_sensor.hoymiles_ems_control_conflict",
-                "name": "Control conflict"
-              },
               {
                 "entity": "sensor.hoymiles_hit_tariff_charge_plan",
                 "name": "Optimizer status"

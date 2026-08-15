@@ -116,6 +116,10 @@ def _compile_probe_method(
         "WATCHED_ENTITIES": (),
         "WATCHED_RCM_ENTITIES": (),
         "WATCHED_TARIFF_ENTITIES": (),
+        "FORECAST_GCF_POLICY_TRIGGER_ENTITIES": (),
+        "_forecast_learning_policy_snapshot": lambda *args: (object(), {}),
+        "_forecast_learning_policy_signature": lambda policy: (True, "adaptive"),
+        "dt_util": SimpleNamespace(now=lambda: object()),
         "async_track_state_change_event": lambda *args: lambda: None,
         "async_track_time_interval": lambda *args: lambda: None,
         "timedelta": timedelta,
@@ -136,6 +140,7 @@ async def _assert_added_is_nonblocking(
     probe._async_history_timer = lambda *args: None
     probe._async_control_timer = lambda *args: None
     probe._async_forecast_accuracy_timer = lambda *args: None
+    probe._async_forecast_gcf_policy_changed = lambda *args: None
     probe._effective_charge_power_factor = 1.0
     probe._effective_charge_power_source = "configured"
     probe._delivered_power_ratios = SimpleNamespace(maxlen=24, append=lambda _v: None)

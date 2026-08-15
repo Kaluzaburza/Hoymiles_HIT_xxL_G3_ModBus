@@ -72,6 +72,8 @@ views:
         entities:
           - entity: sensor.hoymiles_ems_control_owner
             name: Current controller
+          - entity: sensor.hoymiles_tariff_charge_status
+            name: Low-cost charging
           - entity: binary_sensor.hoymiles_ems_control_conflict
             name: Control conflict
           - entity: select.hoymiles_hit_ems_mode
@@ -540,6 +542,12 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
+          - entity: sensor.hoymiles_ems_control_owner
+            name: Current controller
+          - entity: sensor.hoymiles_tariff_charge_status
+            name: Low-cost charging
+          - entity: binary_sensor.hoymiles_ems_control_conflict
+            name: Control conflict
           - entity: input_boolean.hoymiles_tariff_charge_enabled
             name: Enable automatic grid top-up
           - entity: input_select.hoymiles_tariff_operator
@@ -652,8 +660,6 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - entity: sensor.hoymiles_tariff_charge_status
-            name: Automation status
           - entity: sensor.hoymiles_tariff_current_zone
             name: Current period
           - entity: sensor.hoymiles_tariff_current_price
@@ -771,10 +777,6 @@ views:
           show_header_toggle: false
           state_color: true
           entities:
-            - entity: sensor.hoymiles_ems_control_owner
-              name: Current controller
-            - entity: binary_sensor.hoymiles_ems_control_conflict
-              name: Control conflict
             - entity: sensor.hoymiles_hit_tariff_charge_plan
               name: Optimizer status
             - entity: binary_sensor.hoymiles_tariff_control_data_ready

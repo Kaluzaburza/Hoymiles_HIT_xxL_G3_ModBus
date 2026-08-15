@@ -91,6 +91,10 @@
               "name": "Steruje teraz"
             },
             {
+              "entity": "sensor.hoymiles_tariff_charge_status",
+              "name": "Tanie ładowanie"
+            },
+            {
               "entity": "binary_sensor.hoymiles_ems_control_conflict",
               "name": "Konflikt sterowania"
             },
@@ -596,6 +600,18 @@
           "state_color": true,
           "entities": [
             {
+              "entity": "sensor.hoymiles_ems_control_owner",
+              "name": "Steruje teraz"
+            },
+            {
+              "entity": "sensor.hoymiles_tariff_charge_status",
+              "name": "Tanie ładowanie"
+            },
+            {
+              "entity": "binary_sensor.hoymiles_ems_control_conflict",
+              "name": "Konflikt sterowania"
+            },
+            {
               "entity": "input_boolean.hoymiles_tariff_charge_enabled",
               "name": "Włącz automatyczne doładowanie z sieci"
             },
@@ -707,10 +723,6 @@
           "state_color": true,
           "entities": [
             {
-              "entity": "sensor.hoymiles_tariff_charge_status",
-              "name": "Stan automatyki"
-            },
-            {
               "entity": "sensor.hoymiles_tariff_current_zone",
               "name": "Bieżąca strefa"
             },
@@ -760,14 +772,6 @@
             "show_header_toggle": false,
             "state_color": true,
             "entities": [
-              {
-                "entity": "sensor.hoymiles_ems_control_owner",
-                "name": "Steruje teraz"
-              },
-              {
-                "entity": "binary_sensor.hoymiles_ems_control_conflict",
-                "name": "Konflikt sterowania"
-              },
               {
                 "entity": "sensor.hoymiles_hit_tariff_charge_plan",
                 "name": "Stan optymalizatora"

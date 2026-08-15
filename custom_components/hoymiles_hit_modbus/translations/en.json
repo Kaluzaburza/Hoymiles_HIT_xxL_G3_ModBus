@@ -667,6 +667,9 @@
           "parallel_invalid_count": "Invalid inverter count"
         }
       },
+      "parallel_aggregate_power_readback_generation": {
+        "name": "Parallel Aggregate Power Readback Generation"
+      },
       "overview_internal_pv_total_power": {
         "name": "Overview Internal PV Total Power"
       },

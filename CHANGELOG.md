@@ -4,6 +4,170 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.6] - Unreleased
+
+> **Status:** the implementation is present, but a complete frozen-workspace
+> offline release gate and exact-version field/live acceptance are not recorded,
+> and v1.5.6 is not publicly released.
+>
+> **Status PL:** implementacja jest obecna, ale nie zapisano pełnej bramki
+> offline z zamrożonego workspace ani odbioru field/live dokładnej wersji,
+> a v1.5.6 nie została publicznie wydana.
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** keep RCEm in shadow mode and disable every automatic or scheduled
+   EMS writer. Update **EMS for Hoymiles HIT-(5–20)L-G3** to **v1.5.6**.
+   **PL:** pozostaw RCEm w trybie shadow i wyłącz wszystkie automatyczne oraz
+   harmonogramowe zapisy EMS. Zaktualizuj w HACS integrację
+   **EMS for Hoymiles HIT-(5–20)L-G3** do **v1.5.6**.
+2. **Home Assistant:** restart after HACS installs the update. The first start
+   copies managed EMS package **1.5.6**; validate the configuration and perform
+   the second restart requested by the managed-package Repair. Keep all writers
+   disabled during both restarts and hard-refresh every open Hoymiles dashboard
+   so it loads frontend URL `v=1.5.6.17`.
+   **PL:** uruchom Home Assistant ponownie po instalacji aktualizacji z HACS.
+   Pierwszy start kopiuje zarządzany pakiet EMS **1.5.6**; sprawdź konfigurację
+   i wykonaj drugi restart wymagany przez komunikat Napraw pakietu. Podczas obu
+   restartów pozostaw wszystkie zapisy wyłączone i twardo odśwież każdą otwartą
+   kartę dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.6.17`.
+3. **ESP32 / ESPHome:** after the Home Assistant no-write check, rebuild and
+   upload the firmware from the top-level ESPHome file pinned to immutable ref
+   **v1.5.6**. This OTA is mandatory because the hotfix adds the complete
+   aggregate-power readback generation used by the Home Assistant verifier.
+   HACS does not flash the ESP32. Repeat the no-write check after the OTA.
+   **PL:** po odczytowej kontroli Home Assistanta skompiluj i wgraj przez OTA
+   firmware z głównego pliku ESPHome przypiętego do niezmiennego ref
+   **v1.5.6**. Ten krok jest obowiązkowy, ponieważ hotfiks dodaje kompletną
+   generację odczytu mocy sumarycznej używaną przez weryfikator Home Assistanta.
+   HACS nie wgrywa ESP32. Po OTA powtórz kontrolę bez zapisów.
+4. **Verification / Weryfikacja:** confirm package **1.5.6 / Ready**, no
+   unexpected owner or mode/register change, and a fresh
+   `sensor.hoymiles_hit_parallel_aggregate_power_readback_generation` on a
+   detected parallel Master. Then repeat the shared-bus Grid Discharge test on
+   the exact v1.5.6 integration/package/firmware build and retain the aggregate
+   response diagnostic, Master FC03, separate Master and Slave mode/power, and
+   exact start/stop evidence. Do not enable automatic writers until this check
+   passes. **PL:** potwierdź pakiet **1.5.6 / Gotowe**, brak nieoczekiwanego
+   właściciela i zmiany trybu/rejestrów oraz świeżą encję
+   `sensor.hoymiles_hit_parallel_aggregate_power_readback_generation` dla
+   wykrytego Mastera równoległego. Następnie powtórz test Grid Discharge na
+   wspólnej magistrali z dokładnym buildem integracji/pakietu/firmware v1.5.6 i
+   zachowaj diagnostykę odpowiedzi sumarycznej, FC03 Mastera, osobne tryby/moce
+   Mastera i Slave'a oraz dokładne dowody start/stop. Do zakończenia kontroli
+   nie włączaj automatycznych zapisów.
+
+### Added / Dodano
+
+- Added a post-command, system-level aggregate physical-response diagnostic
+  for Grid Discharge on a detected parallel Master. After the existing Master
+  FC03 configuration acknowledgement it allows 20 seconds of transition grace,
+  then examines five newer complete aggregate-power generations (up to 20
+  seconds each) and requires three consecutive stable generations. Its states
+  progress from `pending` to `confirmed`, `not_confirmed`, or `not_evaluable`.
+  It is not a per-Slave protocol acknowledgement.
+- RCE freezes its authoritative discharge target before the command and fails
+  closed through the existing neutral rollback when the required aggregate
+  response is not confirmed; its stable window also requires grid export of at
+  least 0.25 kW and agreement with the frozen target. Manual/manual-recovery
+  and RCEm pre-discharge have no authoritative total-kW target, so they evaluate
+  fresh stable battery-discharge direction without grid-export or amplitude
+  rejection. Self-Use rollback never waits for aggregate discharge evidence.
+- ESPHome now emits a generation only after the complete Master aggregate
+  balance has fresh grid, PV and LOAD inputs. Partial callbacks, local writes
+  and timers cannot forge that generation.
+- Parallel topology is latched before Mode 5; unknown topology blocks the
+  command and a change during verification prevents confirmation. Best-effort
+  sampled-peak attributes annotate the transition without claiming its true
+  instantaneous maximum.
+- Clarified EMS ownership on both dashboards without changing any control
+  decision. When no automatic writer is active, **Controls now** reports
+  **No active automation** instead of implying a manual command. A separate
+  **Low-cost charging** row distinguishes disabled, enabled/waiting, active,
+  no-charge-needed and explicitly blocked policy states. The stable diagnostic
+  attribute remains `owner_code=manual` for backward compatibility.
+- RCE and low-cost charging now protect their independent adaptive Solcast
+  models from curtailed PV on persistent zero-export sites. A fresh coherent
+  physical GCF readback with GCF enabled and an exact effective export limit
+  of `0.0%` disables both live and Recorder-backed learning and uses a fixed
+  `0.80 × Solcast` factor. Any stale, missing or incoherent GCF evidence also
+  pauses learning conservatively with an explicit reason, but is never called
+  zero-export. A historical day is eligible only when the existing physical-
+  derived `EMS Export Allowed` entity remained `on` for the whole local day;
+  one `off`, `unknown`, `unavailable` or missing boundary excludes that day.
+  A second Recorder proof from `sensor.hoymiles_ems_package_version` requires
+  managed package v1.5.2 or newer for the complete day: v1.5.0–v1.5.1 used
+  UI-derived semantics under the same stable entity ID. A v1.5.5 installation
+  therefore reuses only physically qualified boundary rows still retained by
+  Recorder; absent, excluded or purged evidence intentionally cold-starts.
+  Daily evidence attributes added in v1.5.6 keep regular boundary reports for
+  unchanged states going forward, without extending Recorder retention.
+- Dodano diagnostykę sumarycznej odpowiedzi fizycznej po poleceniu Grid
+  Discharge na wykrytym Masterze równoległym. Po dotychczasowym potwierdzeniu
+  konfiguracji przez FC03 Mastera stosuje 20 sekund czasu przejściowego, ocenia
+  pięć nowszych kompletnych generacji mocy (maksymalnie po 20 sekund każda) i
+  wymaga trzech kolejnych stabilnych generacji. Nie jest protokołowym ACK
+  żadnego Slave'a.
+- RCE zamraża autorytatywny cel rozładowania przed poleceniem i przy braku
+  potwierdzenia odpowiedzi wykonuje istniejący neutralny rollback fail-closed.
+  Wymaga też eksportu co najmniej 0,25 kW i zgodności z zamrożonym celem.
+  Tryb ręczny/recovery i przygotowanie RCEm bez autorytatywnego celu sumarycznej
+  mocy oceniają świeży stabilny kierunek rozładowania baterii bez odrzucenia za
+  eksport lub amplitudę. Powrót do Self-Use nie czeka na ten dowód.
+- Uporządkowano prezentację właściciela EMS bez zmiany decyzji sterujących.
+  Gdy żaden automat nie wykonuje zapisu, **Steruje teraz** pokazuje
+  **Brak aktywnej automatyki**, a osobny wiersz **Tanie ładowanie** rozróżnia
+  stan wyłączony, włączony i oczekujący, aktywne ładowanie, brak potrzeby oraz
+  jawną blokadę. Stabilny atrybut diagnostyczny pozostaje
+  `owner_code=manual` dla zgodności wstecznej.
+- RCE i tanie ładowanie chronią teraz swoje niezależne adaptacyjne modele
+  Solcast przed produkcją PV ograniczoną w instalacjach z trwałym zero-export.
+  Świeży, spójny odczyt fizyczny GCF z włączonym GCF i dokładnym efektywnym
+  limitem eksportu `0,0%` wyłącza learning bieżący i historyczny oraz wymusza
+  stały współczynnik `0,80 × Solcast`. Nieświeży, brakujący lub niespójny GCF
+  również konserwatywnie wstrzymuje uczenie z jawną przyczyną, ale nie jest
+  nazywany zero-export. Dzień historyczny uczestniczy w modelu tylko wtedy,
+  gdy istniejąca, wyprowadzona z fizycznych odczytów encja **EMS Export
+  Allowed** była `on` przez cały lokalny dzień; pojedyncze `off`, `unknown`,
+  `unavailable` albo brak stanu granicznego wyklucza cały dzień. Drugim dowodem
+  Recordera jest `sensor.hoymiles_ems_package_version` z wersją pakietu
+  zarządzanego co najmniej v1.5.2 przez cały dzień: v1.5.0–v1.5.1 używały
+  semantyki opartej na UI pod tym samym stabilnym identyfikatorem encji.
+  Instalacja v1.5.5 wykorzystuje więc tylko fizycznie kwalifikowane wpisy
+  graniczne nadal zachowane w Recorderze; brakujący, wykluczony albo usunięty
+  dowód świadomie rozpoczyna model od zera. Dzienne atrybuty dowodowe dodane w
+  v1.5.6 zapewniają kolejne wpisy graniczne dla niezmiennych stanów, ale nie
+  wydłużają retencji Recordera.
+
+### Field evidence boundary / Granica dowodu terenowego
+
+- The 2026-08-15 shared-bus run remains **hardware and protocol evidence only**:
+  the host used managed Home Assistant package **1.5.4** and ESP32
+  firmware/project **1.5.3**, not the v1.5.6 candidate. It recorded Master mode
+  `5`, stable aggregate battery discharge of **33.653 kW** and **33.863 kW**,
+  and the later return to Master mode `0`; the operator reported Grid Discharge
+  on both nodes but retained no per-node power or exact vendor timestamp.
+- Home Assistant history inspected for this installation over the 8–14 August
+  evening windows (19:00–22:00 local) shows an approximately **60 kW** stop
+  transient on 8 August and an approximately **60 kW** start transient aligned
+  with the stored mode-code change on 14 August. The 9–13 August windows show
+  repeated discharge plateaus and switching impulses, although recorder
+  sampling may miss the full peak. Separately, the 15 August live trace at
+  18:20 local captured **63.069 kW battery / 65.910 kW inverter** during a
+  switch. This installation- and date-bounded evidence motivates grace plus a
+  stable window; a sampled peak is annotated, not accepted as stable response
+  or treated by itself as an error.
+- Dokładnie ten sam test z 2026-08-15 pozostaje wyłącznie **dowodem sprzętowym
+  i protokołowym**, ponieważ instalacja korzystała z pakietu HA **1.5.4** i
+  firmware/projektu ESP32 **1.5.3**. Historia tej instalacji z wieczorów 8–14
+  sierpnia, 19:00–22:00 czasu lokalnego, pokazuje pik stop około **60 kW** 8
+  sierpnia oraz pik start około **60 kW** zgodny ze zmianą kodu trybu 14
+  sierpnia. Okna 9–13 sierpnia zawierają powtarzające się plateau rozładowania
+  i impulsy przełączeń, choć próbkowanie mogło nie uchwycić maksimum. Osobno
+  ślad live z 15 sierpnia, 18:20 lokalnie, zawiera **63,069 kW baterii /
+  65,910 kW falownika** podczas przejścia. Ten ograniczony dowód uzasadnia czas
+  przejściowy i stabilne okno; pełny odbiór wymaga testu dokładnej v1.5.6.
+
 ## [1.5.5] - 2026-08-15
 
 ### User update steps / Kroki po aktualizacji

@@ -73,6 +73,9 @@ PHRASE_TRANSLATIONS = {
     "Parallel Topology": "Topologia sieci równoległej",
     "Parallel EMS Control Status": "Stan sterowania EMS sieci równoległej",
     "Parallel Topology Readback Generation": "Generacja odczytu topologii równoległej",
+    "Parallel Aggregate Power Readback Generation": (
+        "Generacja odczytu sumarycznej mocy układu równoległego"
+    ),
     "EMS Verified Hardware Readback Supported": "Obsługa potwierdzonego odczytu sprzętowego EMS",
     "Direct Register Verified Readback Supported": (
         "Obsługa potwierdzonego odczytu rejestrów bezpośrednich"
@@ -279,6 +282,42 @@ TEXT_STATE_TRANSLATIONS = {
 }
 
 ENGLISH_REPLACEMENTS = {
+    "EMS — potwierdź zbiorczą reakcję mocy po Grid Discharge": (
+        "EMS — verify aggregate power response after Grid Discharge"
+    ),
+    "Po sprzętowym ACK trybu z Mastera szuka trzech kolejnych stabilnych": (
+        "After the physical Master mode ACK, looks for three consecutive stable"
+    ),
+    "bilansów w pięciu nowszych kompletnych generacjach. Przejściowy pik tylko": (
+        "balances within five newer complete generations. A transition peak only"
+    ),
+    "przesuwa okno. Wynik jest dowodem reakcji agregatowej, nie odczytem": (
+        "shifts the window. The result is aggregate-response evidence, not a readback"
+    ),
+    "potwierdzającym stan któregokolwiek pojedynczego falownika.": (
+        "confirming the state of any individual inverter."
+    ),
+    "Topologia przed poleceniem nie była jednoznaczna": (
+        "Pre-command topology was not unambiguous"
+    ),
+    "Agregatowy dowód nie jest wymagany dla tej topologii": (
+        "Aggregate evidence is not required for this topology"
+    ),
+    "Brak kompletnej generacji agregatowego bilansu mocy": (
+        "No complete aggregate power-balance generation is available"
+    ),
+    "Generacja agregatowego odczytu zresetowała się po poleceniu": (
+        "Aggregate readback generation reset after the command"
+    ),
+    "ESP uruchomił się ponownie podczas weryfikacji reakcji": (
+        "ESP restarted during response verification"
+    ),
+    "Brak świeżej, zgodnej kierunkowo reakcji mocy układu równoległego": (
+        "No fresh, directionally consistent parallel-system power response"
+    ),
+    "RCE nie otrzymało zgodnej agregatowej reakcji mocy": (
+        "RCE did not receive a matching aggregate power response"
+    ),
     "'letni'": "'summer'",
     "'zimowy'": "'winter'",
     "'tak'": "'yes'",
@@ -2258,6 +2297,37 @@ ENGLISH_REPLACEMENTS = {
     "Automatyka RCE": "RCE automation",
     "Tanie ładowanie": "Low-cost charging",
     "RCEm 253 V+ — obserwacja": "RCEm 253 V+ — observation",
+    "Brak aktywnej automatyki": "No active automation",
+    "Balansowanie": "Balancing",
+    "Wyłączone — kończenie aktywnego bloku": (
+        "Disabled — finishing the active slot"
+    ),
+    "Aktywne — dom zasilany z taniej sieci": (
+        "Active — home supplied from the low-cost grid"
+    ),
+    "Aktywne — ładowanie z sieci": "Active — grid charging",
+    "Aktywne — sterowanie taryfowe": "Active — tariff control",
+    "Niedostępne — trwa inicjalizacja": "Unavailable — initializing",
+    "Włączone — zablokowane: włączona polityka RCE": (
+        "Enabled — blocked: RCE policy is enabled"
+    ),
+    "Włączone — zablokowane: plan niedostępny": (
+        "Enabled — blocked: plan unavailable"
+    ),
+    "Włączone — oczekuje na aktualny plan": (
+        "Enabled — waiting for a current plan"
+    ),
+    "Włączone — brak potrzeby ładowania": (
+        "Enabled — no charging needed"
+    ),
+    "Włączone — wybrany blok oczekuje na rozpoczęcie": (
+        "Enabled — selected slot waiting to start"
+    ),
+    "Włączone — oczekuje na wybrany blok": (
+        "Enabled — waiting for a selected slot"
+    ),
+    "Włączone — zablokowane:": "Enabled — blocked:",
+    "Włączone — {{ plan_state }}": "Enabled — {{ plan_state }}",
     "Sterowanie ręczne": "Manual control",
     "Dane i sterowanie gotowe": "Data and control ready",
     "Eksport fizycznie dozwolony": "Physical export permitted",

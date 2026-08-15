@@ -29,6 +29,10 @@ from diagnostics_analysis.archive import (  # noqa: E402
     discover_archives,
     load_diagnostic_archive,
 )
+from diagnostics_analysis.extractors import (  # noqa: E402
+    AGGREGATE_RESPONSE_EVENT_ATTRIBUTE_KEYS,
+    CONTEXT_ENTITY_SUFFIXES,
+)
 from diagnostics_analysis.history import analyze_control_history  # noqa: E402
 from diagnostics_analysis.outputs import (  # noqa: E402
     build_output_payloads,
@@ -84,6 +88,10 @@ def _healthy_snapshot(timestamp: datetime) -> dict[str, dict]:
                 "data_quality_score": 98.0,
                 "data_quality_issues": [],
                 "forecast_day3_data_fresh": True,
+                "forecast_learning_enabled": True,
+                "forecast_learning_mode": "adaptive",
+                "forecast_learning_excluded_reason": None,
+                "forecast_factor_used": 0.93,
             },
             timestamp,
         ),
@@ -132,6 +140,10 @@ def _healthy_snapshot(timestamp: datetime) -> dict[str, dict]:
                 "model_input_maximum_soc_percent": 90.0,
                 "planning_horizon_hours": 72.0,
                 "forecast_day_3_data_fresh": True,
+                "forecast_learning_enabled": True,
+                "forecast_learning_mode": "adaptive",
+                "forecast_learning_excluded_reason": None,
+                "forecast_factor_used": 0.91,
             },
             timestamp,
         ),
@@ -386,6 +398,44 @@ def _run_adversarial_regressions(
     generated_at: datetime,
 ) -> None:
     """Lock safety semantics and evidence honesty against nearby snapshots."""
+
+    def zero_export_learning(snapshot: dict[str, dict]) -> None:
+        attributes = _planner_attributes(
+            snapshot, "sensor.hoymiles_hit_rce_optimized_plan"
+        )
+        attributes.update(
+            {
+                "forecast_learning_enabled": False,
+                "forecast_learning_mode": "fixed_zero_export",
+                "forecast_learning_excluded_reason": "zero_export",
+                "forecast_factor_used": 0.80,
+            }
+        )
+
+    zero_export = _analyze_adversarial_case(
+        root,
+        "zero-export-forecast-learning",
+        generated_at,
+        snapshot_mutator=zero_export_learning,
+    )
+    rce_observation = next(
+        item
+        for item in zero_export["observations"]
+        if item.get("controller") == "rce"
+    )
+    require(
+        rce_observation.get("flags", {}).get("forecast_learning_enabled")
+        is False
+        and rce_observation.get("metrics", {}).get("forecast_learning_mode")
+        == "fixed_zero_export"
+        and rce_observation.get("metrics", {}).get(
+            "forecast_learning_excluded_reason"
+        )
+        == "zero_export"
+        and rce_observation.get("metrics", {}).get("forecast_factor_used")
+        == 0.80,
+        "Zero-export forecast-learning diagnostics were not preserved",
+    )
 
     # 1. An unavailable/stale BMS input is intentionally reduced to a 0 kW
     # fail-closed physical limit by the live RCE contract.
@@ -1193,6 +1243,161 @@ def _run_history_regressions() -> None:
         "HISTORY_RCEM_ACTIVE_WITH_DIRECT_GATE_OFF" not in codes,
         "Pre-discharge was falsely treated as a direct-register owner",
     )
+
+    def response_event(
+        state: str,
+        seconds: int,
+        transaction_id: str,
+        **extra_attributes,
+    ) -> dict:
+        item = event(
+            "sensor.hoymiles_parallel_aggregate_physical_response",
+            state,
+            seconds,
+        )
+        item["integration_version"] = "1.5.6"
+        item["attributes"] = {
+            "transaction_id": transaction_id,
+            "owner": "manual",
+            "requires_parallel_proof": True,
+            "latched_machine_type": 1,
+            "detected_inverters": 2,
+            "verification_horizon_seconds": 135,
+            **extra_attributes,
+        }
+        return item
+
+    completed_response = [
+        response_event("pending", 0, "transaction-completed"),
+        response_event(
+            "confirmed",
+            45,
+            "transaction-completed",
+            reason="fresh_direction_confirmed",
+            sample_count=3,
+            sampled_transition_observed=True,
+            sampled_transition_peak_kw=71.25,
+            sampled_transition_scope=(
+                "best_effort_post_master_ack_boundaries_and_complete_candidates"
+            ),
+        ),
+    ]
+    response_metrics, response_findings = analyze_control_history(
+        completed_response,
+        {installation: BASE_TIME + timedelta(seconds=240)},
+    )
+    response_codes = {finding.code for finding in response_findings}
+    require(
+        "HISTORY_PARALLEL_AGGREGATE_RESPONSE_CONFIRMED" in response_codes,
+        "A pending-to-confirmed aggregate response was not correlated",
+    )
+    require(
+        "HISTORY_PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT"
+        not in response_codes,
+        "A completed aggregate response was misclassified as an open timeout",
+    )
+    peak_finding = next(
+        finding
+        for finding in response_findings
+        if finding.code == "HISTORY_PARALLEL_TRANSITION_SAMPLE_OBSERVED"
+    )
+    require(
+        peak_finding.severity.value == "info"
+        and peak_finding.evidence.get("sampled_transition_peak_kw") == 71.25,
+        "A sampled transition peak was escalated or lost",
+    )
+    require(
+        any(
+            metric.get("family") == "parallel_aggregate_response"
+            and metric.get("active_minutes") == 0.75
+            for metric in response_metrics
+        ),
+        "Aggregate response latency metric is missing",
+    )
+
+    _, open_pending_findings = analyze_control_history(
+        [response_event("pending", 0, "transaction-open")],
+        {installation: BASE_TIME + timedelta(seconds=136)},
+    )
+    require(
+        "HISTORY_PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT"
+        in {finding.code for finding in open_pending_findings},
+        "An open aggregate response beyond its bounded horizon was missed",
+    )
+
+    boundary_pending_event = response_event(
+        "pending",
+        0,
+        "transaction-boundary-seed",
+        pending_at=(BASE_TIME - timedelta(seconds=300)).isoformat(),
+    )
+    boundary_pending_event["history_boundary_seed"] = True
+    _, boundary_pending_findings = analyze_control_history(
+        [boundary_pending_event],
+        {
+            installation: (
+                (BASE_TIME, BASE_TIME + timedelta(seconds=10)),
+            )
+        },
+    )
+    require(
+        "HISTORY_PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT"
+        in {finding.code for finding in boundary_pending_findings},
+        "A left-censored pending state ignored its explicit pending_at",
+    )
+
+    boundary_terminal = response_event(
+        "not_confirmed",
+        0,
+        "transaction-terminal-boundary-seed",
+        completed_at=(BASE_TIME - timedelta(seconds=300)).isoformat(),
+    )
+    boundary_terminal["history_boundary_seed"] = True
+    boundary_metrics, boundary_terminal_findings = analyze_control_history(
+        [boundary_terminal],
+        {
+            installation: (
+                (BASE_TIME, BASE_TIME + timedelta(seconds=300)),
+            )
+        },
+    )
+    require(
+        not boundary_metrics
+        and not any(
+            finding.code.startswith("HISTORY_PARALLEL_AGGREGATE_RESPONSE_")
+            for finding in boundary_terminal_findings
+        ),
+        "A boundary-seed terminal state manufactured a historical verdict",
+    )
+
+    _, old_version_findings = analyze_control_history(
+        [
+            {
+                **response_event("pending", 0, "transaction-old"),
+                "integration_version": "1.5.5",
+            }
+        ],
+        {installation: BASE_TIME + timedelta(seconds=300)},
+    )
+    require(
+        not any(
+            "PARALLEL_AGGREGATE_RESPONSE" in finding.code
+            for finding in old_version_findings
+        ),
+        "Pre-v1.5.6 history produced an aggregate-response verdict",
+    )
+    hostile_history_event = {
+        **response_event("pending", 0, "transaction-hostile-version"),
+        "integration_version": f"1.{('9' * 5000)}.6",
+    }
+    _, hostile_history_findings = analyze_control_history(
+        [hostile_history_event],
+        {installation: BASE_TIME + timedelta(seconds=600)},
+    )
+    require(
+        not hostile_history_findings,
+        "An unbounded integration-version segment entered history rules",
+    )
     rce_metric = next(
         item
         for item in metrics
@@ -1248,6 +1453,347 @@ def _run_history_regressions() -> None:
         all(item.get("active_minutes") == 60.0 for item in gap_metrics),
         "An open state was extended through an unobserved history gap",
     )
+
+
+def _run_parallel_response_archive_regressions(
+    root: Path,
+    generated_at: datetime,
+) -> None:
+    """Lock capability, topology, state and transition-severity semantics."""
+
+    def v156(reports: list[dict]) -> None:
+        for report in reports:
+            report["integration_version"] = "1.5.6"
+
+    def parallel_mode(
+        snapshot: dict[str, dict],
+        *,
+        response_state: str | None = None,
+        response_timestamp: datetime = BASE_TIME,
+        hardware_mode_timestamp: datetime = BASE_TIME,
+        **response_attributes,
+    ) -> None:
+        snapshot["sensor.hoymiles_ems_hardware_mode"] = _state(
+            "grid_discharge", {}, hardware_mode_timestamp
+        )
+        snapshot["sensor.hoymiles_hit_machines_type"] = _state(
+            "1", {}, BASE_TIME
+        )
+        snapshot[
+            "sensor.hoymiles_hit_number_of_machines_master_and_slave"
+        ] = _state("2", {}, BASE_TIME)
+        snapshot[
+            "sensor.hoymiles_hit_parallel_aggregate_power_readback_generation"
+        ] = _state("42", {}, BASE_TIME)
+        if response_state is not None:
+            snapshot[
+                "sensor.hoymiles_parallel_aggregate_physical_response"
+            ] = _state(
+                response_state,
+                {
+                    "transaction_id": "parallel-test-transaction",
+                    "owner": "manual",
+                    "transaction_started_epoch": response_timestamp.timestamp(),
+                    "pending_at": response_timestamp.isoformat(),
+                    "completed_at": (
+                        response_timestamp.isoformat()
+                        if response_state != "pending"
+                        else None
+                    ),
+                    "evidence_scope": "aggregate_system_power",
+                    "configuration_acknowledgement_scope": "master_fc03",
+                    "requires_parallel_proof": True,
+                    "latched_machine_type": 1,
+                    "detected_inverters": 2,
+                    "verification_horizon_seconds": 135,
+                    **response_attributes,
+                },
+                response_timestamp,
+            )
+
+    old_missing = _analyze_adversarial_case(
+        root,
+        "parallel-old-version-missing",
+        generated_at,
+        snapshot_mutator=parallel_mode,
+    )
+    require(
+        "PARALLEL_AGGREGATE_RESPONSE_MISSING" not in _rule_ids(old_missing),
+        "A pre-v1.5.6 archive was evaluated against the new capability",
+    )
+
+    hostile_version_path = root / "parallel-hostile-version.zip"
+    healthy_peer_path = root / "parallel-hostile-version-peer.zip"
+
+    def hostile_version(reports: list[dict]) -> None:
+        for report in reports:
+            report["integration_version"] = f"1.{('9' * 5000)}.6"
+
+    build_bundle(
+        hostile_version_path,
+        INSTALLATION_A,
+        BASE_TIME,
+        snapshot_mutator=parallel_mode,
+        report_mutator=hostile_version,
+    )
+    build_bundle(
+        healthy_peer_path,
+        INSTALLATION_B,
+        BASE_TIME + timedelta(minutes=1),
+    )
+    hostile_cohort = analyze_inputs(
+        [hostile_version_path, healthy_peer_path],
+        generated_at=generated_at,
+    )
+    require(
+        hostile_cohort["totals"]["accepted_or_partial_archives"] == 2
+        and "PARALLEL_AGGREGATE_RESPONSE_MISSING"
+        not in _rule_ids(hostile_cohort),
+        "An unbounded integration-version segment crashed or entered rules",
+    )
+
+    def single_mode(snapshot: dict[str, dict]) -> None:
+        parallel_mode(snapshot)
+        snapshot["sensor.hoymiles_hit_machines_type"]["state"] = "0"
+        snapshot[
+            "sensor.hoymiles_hit_number_of_machines_master_and_slave"
+        ]["state"] = "1"
+
+    single_missing = _analyze_adversarial_case(
+        root,
+        "parallel-single-inverter-missing",
+        generated_at,
+        snapshot_mutator=single_mode,
+        report_mutator=v156,
+    )
+    require(
+        "PARALLEL_AGGREGATE_RESPONSE_MISSING"
+        not in _rule_ids(single_missing),
+        "A single-inverter archive produced a parallel response error",
+    )
+
+    missing = _analyze_adversarial_case(
+        root,
+        "parallel-v156-missing",
+        generated_at,
+        snapshot_mutator=parallel_mode,
+        report_mutator=v156,
+    )
+    require(
+        "PARALLEL_AGGREGATE_RESPONSE_MISSING" in _rule_ids(missing),
+        "An active v1.5.6 parallel mode without response evidence was missed",
+    )
+
+    def confirmed(snapshot: dict[str, dict]) -> None:
+        parallel_mode(
+            snapshot,
+            response_state="confirmed",
+            reason="fresh_direction_confirmed",
+            sample_count=3,
+            baseline_generation=42,
+            final_generation=47,
+            sampled_transition_observed=True,
+            sampled_transition_peak_kw=73.125,
+            sampled_transition_scope=(
+                "best_effort_post_master_ack_boundaries_and_complete_candidates"
+            ),
+        )
+
+    healthy = _analyze_adversarial_case(
+        root,
+        "parallel-v156-confirmed",
+        generated_at,
+        snapshot_mutator=confirmed,
+        report_mutator=v156,
+    )
+    require(
+        {
+            "PARALLEL_AGGREGATE_RESPONSE_CONFIRMED",
+            "PARALLEL_TRANSITION_SAMPLE_OBSERVED",
+        }.issubset(_rule_ids(healthy)),
+        "Confirmed aggregate response or transition annotation is missing",
+    )
+    transition = _finding(healthy, "PARALLEL_TRANSITION_SAMPLE_OBSERVED")
+    require(
+        transition is not None
+        and transition.get("severity") == "info"
+        and transition.get("sample_evidence", {}).get(
+            "sampled_transition_peak_kw"
+        )
+        == 73.125,
+        "A sampled transition peak became an error or lost its measured value",
+    )
+
+    for stale_state, forbidden_code in (
+        ("confirmed", "PARALLEL_AGGREGATE_RESPONSE_CONFIRMED"),
+        ("not_confirmed", "PARALLEL_AGGREGATE_RESPONSE_NOT_CONFIRMED"),
+    ):
+        stale = _analyze_adversarial_case(
+            root,
+            f"parallel-v156-stale-{stale_state.replace('_', '-')}",
+            generated_at,
+            snapshot_mutator=(
+                lambda snapshot, response_state=stale_state: parallel_mode(
+                    snapshot,
+                    response_state=response_state,
+                    response_timestamp=BASE_TIME - timedelta(seconds=60),
+                    reason=f"stale_{response_state}",
+                )
+            ),
+            report_mutator=v156,
+        )
+        stale_codes = _rule_ids(stale)
+        require(
+            "PARALLEL_AGGREGATE_RESPONSE_STALE" in stale_codes
+            and forbidden_code not in stale_codes,
+            f"An old {stale_state} terminal was reused for a new mode episode",
+        )
+        require(
+            stale["installations"][0]["coverage"][
+                "physical_response_verdict"
+            ]
+            == "aggregate_response_stale",
+            "Installation summary hid a stale aggregate response",
+        )
+
+    def response_history(reports: list[dict]) -> None:
+        v156(reports)
+        pending_at = BASE_TIME - timedelta(seconds=45)
+        for report in reports:
+            report["control_history"] = {
+                "available": True,
+                "hours": 24,
+                "start": (BASE_TIME - timedelta(hours=24)).isoformat(),
+                "end": BASE_TIME.isoformat(),
+                "entities": {
+                    "sensor.hoymiles_parallel_aggregate_physical_response": [
+                        {
+                            "state": "pending",
+                            "attributes": {
+                                "transaction_id": "history-transaction",
+                                "owner": "manual",
+                                "evidence_scope": "aggregate_system_power",
+                                "configuration_acknowledgement_scope": (
+                                    "master_fc03"
+                                ),
+                                "requires_parallel_proof": True,
+                                "latched_machine_type": 1,
+                                "detected_inverters": 2,
+                                "verification_horizon_seconds": 135,
+                                "unrelated_private_attribute": "must-not-pass",
+                            },
+                            "last_changed": pending_at.isoformat(),
+                            "last_updated": pending_at.isoformat(),
+                        },
+                        {
+                            "state": "confirmed",
+                            "attributes": {
+                                "transaction_id": "history-transaction",
+                                "owner": "manual",
+                                "evidence_scope": "aggregate_system_power",
+                                "configuration_acknowledgement_scope": (
+                                    "master_fc03"
+                                ),
+                                "requires_parallel_proof": True,
+                                "latched_machine_type": 1,
+                                "detected_inverters": 2,
+                                "reason": "fresh_direction_confirmed",
+                                "sample_count": 3,
+                                "sampled_transition_observed": True,
+                                "sampled_transition_peak_kw": 73.125,
+                                "sampled_transition_scope": (
+                                    "best_effort_post_master_ack_boundaries_"
+                                    "and_complete_candidates"
+                                ),
+                                "unrelated_private_attribute": "must-not-pass",
+                            },
+                            "last_changed": BASE_TIME.isoformat(),
+                            "last_updated": BASE_TIME.isoformat(),
+                        },
+                    ]
+                },
+                "truncated_entities": [],
+            }
+
+    historical = _analyze_adversarial_case(
+        root,
+        "parallel-v156-history-confirmed",
+        generated_at,
+        snapshot_mutator=confirmed,
+        report_mutator=response_history,
+    )
+    require(
+        "HISTORY_PARALLEL_AGGREGATE_RESPONSE_CONFIRMED"
+        in _rule_ids(historical),
+        "Recorder pending-to-confirmed attributes were not extracted",
+    )
+    response_events = [
+        event
+        for event in historical["control_events"]
+        if event.get("entity_id")
+        == "sensor.hoymiles_parallel_aggregate_physical_response"
+    ]
+    require(
+        len(response_events) == 2
+        and all(isinstance(event.get("attributes"), dict) for event in response_events)
+        and all(
+            "unrelated_private_attribute" not in event["attributes"]
+            for event in response_events
+        )
+        and historical["installations"][0]["coverage"][
+            "fast_physical_telemetry_history_available"
+        ]
+        is True
+        and historical["installations"][0]["coverage"][
+            "physical_response_verdict"
+        ]
+        == "aggregate_response_confirmed",
+        "Aggregate response history coverage was not surfaced",
+    )
+
+    def timed_out(snapshot: dict[str, dict]) -> None:
+        parallel_mode(
+            snapshot,
+            response_state="pending",
+            response_timestamp=BASE_TIME,
+            hardware_mode_timestamp=BASE_TIME - timedelta(seconds=200),
+            pending_at=(BASE_TIME - timedelta(seconds=136)).isoformat(),
+        )
+
+    pending_timeout = _analyze_adversarial_case(
+        root,
+        "parallel-v156-pending-timeout",
+        generated_at,
+        snapshot_mutator=timed_out,
+        report_mutator=v156,
+    )
+    require(
+        "PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT"
+        in _rule_ids(pending_timeout),
+        "A current pending response beyond its bounded horizon was missed",
+    )
+
+    for state, expected_code in (
+        ("not_confirmed", "PARALLEL_AGGREGATE_RESPONSE_NOT_CONFIRMED"),
+        ("not_evaluable", "PARALLEL_AGGREGATE_RESPONSE_NOT_EVALUABLE"),
+    ):
+        summary = _analyze_adversarial_case(
+            root,
+            f"parallel-v156-{state.replace('_', '-')}",
+            generated_at,
+            snapshot_mutator=(
+                lambda snapshot, response_state=state: parallel_mode(
+                    snapshot,
+                    response_state=response_state,
+                    reason=f"fixture_{response_state}",
+                )
+            ),
+            report_mutator=v156,
+        )
+        require(
+            expected_code in _rule_ids(summary),
+            f"Parallel response state {state} produced no explicit finding",
+        )
 
 
 def _run_history_archive_regressions(
@@ -1307,11 +1853,38 @@ def _run_history_archive_regressions(
 
 def main() -> None:
     require(UUID(INSTALLATION_A).version == 4, "Fixture ID A is not UUID v4")
+    require(
+        {
+            "hoymiles_ems_hardware_mode",
+            "hoymiles_hit_gcf_control_readback_generation",
+            "hoymiles_hit_machines_type",
+            "hoymiles_hit_number_of_machines_master_and_slave",
+            "hoymiles_hit_parallel_aggregate_power_readback_generation",
+            "hoymiles_parallel_aggregate_physical_response",
+        }.issubset(CONTEXT_ENTITY_SUFFIXES)
+        and "parallel" not in CONTEXT_ENTITY_SUFFIXES,
+        "Parallel response context is not an exact allowlist",
+    )
+    require(
+        {
+            "sampled_transition_peak_kw",
+            "sampled_transition_observed",
+            "sampled_transition_scope",
+            "verification_horizon_seconds",
+            "transaction_id",
+            "pending_at",
+            "completed_at",
+        }.issubset(AGGREGATE_RESPONSE_EVENT_ATTRIBUTE_KEYS)
+        and "transition_peak_sampling_scope"
+        not in AGGREGATE_RESPONSE_EVENT_ATTRIBUTE_KEYS,
+        "Analyzer response attributes diverged from the frozen contract",
+    )
     fixed_analysis_time = datetime(2026, 8, 16, 0, 0, tzinfo=timezone.utc)
     with tempfile.TemporaryDirectory(prefix="hoymiles_batch_analyzer_") as raw_tmp:
         root = Path(raw_tmp)
         _run_adversarial_regressions(root, fixed_analysis_time)
         _run_history_regressions()
+        _run_parallel_response_archive_regressions(root, fixed_analysis_time)
         _run_history_archive_regressions(root, fixed_analysis_time)
         bundles = root / "bundles"
         bundles.mkdir()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 from copy import deepcopy
 import importlib.util
@@ -506,11 +507,74 @@ def main() -> None:
     for expected in (
         "await async_get_or_create_installation_identity(",
         "**installation_identity.as_dict()",
+        '"sensor.hoymiles_ems_hardware_mode"',
+        '"sensor.hoymiles_parallel_aggregate_physical_response"',
+        "AGGREGATE_RESPONSE_HISTORY_ATTRIBUTE_KEYS",
+        "regular_query = partial(",
+        "response_query = partial(",
+        '"sampled_transition_peak_kw"',
     ):
         require(
             expected in diagnostics_source,
             f"Native diagnostics report is missing identity wiring: {expected}",
         )
+    diagnostics_tree = ast.parse(diagnostics_source)
+    response_attribute_keys: set[str] | None = None
+    for statement in diagnostics_tree.body:
+        if (
+            isinstance(statement, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "AGGREGATE_RESPONSE_HISTORY_ATTRIBUTE_KEYS"
+                for target in statement.targets
+            )
+            and isinstance(statement.value, ast.Call)
+            and statement.value.args
+        ):
+            response_attribute_keys = set(
+                ast.literal_eval(statement.value.args[0])
+            )
+            break
+    require(
+        response_attribute_keys
+        == {
+            "authoritative_expected_power",
+            "baseline_generation",
+            "candidate_generations",
+            "collection_baseline_generation",
+            "completed_at",
+            "configuration_acknowledgement_scope",
+            "detected_inverters",
+            "evidence_scope",
+            "expected_power_kw",
+            "final_generation",
+            "formula",
+            "grid_samples_kw",
+            "individual_inverter_acknowledgement",
+            "latched_machine_type",
+            "observed_median_power_kw",
+            "observed_spread_kw",
+            "owner",
+            "pending_at",
+            "phase",
+            "reason",
+            "required_stable_generations",
+            "requires_parallel_proof",
+            "sample_count",
+            "sampled_transition_observed",
+            "sampled_transition_peak_kw",
+            "sampled_transition_scope",
+            "samples_kw",
+            "stable_window_start",
+            "tolerance_kw",
+            "topology_known",
+            "transaction_id",
+            "transaction_started_epoch",
+            "transition_grace_seconds",
+            "verification_horizon_seconds",
+        },
+        "Recorder response-attribute allowlist diverged from the frozen contract",
+    )
 
     setup_source = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
     identity_init = setup_source.index(

@@ -667,6 +667,9 @@
           "parallel_invalid_count": "Nieprawidłowa liczba falowników"
         }
       },
+      "parallel_aggregate_power_readback_generation": {
+        "name": "Generacja odczytu sumarycznej mocy układu równoległego"
+      },
       "overview_internal_pv_total_power": {
         "name": "Podgląd łącznej mocy wewnętrznych wejść PV"
       },

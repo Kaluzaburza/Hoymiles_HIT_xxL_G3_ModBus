@@ -208,9 +208,57 @@ RELEVANT_HISTORY_PARTS = (
 # normalized output by accident.
 CONTEXT_ENTITY_SUFFIXES = (
     "hoymiles_direct_register_execution_ready",
+    "hoymiles_ems_hardware_mode",
     "hoymiles_hit_battery_max_charge_power_readback",
+    "hoymiles_hit_gcf_control_readback_generation",
     "hoymiles_hit_gcf_enable_readback_code",
     "hoymiles_hit_gcf_maximum_export_power_readback",
+    "hoymiles_hit_machines_type",
+    "hoymiles_hit_number_of_machines_master_and_slave",
+    "hoymiles_hit_parallel_aggregate_power_readback_generation",
+    "hoymiles_parallel_aggregate_physical_response",
+)
+
+AGGREGATE_RESPONSE_ENTITY_ID = (
+    "sensor.hoymiles_parallel_aggregate_physical_response"
+)
+AGGREGATE_RESPONSE_EVENT_ATTRIBUTE_KEYS = frozenset(
+    {
+        "authoritative_expected_power",
+        "baseline_generation",
+        "candidate_generations",
+        "collection_baseline_generation",
+        "completed_at",
+        "configuration_acknowledgement_scope",
+        "detected_inverters",
+        "evidence_scope",
+        "expected_power_kw",
+        "final_generation",
+        "formula",
+        "grid_samples_kw",
+        "individual_inverter_acknowledgement",
+        "latched_machine_type",
+        "observed_median_power_kw",
+        "observed_spread_kw",
+        "owner",
+        "pending_at",
+        "phase",
+        "reason",
+        "required_stable_generations",
+        "requires_parallel_proof",
+        "sample_count",
+        "sampled_transition_observed",
+        "sampled_transition_peak_kw",
+        "sampled_transition_scope",
+        "samples_kw",
+        "stable_window_start",
+        "tolerance_kw",
+        "topology_known",
+        "transaction_id",
+        "transaction_started_epoch",
+        "transition_grace_seconds",
+        "verification_horizon_seconds",
+    }
 )
 
 
@@ -546,9 +594,10 @@ def extract_archive_evidence(
                 for parsed, item, state, boundary_seed in selected_items:
                     event_timestamp = parsed.isoformat()
                     key = (entity_id, event_timestamp, str(state))
-                    events_by_key[key] = {
+                    event: dict[str, Any] = {
                         "installation_key": archive.metadata.installation_key,
                         "archive_key": archive.metadata.archive_key,
+                        "integration_version": report.integration_version,
                         "entity_id": entity_id,
                         "state": _compact_value(state),
                         "last_changed": (
@@ -563,6 +612,16 @@ def extract_archive_evidence(
                         ),
                         "history_boundary_seed": boundary_seed,
                     }
+                    if entity_id == AGGREGATE_RESPONSE_ENTITY_ID:
+                        raw_attributes = item.get("attributes")
+                        if isinstance(raw_attributes, Mapping):
+                            event["attributes"] = {
+                                str(attribute): _compact_value(value)
+                                for attribute, value in raw_attributes.items()
+                                if str(attribute)
+                                in AGGREGATE_RESPONSE_EVENT_ATTRIBUTE_KEYS
+                            }
+                    events_by_key[key] = event
 
     observations: list[ControllerObservation] = []
     owner_snapshot = next(

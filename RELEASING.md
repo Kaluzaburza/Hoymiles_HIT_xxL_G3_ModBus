@@ -59,6 +59,74 @@ required Home Assistant restart(s). Only then rebuild and upload ESPHome from
 the matching immutable tag, and repeat the no-write verification before
 restoring the previous automation policy.
 
+## Parallel Master/Slave live-evidence gate
+
+A field run accepts only the exact integration, managed Home Assistant package,
+ESPHome firmware/project and candidate commit recorded for that run. Evidence
+from an older deployed stack may validate wiring or protocol behaviour, but it
+must not be promoted to software acceptance of a later release. Record local
+timezone and exact versions before the first command.
+
+For a shared-bus release acceptance:
+
+- snapshot physical Master FC03 generation and registers `4300–4306`, GCF
+  `258/259`, battery charge register `306`, SOC, ownership flags, timers and
+  faults before, during and after the run;
+- retain the exact Home Assistant start service-event timestamp, the first
+  physical response, the newer Master FC03 mode code `5`, and at least two
+  stable aggregate grid/LOAD/PV/battery samples with their source timestamps;
+- retain separately timestamped manufacturer-application evidence for the
+  Master and every Slave showing both mode and per-node power. An operator
+  statement without retained screenshots or per-node power is supporting
+  evidence only;
+- retain the exact stop service-event timestamp and identify whether the stop
+  was automatic, timer-driven or manual. Record the later Master FC03 code `0`,
+  separate Master/Slave Self-Use evidence, physical safe-power time,
+  timer/ownership release and final fault state; and
+- report command-to-Master-ACK, command-to-each-vendor-node,
+  command-to-safe-power and command-to-owner-release latencies separately. If
+  the command timestamp is missing, publish only the observed time interval
+  from the first available stop-side marker and state that exact stop latency
+  is unknown.
+
+A matching Master FC03 acknowledges the Master configuration only. Aggregate
+power beyond one inverter's rating is strong physical corroboration under a
+controlled power balance, but it is not acknowledgement from a named Slave.
+The v1.5.6 post-command diagnostic preserves that boundary. After Master FC03
+configuration acknowledgement it applies 20 seconds of transition grace, then
+examines five newer complete generations with a maximum 20-second wait for each
+and requires three consecutive stable generations. Its advertised horizon is
+135 seconds. It reports a system-level physical response and never a per-Slave
+protocol acknowledgement. RCE uses a frozen authoritative target, requires at
+least 0.25 kW grid export and fails closed through the existing neutral rollback
+if the response is not confirmed. Manual/manual-recovery and RCEm pre-discharge
+without an authoritative total-kW target evaluate fresh stable battery-
+discharge direction without an export or amplitude rejection. Self-Use rollback
+must not wait for aggregate discharge confirmation.
+
+Latch topology before Mode 5. Unknown topology must block that command, and a
+changed topology must prevent confirmation rather than allowing a later live
+value to validate the old transaction. Preserve the diagnostic state sequence
+`pending` → `confirmed|not_confirmed|not_evaluable` and the best-effort peak
+scope; the sampled peak is not a claim about the instantaneous maximum.
+
+Do not classify a single transition sample as either successful steady-state
+response or a failure. Record it diagnostically and restart the bounded stable
+window. This rule is motivated by the specific test installation: history for
+8–14 August, 19:00–22:00 local, contains an approximately 60 kW stop transient
+on 8 August and an approximately 60 kW start transient aligned with the stored
+mode-code change on 14 August. The 9–13 August windows show repeated discharge
+plateaus and switching impulses, although recorder cadence may miss the full
+peak. Separately, the 15 August live trace at 18:20 local captured 63.069 kW
+battery / 65.910 kW inverter during a switch. Keep this claim installation-
+and date-bounded; never turn it into a universal inverter characteristic.
+
+The 2026-08-15 run documented in `docs/AUTOMATION_TEST_REPORT.md` used managed
+package 1.5.4 and firmware/project 1.5.3 and lacks retained per-node power and
+an exact manual-stop timestamp. It is therefore hardware/protocol evidence,
+not acceptance of v1.5.5 or v1.5.6. Repeat the full gate on the exact v1.5.6
+candidate before publication.
+
 ## Frontend asset startup contract
 
 When a release changes managed dashboard or frontend assets:
@@ -133,6 +201,7 @@ technical identities listed above as part of a later branding change.
 
    ```text
    python tools/build_hacs_assets.py
+   git diff --exit-code
    python tools/validate_release.py
    python tools/test_rce_optimizer.py
    python tools/test_rce_history.py
@@ -147,9 +216,16 @@ technical identities listed above as part of a later branding change.
    python tools/test_optimizer_executor_contract.py
    python tools/test_optimizer_startup_contract.py
    python tools/test_source_device_rebind.py
+   python tools/test_automation_matrix.py
+   python tools/test_diagnostics.py
+   python tools/test_diagnostic_analyzer.py
    python tools/test_automation_matrix.py --exhaustive
    node tools/validate_rce_card.js
    ```
+
+   Run the generator determinism check from a clean release-preparation tree;
+   unrelated working-tree changes must not be mistaken for generated-asset
+   drift.
 
    The exhaustive matrix must report 2064 passed scenarios unless its reviewed
    scenario set was intentionally changed. Record the new count in
@@ -158,6 +234,15 @@ technical identities listed above as part of a later branding change.
    non-zero joint-solver and planned-export coverage, and all four explicit BMS
    fail-closed contracts. A scenario count without these coverage counters is
    not release evidence.
+   Before publication, run `workflow_dispatch` for the exact candidate ref,
+   record its SHA and require the conditional `firmware-compile` job to pass.
+   To reproduce that CI job locally, use its exact pin and fixture:
+
+   ```text
+   python -m pip install --disable-pip-version-check "esphome==2026.7.2"
+   esphome config tools/esphome_verify_ci.yaml
+   esphome compile tools/esphome_verify_ci.yaml
+   ```
 5. Create the GitHub tag and release.
 6. Copy the complete version notes, including the numbered bilingual user
    steps, into the GitHub Release body visible in HACS.

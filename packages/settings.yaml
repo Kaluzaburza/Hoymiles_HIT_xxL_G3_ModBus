@@ -6,6 +6,50 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: "0"
+  - id: ems_control_write_pending
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: ems_control_write_mismatch_reported
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: ems_control_write_generation_before
+    type: float
+    restore_value: no
+    initial_value: "0.0f"
+  - id: ems_control_write_mismatch_generation
+    type: float
+    restore_value: no
+    initial_value: "0.0f"
+  - id: ems_control_write_expected_4300
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
+  - id: ems_control_write_expected_4301
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
+  - id: ems_control_write_expected_4302
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
+  - id: ems_control_write_expected_4303
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
+  - id: ems_control_write_expected_4304
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
+  - id: ems_control_write_expected_4305
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
+  - id: ems_control_write_expected_4306
+    type: uint16_t
+    restore_value: no
+    initial_value: "0"
 
 # Każda zmiana jednego pola EMS zapisuje cały spójny blok 4300-4306. Dla
 # pojedynczego falownika jest to zwykły adresowany FC16. Master wysyła ten sam
@@ -24,11 +68,28 @@ script:
       maximum_charge_power: float
       force_discharge_soc: float
       maximum_discharge_power: float
+      snapshot_generation: float
     then:
       - lambda: |-
+          if (id(ems_control_write_pending)) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: poprzedni blok oczekuje na nowszy zgodny odczyt FC03");
+            return;
+          }
           if (!id(ems_verified_hardware_readback_supported).has_state() ||
               id(ems_verified_hardware_readback_supported).state < 0.5f) {
             ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: brak gotowości sprzętowej EMS");
+            return;
+          }
+          if (!id(ems_control_readback_generation).has_state() ||
+              !std::isfinite(id(ems_control_readback_generation).state) ||
+              !std::isfinite(snapshot_generation)) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: brak autorytatywnej generacji FC03");
+            return;
+          }
+          const float physical_generation =
+              id(ems_control_readback_generation).state;
+          if (std::fabs(snapshot_generation - physical_generation) > 0.01f) {
+            ESP_LOGE("ems", "Zapis 4300-4306 zablokowany: snapshot pochodzi ze starej generacji FC03");
             return;
           }
           auto valid_range = [](float value, float minimum, float maximum) {
@@ -93,6 +154,19 @@ script:
               encode(force_discharge_soc, 1.0f),
               encode(maximum_discharge_power, 10.0f),
           };
+          auto arm_physical_ack_barrier = [&]() {
+            id(ems_control_write_generation_before) = physical_generation;
+            id(ems_control_write_expected_4300) = values[0];
+            id(ems_control_write_expected_4301) = values[1];
+            id(ems_control_write_expected_4302) = values[2];
+            id(ems_control_write_expected_4303) = values[3];
+            id(ems_control_write_expected_4304) = values[4];
+            id(ems_control_write_expected_4305) = values[5];
+            id(ems_control_write_expected_4306) = values[6];
+            id(ems_control_write_mismatch_reported) = false;
+            id(ems_control_write_mismatch_generation) = 0.0f;
+            id(ems_control_write_pending) = true;
+          };
 
           if (machine_type == 1) {
             if (!id(number_of_machines_master_and_slave_6049).has_state()) {
@@ -123,6 +197,7 @@ script:
               payload.push_back(static_cast<uint8_t>(value >> 8));
               payload.push_back(static_cast<uint8_t>(value & 0xFF));
             }
+            arm_physical_ack_barrier();
             id(modbus_1).send_raw(payload);
             ESP_LOGI("ems",
                      "Wysłano systemowy broadcast EMS 4300-4306; tryb=%d, falowniki=%d",
@@ -134,6 +209,7 @@ script:
           auto command =
               esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(
                   controller, 4300, values.size(), values);
+          arm_physical_ack_barrier();
           controller->queue_command(command);
           ESP_LOGI("ems", "Wysłano adresowany FC16 EMS 4300-4306; tryb=%d",
                    requested_mode);
@@ -348,6 +424,74 @@ sensor:
                         id(ems_control_readback_generation).state < 16000000.0f
                     ? id(ems_control_readback_generation).state + 1.0f
                     : 1.0f;
+            if (id(ems_control_write_pending)) {
+              const float generation_before =
+                  id(ems_control_write_generation_before);
+              const bool newer_generation =
+                  generation > generation_before ||
+                  (generation_before >= 16000000.0f && generation == 1.0f);
+              if (newer_generation) {
+                auto valid_range = [](float value, float minimum, float maximum) {
+                  return std::isfinite(value) && value >= minimum && value <= maximum;
+                };
+                const bool complete =
+                    id(ems_mode_raw_4300).has_state() &&
+                    id(self_used_soc_readback_4301).has_state() &&
+                    id(backup_soc_raw_4302).has_state() &&
+                    id(force_charge_soc_readback_4303).has_state() &&
+                    id(maximum_charge_power_readback_4304).has_state() &&
+                    id(force_discharge_soc_readback_4305).has_state() &&
+                    valid_range(id(ems_mode_raw_4300).state, 0.0f, 5.0f) &&
+                    valid_range(id(self_used_soc_readback_4301).state, 10.0f, 100.0f) &&
+                    valid_range(id(backup_soc_raw_4302).state, 60.0f, 100.0f) &&
+                    valid_range(id(force_charge_soc_readback_4303).state, 10.0f, 100.0f) &&
+                    valid_range(id(maximum_charge_power_readback_4304).state, 0.0f, 100.0f) &&
+                    valid_range(id(force_discharge_soc_readback_4305).state, 0.0f, 100.0f) &&
+                    valid_range(x, 0.0f, 100.0f);
+                auto encode = [](float value, float scale) -> uint16_t {
+                  return static_cast<uint16_t>(std::lround(value * scale));
+                };
+                const bool matches = complete &&
+                    encode(id(ems_mode_raw_4300).state, 1.0f) ==
+                        id(ems_control_write_expected_4300) &&
+                    encode(id(self_used_soc_readback_4301).state, 1.0f) ==
+                        id(ems_control_write_expected_4301) &&
+                    encode(id(backup_soc_raw_4302).state, 1.0f) ==
+                        id(ems_control_write_expected_4302) &&
+                    encode(id(force_charge_soc_readback_4303).state, 1.0f) ==
+                        id(ems_control_write_expected_4303) &&
+                    encode(id(maximum_charge_power_readback_4304).state, 10.0f) ==
+                        id(ems_control_write_expected_4304) &&
+                    encode(id(force_discharge_soc_readback_4305).state, 1.0f) ==
+                        id(ems_control_write_expected_4305) &&
+                    encode(x, 10.0f) == id(ems_control_write_expected_4306);
+                if (matches) {
+                  id(ems_control_write_pending) = false;
+                  id(ems_control_write_mismatch_reported) = false;
+                  id(ems_control_write_mismatch_generation) = 0.0f;
+                  ESP_LOGI("ems", "Potwierdzono fizyczny zapis FC03 pełnego bloku 4300-4306; generacja=%.0f",
+                           generation);
+                } else if (complete && id(ems_control_write_mismatch_reported)) {
+                  const float mismatch_generation =
+                      id(ems_control_write_mismatch_generation);
+                  const bool newer_than_mismatch =
+                      generation > mismatch_generation ||
+                      (mismatch_generation >= 16000000.0f && generation == 1.0f);
+                  if (newer_than_mismatch) {
+                    id(ems_control_write_pending) = false;
+                    id(ems_control_write_mismatch_reported) = false;
+                    id(ems_control_write_mismatch_generation) = 0.0f;
+                    ESP_LOGE("ems", "Zapis 4300-4306 nie uzyskał zgodnego ACK; bariera zwolniona dopiero po kolejnej kompletnej generacji FC03, ponów zmianę");
+                  }
+                } else if (complete) {
+                  id(ems_control_write_mismatch_reported) = true;
+                  id(ems_control_write_mismatch_generation) = generation;
+                  ESP_LOGW("ems", "Bariera zapisu 4300-4306 pozostaje aktywna: nowszy FC03 jest kompletny, ale niezgodny");
+                } else if (!id(ems_control_write_mismatch_reported)) {
+                  ESP_LOGW("ems", "Bariera zapisu 4300-4306 pozostaje aktywna: nowszy FC03 jest niekompletny");
+                }
+              }
+            }
             id(ems_control_readback_generation).publish_state(generation);
 
 select:
@@ -386,7 +530,8 @@ select:
               id(force_charge_soc_readback_4303).state,
               id(maximum_charge_power_readback_4304).state,
               id(force_discharge_soc_readback_4305).state,
-              id(maximum_discharge_power_readback_4306).state);
+              id(maximum_discharge_power_readback_4306).state,
+              id(ems_control_readback_generation).state);
 
   # Generation Control Function (GCF), sekcja Safety Parameters.
   # Rejestr 257 (GCF_FuncCode) pozostaje ustawieniem serwisowym producenta.
@@ -651,7 +796,8 @@ number:
           id(force_charge_soc_readback_4303).state,
           id(maximum_charge_power_readback_4304).state,
           id(force_discharge_soc_readback_4305).state,
-          id(maximum_discharge_power_readback_4306).state);
+          id(maximum_discharge_power_readback_4306).state,
+          id(ems_control_readback_generation).state);
       return {};
     entity_category: config
 
@@ -679,7 +825,8 @@ number:
           safe,
           id(maximum_charge_power_readback_4304).state,
           id(force_discharge_soc_readback_4305).state,
-          id(maximum_discharge_power_readback_4306).state);
+          id(maximum_discharge_power_readback_4306).state,
+          id(ems_control_readback_generation).state);
       return {};
     entity_category: config
 
@@ -708,7 +855,8 @@ number:
           id(force_charge_soc_readback_4303).state,
           safe,
           id(force_discharge_soc_readback_4305).state,
-          id(maximum_discharge_power_readback_4306).state);
+          id(maximum_discharge_power_readback_4306).state,
+          id(ems_control_readback_generation).state);
       return {};
     entity_category: config
 
@@ -736,7 +884,8 @@ number:
           id(force_charge_soc_readback_4303).state,
           id(maximum_charge_power_readback_4304).state,
           safe,
-          id(maximum_discharge_power_readback_4306).state);
+          id(maximum_discharge_power_readback_4306).state,
+          id(ems_control_readback_generation).state);
       return {};
     entity_category: config
 
@@ -765,6 +914,7 @@ number:
           id(force_charge_soc_readback_4303).state,
           id(maximum_charge_power_readback_4304).state,
           id(force_discharge_soc_readback_4305).state,
-          safe);
+          safe,
+          id(ems_control_readback_generation).state);
       return {};
     entity_category: config

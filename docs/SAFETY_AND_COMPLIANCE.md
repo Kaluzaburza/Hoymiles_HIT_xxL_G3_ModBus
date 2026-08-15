@@ -70,9 +70,28 @@ Official references:
   Self-Use.
 - **Parallel evidence boundary:** a newer matching Master FC03 acknowledges
   the configuration, while commissioning still requires separate evidence for
-  every inverter. Aggregate power-based physical-response acknowledgement is
-  not implemented and remains deferred; aggregate response could not by itself
-  prove execution by each Slave.
+  every inverter. In v1.5.6 a separate post-command diagnostic applies 20
+  seconds of transition grace, evaluates five newer complete aggregate-power
+  generations and requires three consecutive stable generations. It confirms
+  a system-level physical response only; aggregate response cannot prove
+  execution by a named Slave and is never described as a per-Slave protocol
+  acknowledgement.
+- **Transition evidence:** an isolated mode-change sample is annotated but is
+  neither accepted as stable response nor treated by itself as an error. On
+  this installation, HA history for 8–14 August, 19:00–22:00 local, showed an
+  approximately 60 kW stop transient on 8 August and an approximately 60 kW
+  start transient aligned with the stored mode-code change on 14 August. The
+  9–13 August windows contain repeated discharge plateaus and switching
+  impulses, though sampling may miss the full peak. Separately, the 15 August
+  live trace at 18:20 local captured 63.069 kW battery / 65.910 kW inverter
+  during a switch. This is bounded evidence, not an inverter specification.
+- **Version-scoped field evidence:** the 2026-08-15 shared-bus observation used
+  managed Home Assistant package 1.5.4 and ESP32 firmware/project 1.5.3. Its
+  two stable 33.653/33.863 kW battery-discharge samples and the operator's
+  report that both nodes showed Grid Discharge support the physical bus and
+  protocol path. They do not accept v1.5.5 or v1.5.6 software, provide
+  per-node power, or prove an automatic stop. An exact-version v1.5.6 retest is
+  required.
 - **Traceability:** the optimizer state includes data age, model source,
   reserve, power constraints, selected windows and the calculated financial
   result; the support ZIP provides a redacted diagnostic snapshot.
@@ -91,16 +110,28 @@ updates as part of the complete installation.
 ## Evidence package for an installer or audit
 
 1. Record the inverter, battery/BMS, protection and OSD documentation.
-2. Save the exact integration and ESPHome package versions.
+2. Save the exact integration, managed Home Assistant package, ESPHome
+   firmware/project and candidate commit versions. Evidence from an older
+   deployed stack cannot accept a later software release.
 3. Export the Hoymiles diagnostic ZIP after commissioning.
 4. Capture Self-Use, Grid Charge and Grid Discharge acceptance tests at a safe
    power limit, including the return to Self-Use.
 5. Verify the configured battery capacity, SOC reserve, BMS current limits,
    system power, GCF/export cap and parallel topology.
 6. For a parallel plant, record the external multidrop RS485 wiring and its
-   termination, then capture the requested mode and power separately on the
-   Master and every Slave during Grid Discharge and return to Self-Use.
-7. Keep the automated test report and the site-specific acceptance protocol.
+   termination, then retain timestamped mode **and power** evidence separately
+   for the Master and every Slave during Grid Discharge and return to Self-Use.
+   An operator statement without per-node power or a retained screenshot must
+   be labelled as limited evidence.
+7. Record the exact start and stop service-event timestamps, both Master FC03
+   generations, at least two stable aggregate power samples, timer/ownership
+   release and the final safe-power time. State explicitly whether the stop was
+   automatic, timer-driven or manual; an idle timer is not a substitute for the
+   missing stop-command timestamp.
+8. Snapshot `4300–4306`, GCF `258/259`, register `306`, SOC and faults before,
+   during and after the test. Do not derive per-Slave acknowledgement from the
+   Master FC03 or aggregate power.
+9. Keep the automated test report and the site-specific acceptance protocol.
 
 ## Polish summary / Podsumowanie po polsku
 
@@ -122,8 +153,21 @@ magistrali zewnętrznego Modbus/RS485 obejmującej Mastera i każdego Slave'a.
 FC03 Mastera nie jest potwierdzeniem Slave'ów, dlatego protokół odbioru musi
 zawierać osobny dowód trybu i mocy każdej jednostki.
 
+Obserwacja z 2026-08-15 na pakiecie Home Assistant 1.5.4 i firmware/projekcie
+ESP32 1.5.3 jest dowodem sprzętowym i protokołowym wspólnej magistrali, a nie
+odbiorem oprogramowania v1.5.5 lub v1.5.6. Operator potwierdził Grid Discharge
+na obu węzłach, lecz nie zachowano osobnych mocy, zrzutów ani dokładnych czasów
+aplikacji. Nie zapisano też dokładnego czasu ręcznego polecenia stop, więc nie
+wolno przypisywać temu testowi zatrzymania automatycznego ani dokładnej latencji.
+Kandydat v1.5.6 wymaga pełnego ponownego testu.
+
 Kod trybu `3` ma pierwszeństwo jako stan Off-Grid należący do
 użytkownika/falownika. Automatyczne silniki ustępują i przywracają wyłącznie
-własne limity, bez wymuszania Self-Use. Potwierdzanie odpowiedzi fizycznej na
-podstawie mocy sumarycznej nie jest jeszcze zaimplementowane; sama odpowiedź
-sumaryczna nie dowodzi wykonania przez każdego Slave'a.
+własne limity, bez wymuszania Self-Use. W v1.5.6 osobna diagnostyka po
+potwierdzeniu konfiguracji przez FC03 Mastera stosuje 20 sekund czasu
+przejściowego, ocenia pięć nowszych kompletnych generacji mocy sumarycznej i
+wymaga trzech kolejnych stabilnych generacji.
+Potwierdza tylko odpowiedź całego systemu; sama moc sumaryczna nadal nie dowodzi
+wykonania przez nazwanego Slave'a i nie jest jego protokołowym ACK. Pojedynczy
+pik zmiany trybu jest adnotowany i pomijany w stabilnym oknie, a nie traktowany
+samodzielnie jako błąd.

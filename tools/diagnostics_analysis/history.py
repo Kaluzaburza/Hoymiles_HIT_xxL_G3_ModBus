@@ -14,6 +14,8 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
+import re
 from typing import Any
 
 from .models import Confidence, Controller, Finding, Severity
@@ -25,6 +27,17 @@ SHORT_RUN_SECONDS = 120.0
 FLAPPING_TOGGLES_PER_HOUR = 6
 SEVERE_FLAPPING_TOGGLES_PER_HOUR = 10
 MIN_VIOLATION_OVERLAP_SECONDS = 30.0
+PARALLEL_RESPONSE_ENTITY_ID = (
+    "sensor.hoymiles_parallel_aggregate_physical_response"
+)
+PARALLEL_RESPONSE_MINIMUM_VERSION = (1, 5, 6)
+# Covers 20 s grace, five 20 s waits and final event/state propagation when a
+# legacy event omits the authoritative bounded runtime attribute.
+PARALLEL_RESPONSE_PENDING_HORIZON_SECONDS = 135.0
+BOUNDED_SEMANTIC_VERSION_RE = re.compile(
+    r"\s*(\d{1,6})\.(\d{1,6})\.(\d{1,6})"
+    r"(?:[-+][0-9A-Za-z.-]{1,64})?\s*"
+)
 
 RCE_ACTIVE = "input_boolean.hoymiles_rce_discharge_active"
 TARIFF_ACTIVE = "input_boolean.hoymiles_tariff_charge_active"
@@ -141,6 +154,391 @@ def _event_datetime(event: Mapping[str, Any]) -> datetime | None:
         if parsed is not None:
             return parsed
     return None
+
+
+def _response_version_supported(event: Mapping[str, Any]) -> bool:
+    raw = event.get("integration_version")
+    if not isinstance(raw, str):
+        return False
+    match = BOUNDED_SEMANTIC_VERSION_RE.fullmatch(raw)
+    return bool(
+        match is not None
+        and tuple(int(part) for part in match.groups())
+        >= PARALLEL_RESPONSE_MINIMUM_VERSION
+    )
+
+
+def _event_attributes(event: Mapping[str, Any]) -> Mapping[str, Any]:
+    raw = event.get("attributes")
+    return raw if isinstance(raw, Mapping) else {}
+
+
+def _finite_attribute(attributes: Mapping[str, Any], key: str) -> float | None:
+    value = attributes.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    return numeric if math.isfinite(numeric) else None
+
+
+def _parallel_proof_required(attributes: Mapping[str, Any]) -> bool:
+    machine_type = _finite_attribute(attributes, "latched_machine_type")
+    machine_count = _finite_attribute(attributes, "detected_inverters")
+    return (
+        attributes.get("requires_parallel_proof") is True
+        and machine_type == 1.0
+        and machine_count is not None
+        and machine_count >= 2.0
+    )
+
+
+def _response_horizon(attributes: Mapping[str, Any]) -> float:
+    configured = _finite_attribute(attributes, "verification_horizon_seconds")
+    if configured is not None and 1.0 <= configured <= 600.0:
+        return configured
+    return PARALLEL_RESPONSE_PENDING_HORIZON_SECONDS
+
+
+def _response_controller(attributes: Mapping[str, Any]) -> Controller:
+    owner = attributes.get("owner")
+    if owner == "rce":
+        return Controller.RCE
+    if owner == "rcm_pre_discharge":
+        return Controller.RCEM
+    return Controller.SYSTEM
+
+
+def _response_capture_end(
+    installation_key: str,
+    at: datetime,
+    capture_windows_by_installation: Mapping[str, Any],
+) -> datetime | None:
+    windows = _capture_windows(
+        installation_key,
+        capture_windows_by_installation,
+        {at: {"pending"}},
+    )
+    containing = [window.end for window in windows if window.start <= at <= window.end]
+    return min(containing) if containing else None
+
+
+def _pending_started_at(
+    at: datetime,
+    event: Mapping[str, Any],
+) -> datetime:
+    declared = _parse_aware_datetime(_event_attributes(event).get("pending_at"))
+    return declared if declared is not None and declared <= at else at
+
+
+def _analyze_parallel_response_history(
+    events: Sequence[Mapping[str, Any]],
+    capture_windows_by_installation: Mapping[str, Any],
+    *,
+    input_truncated: bool,
+) -> tuple[tuple[Mapping[str, Any], ...], tuple[Finding, ...]]:
+    """Correlate bounded pending/terminal aggregate-response transactions."""
+    grouped: dict[tuple[str, str], list[tuple[datetime, Mapping[str, Any]]]] = (
+        defaultdict(list)
+    )
+    for event in events:
+        if (
+            event.get("entity_id") != PARALLEL_RESPONSE_ENTITY_ID
+            or not _response_version_supported(event)
+        ):
+            continue
+        installation_key = event.get("installation_key")
+        state = event.get("state")
+        at = _event_datetime(event)
+        attributes = _event_attributes(event)
+        transaction_id = attributes.get("transaction_id")
+        if (
+            not isinstance(installation_key, str)
+            or not installation_key
+            or len(installation_key) > 256
+            or state not in {
+                "pending",
+                "confirmed",
+                "not_confirmed",
+                "not_evaluable",
+            }
+            or at is None
+            or not isinstance(transaction_id, str)
+            or not transaction_id
+            or len(transaction_id) > 256
+        ):
+            continue
+        grouped[(installation_key, transaction_id)].append((at, event))
+
+    metrics: list[Mapping[str, Any]] = []
+    findings: list[Finding] = []
+    for (installation_key, transaction_id), raw_items in sorted(grouped.items()):
+        items = sorted(raw_items, key=lambda item: (item[0], str(item[1].get("state"))))
+        pending_items = [item for item in items if item[1].get("state") == "pending"]
+        terminal_items = [
+            item
+            for item in items
+            if item[1].get("state") != "pending"
+            and item[1].get("history_boundary_seed") is not True
+        ]
+        actionable_items = sorted(
+            (*pending_items, *terminal_items),
+            key=lambda item: (item[0], str(item[1].get("state"))),
+        )
+        # Recorder's include-start terminal state only initializes the query
+        # window.  It proves nothing about a transition completed inside the
+        # observed window and therefore cannot emit a terminal verdict.
+        if not actionable_items:
+            continue
+        qualifying_attributes = next(
+            (
+                _event_attributes(event)
+                for _at, event in actionable_items
+                if _parallel_proof_required(_event_attributes(event))
+            ),
+            None,
+        )
+        if qualifying_attributes is None:
+            continue
+        terminal_at, terminal_event = (
+            terminal_items[-1] if terminal_items else (None, None)
+        )
+        terminal_state = (
+            terminal_event.get("state") if terminal_event is not None else None
+        )
+        pending_event_at = pending_items[-1][0] if pending_items else None
+        pending_at = (
+            _pending_started_at(*pending_items[-1]) if pending_items else None
+        )
+        latency = (
+            (terminal_at - pending_at).total_seconds()
+            if pending_at is not None
+            and terminal_at is not None
+            and terminal_at >= pending_at
+            else None
+        )
+        transaction_capture_end = _response_capture_end(
+            installation_key,
+            actionable_items[-1][0],
+            capture_windows_by_installation,
+        )
+        metrics.append(
+            {
+                "installation_key": installation_key,
+                "entity_id": PARALLEL_RESPONSE_ENTITY_ID,
+                "family": "parallel_aggregate_response",
+                "controller": _response_controller(qualifying_attributes).value,
+                "event_count": len(actionable_items),
+                "starts": len(pending_items),
+                "stops": len(terminal_items),
+                "active_minutes": (
+                    round(latency / 60.0, 3) if latency is not None else 0.0
+                ),
+                "longest_active_minutes": (
+                    round(latency / 60.0, 3) if latency is not None else 0.0
+                ),
+                "short_runs": 0,
+                "short_run_threshold_seconds": None,
+                "transitions": max(len(actionable_items) - 1, 0),
+                "max_toggles_per_hour": 0,
+                "open": terminal_event is None,
+                "first_observed_at": actionable_items[0][0].isoformat(),
+                "last_observed_at": actionable_items[-1][0].isoformat(),
+                "capture_end": (
+                    transaction_capture_end.isoformat()
+                    if transaction_capture_end is not None
+                    else None
+                ),
+                "ambiguous_event_count": 0,
+                "evidence_truncated": input_truncated,
+            }
+        )
+
+        if terminal_event is not None and terminal_at is not None:
+            terminal_attributes = _event_attributes(terminal_event)
+            controller = _response_controller(terminal_attributes)
+            evidence = {
+                "assessment": (
+                    "confirmed"
+                    if terminal_state in {"confirmed", "not_confirmed"}
+                    else "not_evaluable"
+                ),
+                "transaction_id": transaction_id,
+                "terminal_state": terminal_state,
+                "pending_to_terminal_seconds": (
+                    round(latency, 3) if latency is not None else None
+                ),
+                "reason": terminal_attributes.get("reason"),
+                "owner": terminal_attributes.get("owner"),
+                "evidence_scope": terminal_attributes.get("evidence_scope"),
+                "configuration_acknowledgement_scope": (
+                    terminal_attributes.get(
+                        "configuration_acknowledgement_scope"
+                    )
+                ),
+                "authoritative_expected_power": (
+                    terminal_attributes.get("authoritative_expected_power")
+                    if isinstance(
+                        terminal_attributes.get("authoritative_expected_power"),
+                        bool,
+                    )
+                    else None
+                ),
+                "expected_power_kw": _finite_attribute(
+                    terminal_attributes, "expected_power_kw"
+                ),
+                "observed_median_power_kw": _finite_attribute(
+                    terminal_attributes, "observed_median_power_kw"
+                ),
+                "observed_spread_kw": _finite_attribute(
+                    terminal_attributes, "observed_spread_kw"
+                ),
+                "sample_count": _finite_attribute(
+                    terminal_attributes, "sample_count"
+                ),
+                "baseline_generation": _finite_attribute(
+                    terminal_attributes, "baseline_generation"
+                ),
+                "final_generation": _finite_attribute(
+                    terminal_attributes, "final_generation"
+                ),
+            }
+            if terminal_state == "confirmed":
+                findings.append(
+                    Finding(
+                        code="HISTORY_PARALLEL_AGGREGATE_RESPONSE_CONFIRMED",
+                        severity=Severity.INFO,
+                        message=(
+                            "Historia potwierdza zakończoną zbiorczą odpowiedź "
+                            "mocy układu równoległego."
+                        ),
+                        confidence=Confidence.HIGH,
+                        installation_key=installation_key,
+                        controller=controller,
+                        observed_at=terminal_at,
+                        evidence=evidence,
+                    )
+                )
+            elif terminal_state == "not_confirmed":
+                findings.append(
+                    Finding(
+                        code="HISTORY_PARALLEL_AGGREGATE_RESPONSE_NOT_CONFIRMED",
+                        severity=Severity.ERROR,
+                        message=(
+                            "Historia zawiera zakończoną, niepotwierdzoną "
+                            "odpowiedź mocy układu równoległego."
+                        ),
+                        confidence=Confidence.HIGH,
+                        installation_key=installation_key,
+                        controller=controller,
+                        observed_at=terminal_at,
+                        evidence=evidence,
+                        recommendation=(
+                            "Sprawdź reason oraz świeże kompletne generacje "
+                            "GRID/PV/LOAD dla tej transakcji."
+                        ),
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        code="HISTORY_PARALLEL_AGGREGATE_RESPONSE_NOT_EVALUABLE",
+                        severity=Severity.WARNING,
+                        message=(
+                            "Historia zawiera nieocenialną odpowiedź mocy "
+                            "aktywnego układu równoległego."
+                        ),
+                        confidence=Confidence.HIGH,
+                        installation_key=installation_key,
+                        controller=controller,
+                        observed_at=terminal_at,
+                        evidence=evidence,
+                        recommendation=(
+                            "Sprawdź reason, topologię i generację pełnego bilansu."
+                        ),
+                    )
+                )
+
+            sampled_peak = _finite_attribute(
+                terminal_attributes, "sampled_transition_peak_kw"
+            )
+            if (
+                terminal_attributes.get("sampled_transition_observed") is True
+                and sampled_peak is not None
+            ):
+                findings.append(
+                    Finding(
+                        code="HISTORY_PARALLEL_TRANSITION_SAMPLE_OBSERVED",
+                        severity=Severity.INFO,
+                        message=(
+                            "Historia zawiera informacyjny pik próbki podczas "
+                            "zmiany trybu."
+                        ),
+                        confidence=Confidence.HIGH,
+                        installation_key=installation_key,
+                        controller=controller,
+                        observed_at=terminal_at,
+                        evidence={
+                            "assessment": "observed",
+                            "transaction_id": transaction_id,
+                            "sampled_transition_peak_kw": sampled_peak,
+                            "sampled_transition_scope": (
+                                terminal_attributes.get(
+                                    "sampled_transition_scope"
+                                )
+                            ),
+                        },
+                    )
+                )
+            continue
+
+        if pending_at is None:
+            continue
+        assert pending_event_at is not None
+        capture_end = _response_capture_end(
+            installation_key,
+            pending_event_at,
+            capture_windows_by_installation,
+        )
+        if capture_end is None or capture_end < pending_at:
+            continue
+        horizon = _response_horizon(qualifying_attributes)
+        pending_age = (capture_end - pending_at).total_seconds()
+        timed_out = pending_age > horizon
+        findings.append(
+            Finding(
+                code=(
+                    "HISTORY_PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT"
+                    if timed_out
+                    else "HISTORY_PARALLEL_AGGREGATE_RESPONSE_PENDING"
+                ),
+                severity=Severity.ERROR if timed_out else Severity.INFO,
+                message=(
+                    "Otwarte oczekiwanie na odpowiedź agregatową przekroczyło "
+                    "ograniczony horyzont historii."
+                    if timed_out
+                    else (
+                        "Historia kończy się w trakcie zbierania odpowiedzi "
+                        "agregatowej."
+                    )
+                ),
+                confidence=Confidence.HIGH,
+                installation_key=installation_key,
+                controller=_response_controller(qualifying_attributes),
+                observed_at=capture_end,
+                evidence={
+                    "assessment": "confirmed" if timed_out else "pending",
+                    "transaction_id": transaction_id,
+                    "pending_age_seconds": round(pending_age, 3),
+                    "pending_horizon_seconds": horizon,
+                },
+                recommendation=(
+                    "Sprawdź zakończenie transakcji i świeże kompletne generacje."
+                    if timed_out
+                    else None
+                ),
+            )
+        )
+    return tuple(metrics), tuple(findings)
 
 
 def _capture_windows(
@@ -816,6 +1214,7 @@ def analyze_control_history(
     points_by_helper: dict[
         tuple[str, str], dict[datetime, set[str]]
     ] = defaultdict(lambda: defaultdict(set))
+    response_events: list[Mapping[str, Any]] = []
     exact_seen: set[tuple[str, str, datetime, str]] = set()
     locally_truncated = False
 
@@ -828,6 +1227,8 @@ def analyze_control_history(
         installation_key = event.get("installation_key")
         entity_id = event.get("entity_id")
         state = event.get("state")
+        if entity_id == PARALLEL_RESPONSE_ENTITY_ID:
+            response_events.append(event)
         if (
             not isinstance(installation_key, str)
             or not installation_key
@@ -874,16 +1275,23 @@ def analyze_control_history(
             truncated=truncated,
         )
 
-    metrics = tuple(
+    helper_metrics = tuple(
         _metric(
             timelines[key],
             input_truncated=input_truncated or locally_truncated,
         )
         for key in sorted(timelines)
     )
+    response_metrics, response_findings = _analyze_parallel_response_history(
+        response_events,
+        capture_windows_by_installation,
+        input_truncated=input_truncated or locally_truncated,
+    )
+    metrics = (*helper_metrics, *response_metrics)
     findings = [
         *_flapping_findings(timelines),
         *_safety_findings(timelines),
+        *response_findings,
     ]
     return metrics, tuple(sorted(findings, key=_finding_sort_key))
 

@@ -28,8 +28,12 @@ from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
 from .energy_data import numeric_state_sample, state_age_seconds
 from .forecast_model import (
+    ForecastLearningPolicy,
     adaptive_forecast_factor,
     blend_low_expected,
+    forecast_factor_for_policy,
+    forecast_learning_history_day_eligible,
+    resolve_forecast_learning_policy,
     robust_weighted_factor,
     uncertainty_risk_weight,
 )
@@ -63,6 +67,28 @@ _TODAY_FORECAST_MAX_AGE_SECONDS = 6 * 60 * 60.0
 _TOMORROW_FORECAST_MAX_AGE_SECONDS = 12 * 60 * 60.0
 _DAY3_FORECAST_MAX_AGE_SECONDS = 18 * 60 * 60.0
 _ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+_FORECAST_GCF_SUPPORT_MAX_AGE_SECONDS = 10.0
+_FORECAST_GCF_READBACK_MAX_AGE_SECONDS = 180.0
+_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS = 5.0
+
+FORECAST_GCF_ENABLE_ENTITY = (
+    "sensor.hoymiles_hit_gcf_enable_readback_code"
+)
+FORECAST_GCF_LIMIT_ENTITY = (
+    "sensor.hoymiles_hit_gcf_maximum_export_power_readback"
+)
+FORECAST_GCF_GENERATION_ENTITY = (
+    "sensor.hoymiles_hit_gcf_control_readback_generation"
+)
+FORECAST_GCF_SUPPORT_ENTITY = (
+    "sensor.hoymiles_hit_ems_verified_hardware_readback_supported"
+)
+FORECAST_EXPORT_ALLOWED_ENTITY = "binary_sensor.hoymiles_ems_export_allowed"
+FORECAST_EMS_PACKAGE_VERSION_ENTITY = "sensor.hoymiles_ems_package_version"
+FORECAST_GCF_POLICY_TRIGGER_ENTITIES = (
+    FORECAST_GCF_GENERATION_ENTITY,
+    FORECAST_GCF_SUPPORT_ENTITY,
+)
 
 TODAY_FORECAST_ENTITY_HELPER = (
     "input_text.hoymiles_solcast_forecast_today_entity"
@@ -158,6 +184,117 @@ WATCHED_ENTITIES = {
     *DAY3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
+
+
+def _forecast_learning_policy_snapshot(
+    hass: HomeAssistant,
+    now: datetime,
+) -> tuple[ForecastLearningPolicy, dict[str, Any]]:
+    """Read one coherent, physically verified GCF learning policy."""
+
+    support = numeric_state_sample(
+        hass.states.get(FORECAST_GCF_SUPPORT_ENTITY),
+        now,
+        max_age_seconds=_FORECAST_GCF_SUPPORT_MAX_AGE_SECONDS,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    generation = numeric_state_sample(
+        hass.states.get(FORECAST_GCF_GENERATION_ENTITY),
+        now,
+        max_age_seconds=_FORECAST_GCF_READBACK_MAX_AGE_SECONDS,
+        minimum=1.0,
+        maximum=16_000_000.0,
+    )
+    enable = numeric_state_sample(
+        hass.states.get(FORECAST_GCF_ENABLE_ENTITY),
+        now,
+        max_age_seconds=_FORECAST_GCF_READBACK_MAX_AGE_SECONDS,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    export_limit = numeric_state_sample(
+        hass.states.get(FORECAST_GCF_LIMIT_ENTITY),
+        now,
+        max_age_seconds=_FORECAST_GCF_READBACK_MAX_AGE_SECONDS,
+        minimum=-10.0,
+        maximum=200.0,
+    )
+
+    reason: str | None = None
+    if not support.fresh:
+        reason = f"hardware_readback_{support.reason}"
+    elif support.value != 1.0:
+        reason = "hardware_readback_unverified"
+    elif not generation.fresh:
+        reason = f"gcf_generation_{generation.reason}"
+    elif not enable.fresh:
+        reason = f"gcf_enable_{enable.reason}"
+    elif not export_limit.fresh:
+        reason = f"gcf_limit_{export_limit.reason}"
+
+    coherent = False
+    if reason is None:
+        reported = (
+            generation.reported_at,
+            enable.reported_at,
+            export_limit.reported_at,
+        )
+        if all(item is not None for item in reported):
+            assert generation.reported_at is not None
+            assert enable.reported_at is not None
+            assert export_limit.reported_at is not None
+            try:
+                enable_skew = (
+                    generation.reported_at - enable.reported_at
+                ).total_seconds()
+                limit_skew = (
+                    generation.reported_at - export_limit.reported_at
+                ).total_seconds()
+                coherent = bool(
+                    0.0 <= enable_skew <= _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS
+                    and 0.0
+                    <= limit_skew
+                    <= _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS
+                )
+            except (TypeError, ValueError):
+                coherent = False
+        if not coherent:
+            reason = "gcf_readback_incoherent"
+
+    verified = reason is None
+    policy = resolve_forecast_learning_policy(
+        readback_verified=verified,
+        gcf_enable_code=enable.value,
+        export_limit_percent=export_limit.value,
+        unverified_reason=reason,
+    )
+    diagnostics = {
+        "forecast_learning_gcf_readback_verified": verified,
+        "forecast_learning_gcf_readback_reason": reason,
+        "forecast_learning_gcf_enable_code": enable.value,
+        "forecast_learning_gcf_export_limit_percent": export_limit.value,
+        "forecast_learning_gcf_generation": generation.value,
+        "forecast_learning_gcf_generation_age_seconds": (
+            round(generation.age_seconds, 1)
+            if generation.age_seconds is not None
+            else None
+        ),
+    }
+    return policy, diagnostics
+
+
+def _forecast_learning_policy_signature(
+    policy: ForecastLearningPolicy,
+) -> tuple[bool, str, str | None, float | None]:
+    """Return only semantic fields, excluding the 20-second generation."""
+
+    return (
+        policy.enabled,
+        policy.mode,
+        policy.excluded_reason,
+        policy.factor_override,
+    )
 
 STATUS_TEXT = {
     "pl": {
@@ -575,9 +712,13 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._forecast_refresh_running = False
         self._forecast_refresh_date: date | None = None
         self._startup_warmup_task: asyncio.Task[None] | None = None
+        self._forecast_policy_refresh_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
         self._dynamic_forecast_entities: frozenset[str] = frozenset()
         self._dynamic_forecast_unsub = None
+        self._forecast_gcf_policy_signature: (
+            tuple[bool, str, str | None, float | None] | None
+        ) = None
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
         self._current_slot_continue_eligible: bool | None = None
@@ -637,6 +778,20 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 self.hass,
                 sorted(WATCHED_ENTITIES),
                 self._async_input_changed,
+            )
+        )
+        current_policy, _ = _forecast_learning_policy_snapshot(
+            self.hass,
+            dt_util.now(),
+        )
+        self._forecast_gcf_policy_signature = (
+            _forecast_learning_policy_signature(current_policy)
+        )
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                FORECAST_GCF_POLICY_TRIGGER_ENTITIES,
+                self._async_forecast_gcf_policy_changed,
             )
         )
         refresh_dynamic_forecast_listener = getattr(
@@ -840,6 +995,17 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             return
         self._forecast_refresh_running = True
         try:
+            learning_policy, _ = _forecast_learning_policy_snapshot(
+                self.hass,
+                now,
+            )
+            policy_signature = _forecast_learning_policy_signature(
+                learning_policy
+            )
+            if not learning_policy.enabled:
+                if learning_policy.mode == "fixed_zero_export":
+                    self._forecast_refresh_date = now.date()
+                return
             configured = _state_text(
                 self.hass,
                 TODAY_FORECAST_ENTITY_HELPER,
@@ -857,7 +1023,12 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 self.hass,
                 dt_util.as_utc(start),
                 dt_util.as_utc(now),
-                (forecast_entity, actual_entity),
+                (
+                    forecast_entity,
+                    actual_entity,
+                    FORECAST_EXPORT_ALLOWED_ENTITY,
+                    FORECAST_EMS_PACKAGE_VERSION_ENTITY,
+                ),
             )
             forecast_by_day: dict[date, list[float]] = {}
             actual_by_day: dict[date, list[float]] = {}
@@ -879,8 +1050,32 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                         continue
                     destination.setdefault(local_day, []).append(numeric)
 
+            export_allowed_history = [
+                (item.last_updated, item.state)
+                for item in raw.get(FORECAST_EXPORT_ALLOWED_ENTITY, [])
+                if getattr(item, "last_updated", None) is not None
+            ]
+            package_version_history = [
+                (item.last_updated, item.state)
+                for item in raw.get(FORECAST_EMS_PACKAGE_VERSION_ENTITY, [])
+                if getattr(item, "last_updated", None) is not None
+            ]
+
             samples: list[tuple[float, float]] = []
             for day in sorted(set(forecast_by_day) & set(actual_by_day)):
+                day_start = datetime.combine(day, time.min, tzinfo=timezone)
+                day_end = datetime.combine(
+                    day + timedelta(days=1),
+                    time.min,
+                    tzinfo=timezone,
+                )
+                if not forecast_learning_history_day_eligible(
+                    export_allowed_history,
+                    package_version_history,
+                    day_start=day_start,
+                    day_end=day_end,
+                ):
+                    continue
                 forecasts = [value for value in forecast_by_day[day] if value > 0.5]
                 actuals = actual_by_day[day]
                 if not forecasts or not actuals:
@@ -893,15 +1088,38 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     continue
                 age_days = float((now.date() - day).days)
                 samples.append((age_days, actual / forecast))
-            factor, uncertainty, count = robust_weighted_factor(samples)
-            self._forecast_accuracy_factor = factor
-            self._forecast_accuracy_uncertainty = uncertainty
-            self._forecast_accuracy_days = count
-            self._forecast_accuracy_source = (
-                "recorder_actual_vs_solcast_robust"
-                if count
-                else "automatic_conservative_fallback"
+
+            current_policy, _ = _forecast_learning_policy_snapshot(
+                self.hass,
+                dt_util.now().astimezone(timezone),
             )
+            if (
+                not current_policy.enabled
+                or _forecast_learning_policy_signature(current_policy)
+                != policy_signature
+            ):
+                return
+            if samples:
+                factor, uncertainty, count = robust_weighted_factor(samples)
+                self._forecast_accuracy_factor = factor
+                self._forecast_accuracy_uncertainty = uncertainty
+                self._forecast_accuracy_days = count
+                self._forecast_accuracy_source = (
+                    "recorder_actual_vs_solcast_robust"
+                )
+            else:
+                # Keep the last factor that was learned only from qualified
+                # days, but do not claim that currently retained Recorder rows
+                # still support it. A fresh process remains on its 0.90
+                # conservative fallback until a complete day is provable.
+                self._forecast_accuracy_days = 0
+                if self._forecast_accuracy_source in {
+                    "recorder_actual_vs_solcast_robust",
+                    "retained_last_qualified_factor_no_current_history",
+                }:
+                    self._forecast_accuracy_source = (
+                        "retained_last_qualified_factor_no_current_history"
+                    )
             self._forecast_refresh_date = now.date()
         except Exception:  # noqa: BLE001 - safe fallback remains active
             _LOGGER.exception("Cannot learn RCE Solcast forecast accuracy")
@@ -1029,6 +1247,58 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 INPUT_RECALCULATION_DELAY_SECONDS,
                 self._async_debounced_recalculate,
             )
+
+    @callback
+    def _async_forecast_gcf_policy_changed(
+        self,
+        event: Event[EventStateChangedData],
+    ) -> None:
+        """Replan only when a completed GCF read changes learning policy."""
+
+        policy, _ = _forecast_learning_policy_snapshot(
+            self.hass,
+            dt_util.now(),
+        )
+        signature = _forecast_learning_policy_signature(policy)
+        previous_signature = self._forecast_gcf_policy_signature
+        if signature == previous_signature:
+            return
+        self._forecast_gcf_policy_signature = signature
+        if policy.enabled and (
+            previous_signature is None or not previous_signature[0]
+        ):
+            self._schedule_forecast_policy_refresh()
+        self._invalidate_internal_inputs()
+        if self._recalculate_cancel is None:
+            self._recalculate_cancel = async_call_later(
+                self.hass,
+                INPUT_RECALCULATION_DELAY_SECONDS,
+                self._async_debounced_recalculate,
+            )
+
+    @callback
+    def _schedule_forecast_policy_refresh(self) -> None:
+        """Start one cancel-safe Recorder rebuild after GCF policy recovery."""
+
+        if (
+            self._forecast_policy_refresh_task is not None
+            and not self._forecast_policy_refresh_task.done()
+        ):
+            return
+        task = self._entry.async_create_background_task(
+            self.hass,
+            self._async_refresh_forecast_after_policy_restore(),
+            "hoymiles RCE forecast learning policy refresh",
+        )
+        self._forecast_policy_refresh_task = task
+        self.async_on_remove(task.cancel)
+
+    async def _async_refresh_forecast_after_policy_restore(self) -> None:
+        """Rebuild and publish the adaptive model after GCF becomes usable."""
+
+        await self._async_refresh_forecast_accuracy(force=True)
+        self._invalidate_internal_inputs()
+        await self._recalculate_and_write()
 
     async def _async_debounced_recalculate(self, now: datetime) -> None:
         self._recalculate_cancel = None
@@ -1912,7 +2182,33 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         ) = robust_weighted_upper_estimate(
             tuple(profile_history.night_energy_kwh.values())
         )
+        learning_policy, learning_diagnostics = (
+            _forecast_learning_policy_snapshot(self.hass, now)
+        )
+        self._forecast_gcf_policy_signature = (
+            _forecast_learning_policy_signature(learning_policy)
+        )
+        forecast_factor_used = forecast_factor_for_policy(
+            learning_policy,
+            self._forecast_accuracy_factor,
+        )
+        forecast_history_days_used = (
+            self._forecast_accuracy_days if learning_policy.enabled else 0
+        )
+        forecast_uncertainty_used = (
+            self._forecast_accuracy_uncertainty
+            if learning_policy.enabled
+            else 0.15
+        )
         metadata: dict[str, Any] = {
+            **learning_diagnostics,
+            "forecast_learning_enabled": learning_policy.enabled,
+            "forecast_learning_mode": learning_policy.mode,
+            "forecast_learning_excluded_reason": (
+                learning_policy.excluded_reason
+            ),
+            "forecast_factor_used": round(forecast_factor_used, 3),
+            "forecast_learning_history_days_used": forecast_history_days_used,
             "missing_entities": missing,
             "forecast_today_entity": today_entity or "none",
             "forecast_tomorrow_entity": tomorrow_entity or "none",
@@ -2218,7 +2514,8 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             now,
         )
         live_eligible = (
-            sunrise_today is not None
+            learning_policy.enabled
+            and sunrise_today is not None
             and sunset_today is not None
             and now >= sunrise_today.astimezone(timezone) + timedelta(minutes=90)
             and now <= sunset_today.astimezone(timezone) + timedelta(minutes=30)
@@ -2228,14 +2525,14 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             live_forecast_ratio,
             live_forecast_confidence,
         ) = adaptive_forecast_factor(
-            self._forecast_accuracy_factor,
+            forecast_factor_used,
             actual_pv_today,
             expected_elapsed_raw,
             eligible=live_eligible,
         )
         forecast_today = forecast_today_raw * today_forecast_factor
         forecast_tomorrow = (
-            forecast_tomorrow_raw * self._forecast_accuracy_factor
+            forecast_tomorrow_raw * forecast_factor_used
         )
         remaining_today = remaining_today_raw * today_forecast_factor
 
@@ -2256,7 +2553,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             and forecast_tomorrow_raw > 0
         )
         risk_weight = uncertainty_risk_weight(
-            history_days=self._forecast_accuracy_days,
+            history_days=forecast_history_days_used,
             live_confidence=live_forecast_confidence,
             uncertainty_available=uncertainty_available,
         )
@@ -2288,7 +2585,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             except (KeyError, TypeError, ValueError):
                 pass
         history_forecast_confidence = min(
-            self._forecast_accuracy_days / 4.0,
+            forecast_history_days_used / 4.0,
             1.0,
         )
         forecast_confidence = 100.0 * (
@@ -2391,12 +2688,12 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         day3_raw = _forecast_total(usable_day3_forecast_state, "p50")
         day3_p10_raw = _forecast_total(usable_day3_forecast_state, "p10")
         day3_expected = (
-            day3_raw * self._forecast_accuracy_factor
+            day3_raw * forecast_factor_used
             if day3_raw is not None
             else None
         )
         day3_low = (
-            day3_p10_raw * self._forecast_accuracy_factor
+            day3_p10_raw * forecast_factor_used
             if day3_p10_raw is not None
             else day3_expected
         )
@@ -2654,7 +2951,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             and _age_minutes_is_fresh(forecast_tomorrow_age, 720)
         )
         p10_high_risk = (
-            self._forecast_accuracy_uncertainty >= 0.18
+            forecast_uncertainty_used >= 0.18
             or uncertainty_spread_ratio >= 0.75
         )
         critical_zero_pv_guard = p10_missing or p10_stale or p10_high_risk
@@ -2686,7 +2983,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         if not uncertainty_available:
             quality_score -= 10
             quality_issues.append("solcast_uncertainty_unavailable")
-        if self._forecast_accuracy_days < 2:
+        if learning_policy.enabled and self._forecast_accuracy_days < 2:
             quality_score -= 5
             quality_issues.append("forecast_history_short")
         if profile_history.daily_history_days < 4:

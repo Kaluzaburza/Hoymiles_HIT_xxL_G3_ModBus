@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 import math
+import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from .extractors import (
@@ -26,6 +27,17 @@ from .models import (
 
 POWER_TOLERANCE_KW = 0.05
 READBACK_TOLERANCE_PERCENT = 1.0
+PARALLEL_RESPONSE_MINIMUM_VERSION = (1, 5, 6)
+# Runtime can remain visibly pending for 20 s transition grace, five 20 s
+# generation waits and final state propagation.  The sensor attribute is
+# authoritative within a defensive bound; this default covers legacy/missing
+# attributes without declaring a still-running verifier stale.
+PARALLEL_RESPONSE_PENDING_HORIZON_SECONDS = 135.0
+PARALLEL_RESPONSE_SUFFIX = "hoymiles_parallel_aggregate_physical_response"
+BOUNDED_SEMANTIC_VERSION_RE = re.compile(
+    r"\s*(\d{1,6})\.(\d{1,6})\.(\d{1,6})"
+    r"(?:[-+][0-9A-Za-z.-]{1,64})?\s*"
+)
 
 
 def _value(observation: ControllerObservation, key: str) -> Any:
@@ -123,6 +135,369 @@ def _context_active_age_seconds(
     return None
 
 
+def _version_tuple(value: str | None) -> tuple[int, int, int] | None:
+    """Return a bounded semantic core without accepting arbitrary text."""
+    if not isinstance(value, str):
+        return None
+    match = BOUNDED_SEMANTIC_VERSION_RE.fullmatch(value)
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def _supports_parallel_response(archive: LoadedDiagnosticArchive) -> bool:
+    """Require an explicit integration capability generation."""
+    return any(
+        version is not None and version >= PARALLEL_RESPONSE_MINIMUM_VERSION
+        for report in archive.reports
+        if (version := _version_tuple(report.integration_version)) is not None
+    )
+
+
+def _context_snapshot(
+    context: Mapping[str, Mapping[str, Any]],
+    suffix: str,
+) -> Mapping[str, Any] | None:
+    for entity_id, snapshot in context.items():
+        if entity_id.endswith(suffix):
+            return snapshot
+    return None
+
+
+def _snapshot_age_seconds(
+    snapshot: Mapping[str, Any],
+    observed_at: datetime | None,
+) -> float | None:
+    if observed_at is None or observed_at.tzinfo is None:
+        return None
+    raw = snapshot.get("last_updated") or snapshot.get("last_changed")
+    if not isinstance(raw, str):
+        return None
+    try:
+        updated = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if updated.tzinfo is None:
+        return None
+    return max((observed_at - updated).total_seconds(), 0.0)
+
+
+def _aware_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _response_episode_evidence(
+    hardware_mode: Mapping[str, Any],
+    response: Mapping[str, Any],
+    state: str | None,
+    attributes: Mapping[str, Any],
+) -> tuple[bool, Mapping[str, Any]]:
+    """Require response evidence from the current Grid Discharge episode."""
+    mode_started = _aware_datetime(hardware_mode.get("last_changed"))
+    response_updated = _aware_datetime(
+        response.get("last_updated") or response.get("last_changed")
+    )
+    pending_at = _aware_datetime(attributes.get("pending_at"))
+    completed_at = _aware_datetime(attributes.get("completed_at"))
+    evidence = {
+        "hardware_mode_started_at": (
+            mode_started.isoformat() if mode_started is not None else None
+        ),
+        "response_last_updated": (
+            response_updated.isoformat() if response_updated is not None else None
+        ),
+        "response_pending_at": (
+            pending_at.isoformat() if pending_at is not None else None
+        ),
+        "response_completed_at": (
+            completed_at.isoformat() if completed_at is not None else None
+        ),
+        "transaction_started_epoch": finite_number(
+            attributes.get("transaction_started_epoch")
+        ),
+    }
+    if mode_started is None or response_updated is None:
+        return False, {**evidence, "stale_reason": "episode_timestamp_missing"}
+    if response_updated < mode_started:
+        return False, {**evidence, "stale_reason": "response_precedes_mode"}
+    if pending_at is not None and pending_at < mode_started:
+        return False, {**evidence, "stale_reason": "transaction_precedes_mode"}
+    if state in {"confirmed", "not_confirmed", "not_evaluable"}:
+        if completed_at is None:
+            return False, {
+                **evidence,
+                "stale_reason": "terminal_completion_timestamp_missing",
+            }
+        if completed_at < mode_started:
+            return False, {
+                **evidence,
+                "stale_reason": "terminal_completion_precedes_mode",
+            }
+    return True, evidence
+
+
+def _pending_snapshot_age_seconds(
+    snapshot: Mapping[str, Any],
+    attributes: Mapping[str, Any],
+    observed_at: datetime | None,
+) -> float | None:
+    if observed_at is not None and observed_at.tzinfo is not None:
+        declared = attributes.get("pending_at")
+        if isinstance(declared, str):
+            try:
+                pending_at = datetime.fromisoformat(
+                    declared.replace("Z", "+00:00")
+                )
+            except ValueError:
+                pending_at = None
+            if (
+                pending_at is not None
+                and pending_at.tzinfo is not None
+                and pending_at <= observed_at
+            ):
+                return (observed_at - pending_at).total_seconds()
+    return _snapshot_age_seconds(snapshot, observed_at)
+
+
+def _parallel_response_controller(attributes: Mapping[str, Any]) -> Controller:
+    owner = attributes.get("owner")
+    if owner == "rce":
+        return Controller.RCE
+    if owner == "rcm_pre_discharge":
+        return Controller.RCEM
+    return Controller.SYSTEM
+
+
+def _parallel_response_horizon(attributes: Mapping[str, Any]) -> float:
+    configured = finite_number(attributes.get("verification_horizon_seconds"))
+    if configured is not None and 1.0 <= configured <= 600.0:
+        return configured
+    return PARALLEL_RESPONSE_PENDING_HORIZON_SECONDS
+
+
+def _evaluate_parallel_aggregate_response(
+    archive: LoadedDiagnosticArchive,
+    context: Mapping[str, Mapping[str, Any]],
+    findings: list[Finding],
+) -> None:
+    """Evaluate v1.5.6 aggregate evidence only for an active parallel mode 5."""
+    if not _supports_parallel_response(archive):
+        return
+    hardware_mode = _context_snapshot(context, "hoymiles_ems_hardware_mode")
+    if (
+        hardware_mode is None
+        or context_state(context, "hoymiles_ems_hardware_mode")
+        != "grid_discharge"
+    ):
+        return
+    machine_type = _context_numeric_state(context, "hoymiles_hit_machines_type")
+    machine_count = _context_numeric_state(
+        context, "hoymiles_hit_number_of_machines_master_and_slave"
+    )
+    if machine_type != 1.0 or machine_count is None or machine_count < 2.0:
+        return
+
+    response = _context_snapshot(context, PARALLEL_RESPONSE_SUFFIX)
+    if response is None:
+        findings.append(
+            _finding(
+                "PARALLEL_AGGREGATE_RESPONSE_MISSING",
+                Severity.ERROR,
+                (
+                    "Aktywny równoległy Grid Discharge nie ma sensora "
+                    "odpowiedzi agregatowej."
+                ),
+                archive=archive,
+                controller=Controller.SYSTEM,
+                evidence={
+                    "assessment": "confirmed",
+                    "hardware_mode": "grid_discharge",
+                    "machine_type": int(machine_type),
+                    "detected_inverters": int(machine_count),
+                    "minimum_integration_version": "1.5.6",
+                },
+                recommendation=(
+                    "Sprawdź załadowanie pakietu scheduler v1.5.6 i wygeneruj "
+                    "nową paczkę po ponownym wywołaniu Grid Discharge."
+                ),
+            )
+        )
+        return
+
+    state = context_state(context, PARALLEL_RESPONSE_SUFFIX)
+    raw_attributes = response.get("attributes")
+    attributes = raw_attributes if isinstance(raw_attributes, Mapping) else {}
+    controller = _parallel_response_controller(attributes)
+    common_evidence = {
+        "hardware_mode": "grid_discharge",
+        "detected_inverters": int(machine_count),
+        "response_state": state,
+        "reason": attributes.get("reason"),
+        "transaction_id": attributes.get("transaction_id"),
+        "owner": attributes.get("owner"),
+        "evidence_scope": attributes.get("evidence_scope"),
+        "configuration_acknowledgement_scope": attributes.get(
+            "configuration_acknowledgement_scope"
+        ),
+        "sample_count": finite_number(attributes.get("sample_count")),
+        "baseline_generation": finite_number(
+            attributes.get("baseline_generation")
+        ),
+        "final_generation": finite_number(attributes.get("final_generation")),
+    }
+    response_current, episode_evidence = _response_episode_evidence(
+        hardware_mode,
+        response,
+        state,
+        attributes,
+    )
+    if not response_current:
+        findings.append(
+            _finding(
+                "PARALLEL_AGGREGATE_RESPONSE_STALE",
+                Severity.ERROR,
+                (
+                    "Odpowiedź agregatowa pochodzi z wcześniejszego epizodu "
+                    "Grid Discharge i nie potwierdza bieżącego trybu."
+                ),
+                archive=archive,
+                controller=controller,
+                evidence={
+                    **common_evidence,
+                    **episode_evidence,
+                    "assessment": "stale",
+                },
+                recommendation=(
+                    "Ponów transakcję i wymagaj nowego pending oraz terminalnego "
+                    "zdarzenia po rozpoczęciu bieżącego Grid Discharge."
+                ),
+            )
+        )
+        return
+    common_evidence = {**common_evidence, **episode_evidence}
+
+    if state == "confirmed":
+        findings.append(
+            _finding(
+                "PARALLEL_AGGREGATE_RESPONSE_CONFIRMED",
+                Severity.INFO,
+                (
+                    "Zbiorcza odpowiedź mocy równoległego Grid Discharge "
+                    "została potwierdzona."
+                ),
+                archive=archive,
+                controller=controller,
+                evidence={**common_evidence, "assessment": "confirmed"},
+            )
+        )
+    elif state == "pending":
+        horizon = _parallel_response_horizon(attributes)
+        age = _pending_snapshot_age_seconds(
+            response,
+            attributes,
+            archive.metadata.generated_at,
+        )
+        timed_out = age is not None and age > horizon
+        findings.append(
+            _finding(
+                (
+                    "PARALLEL_AGGREGATE_RESPONSE_PENDING_TIMEOUT"
+                    if timed_out
+                    else "PARALLEL_AGGREGATE_RESPONSE_PENDING"
+                ),
+                Severity.ERROR if timed_out else Severity.INFO,
+                (
+                    "Oczekiwanie na odpowiedź agregatową przekroczyło "
+                    "ograniczony czas weryfikacji."
+                    if timed_out
+                    else "Trwa ograniczone czasowo zbieranie odpowiedzi agregatowej."
+                ),
+                archive=archive,
+                controller=controller,
+                confidence=(Confidence.HIGH if age is not None else Confidence.MEDIUM),
+                evidence={
+                    **common_evidence,
+                    "assessment": "confirmed" if timed_out else "pending",
+                    "pending_age_seconds": round(age, 3) if age is not None else None,
+                    "pending_horizon_seconds": horizon,
+                },
+                recommendation=(
+                    "Sprawdź kompletne generacje GRID/PV/LOAD oraz zakończenie "
+                    "transakcji."
+                    if timed_out
+                    else None
+                ),
+            )
+        )
+    elif state == "not_confirmed":
+        findings.append(
+            _finding(
+                "PARALLEL_AGGREGATE_RESPONSE_NOT_CONFIRMED",
+                Severity.ERROR,
+                (
+                    "Zbiorcza odpowiedź mocy równoległego Grid Discharge nie "
+                    "została potwierdzona."
+                ),
+                archive=archive,
+                controller=controller,
+                evidence={**common_evidence, "assessment": "confirmed"},
+                recommendation=(
+                    "Sprawdź reason, świeże kompletne generacje i kierunek mocy; "
+                    "nie interpretuj samego ACK Mastera jako ACK Slave."
+                ),
+            )
+        )
+    else:
+        findings.append(
+            _finding(
+                "PARALLEL_AGGREGATE_RESPONSE_NOT_EVALUABLE",
+                Severity.WARNING,
+                (
+                    "Zbiorcza odpowiedź mocy aktywnego układu równoległego "
+                    "jest nieocenialna."
+                ),
+                archive=archive,
+                controller=controller,
+                evidence={**common_evidence, "assessment": "not_evaluable"},
+                recommendation=(
+                    "Sprawdź reason, topologię i dostępność generacji "
+                    "agregatowego bilansu."
+                ),
+            )
+        )
+
+    transition_observed = strict_bool(
+        attributes.get("sampled_transition_observed")
+    )
+    transition_peak = finite_number(
+        attributes.get("sampled_transition_peak_kw")
+    )
+    if transition_observed is True and transition_peak is not None:
+        findings.append(
+            _finding(
+                "PARALLEL_TRANSITION_SAMPLE_OBSERVED",
+                Severity.INFO,
+                "Podczas zmiany trybu zarejestrowano informacyjny pik próbki mocy.",
+                archive=archive,
+                controller=controller,
+                evidence={
+                    "assessment": "observed",
+                    "sampled_transition_peak_kw": transition_peak,
+                    "sampled_transition_scope": attributes.get(
+                        "sampled_transition_scope"
+                    ),
+                    "response_state": state,
+                },
+            )
+        )
+
+
 def _controller_map(
     observations: Sequence[ControllerObservation],
 ) -> dict[Controller, ControllerObservation]:
@@ -196,6 +571,7 @@ def evaluate_archive(
 
     _evaluate_archive_health(archive, findings)
     _evaluate_common_control(archive, observations, context, findings)
+    _evaluate_parallel_aggregate_response(archive, context, findings)
     if Controller.RCE in by_controller:
         _evaluate_rce(by_controller[Controller.RCE], context, findings)
     if Controller.RCEM in by_controller:

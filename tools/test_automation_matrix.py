@@ -1155,9 +1155,12 @@ def assert_manual_cycle_finalization_contracts() -> None:
             final_guard:mode_position
         ]
         assert release_wait < mode_position < readback_position < timer_position
-        assert '- delay: "00:00:05"' in block[mode_position:timer_position]
-        assert "continue_on_timeout: false" in block[mode_position:timer_position]
         if "grid_discharge" in mode_write:
+            # The verified mode helper has already consumed fresh Master FC03.
+            # Arm the exact timer immediately, without an extra wait that would
+            # leave the claimed owner timer-idle across the minute watchdog.
+            assert '- delay: "00:00:05"' not in block[mode_position:timer_position]
+            assert "wait_template:" not in block[mode_position:timer_position]
             assert block.count("binary_sensor.hoymiles_sale_block_active") >= 3
             assert block.rindex(
                 "binary_sensor.hoymiles_sale_block_active", 0, mode_position
@@ -1173,6 +1176,9 @@ def assert_manual_cycle_finalization_contracts() -> None:
             assert "input_boolean.hoymiles_rcm_active" in neutral_guard
             assert "input_boolean.hoymiles_rcm_pre_discharge_active" in neutral_guard
             assert "['self_use', 'off_grid', 'unknown', 'unavailable'" in neutral_guard
+        else:
+            assert '- delay: "00:00:05"' in block[mode_position:timer_position]
+            assert "continue_on_timeout: false" in block[mode_position:timer_position]
             assert release_wait < mode_position, (
                 "Manual Grid Discharge can race its final mode write with RCEm restore"
             )
@@ -3333,6 +3339,524 @@ def assert_physical_hardware_readback_contracts() -> None:
         "grid_discharge", True, False, -1, "self_use"
     )
 
+    aggregate_sensor = scheduler.split(
+        "# The event-driven sensor reports a system-level physical response", 1
+    )[1].split("# Shared execution gate for the complete EMS block", 1)[0]
+    for marker in (
+        "event_type: hoymiles_parallel_aggregate_physical_response",
+        'name: "Hoymiles Parallel Aggregate Physical Response"',
+        "aggregate_system_power",
+        "master_fc03",
+        "individual_inverter_acknowledgement: unavailable",
+        'formula: "P_battery = P_grid + P_load - P_pv"',
+        "transition_grace_seconds: 20",
+        "candidate_generations: 5",
+        "required_stable_generations: 3",
+        "transaction_started_epoch",
+        "latched_esp_uptime_seconds",
+        "latched_machine_type",
+        "topology_known",
+        "requires_parallel_proof",
+        "authoritative_expected_power",
+        "observed_median_power_kw",
+        "sampled_transition_peak_kw",
+        "sampled_transition_observed",
+        "sampled_transition_scope",
+        "best_effort_post_master_ack_boundaries_and_complete_candidates",
+        "verification_horizon_seconds",
+        "baseline_generation",
+        "collection_baseline_generation",
+        "final_generation",
+    ):
+        assert marker in aggregate_sensor, marker
+    assert "per_slave" not in aggregate_sensor.lower()
+
+    aggregate_helper = helpers.split(
+        "  hoymiles_verify_parallel_aggregate_discharge_response:", 1
+    )[1].split("\n  hoymiles_start_grid_discharge:", 1)[0]
+    for marker in (
+        "mode: parallel",
+        "max: 4",
+        "transaction_id:",
+        "transaction_started_epoch:",
+        "baseline_generation:",
+        "latched_esp_uptime_seconds:",
+        "latched_machine_type:",
+        "latched_inverter_count:",
+        "topology_known:",
+        "requires_parallel_proof:",
+        "response_started_epoch",
+        "sensor.hoymiles_hit_parallel_aggregate_power_readback_generation",
+        "sensor.hoymiles_hit_overview_battery_power",
+        "sensor.hoymiles_hit_overview_grid_total_active_power",
+        "last_reported",
+        "response_sample_1_valid",
+        "response_sample_2_valid",
+        "response_sample_3_valid",
+        "response_sample_4_valid",
+        "response_sample_5_valid",
+        "response_sample_count",
+        "response_window_1_stable",
+        "response_window_2_stable",
+        "response_window_3_stable",
+        "response_window_1_target_compatible",
+        "response_window_2_target_compatible",
+        "response_window_3_target_compatible",
+        "response_stable_window_start",
+        "response_sampled_transition_peak_kw",
+        "response_sampled_transition_observed",
+        "response_collection_baseline_generation",
+        "response_esp_uptime_after_grace",
+        "response_esp_uptime_still_monotonic",
+        "response_median_kw",
+        "response_spread_kw",
+        "authoritative_target_mismatch_after_transition_grace",
+        "aggregate_generation_reset_during_transition",
+        "esp_restart_during_response_verification",
+        "fresh_sample_timeout",
+        "missing_required_direction_after_transition_grace",
+        "stable_sample_window_timeout",
+        "result: pending",
+        "result: not_evaluable",
+        "confirmed",
+    ):
+        assert marker in aggregate_helper, marker
+    # One 20-second transition-grace wait plus five candidate generations.
+    assert aggregate_helper.count('timeout: "00:00:20"') == 6
+    assert aggregate_helper.count("verification_horizon_seconds: 135") == 7
+    assert (
+        aggregate_helper.count(
+            "or not is_number(states('sensor.hoymiles_hit_esp_uptime'))"
+        )
+        == 5
+    )
+    for sample in range(1, 6):
+        assert aggregate_helper.count(f"response_esp_uptime_{sample}") >= 2
+    assert "* 0.15" in aggregate_helper
+    assert "* 0.10" in aggregate_helper
+    assert "response_expected_kw | float(0)) >= 1.0" in aggregate_helper
+    assert "action: select.select_option" not in aggregate_helper
+    assert "action: number.set_value" not in aggregate_helper
+    assert "per_slave" not in aggregate_helper.lower()
+    assert "mode: restart" not in aggregate_helper.split("fields:", 1)[0]
+    assert "transition_peak_kw:" not in aggregate_helper.replace(
+        "sampled_transition_peak_kw:", ""
+    )
+    grace = aggregate_helper.index("transition grace")
+    collection_baseline = aggregate_helper.index(
+        "response_collection_baseline_generation", grace
+    )
+    first_candidate = aggregate_helper.index("response_generation_1", collection_baseline)
+    assert grace < collection_baseline < first_candidate
+    assert "64.0" not in aggregate_helper
+    assert "< (response_baseline_generation | float(-1))" in aggregate_helper
+    assert "> (response_collection_baseline_generation | float(-1))" in aggregate_helper
+    assert (
+        aggregate_helper.count(
+            "> (response_collection_baseline_generation | float(-1))"
+        )
+        == 10
+    ), "Every wait and candidate must stay above the post-grace boot floor"
+    for generation in range(1, 5):
+        assert (
+            f"> (response_generation_{generation} | float(-1))"
+            in aggregate_helper
+        )
+        assert (
+            f"!= (response_generation_{generation} | float(-1))"
+            not in aggregate_helper
+        )
+
+    def topology_contract(machine_type: int, count: int) -> tuple[bool, bool]:
+        known = (machine_type == 0 and count == 1) or (
+            machine_type == 1 and 2 <= count <= 10
+        )
+        requires_parallel_proof = machine_type == 1 and 2 <= count <= 10
+        return known, requires_parallel_proof
+
+    assert topology_contract(0, 1) == (True, False)
+    assert topology_contract(1, 2) == (True, True)
+    assert topology_contract(-1, -1) == (False, False)
+    assert topology_contract(1, 1) == (False, False)
+
+    def collection_generation_valid(precommand: float, after_grace: float) -> bool:
+        return after_grace >= precommand
+
+    assert collection_generation_valid(100, 102)
+    assert not collection_generation_valid(100, 2), (
+        "An ESP generation reset during grace must fail before sample collection"
+    )
+    assert 103 > 102
+    assert not 2 > 100
+
+    def generation_sequence_valid(baseline: float, generations: list[float]) -> bool:
+        previous = baseline
+        for generation in generations:
+            if generation <= baseline or generation <= previous:
+                return False
+            previous = generation
+        return True
+
+    assert generation_sequence_valid(102, [103, 104, 105, 106, 107])
+    assert not generation_sequence_valid(102, [1, 2, 3, 4, 5])
+    assert not generation_sequence_valid(102, [103, 104, 1, 2, 3]), (
+        "A reset after collection begins must not create a later valid window"
+    )
+
+    def uptime_remains_in_same_boot(
+        latched_uptime: float, observed_uptimes: list[float]
+    ) -> bool:
+        return latched_uptime >= 180 and all(
+            uptime >= latched_uptime for uptime in observed_uptimes
+        )
+
+    assert uptime_remains_in_same_boot(1000, [1000, 1000, 1060, 1060, 1120])
+    assert not uptime_remains_in_same_boot(1000, [1000, 1, 2, 3, 4]), (
+        "Generation 2 catching up after reboot cannot cross the uptime boot latch"
+    )
+    assert not uptime_remains_in_same_boot(179, [180, 181, 182])
+
+    def stable_response_window(
+        battery_kw: list[float],
+        grid_kw: list[float],
+        expected_kw: float,
+        *,
+        authoritative: bool,
+    ) -> tuple[int, float | None]:
+        """Mirror the three overlapping windows encoded in the HA script."""
+
+        for start in range(3):
+            battery_window = battery_kw[start : start + 3]
+            grid_window = grid_kw[start : start + 3]
+            median = sorted(battery_window)[1]
+            spread_reference = expected_kw if authoritative else median
+            if (
+                min(battery_window) >= 0.5
+                and (not authoritative or min(grid_window) >= 0.25)
+                and max(battery_window) - min(battery_window)
+                <= max(1.0, spread_reference * 0.10)
+                and (
+                    not authoritative
+                    or abs(median - expected_kw)
+                    <= max(1.0, expected_kw * 0.15)
+                )
+            ):
+                return start + 1, median
+        return 0, None
+
+    # A known constructional transition peak is recorded but excluded from
+    # both confirmation and failure. One or two peak generations simply move
+    # the stable window forward; only stable post-transition evidence is judged.
+    expected_kw = 33.75
+    window, median_kw = stable_response_window(
+        [64.0, 33.65, 33.86, 33.70, 33.75],
+        [59.0, 29.10, 29.23, 29.16, 29.18],
+        expected_kw,
+        authoritative=True,
+    )
+    assert window == 2 and median_kw is not None
+    assert abs(median_kw - expected_kw) <= max(1.0, expected_kw * 0.15)
+    window, median_kw = stable_response_window(
+        [64.0, 58.0, 33.65, 33.86, 33.70],
+        [59.0, 53.0, 29.10, 29.23, 29.16],
+        expected_kw,
+        authoritative=True,
+    )
+    assert window == 3 and median_kw is not None
+    assert stable_response_window(
+        [-2.0, -1.5, -1.0, -0.8, -0.5],
+        [-2.0, -1.5, -1.0, -0.8, -0.5],
+        expected_kw,
+        authoritative=True,
+    ) == (0, None)
+    # A stable but transitional high plateau is not selected as a target
+    # mismatch while later windows are still available.
+    window, median_kw = stable_response_window(
+        [64.0, 64.0, 33.65, 33.86, 33.70],
+        [59.0, 59.0, 29.10, 29.23, 29.16],
+        expected_kw,
+        authoritative=True,
+    )
+    assert window == 3 and median_kw is not None
+    assert stable_response_window(
+        [50.0, 50.1, 49.9, 50.0, 50.1],
+        [45.0, 45.1, 44.9, 45.0, 45.1],
+        expected_kw,
+        authoritative=True,
+    ) == (0, None)
+
+    # Under high local load the battery can discharge while the site still
+    # imports. Manual/RCEm need battery direction only; authoritative RCE also
+    # requires physical grid export and therefore rejects the same samples.
+    high_load_battery = [20.0, 20.1, 19.9, 20.0, 20.1]
+    high_load_grid = [-5.0, -4.9, -5.1, -5.0, -4.9]
+    assert stable_response_window(
+        high_load_battery,
+        high_load_grid,
+        20.0,
+        authoritative=False,
+    )[0] == 1
+    assert stable_response_window(
+        high_load_battery,
+        high_load_grid,
+        20.0,
+        authoritative=True,
+    ) == (0, None)
+
+    manual_start = scheduler.split(
+        "  hoymiles_start_grid_discharge:", 1
+    )[1].split("\n  hoymiles_start_grid_charge:", 1)[0]
+    manual_baseline = manual_start.index(
+        "manual_parallel_generation_before_mode"
+    )
+    manual_topology_gate = manual_start.index(
+        'value_template: "{{ manual_topology_known | bool(false) }}"',
+        manual_baseline,
+    )
+    manual_uptime_gate = manual_start.index(
+        'value_template: "{{ manual_esp_uptime_ready | bool(false) }}"',
+        manual_topology_gate,
+    )
+    manual_mode = manual_start.index('option: "grid_discharge"', manual_baseline)
+    manual_master_ack = manual_start.index(
+        "sensor.hoymiles_ems_hardware_mode", manual_mode
+    )
+    manual_timer = manual_start.index("action: timer.start", manual_master_ack)
+    manual_aggregate = manual_start.index(
+        "script.hoymiles_verify_parallel_aggregate_discharge_response",
+        manual_timer,
+    )
+    assert (
+        manual_baseline
+        < manual_topology_gate
+        < manual_uptime_gate
+        < manual_mode
+        < manual_master_ack
+        < manual_timer
+        < manual_aggregate
+    )
+    mode_ack_to_timer = manual_start[manual_mode:manual_timer]
+    assert "wait_template:" not in mode_ack_to_timer
+    assert "delay:" not in mode_ack_to_timer
+    assert "state: \"grid_discharge\"" in mode_ack_to_timer
+    assert manual_start.count("action: timer.start") == 1, (
+        "Manual verification must not restart or extend the requested timer"
+    )
+    timer_block = manual_start[manual_timer:manual_aggregate]
+    assert (
+        "{{ (states('input_number.hoymiles_discharge_duration') | int(90)) * 60 }}"
+        in timer_block
+    )
+    # The watchdog runs every minute, while nominal verification can consume
+    # 20 s grace + five 13 s generations. Starting the exact timer first means
+    # it never observes a claimed manual owner with an idle timer in that gap.
+    helper_nominal_seconds = 20 + 5 * 13
+    watchdog_period_seconds = 60
+    assert helper_nominal_seconds > watchdog_period_seconds
+    assert manual_timer < manual_aggregate
+    manual_policy = manual_start[manual_aggregate:]
+    assert "authoritative_expected_power: false" in manual_policy
+    assert "expected_power_kw:" not in manual_policy
+    assert "sensor.hoymiles_parallel_aggregate_physical_response" in manual_policy
+    assert "transaction_id: \"{{ manual_response_transaction_id }}\"" in manual_policy
+    assert "{{ manual_latched_esp_uptime_seconds }}" in manual_policy
+    assert "continue_on_error: true" in manual_policy
+    assert "'owner') == 'manual'" in manual_policy
+    assert "'completed_at'" in manual_policy
+    assert 'option: "self_use"' in manual_policy
+    assert "action: timer.cancel" in manual_policy
+    assert "tolerance_kw" not in manual_policy
+    manual_postcheck = manual_policy.split("# Manual mode has no authoritative", 1)[1]
+    assert "manual_requires_parallel_proof" in manual_postcheck
+    assert "manual_topology_known" in manual_postcheck
+    assert "states('sensor.hoymiles_hit_machines_type')" not in manual_postcheck
+
+    manual_failure = manual_postcheck.split(
+        "# Stop the requested-duration clock immediately.", 1
+    )[1].split("- stop:", 1)[0]
+    failure_timer_cancel = manual_failure.index("action: timer.cancel")
+    failure_neutral_write = manual_failure.index('option: "self_use"')
+    guarded_release = manual_failure.index(
+        "# Release ownership only after the same physical neutral readback"
+    )
+    owner_release = manual_failure.index(
+        "action: input_boolean.turn_off", guarded_release
+    )
+    assert failure_timer_cancel < failure_neutral_write < guarded_release < owner_release
+    assert "continue_on_error: true" in manual_failure[
+        failure_neutral_write - 120 : guarded_release
+    ]
+    assert "in ['self_use', 'off_grid']" in manual_failure[
+        guarded_release:owner_release
+    ]
+    assert "is_state('timer.hoymiles_discharge', 'idle')" in manual_failure[
+        guarded_release:owner_release
+    ]
+    assert manual_failure.count("action: input_boolean.turn_off") == 1
+
+    def failed_manual_response_cleanup(
+        *, rollback_readback_confirmed: bool
+    ) -> tuple[bool, bool]:
+        """Return (owner_active, timer_active) after aggregate-failure cleanup."""
+
+        timer_active = False
+        owner_active = not rollback_readback_confirmed
+        return owner_active, timer_active
+
+    assert failed_manual_response_cleanup(
+        rollback_readback_confirmed=True
+    ) == (False, False)
+    assert failed_manual_response_cleanup(
+        rollback_readback_confirmed=False
+    ) == (True, False), (
+        "Unavailable rollback must retain owner + idle timer for watchdog retry"
+    )
+    finish_watchdog = scheduler.split("id: hoymiles_finish_grid_discharge", 1)[1]
+    finish_watchdog = finish_watchdog.split("\n  - id:", 1)[0]
+    assert 'minutes: "/1"' in finish_watchdog
+    assert "input_boolean.hoymiles_discharge_cycle_active" in finish_watchdog
+    assert "is_state('timer.hoymiles_discharge', 'idle')" in finish_watchdog
+
+    rce_control = scheduler.split(
+        "id: hoymiles_rce_grid_discharge_control", 1
+    )[1].split("\n  - id:", 1)[0]
+    frozen_target = rce_control.index("rce_start_expected_power_kw")
+    first_owned_write = rce_control.index(
+        "script.hoymiles_verified_set_ems_maximum_discharge_power",
+        frozen_target,
+    )
+    rce_baseline = rce_control.index(
+        "rce_parallel_generation_before_mode", first_owned_write
+    )
+    rce_topology_gate = rce_control.index(
+        'value_template: "{{ rce_topology_known | bool(false) }}"', rce_baseline
+    )
+    rce_uptime_gate = rce_control.index(
+        'value_template: "{{ rce_esp_uptime_ready | bool(false) }}"',
+        rce_topology_gate,
+    )
+    rce_mode = rce_control.index('option: "grid_discharge"', rce_baseline)
+    rce_master_ack = rce_control.index("wait_template:", rce_mode)
+    rce_aggregate = rce_control.index(
+        "script.hoymiles_verify_parallel_aggregate_discharge_response",
+        rce_master_ack,
+    )
+    assert (
+        frozen_target
+        < first_owned_write
+        < rce_baseline
+        < rce_topology_gate
+        < rce_uptime_gate
+        < rce_mode
+    )
+    assert rce_mode < rce_master_ack < rce_aggregate
+    rce_physical = rce_control[rce_baseline:]
+    assert "current_slot_execution_discharge_power_kw" not in (
+        rce_physical.split("script.hoymiles_verify_parallel_aggregate", 1)[1]
+    )
+    for marker in (
+        "expected_power_kw:",
+        "{{ rce_start_expected_power_kw }}",
+        "authoritative_expected_power: true",
+        "sensor.hoymiles_parallel_aggregate_physical_response",
+        "rce_response_transaction_id",
+        "rce_response_transaction_started_epoch",
+        "rce_latched_machine_type",
+        "rce_latched_inverter_count",
+        "rce_latched_esp_uptime_seconds",
+        "rce_esp_uptime_ready",
+        "rce_topology_known",
+        "rce_requires_parallel_proof",
+        "'transaction_id') == rce_response_transaction_id",
+        "'owner') == 'rce'",
+        "'completed_at'",
+        "script.hoymiles_rollback_rce_transaction",
+    ):
+        assert marker in rce_physical, marker
+    fail_closed = rce_physical.split(
+        "script.hoymiles_verify_parallel_aggregate_discharge_response", 1
+    )[1].split(
+        "# A successful mode ACK is not permission", 1
+    )[0]
+    assert fail_closed.index(
+        "sensor.hoymiles_parallel_aggregate_physical_response"
+    ) < fail_closed.index("script.hoymiles_rollback_rce_transaction")
+    assert "rce_requires_parallel_proof" in fail_closed
+    assert "rce_topology_known" in fail_closed
+    assert "continue_on_error: true" in fail_closed
+    assert "states('sensor.hoymiles_hit_machines_type')" not in fail_closed
+
+    # Every caller supplies an independently generated transaction plus its
+    # frozen topology. This prevents a parallel helper or HA restart from
+    # satisfying a different owner's post-command decision.
+    recovery_control = scheduler.split(
+        "id: hoymiles_restore_ems_cycle_after_ha_restart", 1
+    )[1].split("\n  - id:", 1)[0]
+    rcm_pre_discharge = scheduler.split(
+        "id: hoymiles_rcm_pre_discharge_control", 1
+    )[1].split("\n  - id:", 1)[0]
+    caller_contracts = (
+        (manual_start, "manual_response", "manual_latched"),
+        (rce_control, "rce_response", "rce_latched"),
+        (recovery_control, "recovery_response", "recovery_latched"),
+        (rcm_pre_discharge, "rcm_response", "rcm_latched"),
+    )
+    for caller, transaction_prefix, topology_prefix in caller_contracts:
+        mode_position = caller.index('option: "grid_discharge"')
+        precommand = caller[:mode_position]
+        assert (
+            f"({topology_prefix}_esp_uptime_seconds | float(-1)) >= 180"
+            in precommand
+        )
+        assert "age >= -5 and age <= 180" in precommand
+        action = caller.split(
+            "script.hoymiles_verify_parallel_aggregate_discharge_response", 1
+        )[1]
+        for marker in (
+            f'transaction_id: "{{{{ {transaction_prefix}_transaction_id }}}}"',
+            f"{{{{ {transaction_prefix}_transaction_started_epoch }}}}",
+            f'latched_machine_type: "{{{{ {topology_prefix}_machine_type }}}}"',
+            f'latched_inverter_count: "{{{{ {topology_prefix}_inverter_count }}}}"',
+            f"{{{{ {topology_prefix}_esp_uptime_seconds }}}}",
+            "topology_known:",
+            "requires_parallel_proof:",
+        ):
+            assert marker in action, marker
+
+    for caller, gate, uptime_gate in (
+        (
+            recovery_control,
+            "recovery_topology_known",
+            "recovery_esp_uptime_ready",
+        ),
+        (rcm_pre_discharge, "rcm_topology_known", "rcm_esp_uptime_ready"),
+    ):
+        latch = caller.index(f"{gate}:")
+        gate_position = caller.index(
+            f'value_template: "{{{{ {gate} | bool(false) }}}}"', latch
+        )
+        uptime_gate_position = caller.index(
+            f'value_template: "{{{{ {uptime_gate} | bool(false) }}}}"',
+            gate_position,
+        )
+        mode_position = caller.index('option: "grid_discharge"', uptime_gate_position)
+        assert latch < gate_position < uptime_gate_position < mode_position
+
+    # A failed discharge-response transaction may request the existing neutral
+    # rollback, but the rollback itself must never wait on aggregate power.
+    for rollback_name, next_name in (
+        (
+            "hoymiles_rollback_tariff_transaction:",
+            "hoymiles_rollback_rce_transaction:",
+        ),
+        (
+            "hoymiles_rollback_rce_transaction:",
+            "hoymiles_start_battery_balancing:",
+        ),
+    ):
+        rollback = scheduler.split(rollback_name, 1)[1].split(next_name, 1)[0]
+        assert "parallel_aggregate_physical_response" not in rollback
+
     hardware_mode = scheduler.split(
         '- name: "Hoymiles EMS Hardware Mode"', 1
     )[1].split('- name: "Hoymiles Actual Load Power"', 1)[0]
@@ -3364,6 +3888,21 @@ def assert_physical_hardware_readback_contracts() -> None:
     assert "hoymiles_rce_discharge_enabled" not in owner_state
     assert "hoymiles_tariff_charge_enabled" not in owner_state
     assert "hoymiles_rcm_enabled" not in owner_state
+    for visible_owner in (
+        "Balansowanie",
+        "Sterowanie ręczne",
+        "RCE",
+        "Tanie ładowanie",
+        "RCEm",
+        "Brak aktywnej automatyki",
+    ):
+        assert visible_owner in owner_state
+    fallback_owner = owner_state.rsplit("{% else %}", 1)[1]
+    assert "Brak aktywnej automatyki" in fallback_owner
+    assert "Sterowanie ręczne" not in fallback_owner
+    owner_attributes = owner.split("attributes:", 1)[1]
+    assert "owner_code: >-" in owner_attributes
+    assert "manual" in owner_attributes
 
     conflict = scheduler.split(
         '- name: "Hoymiles EMS Control Conflict"', 1
@@ -3512,6 +4051,107 @@ def assert_physical_hardware_readback_contracts() -> None:
         assert "script.hoymiles_verified_set_ems_force_charge_soc" in restore_actions
 
 
+def assert_human_control_status_contracts() -> None:
+    """Keep enabled policy, planned work and active ownership distinct in UI."""
+
+    scheduler = (
+        ROOT / "home_assistant" / "hoymiles_ems_scheduler.yaml"
+    ).read_text(encoding="utf-8")
+    tariff = scheduler.split(
+        '- name: "Hoymiles Tariff Charge Status"', 1
+    )[1].split(
+        '- name: "Hoymiles Battery Balancing BMS Safe Charge Power"', 1
+    )[0]
+    tariff_state = tariff.split("state: >-", 1)[1]
+
+    # A running transaction is the primary truth.  The frozen action describes
+    # what the owner is actually doing even if the live optimizer republishes.
+    assert "input_text.hoymiles_tariff_active_action" in tariff_state
+    assert "'current_action'" not in tariff_state
+    active_branch = tariff_state.index(
+        "is_state('input_boolean.hoymiles_tariff_charge_active', 'on')"
+    )
+    disabled_branch = tariff_state.index(
+        "is_state('input_boolean.hoymiles_tariff_charge_enabled', 'off')",
+        active_branch + 1,
+    )
+    rce_block = tariff_state.index(
+        "is_state('input_boolean.hoymiles_rce_discharge_enabled', 'on')"
+    )
+    assert active_branch < disabled_branch < rce_block
+
+    for human_state in (
+        "Wyłączone — kończenie aktywnego bloku",
+        "Aktywne — dom zasilany z taniej sieci",
+        "Aktywne — ładowanie z sieci",
+        "Aktywne — sterowanie taryfowe",
+        "Wyłączone",
+        "Niedostępne — trwa inicjalizacja",
+        "Włączone — zablokowane: włączona polityka RCE",
+        "Włączone — zablokowane: plan niedostępny",
+        "Włączone — oczekuje na aktualny plan",
+        "Włączone — brak potrzeby ładowania",
+        "Włączone — wybrany blok oczekuje na rozpoczęcie",
+        "Włączone — oczekuje na wybrany blok",
+    ):
+        assert human_state in tariff_state
+    for blocking_status in (
+        "missing_data",
+        "optimizer_error",
+        "unsupported_profile",
+        "expired_profile",
+        "soc_limits_conflict",
+        "hard_reserve_unavailable",
+    ):
+        assert blocking_status in tariff_state
+    assert "recalculation_pending" in tariff_state
+    assert "result_current" in tariff_state
+    assert "current_slot_planned" in tariff_state
+    assert "planned_slots" in tariff_state
+    assert "hoymiles_tariff_control_data_ready" in tariff_state
+    no_need_branch = tariff_state.split(
+        "{% elif status == 'no_charge_needed' %}", 1
+    )[1].split("{% elif current_slot %}", 1)[0]
+    assert "Włączone — brak potrzeby ładowania" in no_need_branch
+    for distinct_result in (
+        "no_discount_window",
+        "no_cheap_window",
+        "not_economically_beneficial",
+        "shortage_in_low_period",
+    ):
+        assert distinct_result not in no_need_branch
+    final_result = tariff_state.split("{% elif planned_slots | count > 0 %}", 1)[
+        1
+    ].split("{% endif %}", 1)[0]
+    assert "Włączone — oczekuje na wybrany blok" in final_result
+    assert "Włączone — {{ plan_state }}" in final_result
+
+    dashboard = (ROOT / "dashboard_hoymiles.yaml").read_text(encoding="utf-8")
+    main_ems = dashboard.split("title: Sterowanie EMS", 1)[1].split(
+        "\n      - type:", 1
+    )[0]
+    main_owner = main_ems.index("entity: sensor.hoymiles_ems_control_owner")
+    main_tariff = main_ems.index("entity: sensor.hoymiles_tariff_charge_status")
+    main_conflict = main_ems.index("entity: binary_sensor.hoymiles_ems_control_conflict")
+    assert main_owner < main_tariff < main_conflict
+
+    tariff_view = dashboard.split("path: ladowanie-taryfowe", 1)[1].split(
+        "  - title: RCEm 253 V+", 1
+    )[0]
+    assert tariff_view.count("entity: sensor.hoymiles_ems_control_owner") == 1
+    assert tariff_view.count("entity: sensor.hoymiles_tariff_charge_status") == 1
+    assert tariff_view.count("entity: binary_sensor.hoymiles_ems_control_conflict") == 1
+    tariff_owner = tariff_view.index("entity: sensor.hoymiles_ems_control_owner")
+    tariff_policy = tariff_view.index("entity: sensor.hoymiles_tariff_charge_status")
+    tariff_conflict = tariff_view.index(
+        "entity: binary_sensor.hoymiles_ems_control_conflict"
+    )
+    tariff_toggle = tariff_view.index(
+        "entity: input_boolean.hoymiles_tariff_charge_enabled"
+    )
+    assert tariff_owner < tariff_policy < tariff_conflict < tariff_toggle
+
+
 def main() -> None:
     """Run all matrices without external test dependencies."""
 
@@ -3539,6 +4179,7 @@ def main() -> None:
     assert_rce_execution_contracts()
     assert_rcm_execution_contracts()
     assert_physical_hardware_readback_contracts()
+    assert_human_control_status_contracts()
     total = rce_count + tariff_count + rcm_count + random_count
     profile = "exhaustive" if exhaustive else "quick"
     print(f"Automation matrix ({profile}): {total} scenarios passed")

@@ -17,8 +17,10 @@ from typing import Any
 
 
 ANALYZER_VERSION = "1.0.0"
+# v1.5.6 adds rule outcomes and rows using the existing finding/history
+# mappings; no serialized model shape changed.
 ANALYSIS_SCHEMA_VERSION = 1
-RULE_SET_VERSION = 1
+RULE_SET_VERSION = 2
 SUPPORTED_REPORT_SCHEMA_VERSIONS = frozenset({1})
 SUPPORTED_INSTALLATION_ID_SCHEMA_VERSIONS = frozenset({1})
 

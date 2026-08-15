@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import importlib.util
 from itertools import product
 import math
@@ -936,6 +936,292 @@ def test_shared_forecast_model_is_conservative_and_robust() -> None:
     assert count == 4
     assert 0.78 <= learned <= 0.83
     assert uncertainty >= 0.0
+
+
+def test_zero_export_forecast_learning_policy_is_fixed_and_reversible() -> None:
+    """A verified 0% cap never consumes clipped actual PV."""
+
+    learned_factor = 0.93
+    zero_export = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=0.0,
+    )
+    assert not zero_export.enabled
+    assert zero_export.mode == "fixed_zero_export"
+    assert zero_export.excluded_reason == "zero_export"
+    assert FORECAST.forecast_factor_for_policy(
+        zero_export,
+        learned_factor,
+    ) == 0.80
+    live_factor, live_ratio, confidence = FORECAST.adaptive_forecast_factor(
+        FORECAST.forecast_factor_for_policy(zero_export, learned_factor),
+        actual_energy_kwh=1.0,
+        expected_elapsed_kwh=10.0,
+        eligible=zero_export.enabled,
+    )
+    assert (live_factor, live_ratio, confidence) == (0.80, None, 0.0)
+
+    export_restored = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=0.1,
+    )
+    assert export_restored.enabled
+    assert export_restored.mode == "adaptive"
+    assert FORECAST.forecast_factor_for_policy(
+        export_restored,
+        learned_factor,
+    ) == learned_factor
+
+    gcf_disabled = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=0.0,
+        export_limit_percent=0.0,
+    )
+    assert gcf_disabled.enabled
+    assert FORECAST.forecast_factor_for_policy(
+        gcf_disabled,
+        learned_factor,
+    ) == learned_factor
+
+
+def test_unverified_gcf_pauses_learning_without_guessing_zero_export() -> None:
+    """Missing/stale evidence is conservative but distinct from 0% GCF."""
+
+    for reason in (
+        "gcf_generation_stale",
+        "gcf_enable_missing",
+        "gcf_limit_future_timestamp",
+        "gcf_readback_incoherent",
+        "hardware_readback_unverified",
+    ):
+        policy = FORECAST.resolve_forecast_learning_policy(
+            readback_verified=False,
+            gcf_enable_code=None,
+            export_limit_percent=None,
+            unverified_reason=reason,
+        )
+        assert not policy.enabled
+        assert policy.mode == "conservative_gcf_unverified"
+        assert policy.excluded_reason == reason
+        assert policy.factor_override is None
+        assert FORECAST.forecast_factor_for_policy(policy, 0.93) == 0.80
+        assert FORECAST.forecast_factor_for_policy(policy, 0.72) == 0.72
+
+    invalid_enable = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=2.0,
+        export_limit_percent=50.0,
+    )
+    assert invalid_enable.excluded_reason == "gcf_enable_invalid"
+    invalid_negative_cap = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=-10.0,
+    )
+    assert invalid_negative_cap.mode == "conservative_gcf_unverified"
+    assert invalid_negative_cap.excluded_reason == "gcf_limit_invalid"
+    invalid_excess_cap = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=100.1,
+    )
+    assert invalid_excess_cap.excluded_reason == "gcf_limit_invalid"
+
+
+def test_zero_export_days_never_reenter_forecast_learning_history() -> None:
+    """Any unverified/blocked interval excludes the cumulative-PV day."""
+
+    day = datetime(2026, 8, 10, tzinfo=WARSAW)
+    always_allowed = [
+        (day - timedelta(minutes=1), "on"),
+        (day + timedelta(hours=12), "on"),
+    ]
+    physical_package = [
+        (day - timedelta(minutes=1), "1.5.5"),
+    ]
+    assert FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        physical_package,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+
+    zero_then_restored = [
+        (day - timedelta(minutes=1), "on"),
+        (day + timedelta(hours=10), "off"),
+        (day + timedelta(hours=11), "on"),
+    ]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        zero_then_restored,
+        physical_package,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    for unknown_state in ("unknown", "unavailable", "off"):
+        assert not FORECAST.forecast_learning_history_day_eligible(
+            [
+                (day, "on"),
+                (day + timedelta(hours=6), unknown_state),
+                (day + timedelta(hours=7), "on"),
+            ],
+            physical_package,
+            day_start=day,
+            day_end=day + timedelta(days=1),
+        )
+    assert FORECAST.forecast_learning_history_day_eligible(
+        [(day, "on"), (day + timedelta(days=1), "off")],
+        [(day, "1.5.2")],
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        [(day + timedelta(hours=1), "on")],
+        physical_package,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+
+    # The v1.5.6 daily evidence attribute creates a Recorder row even when
+    # both semantic states stay constant. The first retained/installation day
+    # has no midnight boundary and is rejected; the following complete day can
+    # use that heartbeat as its proven starting state.
+    heartbeat_at = day + timedelta(minutes=1)
+    retained_export = [(heartbeat_at, "on")]
+    retained_version = [(heartbeat_at, "1.5.6")]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        retained_export,
+        retained_version,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    next_day = day + timedelta(days=1)
+    assert FORECAST.forecast_learning_history_day_eligible(
+        retained_export,
+        retained_version,
+        day_start=next_day,
+        day_end=next_day + timedelta(days=1),
+    )
+
+    legacy_ui_derived = [(day - timedelta(minutes=1), "1.5.1")]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        legacy_ui_derived,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    upgraded_midday = [
+        (day - timedelta(minutes=1), "1.5.1"),
+        (day + timedelta(hours=8), "1.5.5"),
+    ]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        upgraded_midday,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        [],
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        [(day - timedelta(minutes=1), "9" * 5000 + ".0.0")],
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+
+    # Recorder timestamps are UTC-aware, while day boundaries are local. Both
+    # the 23-hour spring day and 25-hour autumn day must reject an intraday
+    # fail-closed interval without inventing a fixed 24-hour window.
+    for dst_day in (
+        datetime(2026, 3, 29, tzinfo=WARSAW),
+        datetime(2026, 10, 25, tzinfo=WARSAW),
+    ):
+        dst_end = dst_day + timedelta(days=1)
+        assert (
+            dst_end.astimezone(timezone.utc)
+            - dst_day.astimezone(timezone.utc)
+        ).total_seconds() in {23 * 3600, 25 * 3600}
+        midpoint_utc = dst_day.astimezone(timezone.utc) + timedelta(hours=12)
+        assert not FORECAST.forecast_learning_history_day_eligible(
+            [
+                (dst_day - timedelta(minutes=1), "on"),
+                (midpoint_utc, "off"),
+                (midpoint_utc + timedelta(minutes=1), "on"),
+            ],
+            [(dst_day - timedelta(minutes=1), "1.5.5")],
+            day_start=dst_day,
+            day_end=dst_end,
+        )
+        assert FORECAST.forecast_learning_history_day_eligible(
+            [(dst_day - timedelta(minutes=1), "on")],
+            [(dst_day - timedelta(minutes=1), "1.5.6")],
+            day_start=dst_day,
+            day_end=dst_end,
+        )
+
+    # A clipped 1/10 actual-vs-Solcast day must not depress an otherwise
+    # stable 0.93 model, even when the model is rebuilt after export returns.
+    candidate_days = [
+        (always_allowed, 0.93),
+        (zero_then_restored, 0.10),
+    ]
+    eligible_ratios = [
+        ratio
+        for history, ratio in candidate_days
+        if FORECAST.forecast_learning_history_day_eligible(
+            history,
+            physical_package,
+            day_start=day,
+            day_end=day + timedelta(days=1),
+        )
+    ]
+    learned, _, count = FORECAST.robust_weighted_factor(
+        [(1.0, ratio) for ratio in eligible_ratios]
+    )
+    assert count == 1
+    assert learned == 0.93
+
+
+def test_forecast_learning_wiring_covers_rce_and_tariff() -> None:
+    """Both independent HA models consume the same physical GCF contract."""
+
+    rce_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    tariff_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "tariff_sensor.py"
+    ).read_text(encoding="utf-8")
+    for source in (rce_source, tariff_source):
+        for marker in (
+            "_forecast_learning_policy_snapshot",
+            "FORECAST_EXPORT_ALLOWED_ENTITY",
+            "FORECAST_EMS_PACKAGE_VERSION_ENTITY",
+            "raw.get(FORECAST_EMS_PACKAGE_VERSION_ENTITY, [])",
+            "package_version_history,",
+            '"forecast_learning_enabled"',
+            '"forecast_learning_mode"',
+            '"forecast_learning_excluded_reason"',
+            '"forecast_factor_used"',
+            "forecast_learning_history_day_eligible(",
+            "retained_last_qualified_factor_no_current_history",
+        ):
+            assert marker in source
+        assert source.index('"forecast_learning_enabled"') < source.index(
+            "if missing:"
+        )
+    assert "FORECAST_GCF_POLICY_TRIGGER_ENTITIES" in tariff_source
+    for source in (rce_source, tariff_source):
+        assert "previous_signature" in source
+        assert "self._entry.async_create_background_task(" in source
+        assert "self.hass.async_create_task(" not in source
+        assert "_forecast_policy_refresh_task" in source
+        assert "self.async_on_remove(task.cancel)" in source
+        assert "_async_refresh_forecast_after_policy_restore" in source
 
 
 def test_house_energy_model_applies_charge_and_discharge_losses() -> None:
@@ -2328,6 +2614,8 @@ def test_scheduler_requests_absolute_ordered_pse_rows() -> None:
         source = path.read_text(encoding="utf-8")
         assert source.count("%2Cdtime_utc%2Cperiod_utc") == 2
         assert source.count("%24orderby=dtime_utc%20asc") == 2
+        assert source.count("forecast_learning_evidence_date:") == 2
+        assert source.count("now().date().isoformat()") == 2
 
 
 def test_real_horizon_solver_runtime_is_bounded() -> None:
@@ -3025,6 +3313,10 @@ def main() -> None:
         test_sensor_exposes_terminal_and_gain_contract,
         test_dynamic_solcast_sources_and_day3_freshness_contract,
         test_shared_forecast_model_is_conservative_and_robust,
+        test_zero_export_forecast_learning_policy_is_fixed_and_reversible,
+        test_unverified_gcf_pauses_learning_without_guessing_zero_export,
+        test_zero_export_days_never_reenter_forecast_learning_history,
+        test_forecast_learning_wiring_covers_rce_and_tariff,
         test_house_energy_model_applies_charge_and_discharge_losses,
         test_load_and_grid_share_the_same_bms_discharge_budget,
         test_current_slot_uses_only_real_remaining_fraction_and_live_power,
