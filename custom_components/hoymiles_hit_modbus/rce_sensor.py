@@ -19,6 +19,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
+    async_track_state_report_event,
     async_track_time_interval,
 )
 from homeassistant.helpers.sun import get_astral_event_date
@@ -86,8 +87,15 @@ FORECAST_GCF_SUPPORT_ENTITY = (
 FORECAST_EXPORT_ALLOWED_ENTITY = "binary_sensor.hoymiles_ems_export_allowed"
 FORECAST_EMS_PACKAGE_VERSION_ENTITY = "sensor.hoymiles_ems_package_version"
 FORECAST_GCF_POLICY_TRIGGER_ENTITIES = (
+    FORECAST_GCF_ENABLE_ENTITY,
+    FORECAST_GCF_LIMIT_ENTITY,
     FORECAST_GCF_GENERATION_ENTITY,
     FORECAST_GCF_SUPPORT_ENTITY,
+)
+FORECAST_GCF_COHORT_REPORT_ENTITIES = (
+    FORECAST_GCF_ENABLE_ENTITY,
+    FORECAST_GCF_LIMIT_ENTITY,
+    FORECAST_GCF_GENERATION_ENTITY,
 )
 
 TODAY_FORECAST_ENTITY_HELPER = (
@@ -245,16 +253,12 @@ def _forecast_learning_policy_snapshot(
             assert enable.reported_at is not None
             assert export_limit.reported_at is not None
             try:
-                enable_skew = (
-                    generation.reported_at - enable.reported_at
-                ).total_seconds()
-                limit_skew = (
-                    generation.reported_at - export_limit.reported_at
+                cohort_span = (
+                    max(reported) - min(reported)
                 ).total_seconds()
                 coherent = bool(
-                    0.0 <= enable_skew <= _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS
-                    and 0.0
-                    <= limit_skew
+                    0.0
+                    <= cohort_span
                     <= _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS
                 )
             except (TypeError, ValueError):
@@ -719,6 +723,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._forecast_gcf_policy_signature: (
             tuple[bool, str, str | None, float | None] | None
         ) = None
+        self._forecast_gcf_policy_evaluation_cancel = None
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
         self._current_slot_continue_eligible: bool | None = None
@@ -793,6 +798,16 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 FORECAST_GCF_POLICY_TRIGGER_ENTITIES,
                 self._async_forecast_gcf_policy_changed,
             )
+        )
+        self.async_on_remove(
+            async_track_state_report_event(
+                self.hass,
+                FORECAST_GCF_COHORT_REPORT_ENTITIES,
+                self._async_forecast_gcf_policy_changed,
+            )
+        )
+        self.async_on_remove(
+            lambda: self._cancel_forecast_gcf_policy_evaluation()
         )
         refresh_dynamic_forecast_listener = getattr(
             self,
@@ -1251,20 +1266,72 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     @callback
     def _async_forecast_gcf_policy_changed(
         self,
-        event: Event[EventStateChangedData],
+        event: Event[Any],
     ) -> None:
-        """Replan only when a completed GCF read changes learning policy."""
+        """Accept a complete cohort or arm one bounded fail-closed deadline."""
 
         policy, _ = _forecast_learning_policy_snapshot(
             self.hass,
             dt_util.now(),
         )
+        if policy.excluded_reason != "gcf_readback_incoherent":
+            cohort_pending = (
+                self._forecast_gcf_policy_evaluation_cancel is not None
+            )
+            self._cancel_forecast_gcf_policy_evaluation()
+            self._apply_forecast_gcf_policy(
+                policy,
+                force_recalculate=cohort_pending,
+            )
+            return
+        if self._forecast_gcf_policy_evaluation_cancel is None:
+            # Withdraw execution authority while HA finishes delivering the
+            # three physical readback reports.  No optimizer run may publish
+            # the transient mixed cohort as a current plan.
+            self._invalidate_internal_inputs()
+            self._forecast_gcf_policy_evaluation_cancel = async_call_later(
+                self.hass,
+                _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS,
+                self._async_evaluate_forecast_gcf_policy,
+            )
+
+    @callback
+    def _cancel_forecast_gcf_policy_evaluation(self) -> None:
+        """Cancel one pending event-order coalescing callback."""
+
+        if self._forecast_gcf_policy_evaluation_cancel is not None:
+            self._forecast_gcf_policy_evaluation_cancel()
+            self._forecast_gcf_policy_evaluation_cancel = None
+
+    async def _async_evaluate_forecast_gcf_policy(
+        self,
+        now: datetime,
+    ) -> None:
+        """Replan only when a completed GCF read changes learning policy."""
+
+        self._forecast_gcf_policy_evaluation_cancel = None
+        policy, _ = _forecast_learning_policy_snapshot(
+            self.hass,
+            now,
+        )
+        self._apply_forecast_gcf_policy(policy, force_recalculate=True)
+
+    @callback
+    def _apply_forecast_gcf_policy(
+        self,
+        policy: ForecastLearningPolicy,
+        *,
+        force_recalculate: bool = False,
+    ) -> None:
+        """Apply one complete or deadline-expired physical GCF policy."""
+
         signature = _forecast_learning_policy_signature(policy)
         previous_signature = self._forecast_gcf_policy_signature
-        if signature == previous_signature:
+        signature_changed = signature != previous_signature
+        if not signature_changed and not force_recalculate:
             return
         self._forecast_gcf_policy_signature = signature
-        if policy.enabled and (
+        if signature_changed and policy.enabled and (
             previous_signature is None or not previous_signature[0]
         ):
             self._schedule_forecast_policy_refresh()
@@ -1342,6 +1409,12 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                     return
 
     async def _recalculate_locked(self) -> bool:
+        if self._forecast_gcf_policy_evaluation_cancel is not None:
+            # The current 258/259/generation reports are still a mixed HA
+            # delivery cohort.  Keep the previous plan non-current until the
+            # late report closes it or the bounded deadline fails closed.
+            self._mark_recalculation_pending()
+            return False
         captured_revision = self._input_revision.value
         captured_fingerprint = self._current_input_fingerprint()
         try:

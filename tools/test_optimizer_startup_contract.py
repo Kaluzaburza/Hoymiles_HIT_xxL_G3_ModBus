@@ -117,10 +117,12 @@ def _compile_probe_method(
         "WATCHED_RCM_ENTITIES": (),
         "WATCHED_TARIFF_ENTITIES": (),
         "FORECAST_GCF_POLICY_TRIGGER_ENTITIES": (),
+        "FORECAST_GCF_COHORT_REPORT_ENTITIES": (),
         "_forecast_learning_policy_snapshot": lambda *args: (object(), {}),
         "_forecast_learning_policy_signature": lambda policy: (True, "adaptive"),
         "dt_util": SimpleNamespace(now=lambda: object()),
         "async_track_state_change_event": lambda *args: lambda: None,
+        "async_track_state_report_event": lambda *args: lambda: None,
         "async_track_time_interval": lambda *args: lambda: None,
         "timedelta": timedelta,
     }
