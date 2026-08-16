@@ -1324,10 +1324,19 @@ def test_unverified_gcf_pauses_learning_without_guessing_zero_export() -> None:
     )
     assert invalid_negative_cap.mode == "conservative_gcf_unverified"
     assert invalid_negative_cap.excluded_reason == "gcf_limit_invalid"
+    maximum_positive_cap = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=200.0,
+    )
+    assert maximum_positive_cap.enabled
+    assert maximum_positive_cap.mode == "adaptive"
+    assert maximum_positive_cap.excluded_reason is None
+    assert maximum_positive_cap.factor_override is None
     invalid_excess_cap = FORECAST.resolve_forecast_learning_policy(
         readback_verified=True,
         gcf_enable_code=1.0,
-        export_limit_percent=100.1,
+        export_limit_percent=200.1,
     )
     assert invalid_excess_cap.excluded_reason == "gcf_limit_invalid"
 

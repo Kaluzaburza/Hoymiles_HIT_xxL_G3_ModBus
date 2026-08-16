@@ -47,7 +47,7 @@ def resolve_forecast_learning_policy(
     Register 258 decides whether register 259 is effective.  A disabled GCF
     leaves export unrestricted by this function.  An enabled GCF is treated
     as zero-export only for the exact, verified ``0.0`` readback; values
-    outside the physical ``0..100`` percent range remain invalid evidence.
+    outside the physical ``0..200`` percent range remain invalid evidence.
     """
 
     if not readback_verified:
@@ -72,7 +72,7 @@ def resolve_forecast_learning_policy(
         export_limit_percent is None
         or not isfinite(export_limit_percent)
         or export_limit_percent < 0.0
-        or export_limit_percent > 100.0
+        or export_limit_percent > 200.0
     ):
         return ForecastLearningPolicy(
             enabled=False,
