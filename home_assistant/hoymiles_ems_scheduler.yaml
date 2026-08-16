@@ -8714,6 +8714,8 @@ automation:
           - sensor.hoymiles_rce_effective_minimum_soc
           - sensor.hoymiles_rce_dynamic_minimum_soc
           - sensor.hoymiles_ems_hardware_mode
+          - binary_sensor.hoymiles_ems_execution_ready
+          - binary_sensor.hoymiles_ems_control_conflict
           - binary_sensor.hoymiles_rce_reserve_ready
           - binary_sensor.hoymiles_rce_control_data_ready
           - binary_sensor.hoymiles_ems_export_allowed
@@ -8780,6 +8782,173 @@ automation:
             sequence:
               - variables:
                   rce_live_authorization_checked: true
+          # Planning authority is required for every new start or operational
+          # write. A short normal recalculation may, however, preserve an
+          # already accepted and latched cycle while every independent live
+          # execution-safety input remains valid.
+          #
+          # Important: do not infer safety from the stale/latched optimizer
+          # result while recalculation is pending.
+          # Hard-stop conditions must continue to be evaluated independently
+          # from current physical/live safety inputs.
+          # A normal planning-input change may preserve the active latched
+          # cycle, but a safety-critical input change must stop it immediately
+          # even if the new optimizer result has not yet been published.
+          - conditions:
+              - condition: template
+                value_template: &rce_pending_latched_execution_safe >-
+                  {% set plan =
+                    states.sensor.hoymiles_hit_rce_optimized_plan %}
+                  {% set soc =
+                    states.sensor.hoymiles_hit_overview_battery_soc %}
+                  {% set bms_current =
+                    states.sensor.hoymiles_hit_maximum_discharge_current %}
+                  {% set bms_voltage =
+                    states.sensor.hoymiles_hit_battery_voltage_bms %}
+                  {% set floor =
+                    states.sensor.hoymiles_hit_ems_force_discharge_soc_readback %}
+                  {% set power =
+                    states.sensor.hoymiles_hit_ems_maximum_discharge_power_readback %}
+                  {% set soc_reported = soc.last_reported
+                    if soc.last_reported is defined else soc.last_updated %}
+                  {% set current_reported = bms_current.last_reported
+                    if bms_current.last_reported is defined
+                    else bms_current.last_updated %}
+                  {% set voltage_reported = bms_voltage.last_reported
+                    if bms_voltage.last_reported is defined
+                    else bms_voltage.last_updated %}
+                  {% set floor_reported = floor.last_reported
+                    if floor.last_reported is defined else floor.last_updated %}
+                  {% set power_reported = power.last_reported
+                    if power.last_reported is defined else power.last_updated %}
+                  {% set now_ts = as_timestamp(now()) %}
+                  {% set soc_age = now_ts - as_timestamp(soc_reported, 0) %}
+                  {% set current_age =
+                    now_ts - as_timestamp(current_reported, 0) %}
+                  {% set voltage_age =
+                    now_ts - as_timestamp(voltage_reported, 0) %}
+                  {% set floor_age =
+                    now_ts - as_timestamp(floor_reported, 0) %}
+                  {% set power_age =
+                    now_ts - as_timestamp(power_reported, 0) %}
+                  {% set latched_floor = states(
+                    'input_number.hoymiles_rce_latched_minimum_soc') %}
+                  {% set committed_power = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_slot_execution_power_percent') %}
+                  {% set current_price = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_price_pln_kwh') %}
+                  {% set automatic_floor = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'automatic_price_floor_pln_kwh') %}
+                  {% set continue_eligible = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_slot_continue_eligible') %}
+                  {% set continue_seconds = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_slot_continue_stable_seconds') %}
+                  {% set machine_type =
+                    states('sensor.hoymiles_hit_machines_type') %}
+                  {% set machine_count = states(
+                    'sensor.hoymiles_hit_number_of_machines_master_and_slave') %}
+                  {% set topology_valid =
+                    is_number(machine_type) and is_number(machine_count)
+                    and (((machine_type | int(-1)) == 0
+                          and (machine_count | int(-1)) == 1)
+                         or ((machine_type | int(-1)) == 1
+                             and (machine_count | int(-1)) >= 2
+                             and (machine_count | int(-1)) <= 10)) %}
+                  {% set owners_clear =
+                    is_state('input_boolean.hoymiles_tariff_charge_enabled', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_tariff_charge_active', 'off')
+                    and is_state('input_boolean.hoymiles_rcm_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_rcm_pre_discharge_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_rcm_export_control_active', 'off')
+                    and (is_state('input_boolean.hoymiles_rcm_enabled', 'off')
+                         or is_state(
+                           'input_boolean.hoymiles_rcm_shadow_mode', 'on'))
+                    and is_state(
+                      'input_boolean.hoymiles_battery_balancing_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_discharge_cycle_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_charge_cycle_active', 'off')
+                    and not is_state('timer.hoymiles_discharge', 'active')
+                    and not is_state('timer.hoymiles_charge', 'active') %}
+                  {% set committed_stop =
+                    continue_eligible is sameas false
+                    and is_number(continue_seconds)
+                    and (continue_seconds | float(0)) >= 60 %}
+                  {% set price_stop =
+                    not is_number(current_price)
+                    or not is_number(automatic_floor)
+                    or (current_price | float(0))
+                       < (automatic_floor | float(0)) %}
+                  {{ is_state(
+                       'input_boolean.hoymiles_rce_discharge_active', 'on')
+                     and is_state(
+                       'input_boolean.hoymiles_rce_discharge_enabled', 'on')
+                     and state_attr(
+                       'sensor.hoymiles_hit_rce_optimized_plan',
+                       'result_current') is sameas false
+                     and state_attr(
+                       'sensor.hoymiles_hit_rce_optimized_plan',
+                       'recalculation_pending') is sameas true
+                     and is_state(
+                       'binary_sensor.hoymiles_ems_execution_ready', 'on')
+                     and is_state(
+                       'binary_sensor.hoymiles_ems_export_allowed', 'on')
+                     and is_state(
+                       'binary_sensor.hoymiles_sale_block_active', 'off')
+                     and is_state(
+                       'binary_sensor.hoymiles_ems_control_conflict', 'off')
+                     and is_state(
+                       'sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+                     and owners_clear
+                     and topology_valid
+                     and as_timestamp(states(
+                       'input_datetime.hoymiles_rce_latched_slot_end'), 0)
+                         > now_ts
+                     and state_attr(
+                       'sensor.hoymiles_hit_rce_optimized_plan',
+                       'current_slot_planned') | default(false, true)
+                     and not committed_stop
+                     and not price_stop
+                     and is_number(committed_power)
+                     and (committed_power | float(0)) > 0
+                     and is_number(soc.state)
+                     and (soc.state | float(-1)) >= 0
+                     and (soc.state | float(101)) <= 100
+                     and soc_age >= -5 and soc_age <= 120
+                     and is_number(bms_current.state)
+                     and (bms_current.state | float(0)) > 0
+                     and current_age >= -5 and current_age <= 300
+                     and is_number(bms_voltage.state)
+                     and (bms_voltage.state | float(0)) > 0
+                     and voltage_age >= -5 and voltage_age <= 300
+                     and is_number(floor.state)
+                     and (floor.state | float(-1)) >= 0
+                     and (floor.state | float(101)) <= 100
+                     and floor_age >= -5 and floor_age <= 180
+                     and is_number(power.state)
+                     and (power.state | float(0)) > 0
+                     and (power.state | float(101)) <= 100
+                     and power_age >= -5 and power_age <= 180
+                     and is_number(latched_floor)
+                     and (power.state | float(999))
+                         <= (committed_power | float(0)) + 0.5
+                     and (floor.state | float(-999))
+                         >= (latched_floor | float(100)) - 0.5
+                     and (soc.state | float(0))
+                         > [latched_floor | float(100),
+                            floor.state | float(100)] | max }}
+            sequence:
+              - stop: >-
+                  RCE przelicza plan; aktywny zatwierdzony cykl pozostaje bez zmian
           - conditions:
               - condition: state
                 entity_id: input_boolean.hoymiles_rce_discharge_active
@@ -8911,6 +9080,12 @@ automation:
             sequence:
               - variables:
                   rce_live_authorization_checked: true
+          - conditions:
+              - condition: template
+                value_template: *rce_pending_latched_execution_safe
+            sequence:
+              - stop: >-
+                  RCE przelicza plan; aktywny zatwierdzony cykl pozostaje bez zmian
           - conditions:
               - condition: state
                 entity_id: input_boolean.hoymiles_rce_discharge_active
@@ -9147,6 +9322,12 @@ automation:
                                          'none', ''] }}
                         then:
                           - action: script.hoymiles_rollback_rce_transaction
+              - conditions:
+                  - condition: template
+                    value_template: *rce_pending_latched_execution_safe
+                sequence:
+                  - stop: >-
+                      RCE przelicza plan; aktywny zatwierdzony cykl pozostaje bez zmian
             default:
               - action: script.hoymiles_rollback_rce_transaction
               - stop: >-
@@ -9782,6 +9963,17 @@ automation:
                 default:
                   - action: script.hoymiles_rollback_rce_transaction
                   - stop: "RCE authorization lost after Grid Discharge ACK"
+
+          # A recalculation withdraws planning authority but does not revoke an
+          # already latched execution contract while all live hard stops remain
+          # clear. The shared predicate is re-evaluated here after every prior
+          # yielded action; it never trusts the unavailable derived power helper.
+          - conditions:
+              - condition: template
+                value_template: *rce_pending_latched_execution_safe
+            sequence:
+              - stop: >-
+                  RCE przelicza plan; aktywny zatwierdzony cykl pozostaje bez zmian
 
           # Stop RCE: blok wypadł z planu, osiągnięto minimalny SOC, wyłączono
           # automatykę albo dane PSE stały się niedostępne.

@@ -2316,6 +2316,425 @@ def assert_rce_execution_contracts() -> None:
         assert not active_rce_update_allowed(**(rce_live | changed)), (
             "RCE interleaving can write or extend after authorization loss"
         )
+
+    # Planning authority for a new start remains distinct from the execution
+    # authority of an already accepted, latched cycle.  A pending calculation
+    # may hold that cycle only while current physical safety inputs independently
+    # remain valid; it must never authorize a write or hide a hard stop.
+    def rce_lifecycle_action(
+        *,
+        active: bool,
+        enabled: bool,
+        result_current: bool,
+        recalculation_pending: bool,
+        execution_ready: bool,
+        export_allowed: bool,
+        sale_block: bool,
+        conflict: bool,
+        owner_exclusive: bool,
+        physical_mode: str,
+        topology_valid: bool,
+        latched_seconds_remaining: float,
+        planned: bool,
+        committed_power_percent: float | None,
+        physical_power_percent: float | None,
+        price_above_floor: bool,
+        continue_stop_confirmed: bool,
+        soc_percent: float | None,
+        floor_percent: float | None,
+        latched_floor_percent: float | None,
+        soc_fresh: bool,
+        bms_current_a: float | None,
+        bms_voltage_v: float | None,
+        bms_fresh: bool,
+        readbacks_fresh: bool,
+    ) -> str:
+        live_safety = (
+            enabled
+            and execution_ready
+            and export_allowed
+            and not sale_block
+            and not conflict
+            and owner_exclusive
+            and physical_mode == "grid_discharge"
+            and topology_valid
+            and soc_fresh
+            and soc_percent is not None
+            and floor_percent is not None
+            and soc_percent > floor_percent
+            and bms_fresh
+            and bms_current_a is not None
+            and bms_current_a > 0
+            and bms_voltage_v is not None
+            and bms_voltage_v > 0
+            and readbacks_fresh
+            and committed_power_percent is not None
+            and physical_power_percent is not None
+            and physical_power_percent <= committed_power_percent + 0.5
+            and floor_percent is not None
+            and latched_floor_percent is not None
+            and floor_percent >= latched_floor_percent - 0.5
+        )
+        committed_execution = (
+            latched_seconds_remaining > 0
+            and planned
+            and committed_power_percent is not None
+            and committed_power_percent > 0
+            and price_above_floor
+            and not continue_stop_confirmed
+        )
+        if not active:
+            return "unowned"
+        if not live_safety or not committed_execution:
+            return "rollback"
+        if not result_current:
+            return "hold" if recalculation_pending else "rollback"
+        return "continue"
+
+    rce_latched = dict(
+        active=True,
+        enabled=True,
+        result_current=True,
+        recalculation_pending=False,
+        execution_ready=True,
+        export_allowed=True,
+        sale_block=False,
+        conflict=False,
+        owner_exclusive=True,
+        physical_mode="grid_discharge",
+        topology_valid=True,
+        latched_seconds_remaining=300.0,
+        planned=True,
+        committed_power_percent=50.0,
+        physical_power_percent=50.0,
+        price_above_floor=True,
+        continue_stop_confirmed=False,
+        soc_percent=70.0,
+        floor_percent=30.0,
+        latched_floor_percent=30.0,
+        soc_fresh=True,
+        bms_current_a=500.0,
+        bms_voltage_v=53.0,
+        bms_fresh=True,
+        readbacks_fresh=True,
+    )
+    harmless_recalculation = rce_latched | {
+        "result_current": False,
+        "recalculation_pending": True,
+    }
+    harmless_event_orders = (
+        harmless_recalculation,
+        harmless_recalculation,
+    )
+    lifecycle_sequence = [rce_lifecycle_action(**rce_latched)] + [
+        rce_lifecycle_action(**event) for event in harmless_event_orders
+    ] + [rce_lifecycle_action(**rce_latched)]
+    assert lifecycle_sequence == ["continue", "hold", "hold", "continue"], (
+        "Plan/readiness event order changed the active pending-cycle decision"
+    )
+    assert "rollback" not in lifecycle_sequence
+    assert rce_lifecycle_action(**harmless_recalculation) == "hold", (
+        "A harmless price/PV/LOAD recalculation rolled back a latched RCE cycle"
+    )
+    assert rce_lifecycle_action(**rce_latched) == "continue", (
+        "A compatible committed replacement plan did not resume normal continuation"
+    )
+    assert rce_lifecycle_action(
+        **(rce_latched | {"planned": False})
+    ) == "rollback", "A current replacement plan requiring stop was ignored"
+    assert rce_lifecycle_action(
+        **(harmless_recalculation | {"bms_current_a": 0.0})
+    ) == "rollback", "BMS zero was hidden by optimizer pending"
+    assert rce_lifecycle_action(
+        **(harmless_recalculation | {"bms_current_a": None})
+    ) == "rollback", "Missing BMS capability was hidden by optimizer pending"
+    assert rce_lifecycle_action(
+        **(harmless_recalculation | {"bms_fresh": False})
+    ) == "rollback", "Stale BMS capability was hidden by optimizer pending"
+    assert rce_lifecycle_action(
+        **(harmless_recalculation | {"export_allowed": False})
+    ) == "rollback", "Physical export prohibition was hidden by optimizer pending"
+    assert rce_lifecycle_action(
+        **(
+            harmless_recalculation
+            | {"bms_current_a": 0.0, "export_allowed": False}
+        )
+    ) == "rollback", (
+        "A simultaneous BMS/GCF hard stop waited for a replacement optimizer result"
+    )
+    for hard_stop in (
+        {"conflict": True},
+        {"owner_exclusive": False},
+        {"physical_mode": "off_grid"},
+        {"execution_ready": False},
+        {"topology_valid": False},
+        {"soc_percent": 30.0},
+        {"soc_fresh": False},
+        {"readbacks_fresh": False},
+        {"physical_power_percent": 100.0},
+        {"floor_percent": 29.0},
+    ):
+        assert rce_lifecycle_action(
+            **(harmless_recalculation | hard_stop)
+        ) == "rollback", f"Pending RCE masked hard stop {hard_stop}"
+    assert rce_lifecycle_action(
+        **(harmless_recalculation | {"physical_power_percent": 25.0})
+    ) == "hold", "A safer downward physical power cap was treated as drift"
+    assert rce_lifecycle_action(
+        **(harmless_recalculation | {"active": False})
+    ) == "unowned", (
+        "An unowned physical Grid Discharge was misclassified as an RCE cycle"
+    )
+
+    def rce_new_start_allowed(
+        *,
+        active: bool,
+        result_current: bool,
+        recalculation_pending: bool,
+        control_data_ready: bool,
+        physical_mode: str,
+    ) -> bool:
+        return (
+            not active
+            and result_current
+            and not recalculation_pending
+            and control_data_ready
+            and physical_mode == "self_use"
+        )
+
+    assert rce_new_start_allowed(
+        active=False,
+        result_current=True,
+        recalculation_pending=False,
+        control_data_ready=True,
+        physical_mode="self_use",
+    )
+    assert not rce_new_start_allowed(
+        active=False,
+        result_current=False,
+        recalculation_pending=True,
+        control_data_ready=False,
+        physical_mode="self_use",
+    ), "A pending optimizer result authorized a new RCE start"
+
+    pending_marker = "rce_pending_latched_execution_safe"
+    pending_stop = (
+        "RCE przelicza plan; aktywny zatwierdzony cykl pozostaje bez zmian"
+    )
+    assert scheduler.count(f"&{pending_marker}") == 1
+    assert scheduler.count(f"*{pending_marker}") == 3
+    assert scheduler.count(pending_stop) == 4
+    pending_source = scheduler.split(f"&{pending_marker}", 1)[1].split(
+        "sequence:", 1
+    )[0]
+    pending_normalized = " ".join(pending_source.split())
+    pending_compact = "".join(pending_source.split())
+    assert "'result_current') is sameas false" in pending_normalized
+    assert "'recalculation_pending') is sameas true" in pending_normalized
+    assert "<= (committed_power | float(0)) + 0.5" in pending_normalized
+    assert ">= (latched_floor | float(100)) - 0.5" in pending_normalized
+    for exact_contract in (
+        "state_attr('sensor.hoymiles_hit_rce_optimized_plan',"
+        "'result_current')issameasfalse",
+        "state_attr('sensor.hoymiles_hit_rce_optimized_plan',"
+        "'recalculation_pending')issameastrue",
+        "is_state('input_boolean.hoymiles_rce_discharge_active','on')",
+        "is_state('input_boolean.hoymiles_rce_discharge_enabled','on')",
+        "is_state('binary_sensor.hoymiles_ems_execution_ready','on')",
+        "is_state('binary_sensor.hoymiles_ems_export_allowed','on')",
+        "is_state('binary_sensor.hoymiles_sale_block_active','off')",
+        "is_state('binary_sensor.hoymiles_ems_control_conflict','off')",
+        "is_state('sensor.hoymiles_ems_hardware_mode','grid_discharge')",
+        "is_state('input_boolean.hoymiles_tariff_charge_enabled','off')",
+        "is_state('input_boolean.hoymiles_tariff_charge_active','off')",
+        "is_state('input_boolean.hoymiles_rcm_active','off')",
+        "is_state('input_boolean.hoymiles_rcm_pre_discharge_active','off')",
+        "is_state('input_boolean.hoymiles_rcm_export_control_active','off')",
+        "(is_state('input_boolean.hoymiles_rcm_enabled','off')"
+        "oris_state('input_boolean.hoymiles_rcm_shadow_mode','on'))",
+        "is_state('input_boolean.hoymiles_battery_balancing_active','off')",
+        "is_state('input_boolean.hoymiles_discharge_cycle_active','off')",
+        "is_state('input_boolean.hoymiles_charge_cycle_active','off')",
+        "notis_state('timer.hoymiles_discharge','active')",
+        "notis_state('timer.hoymiles_charge','active')",
+        "(bms_current.state|float(0))>0",
+        "(bms_voltage.state|float(0))>0",
+        "current_age>=-5andcurrent_age<=300",
+        "voltage_age>=-5andvoltage_age<=300",
+        "soc_age>=-5andsoc_age<=120",
+        "floor_age>=-5andfloor_age<=180",
+        "power_age>=-5andpower_age<=180",
+        "as_timestamp(states('input_datetime.hoymiles_rce_latched_slot_end'),0)"
+        ">now_ts",
+        "'current_slot_planned')|default(false,true)",
+        "andnotcommitted_stop",
+        "andnotprice_stop",
+        "(power.state|float(999))<=(committed_power|float(0))+0.5",
+        "(floor.state|float(-999))>=(latched_floor|float(100))-0.5",
+        "(soc.state|float(0))>[latched_floor|float(100),"
+        "floor.state|float(100)]|max",
+    ):
+        assert exact_contract in pending_compact, (
+            f"RCE pending hard-stop polarity changed: {exact_contract}"
+        )
+    for marker in (
+        "result_current",
+        "recalculation_pending",
+        "binary_sensor.hoymiles_ems_execution_ready",
+        "binary_sensor.hoymiles_ems_export_allowed",
+        "binary_sensor.hoymiles_sale_block_active",
+        "binary_sensor.hoymiles_ems_control_conflict",
+        "sensor.hoymiles_ems_hardware_mode",
+        "sensor.hoymiles_hit_overview_battery_soc",
+        "sensor.hoymiles_hit_maximum_discharge_current",
+        "sensor.hoymiles_hit_battery_voltage_bms",
+        "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+        "sensor.hoymiles_hit_ems_maximum_discharge_power_readback",
+        "sensor.hoymiles_hit_machines_type",
+        "sensor.hoymiles_hit_number_of_machines_master_and_slave",
+        "input_datetime.hoymiles_rce_latched_slot_end",
+        "input_number.hoymiles_rce_latched_minimum_soc",
+        "current_slot_execution_power_percent",
+        "current_slot_planned",
+        "current_slot_continue_eligible",
+        "current_price_pln_kwh",
+        "automatic_price_floor_pln_kwh",
+        "current_age >= -5 and current_age <= 300",
+        "voltage_age >= -5 and voltage_age <= 300",
+        "soc_age >= -5 and soc_age <= 120",
+        "floor_age >= -5 and floor_age <= 180",
+        "power_age >= -5 and power_age <= 180",
+    ):
+        assert marker in pending_source, (
+            f"RCE pending execution safety predicate lacks {marker}"
+        )
+    assert "binary_sensor.hoymiles_rce_control_data_ready" not in pending_source
+    assert "sensor.hoymiles_rce_effective_discharge_power_percent" not in pending_source
+    for marker in (
+        "binary_sensor.hoymiles_ems_execution_ready",
+        "binary_sensor.hoymiles_ems_control_conflict",
+    ):
+        assert marker in block.split("actions:", 1)[0], (
+            f"RCE hard-stop source is not a direct controller trigger: {marker}"
+        )
+
+    if yaml is not None:
+        package = yaml.safe_load(scheduler)
+        rce_automation = next(
+            item
+            for item in package["automation"]
+            if item.get("id") == "hoymiles_rce_grid_discharge_control"
+        )
+
+        def tree_contains(value, needle: str) -> bool:
+            if isinstance(value, str):
+                return needle in value
+            if isinstance(value, dict):
+                return any(
+                    needle in str(key) or tree_contains(item, needle)
+                    for key, item in value.items()
+                )
+            if isinstance(value, list):
+                return any(tree_contains(item, needle) for item in value)
+            return False
+
+        pending_parents: list[tuple[dict, int]] = []
+
+        def collect_pending_branches(value) -> None:
+            if isinstance(value, dict):
+                branches = value.get("choose")
+                if isinstance(branches, list):
+                    for index, branch in enumerate(branches):
+                        if tree_contains(branch.get("sequence", []), pending_stop):
+                            pending_parents.append((value, index))
+                for item in value.values():
+                    collect_pending_branches(item)
+            elif isinstance(value, list):
+                for item in value:
+                    collect_pending_branches(item)
+
+        collect_pending_branches(rce_automation["actions"])
+        assert len(pending_parents) == 4, (
+            "Every active-cycle interleaving checkpoint needs the same pending hold"
+        )
+        for parent, index in pending_parents:
+            branch = parent["choose"][index]
+            sequence = branch.get("sequence", [])
+            assert len(sequence) == 1 and set(sequence[0]) == {"stop"}
+            assert tree_contains(branch, "result_current")
+            assert tree_contains(branch, "recalculation_pending")
+            assert not tree_contains(
+                branch, "binary_sensor.hoymiles_rce_control_data_ready"
+            )
+            assert not tree_contains(
+                branch, "sensor.hoymiles_rce_effective_discharge_power_percent"
+            )
+            for forbidden in (
+                "script.hoymiles_rollback_rce_transaction",
+                "script.hoymiles_verified_set_ems_",
+                "input_boolean.turn_off",
+                "wait_template",
+                "delay",
+            ):
+                assert not tree_contains(branch, forbidden), (
+                    f"RCE pending hold performs forbidden operation {forbidden}"
+                )
+            later_fallback = any(
+                tree_contains(candidate, "script.hoymiles_rollback_rce_transaction")
+                for candidate in parent["choose"][index + 1 :]
+            ) or tree_contains(
+                parent.get("default", []),
+                "script.hoymiles_rollback_rce_transaction",
+            )
+            assert later_fallback, (
+                "RCE pending hold is not ordered before an existing hard rollback"
+            )
+
+        prewrite_pending_parents = [
+            (parent, index)
+            for parent, index in pending_parents
+            if tree_contains(
+                parent["choose"][0], "rce_live_authorization_checked"
+            )
+        ]
+        assert len(prewrite_pending_parents) == 2
+        for parent, index in prewrite_pending_parents:
+            assert index == 1, (
+                "Active RCE ordering must be current authority, pending hold, rollback"
+            )
+            current_branch = parent["choose"][0]
+            rollback_branch = parent["choose"][2]
+            assert tree_contains(
+                current_branch, "binary_sensor.hoymiles_rce_control_data_ready"
+            )
+            assert tree_contains(current_branch, "current_slot_planned")
+            assert tree_contains(
+                rollback_branch, "input_boolean.hoymiles_rce_discharge_active"
+            )
+            assert tree_contains(
+                rollback_branch, "script.hoymiles_rollback_rce_transaction"
+            )
+
+        trigger_entities: set[str] = set()
+        for trigger in rce_automation["triggers"]:
+            entity_ids = trigger.get("entity_id", [])
+            if isinstance(entity_ids, str):
+                trigger_entities.add(entity_ids)
+            else:
+                trigger_entities.update(entity_ids)
+        for entity_id in (
+            "binary_sensor.hoymiles_ems_execution_ready",
+            "binary_sensor.hoymiles_ems_control_conflict",
+        ):
+            assert entity_id in trigger_entities
+
+    failsafe = scheduler.split(
+        "id: hoymiles_automatic_ems_control_failsafe", 1
+    )[1].split("id: hoymiles_daily_grid_discharge", 1)[0]
+    assert "binary_sensor.hoymiles_rce_control_data_ready" in failsafe
+    assert ">= 120" in failsafe, (
+        "Persistent RCE planning/readiness loss no longer reaches the failsafe"
+    )
     assert "input_number.hoymiles_rce_latched_minimum_soc" in stop
     assert "sensor.hoymiles_rce_effective_minimum_soc" not in stop
     assert "as_timestamp(now()) >= as_timestamp(states(" in stop
