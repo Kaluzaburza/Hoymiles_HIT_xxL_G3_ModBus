@@ -246,10 +246,20 @@ def _assert_tariff_feedback_is_not_a_planning_input() -> None:
         "sensor.hoymiles_hit_maximum_charge_current",
         "input_select.hoymiles_tariff_type",
         "input_number.hoymiles_tariff_low_price",
+        "input_number.hoymiles_rce_fallback_daily_load",
     ):
         assert entity_id in watched, f"Real tariff input is not watched: {entity_id}"
 
     class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    optimizer_input = _method(class_node, "_optimizer_input")
+    optimizer_literals = {
+        node.value
+        for node in ast.walk(optimizer_input)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "input_number.hoymiles_rce_fallback_daily_load" in optimizer_literals, (
+        "Fallback daily LOAD is watched without being consumed by tariff planning"
+    )
     for method_name in ("async_added_to_hass", "_current_input_fingerprint"):
         method = _method(class_node, method_name)
         names = {

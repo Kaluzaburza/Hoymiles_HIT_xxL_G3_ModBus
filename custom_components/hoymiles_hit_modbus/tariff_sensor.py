@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import MATCH_ALL, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
@@ -130,6 +130,7 @@ WATCHED_TARIFF_ENTITIES = {
     "input_number.hoymiles_tariff_minimum_saving",
     "input_number.hoymiles_tariff_soc_safety_margin",
     "input_number.hoymiles_tariff_maximum_soc",
+    "input_number.hoymiles_rce_fallback_daily_load",
     "input_datetime.hoymiles_tariff_cheap_1_start",
     "input_datetime.hoymiles_tariff_cheap_1_end",
     "input_datetime.hoymiles_tariff_cheap_2_start",
@@ -429,6 +430,10 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
     _attr_should_poll = False
     _attr_translation_key = "tariff_charge_plan"
     _attr_icon = "mdi:battery-clock-outline"
+    # The complete current plan remains available to automations, diagnostics,
+    # and RestoreEntity. Recorder intentionally stores no custom attributes for
+    # this entity because the bounded plan can still exceed its 16 KiB column.
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(
         self,
@@ -478,6 +483,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self._startup_warmup_task: asyncio.Task[None] | None = None
         self._forecast_policy_refresh_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
+        self._delayed_recalculate_tasks: set[asyncio.Task[None]] = set()
+        self._lifecycle_stopped = False
         self._dynamic_forecast_entities: frozenset[str] = frozenset()
         self._dynamic_forecast_unsub = None
         self._forecast_gcf_policy_signature: (
@@ -602,6 +609,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self.async_on_remove(
             lambda: self._cancel_forecast_gcf_policy_evaluation()
         )
+        self.async_on_remove(self._cancel_delayed_recalculation)
         refresh_dynamic_forecast_listener = getattr(
             self,
             "_refresh_dynamic_forecast_listener",
@@ -787,7 +795,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             self.async_on_remove(task.cancel)
         if not self._invalidate_input_event(event):
             return
-        if self._recalculate_cancel is None:
+        if not self._lifecycle_stopped and self._recalculate_cancel is None:
             self._recalculate_cancel = async_call_later(
                 self.hass,
                 INPUT_RECALCULATION_DELAY_SECONDS,
@@ -867,7 +875,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         ):
             self._schedule_forecast_policy_refresh()
         self._invalidate_internal_inputs()
-        if self._recalculate_cancel is None:
+        if not self._lifecycle_stopped and self._recalculate_cancel is None:
             self._recalculate_cancel = async_call_later(
                 self.hass,
                 INPUT_RECALCULATION_DELAY_SECONDS,
@@ -900,7 +908,30 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
 
     async def _async_debounced_recalculate(self, now: datetime) -> None:
         self._recalculate_cancel = None
-        await self._recalculate_and_write()
+        if self._lifecycle_stopped:
+            return
+        task = asyncio.current_task()
+        if task is None:
+            return
+        self._delayed_recalculate_tasks.add(task)
+        try:
+            await self._recalculate_and_write()
+        finally:
+            self._delayed_recalculate_tasks.discard(task)
+
+    @callback
+    def _cancel_delayed_recalculation(self) -> None:
+        """Cancel queued or running delayed work when the entity is removed."""
+
+        self._lifecycle_stopped = True
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+            self._recalculate_cancel = None
+        tasks = tuple(self._delayed_recalculate_tasks)
+        self._delayed_recalculate_tasks.clear()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
     async def _async_timer(self, now: datetime) -> None:
         if self._recalculate_cancel is not None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 from copy import deepcopy
 from datetime import timedelta
 from functools import partial
@@ -143,6 +144,7 @@ async def _assert_added_is_nonblocking(
     probe._async_control_timer = lambda *args: None
     probe._async_forecast_accuracy_timer = lambda *args: None
     probe._async_forecast_gcf_policy_changed = lambda *args: None
+    probe._cancel_delayed_recalculation = lambda: None
     probe._effective_charge_power_factor = 1.0
     probe._effective_charge_power_source = "configured"
     probe._delivered_power_ratios = SimpleNamespace(maxlen=24, append=lambda _v: None)
@@ -465,6 +467,229 @@ def _assert_bounded_recorder_contract() -> None:
     assert any(isinstance(value, ast.Constant) and value.value == 1 for value in limits)
 
 
+def _assert_tariff_recorder_attribute_contract() -> None:
+    """Keep the live plan rich while excluding it from Recorder's 16 KiB row."""
+
+    path = COMPONENT / "tariff_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    match_all_imports = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "homeassistant.const"
+        and any(alias.name == "MATCH_ALL" for alias in node.names)
+    ]
+    assert len(match_all_imports) == 1
+    class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    unrecorded = [
+        node.value
+        for node in class_node.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "_unrecorded_attributes"
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            )
+        )
+    ]
+    assert len(unrecorded) == 1
+    value = unrecorded[0]
+    assert (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id == "frozenset"
+        and len(value.args) == 1
+        and isinstance(value.args[0], ast.Set)
+        and len(value.args[0].elts) == 1
+        and isinstance(value.args[0].elts[0], ast.Name)
+        and value.args[0].elts[0].id == "MATCH_ALL"
+    ), "Tariff plan custom attributes are no longer fully excluded from Recorder"
+
+    bases = {
+        node.id for node in class_node.bases if isinstance(node, ast.Name)
+    }
+    assert "RestoreEntity" in bases
+    extra = _method(class_node, "extra_state_attributes")
+    returns = [node for node in ast.walk(extra) if isinstance(node, ast.Return)]
+    assert len(returns) == 1
+    returned = returns[0].value
+    assert (
+        isinstance(returned, ast.Attribute)
+        and isinstance(returned.value, ast.Name)
+        and returned.value.id == "self"
+        and returned.attr == "_attributes"
+    ), "Recorder exclusion truncated the live tariff plan"
+
+    restored = _method(class_node, "async_added_to_hass")
+    restored_literals = {
+        node.value
+        for node in ast.walk(restored)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert {
+        "charge_power_feedback_version",
+        "effective_charge_power_factor",
+        "effective_charge_power_feedback_samples",
+    } <= restored_literals, "Recorder fix removed existing RestoreEntity feedback"
+
+    synthetic_plan = {
+        "status_code": "ready",
+        "planned_slots": [
+            {
+                "start": f"2026-08-{1 + index // 48:02d}T{index % 24:02d}:00:00+02:00",
+                "end": f"2026-08-{1 + index // 48:02d}T{index % 24:02d}:30:00+02:00",
+                "action": "grid_support_and_charge",
+                "energy_kwh": 3.141,
+                "power_kw": 12.5,
+                "price_pln_kwh": 0.4321,
+                "target_soc": 98.0,
+            }
+            for index in range(96)
+        ],
+        "expensive_window_load_buffers": [
+            {
+                "start": f"2026-08-{1 + index // 24:02d}T{index % 24:02d}:00:00+02:00",
+                "required_kwh": 14.25,
+                "uncertainty_kwh": 2.75,
+            }
+            for index in range(48)
+        ],
+    }
+    full_size = len(
+        json.dumps(synthetic_plan, separators=(",", ":")).encode("utf-8")
+    )
+    assert full_size > 16_384, "Recorder regression fixture is not oversized"
+    recorder_custom_attributes: dict[str, Any] = {}
+    recorder_size = len(
+        json.dumps(
+            recorder_custom_attributes,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    assert recorder_size < 4_096
+
+
+def _compile_tariff_delayed_recalculation_probe() -> type[Any]:
+    path = COMPONENT / "tariff_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    methods = [
+        deepcopy(_method(class_node, name))
+        for name in (
+            "_async_debounced_recalculate",
+            "_cancel_delayed_recalculation",
+        )
+    ]
+    for method in methods:
+        method.decorator_list = []
+    probe_class = ast.ClassDef(
+        name="TariffDelayedRecalculationProbe",
+        bases=[],
+        keywords=[],
+        decorator_list=[],
+        body=methods,
+    )
+    namespace: dict[str, Any] = {"asyncio": asyncio}
+    exec(
+        compile(
+            ast.fix_missing_locations(
+                ast.Module(body=[probe_class], type_ignores=[])
+            ),
+            "<tariff-delayed-recalculation-probe>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace["TariffDelayedRecalculationProbe"]
+
+
+async def _assert_tariff_delayed_recalculation_lifecycle() -> None:
+    """Cancel queued and running tariff recalculations during entity removal."""
+
+    path = COMPONENT / "tariff_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    added = _method(class_node, "async_added_to_hass")
+    cleanup_registrations = [
+        node
+        for node in ast.walk(added)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "async_on_remove"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Attribute)
+        and isinstance(node.args[0].value, ast.Name)
+        and node.args[0].value.id == "self"
+        and node.args[0].attr == "_cancel_delayed_recalculation"
+    ]
+    assert len(cleanup_registrations) == 1
+
+    probe_type = _compile_tariff_delayed_recalculation_probe()
+    probe = probe_type()
+    handle_cancellations = 0
+
+    def cancel_handle() -> None:
+        nonlocal handle_cancellations
+        handle_cancellations += 1
+
+    probe._lifecycle_stopped = False
+    probe._recalculate_cancel = cancel_handle
+    probe._delayed_recalculate_tasks = set()
+    probe._cancel_delayed_recalculation()
+    probe._cancel_delayed_recalculation()
+    assert handle_cancellations == 1
+    assert probe._lifecycle_stopped
+    assert probe._recalculate_cancel is None
+    assert probe._delayed_recalculate_tasks == set()
+
+    recalculations = 0
+
+    async def count_recalculation() -> None:
+        nonlocal recalculations
+        recalculations += 1
+
+    probe._recalculate_and_write = count_recalculation
+    await probe._async_debounced_recalculate(None)
+    assert recalculations == 0, "Queued callback published after entity removal"
+
+    probe._lifecycle_stopped = False
+    await probe._async_debounced_recalculate(None)
+    assert recalculations == 1
+    assert probe._delayed_recalculate_tasks == set()
+
+    entered = asyncio.Event()
+    entered_count = 0
+    published = 0
+
+    async def blocked_recalculation() -> None:
+        nonlocal entered_count, published
+        entered_count += 1
+        if entered_count == 2:
+            entered.set()
+        await asyncio.Event().wait()
+        published += 1
+
+    probe._lifecycle_stopped = False
+    probe._recalculate_and_write = blocked_recalculation
+    running = [
+        asyncio.create_task(probe._async_debounced_recalculate(None))
+        for _ in range(2)
+    ]
+    await asyncio.wait_for(entered.wait(), timeout=0.1)
+    assert probe._delayed_recalculate_tasks == set(running)
+    probe._cancel_delayed_recalculation()
+    results = await asyncio.wait_for(
+        asyncio.gather(*running, return_exceptions=True),
+        timeout=1.0,
+    )
+    assert all(isinstance(result, asyncio.CancelledError) for result in results), (
+        "An overlapping delayed recalculation survived removal"
+    )
+    assert published == 0
+    assert probe._delayed_recalculate_tasks == set()
+
+
 def _compile_bounded_history_probe() -> dict[str, Any]:
     path = COMPONENT / "bounded_history.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -577,6 +802,7 @@ async def _async_main() -> None:
         )
         contracts.append((filename, added, scheduler))
     _assert_bounded_recorder_contract()
+    _assert_tariff_recorder_attribute_contract()
     for filename, (class_name, watched_name) in DYNAMIC_FORECAST_SENSORS.items():
         _assert_dynamic_forecast_listener_runtime(
             COMPONENT / filename,
@@ -587,6 +813,7 @@ async def _async_main() -> None:
     for filename, added, scheduler in contracts:
         await _assert_added_is_nonblocking(added, filename)
         await _assert_warmup_single_flight(scheduler, filename)
+    await _assert_tariff_delayed_recalculation_lifecycle()
     await _assert_bounded_recorder_runtime()
 
 
