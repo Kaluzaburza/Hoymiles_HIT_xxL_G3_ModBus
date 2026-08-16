@@ -3099,7 +3099,16 @@ def assert_rcm_execution_contracts() -> None:
             }
             else "ems_verified_hardware_readback_supported"
         )
-        assert capability in body
+        if helper in {
+            "hoymiles_verified_set_ems_maximum_charge_power",
+            "hoymiles_verified_set_ems_force_charge_soc",
+            "hoymiles_verified_set_ems_maximum_discharge_power",
+            "hoymiles_verified_set_ems_force_discharge_soc",
+        }:
+            assert "*ems_complete_physical_snapshot_ready" in body
+            assert "*ems_complete_physical_block_ack" in body
+        else:
+            assert capability in body
     pre = scheduler.split(
         "id: hoymiles_rcm_pre_discharge_control",
         1,
@@ -3842,32 +3851,34 @@ def assert_physical_hardware_readback_contracts() -> None:
     helpers = scheduler.split("script:", 1)[1].split(
         "  hoymiles_start_grid_discharge:", 1
     )[0]
-    helper_specs = {
+    ems_helper_specs = {
         "hoymiles_verified_set_ems_mode": (
             "action: select.select_option",
-            "ems_control_readback_generation",
-            "ems_mode_readback_code",
+            "expected_mode_code",
+            "option",
         ),
         "hoymiles_verified_set_ems_maximum_charge_power": (
             "action: number.set_value",
-            "ems_control_readback_generation",
-            "ems_maximum_charge_power_readback",
+            "expected_maximum_charge_power",
+            "value | float(0) | round(1)",
         ),
         "hoymiles_verified_set_ems_force_charge_soc": (
             "action: number.set_value",
-            "ems_control_readback_generation",
-            "ems_force_charge_soc_readback",
+            "expected_force_charge_soc",
+            "value | float(0) | round(0)",
         ),
         "hoymiles_verified_set_ems_maximum_discharge_power": (
             "action: number.set_value",
-            "ems_control_readback_generation",
-            "ems_maximum_discharge_power_readback",
+            "expected_maximum_discharge_power",
+            "value | float(0) | round(1)",
         ),
         "hoymiles_verified_set_ems_force_discharge_soc": (
             "action: number.set_value",
-            "ems_control_readback_generation",
-            "ems_force_discharge_soc_readback",
+            "expected_force_discharge_soc",
+            "value | float(0) | round(0)",
         ),
+    }
+    direct_helper_specs = {
         "hoymiles_verified_set_battery_max_charge_power": (
             "action: number.set_value",
             "battery_charge_power_readback_generation",
@@ -3879,7 +3890,153 @@ def assert_physical_hardware_readback_contracts() -> None:
             "gcf_maximum_export_power_readback",
         ),
     }
-    for helper, (service, generation, mirror) in helper_specs.items():
+    full_block_mirrors = (
+        "ems_mode_readback_code",
+        "ems_self_use_soc_readback",
+        "ems_backup_soc_readback",
+        "ems_force_charge_soc_readback",
+        "ems_maximum_charge_power_readback",
+        "ems_force_discharge_soc_readback",
+        "ems_maximum_discharge_power_readback",
+    )
+    full_block_expected = (
+        "expected_mode_code",
+        "expected_self_use_soc",
+        "expected_backup_soc",
+        "expected_force_charge_soc",
+        "expected_maximum_charge_power",
+        "expected_force_discharge_soc",
+        "expected_maximum_discharge_power",
+    )
+    expected_to_mirror = {
+        "expected_mode_code": "ems_mode_readback_code",
+        "expected_self_use_soc": "ems_self_use_soc_readback",
+        "expected_backup_soc": "ems_backup_soc_readback",
+        "expected_force_charge_soc": "ems_force_charge_soc_readback",
+        "expected_maximum_charge_power": "ems_maximum_charge_power_readback",
+        "expected_force_discharge_soc": "ems_force_discharge_soc_readback",
+        "expected_maximum_discharge_power": "ems_maximum_discharge_power_readback",
+    }
+    snapshot_contract = scheduler.split(
+        "value_template: &ems_complete_physical_snapshot_ready", 1
+    )[1].split("      - variables:", 1)[0]
+    full_ack_contract = scheduler.split(
+        "wait_template: &ems_complete_physical_block_ack", 1
+    )[1].split('        timeout: "00:01:00"', 1)[0]
+    assert scheduler.count("&ems_complete_physical_snapshot_ready") == 1
+    assert scheduler.count("*ems_complete_physical_snapshot_ready") == 4
+    assert scheduler.count("&ems_complete_physical_block_ack") == 1
+    assert scheduler.count("*ems_complete_physical_block_ack") == 4
+    for mirror in full_block_mirrors:
+        assert mirror in snapshot_contract, f"Snapshot omits {mirror}"
+        assert mirror in full_ack_contract, f"Full-block ACK omits {mirror}"
+    for expected in full_block_expected:
+        assert expected in full_ack_contract, f"Full-block ACK omits {expected}"
+    for marker in (
+        "ems_generation_before_write",
+        "ems_generation_after_write",
+        "generation_after_not_older",
+        "newer_than_after",
+        "generation_before >= 16000000",
+        "generation_after >= 16000000",
+        "is_number(states(",
+        "sensor.hoymiles_hit_ems_verified_hardware_readback_supported",
+    ):
+        assert marker in full_ack_contract, marker
+
+    compact_full_ack = " ".join(full_ack_contract.split()).replace(
+        "states( '", "states('"
+    )
+    exact_full_ack_pairs = (
+        "and (states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1)) "
+        "== (expected_mode_code | int(-2))",
+        "and ((states('sensor.hoymiles_hit_ems_self_use_soc_readback') "
+        "| float(-999)) - (expected_self_use_soc | float(-998))) | abs < 0.5",
+        "and ((states('sensor.hoymiles_hit_ems_backup_soc_readback') "
+        "| float(-999)) - (expected_backup_soc | float(-998))) | abs < 0.5",
+        "and ((states('sensor.hoymiles_hit_ems_force_charge_soc_readback') "
+        "| float(-999)) - (expected_force_charge_soc | float(-998))) | abs < 0.5",
+        "and ((states('sensor.hoymiles_hit_ems_maximum_charge_power_readback') "
+        "| float(-999)) - (expected_maximum_charge_power | float(-998))) "
+        "| abs < 0.05",
+        "and ((states('sensor.hoymiles_hit_ems_force_discharge_soc_readback') "
+        "| float(-999)) - (expected_force_discharge_soc | float(-998))) "
+        "| abs < 0.5",
+        "and ((states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback') "
+        "| float(-999)) - (expected_maximum_discharge_power | float(-998))) "
+        "| abs < 0.05",
+    )
+    for exact_pair in exact_full_ack_pairs:
+        assert compact_full_ack.count(exact_pair) == 1, (
+            f"Full-block ACK no longer binds the exact physical/expected pair: "
+            f"{exact_pair}"
+        )
+    for exact_generation_clause in (
+        "{% set generation_after_not_older = generation_after == generation_before "
+        "or generation_after > generation_before or (generation_before >= 16000000 "
+        "and generation_after >= 1 and generation_after < generation_before) %}",
+        "{% set newer_than_after = current_generation > generation_after "
+        "or (generation_after >= 16000000 and current_generation >= 1 "
+        "and current_generation < generation_after) %}",
+        "and generation_after_not_older",
+        "and newer_than_after",
+    ):
+        assert compact_full_ack.count(exact_generation_clause) == 1, (
+            f"Full-block ACK generation polarity changed: {exact_generation_clause}"
+        )
+
+    for helper, (service, target_expected, target_source) in ems_helper_specs.items():
+        body = helpers.split(f"  {helper}:", 1)[1].split("\n  hoymiles_", 1)[0]
+        frozen_pos = body.index("ems_generation_before_write")
+        service_pos = body.index(service)
+        capture_pos = body.index("ems_generation_after_write")
+        wait_pos = body.index("wait_template:", capture_pos)
+        assert frozen_pos < service_pos < capture_pos < wait_pos
+        frozen = body[frozen_pos:service_pos]
+        assert target_expected in frozen
+        target_assignment = frozen.split(f"{target_expected}:", 1)[1].split(
+            "\n          expected_", 1
+        )[0]
+        assert target_source in target_assignment, (
+            f"{helper} no longer substitutes its normalized requested field"
+        )
+        for expected, mirror in expected_to_mirror.items():
+            if expected == target_expected:
+                continue
+            assignment = frozen.split(f"{expected}:", 1)[1].split(
+                "\n          expected_", 1
+            )[0]
+            assert mirror in assignment, (
+                f"{helper} no longer freezes {expected} from physical {mirror}"
+            )
+        assert "mode: restart" in body
+        if helper == "hoymiles_verified_set_ems_mode":
+            assert "sensor.hoymiles_hit_ems_verified_hardware_readback_supported" in body
+            assert "&ems_complete_physical_snapshot_ready" in body
+            assert "&ems_complete_physical_block_ack" in body
+        else:
+            assert "*ems_complete_physical_snapshot_ready" in body
+            assert "*ems_complete_physical_block_ack" in body
+        assert f"action: script.{helper}" not in body
+
+    if yaml is not None:
+        package = yaml.safe_load(scheduler)
+        scripts = package["script"]
+        parsed_waits: list[str] = []
+        for helper in ems_helper_specs:
+            sequence = scripts[helper]["sequence"]
+            waits = [
+                item["wait_template"]
+                for item in sequence
+                if isinstance(item, dict) and "wait_template" in item
+            ]
+            assert len(waits) == 1, f"{helper} has an ambiguous ACK wait"
+            parsed_waits.extend(waits)
+        assert len(set(parsed_waits)) == 1, (
+            "EMS helpers no longer share one parsed full-block ACK definition"
+        )
+
+    for helper, (service, generation, mirror) in direct_helper_specs.items():
         body = helpers.split(f"  {helper}:", 1)[1].split("\n  hoymiles_", 1)[0]
         service_pos = body.index(service)
         capture_pos = body.index("generation_after_write")
@@ -3888,15 +4045,7 @@ def assert_physical_hardware_readback_contracts() -> None:
         assert generation in body[capture_pos:]
         assert mirror in body[wait_pos:]
         assert "mode: restart" in body
-        capability = (
-            "sensor.hoymiles_hit_direct_register_verified_readback_supported"
-            if helper
-            in {
-                "hoymiles_verified_set_battery_max_charge_power",
-                "hoymiles_verified_set_gcf_export_limit",
-            }
-            else "sensor.hoymiles_hit_ems_verified_hardware_readback_supported"
-        )
+        capability = "sensor.hoymiles_hit_direct_register_verified_readback_supported"
         assert capability in body
         assert "| float(0) > 0.5" in body[wait_pos:]
         assert f"action: script.{helper}" not in body
@@ -3904,15 +4053,7 @@ def assert_physical_hardware_readback_contracts() -> None:
     mode = helpers.split("  hoymiles_verified_set_ems_mode:", 1)[1].split(
         "\n  hoymiles_verified_set_ems_maximum_charge_power:", 1
     )[0]
-    for mirror in (
-        "ems_mode_readback_code",
-        "ems_self_use_soc_readback",
-        "ems_backup_soc_readback",
-        "ems_force_charge_soc_readback",
-        "ems_maximum_charge_power_readback",
-        "ems_force_discharge_soc_readback",
-        "ems_maximum_discharge_power_readback",
-    ):
+    for mirror in full_block_mirrors:
         assert mirror in mode
     assert "'self_use': 0" in mode and "'off_grid': 3" in mode
     assert "'grid_charge': 4" in mode
@@ -3934,6 +4075,171 @@ def assert_physical_hardware_readback_contracts() -> None:
         assert marker in late_guard, (
             "Verified mode helper lacks a direct raw-code3 late interlock"
         )
+
+    def generation_not_older(current: int, baseline: int) -> bool:
+        return (
+            current == baseline
+            or current > baseline
+            or (baseline >= 16_000_000 and 1 <= current < baseline)
+        )
+
+    def generation_newer(current: int, baseline: int) -> bool:
+        return current > baseline or (
+            baseline >= 16_000_000 and 1 <= current < baseline
+        )
+
+    def full_block_helper_ack(
+        *,
+        supported: bool,
+        generation_before: int,
+        generation_after: int,
+        generation_current: int,
+        expected: tuple[float, ...],
+        physical: tuple[float | None, ...] | None,
+    ) -> bool:
+        """Model the one shared HA completion predicate for EMS 4300-4306."""
+
+        if (
+            not supported
+            or physical is None
+            or len(expected) != 7
+            or len(physical) != 7
+            or any(value is None for value in physical)
+            or not generation_not_older(generation_after, generation_before)
+            or not generation_newer(generation_current, generation_after)
+        ):
+            return False
+        actual = tuple(float(value) for value in physical if value is not None)
+        return (
+            int(actual[0]) == int(expected[0])
+            and all(abs(actual[index] - expected[index]) < 0.5 for index in (1, 2, 3, 5))
+            and all(abs(actual[index] - expected[index]) < 0.05 for index in (4, 6))
+        )
+
+    first_expected = (0.0, 25.0, 90.0, 98.0, 60.0, 0.0, 100.0)
+    target_only_match = (0.0, 25.0, 90.0, 98.0, 60.0, 0.0, 90.0)
+    assert not full_block_helper_ack(
+        supported=True,
+        generation_before=10,
+        generation_after=10,
+        generation_current=11,
+        expected=first_expected,
+        physical=target_only_match,
+    ), "A matching target field cannot hide a mismatching sibling"
+    assert full_block_helper_ack(
+        supported=True,
+        generation_before=10,
+        generation_after=10,
+        generation_current=11,
+        expected=first_expected,
+        physical=first_expected,
+    )
+    assert not full_block_helper_ack(
+        supported=True,
+        generation_before=10,
+        generation_after=10,
+        generation_current=10,
+        expected=first_expected,
+        physical=first_expected,
+    ), "Cached matching values are not a physical acknowledgement"
+    assert not full_block_helper_ack(
+        supported=True,
+        generation_before=10,
+        generation_after=9,
+        generation_current=11,
+        expected=first_expected,
+        physical=first_expected,
+    ), "A stale post-service generation capture must fail closed"
+    assert not full_block_helper_ack(
+        supported=True,
+        generation_before=10,
+        generation_after=10,
+        generation_current=11,
+        expected=first_expected,
+        physical=None,
+    )
+    assert not full_block_helper_ack(
+        supported=False,
+        generation_before=10,
+        generation_after=10,
+        generation_current=11,
+        expected=first_expected,
+        physical=first_expected,
+    ), "Missing or stale verified readback must fail closed"
+
+    # A family sequence cannot advance to its next helper on a target-only
+    # match. After the complete ACK, the next ordinary single-field helper can
+    # run and complete against its own newly frozen tuple.
+    first_complete = full_block_helper_ack(
+        supported=True,
+        generation_before=20,
+        generation_after=20,
+        generation_current=21,
+        expected=first_expected,
+        physical=first_expected,
+    )
+    assert first_complete
+    second_expected = first_expected[:5] + (30.0, first_expected[6])
+    assert full_block_helper_ack(
+        supported=True,
+        generation_before=21,
+        generation_after=21,
+        generation_current=22,
+        expected=second_expected,
+        physical=second_expected,
+    ), "A normal helper must work after the prior full-block ACK"
+    assert full_block_helper_ack(
+        supported=True,
+        generation_before=16_000_000,
+        generation_after=16_000_000,
+        generation_current=1,
+        expected=first_expected,
+        physical=first_expected,
+    ), "Generation wrap still needs the exact full block"
+    assert full_block_helper_ack(
+        supported=True,
+        generation_before=16_000_000,
+        generation_after=1,
+        generation_current=2,
+        expected=first_expected,
+        physical=first_expected,
+    ), "A service-time wrap must not deadlock the following full-block ACK"
+
+    # Minimal family markers: every previously affected path still routes
+    # through the corrected common helper layer; no family gets a duplicate
+    # acknowledgement implementation.
+    family_markers = {
+        "RCE": (
+            "script.hoymiles_verified_set_ems_maximum_discharge_power",
+            "script.hoymiles_verified_set_ems_force_discharge_soc",
+        ),
+        "tariff": (
+            "script.hoymiles_verified_set_ems_maximum_charge_power",
+            "script.hoymiles_verified_set_ems_force_charge_soc",
+        ),
+        "balancing": (
+            "hoymiles_stop_battery_balancing:",
+            "script.hoymiles_verified_set_ems_maximum_charge_power",
+        ),
+        "RCEm": (
+            "id: hoymiles_rcm_pre_discharge_control",
+            "script.hoymiles_verified_set_ems_force_discharge_soc",
+        ),
+    }
+    for family, markers in family_markers.items():
+        for marker in markers:
+            assert marker in scheduler, f"{family} bypasses the common EMS helper layer"
+
+    tariff_rollback = scheduler.split(
+        "  hoymiles_rollback_tariff_transaction:", 1
+    )[1].split("\n  hoymiles_rollback_rce_transaction:", 1)[0]
+    assert tariff_rollback.count(
+        "number.hoymiles_hit_ems_complete_block_charge_rollback_command"
+    ) == 1
+    assert "script.hoymiles_verified_set_ems_maximum_charge_power" not in tariff_rollback
+    assert "script.hoymiles_verified_set_ems_force_charge_soc" not in tariff_rollback
+    assert "system_broadcast_with_master_fc03" in scheduler
+    assert "individual_inverter_acknowledgement: unavailable" in scheduler
 
     def late_mode_write_allowed(
         option: str,

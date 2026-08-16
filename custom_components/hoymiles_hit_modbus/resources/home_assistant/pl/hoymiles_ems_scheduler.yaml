@@ -3360,8 +3360,8 @@ timer:
 script:
   # These are the only scripts allowed to write HIT/GCF control entities.
   # A Home Assistant number/select state is only a command echo.  Every helper
-  # snapshots the firmware readback generation *after* the service call and
-  # returns only after a later Modbus read proves the requested raw value.
+  # freezes the complete physical 4300-4306 tuple before the service call and
+  # returns only after a later Modbus read proves the complete requested block.
   hoymiles_verified_set_ems_mode:
     alias: "EMS — zapisz tryb z odczytem sprzętowym"
     description: >-
@@ -3383,15 +3383,29 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ option in ['self_use', 'off_grid', 'grid_charge', 'grid_discharge'] }}
       - condition: template
-        value_template: >-
-          {{ option in ['self_use', 'off_grid', 'grid_charge', 'grid_discharge']
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation'))
+        value_template: &ems_complete_physical_snapshot_ready >-
+          {% set ems_generation =
+            states.sensor.hoymiles_hit_ems_control_readback_generation %}
+          {% set topology_generation =
+            states.sensor.hoymiles_hit_parallel_topology_readback_generation %}
+          {% set ems_reported = ems_generation.last_reported
+            if ems_generation.last_reported is defined
+            else ems_generation.last_updated %}
+          {% set topology_reported = topology_generation.last_reported
+            if topology_generation.last_reported is defined
+            else topology_generation.last_updated %}
+          {% set ems_age = as_timestamp(now())
+            - as_timestamp(ems_reported, 0) %}
+          {% set topology_age = as_timestamp(now())
+            - as_timestamp(topology_reported, 0) %}
+          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+               | float(0) > 0.5
+             and is_number(ems_generation.state)
+             and is_number(topology_generation.state)
+             and ems_age >= -5 and ems_age <= 180
+             and topology_age >= -5 and topology_age <= 180
              and is_number(states(
                'sensor.hoymiles_hit_ems_mode_readback_code'))
              and is_number(states(
@@ -3407,7 +3421,9 @@ script:
              and is_number(states(
                'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')) }}
       - variables:
-          target_mode_code: >-
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
             {{ {'self_use': 0, 'off_grid': 3, 'grid_charge': 4,
                 'grid_discharge': 5}.get(option, -1) }}
           expected_self_use_soc: >-
@@ -3452,37 +3468,69 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
+      - wait_template: &ems_complete_physical_block_ack >-
+          {% set current_generation = states(
+            'sensor.hoymiles_hit_ems_control_readback_generation')
+            | float(-1) %}
+          {% set generation_before = ems_generation_before_write | float(-1) %}
+          {% set generation_after = ems_generation_after_write | float(-1) %}
+          {% set generation_after_not_older = generation_after == generation_before
+            or generation_after > generation_before
+            or (generation_before >= 16000000
+                and generation_after >= 1
+                and generation_after < generation_before) %}
+          {% set newer_than_after = current_generation > generation_after
+            or (generation_after >= 16000000
+                and current_generation >= 1
+                and current_generation < generation_after) %}
           {{ (states(
                'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
                | float(0) > 0.5)
-             and states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')
-                 not in ['unknown', 'unavailable', 'none', '']
-             and states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')
-                 != ems_generation_after_write
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_control_readback_generation'))
+             and generation_after_not_older
+             and newer_than_after
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_mode_readback_code'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_self_use_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_backup_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_force_charge_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_maximum_charge_power_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_force_discharge_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_maximum_discharge_power_readback'))
              and (states('sensor.hoymiles_hit_ems_mode_readback_code')
-                  | int(-1)) == (target_mode_code | int(-2))
-             and (states('sensor.hoymiles_hit_ems_self_use_soc_readback')
-                  | float(-999)) == (expected_self_use_soc | float(-998))
-             and (states('sensor.hoymiles_hit_ems_backup_soc_readback')
-                  | float(-999)) == (expected_backup_soc | float(-998))
-             and (states(
+                   | int(-1)) == (expected_mode_code | int(-2))
+             and ((states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+                   | float(-999)) - (expected_self_use_soc | float(-998)))
+                   | abs < 0.5
+             and ((states('sensor.hoymiles_hit_ems_backup_soc_readback')
+                   | float(-999)) - (expected_backup_soc | float(-998)))
+                   | abs < 0.5
+             and ((states(
                'sensor.hoymiles_hit_ems_force_charge_soc_readback')
-                  | float(-999)) == (expected_force_charge_soc | float(-998))
-             and (states(
+                   | float(-999)) - (expected_force_charge_soc | float(-998)))
+                   | abs < 0.5
+             and ((states(
                'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
-                  | float(-999))
-                    == (expected_maximum_charge_power | float(-998))
-             and (states(
+                   | float(-999))
+                     - (expected_maximum_charge_power | float(-998)))
+                   | abs < 0.05
+             and ((states(
                'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
-                  | float(-999))
-                    == (expected_force_discharge_soc | float(-998))
-             and (states(
+                   | float(-999))
+                     - (expected_force_discharge_soc | float(-998)))
+                   | abs < 0.5
+             and ((states(
                'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
-                  | float(-999))
-                    == (expected_maximum_discharge_power | float(-998)) }}
+                   | float(-999))
+                     - (expected_maximum_discharge_power | float(-998)))
+                   | abs < 0.05 }}
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3500,15 +3548,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+               | float(-999) }}
+          expected_maximum_charge_power: >-
+            {{ value | float(0) | round(1) }}
+          expected_force_discharge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          expected_maximum_discharge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_maximum_charge_power
@@ -3517,17 +3581,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.05 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3545,15 +3599,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ value | float(0) | round(0) }}
+          expected_maximum_charge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+               | float(-999) }}
+          expected_force_discharge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          expected_maximum_discharge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_force_charge_soc
@@ -3562,17 +3632,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_force_charge_soc_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.5 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3590,15 +3650,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+               | float(-999) }}
+          expected_maximum_charge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+               | float(-999) }}
+          expected_force_discharge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          expected_maximum_discharge_power: >-
+            {{ value | float(0) | round(1) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_maximum_discharge_power
@@ -3607,17 +3683,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.05 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3635,15 +3701,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+               | float(-999) }}
+          expected_maximum_charge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+               | float(-999) }}
+          expected_force_discharge_soc: >-
+            {{ value | float(0) | round(0) }}
+          expected_maximum_discharge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_force_discharge_soc
@@ -3652,17 +3734,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.5 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
