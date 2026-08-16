@@ -111,15 +111,10 @@ WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
     "sensor.hoymiles_hit_pv_total_energy_today",
     "sensor.hoymiles_hit_overview_battery_power",
-    "sensor.hoymiles_hit_grid_to_battery_power",
-    "sensor.hoymiles_hit_overview_load_active_power",
     "sensor.hoymiles_actual_load_power",
     "sensor.hoymiles_hit_overview_pv_total_power",
-    "sensor.hoymiles_tariff_grid_charge_power",
     "sensor.hoymiles_hit_ems_self_use_soc_readback",
-    "sensor.hoymiles_hit_ems_mode_readback_code",
     "input_boolean.hoymiles_tariff_charge_enabled",
-    "input_boolean.hoymiles_tariff_charge_active",
     "input_boolean.hoymiles_tariff_weekend_low_price",
     "input_boolean.hoymiles_tariff_polish_holidays_low_price",
     "input_select.hoymiles_tariff_operator",
@@ -148,6 +143,19 @@ WATCHED_TARIFF_ENTITIES = {
     *DAY3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
+
+# These execution states are sampled only by the one-minute delivered-power
+# feedback pass below. They do not participate in optimizer mathematics and
+# therefore must not withdraw planning authority when an accepted cycle starts.
+TARIFF_EXECUTION_FEEDBACK_ENTITIES = frozenset(
+    {
+        "input_boolean.hoymiles_tariff_charge_active",
+        "sensor.hoymiles_hit_ems_mode_readback_code",
+        "sensor.hoymiles_hit_grid_to_battery_power",
+        "sensor.hoymiles_hit_overview_load_active_power",
+        "sensor.hoymiles_tariff_grid_charge_power",
+    }
+)
 
 STATUS_TEXT = {
     "pl": {

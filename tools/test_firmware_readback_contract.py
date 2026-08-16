@@ -86,6 +86,9 @@ def main() -> None:
         assert publish in poll_block, generation_id
 
     mode_block = platform_block(settings, "ems_mode_4300")
+    tariff_rollback_block = platform_block(
+        settings, "ems_complete_block_charge_rollback_command"
+    )
     ems_writer = script_block(settings, "ems_write_complete_block_4300_4306")
     assert "update_interval: never" in mode_block
     assert "optimistic:" not in mode_block
@@ -93,6 +96,28 @@ def main() -> None:
     assert "id(ems_write_complete_block_4300_4306)->execute(" in mode_block
     assert "create_write_multiple_command" not in mode_block
     assert "send_raw" not in mode_block
+    assert "platform: template" in tariff_rollback_block
+    assert "set_action:" in tariff_rollback_block
+    assert "min_value: 0" in tariff_rollback_block
+    assert "max_value: 101100" in tariff_rollback_block
+    assert "initial_value: 0" in tariff_rollback_block
+    assert "optimistic: false" in tariff_rollback_block
+    assert "restore_value: false" in tariff_rollback_block
+    assert "lambda:" not in tariff_rollback_block.split("set_action:", 1)[0]
+    assert "update_interval:" not in tariff_rollback_block
+    assert "x < 10010.0f || x > 101100.0f" in tariff_rollback_block
+    assert "const int32_t force_charge_soc = payload / 1001;" in (
+        tariff_rollback_block
+    )
+    assert "const int32_t maximum_charge_power_raw = payload % 1001;" in (
+        tariff_rollback_block
+    )
+    assert "physical_mode == 3 ? 3.0f : 0.0f" in tariff_rollback_block
+    assert "std::fabs(physical_mode_raw - static_cast<float>(physical_mode))" in (
+        tariff_rollback_block
+    )
+    assert "create_write_multiple_command" not in tariff_rollback_block
+    assert "send_raw" not in tariff_rollback_block
 
     # Every EMS edit is composed from the complete physical 4300-4306
     # snapshot. A Master gets the same FC16 frame on the system broadcast
@@ -224,6 +249,19 @@ def main() -> None:
                 "id(ems_control_readback_generation).state",
             ),
         ),
+        "ems_complete_block_charge_rollback_command": (
+            tariff_rollback_block,
+            (
+                "rollback_mode",
+                "id(self_used_soc_readback_4301).state",
+                "id(backup_soc_raw_4302).state",
+                "rollback_force_charge_soc",
+                "rollback_maximum_charge_power",
+                "id(force_discharge_soc_readback_4305).state",
+                "id(maximum_discharge_power_readback_4306).state",
+                "id(ems_control_readback_generation).state",
+            ),
+        ),
     }
     assert settings.count(call_marker) == len(actuator_calls)
     for component_id, (block, arguments) in actuator_calls.items():
@@ -233,7 +271,10 @@ def main() -> None:
         actual_call = re.sub(r"\s+", "", block[call_start:call_end])
         expected_call = call_marker + ",".join(arguments) + ");"
         assert actual_call == expected_call, component_id
-        if component_id != "ems_mode_4300":
+        if component_id not in {
+            "ems_mode_4300",
+            "ems_complete_block_charge_rollback_command",
+        }:
             assert block[call_end:].lstrip().startswith("return {};"), component_id
 
     for marker in (
@@ -401,6 +442,50 @@ def main() -> None:
     assert shared.writes == [first, automatic_retry]
     shared.physical_poll(63, automatic_retry)
     assert shared.pending is None
+
+    # The tariff rollback composes its one desired block from the latest
+    # physical tuple plus explicit saved 4303/4304 values. A no-op 4304 does
+    # not cause a separate transaction.
+    tariff_one_physical = (0, 20, 60, 93, 500, 20, 1000)
+    tariff_one_desired = (0, 20, 60, 98, 500, 20, 1000)
+    tariff_one = ManualWriteBarrier(70, tariff_one_physical)
+    assert tariff_one.request(tariff_one_desired, 70)
+    assert tariff_one.writes == [tariff_one_desired]
+    tariff_one.physical_poll(71, tariff_one_desired)
+    assert tariff_one.pending is None
+
+    # Mode, 4303 and 4304 may all need restoration, but they still form one
+    # FC16 desired tuple and one physical full-block acknowledgement.
+    tariff_many_physical = (4, 20, 60, 93, 600, 20, 1000)
+    tariff_many_desired = (0, 20, 60, 98, 500, 20, 1000)
+    tariff_many = ManualWriteBarrier(80, tariff_many_physical)
+    assert tariff_many.request(tariff_many_desired, 80)
+    assert tariff_many.writes == [tariff_many_desired]
+    tariff_many.physical_poll(81, tariff_many_desired)
+    assert tariff_many.pending is None
+
+    # A logical no-op emits no FC16, but it still needs a newer complete FC03
+    # cohort before ownership may be released. Matching cached values, a
+    # missing block, or any sibling mismatch are not acknowledgement.
+    def tariff_no_op_ack(
+        baseline_generation: int,
+        generation: int,
+        expected: tuple[int, ...],
+        physical: tuple[int, ...] | None,
+    ) -> bool:
+        return (
+            ManualWriteBarrier.newer(generation, baseline_generation)
+            and physical is not None
+            and physical == expected
+        )
+
+    tariff_no_op = (0, 20, 60, 98, 500, 20, 1000)
+    assert not tariff_no_op_ack(90, 90, tariff_no_op, tariff_no_op)
+    assert not tariff_no_op_ack(90, 91, tariff_no_op, None)
+    assert not tariff_no_op_ack(
+        90, 91, tariff_no_op, tariff_no_op[:6] + (900,)
+    )
+    assert tariff_no_op_ack(90, 91, tariff_no_op, tariff_no_op)
 
     assert not fast_ack.request(final, 11), "A stale captured generation must fail closed"
     assert not fast_ack.request(None, 12), "An incomplete snapshot must fail closed"

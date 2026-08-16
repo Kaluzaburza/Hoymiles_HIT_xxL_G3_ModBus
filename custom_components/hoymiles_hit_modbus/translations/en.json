@@ -1699,6 +1699,9 @@
       }
     },
     "number": {
+      "ems_complete_block_charge_rollback_command": {
+        "name": "EMS Complete Block Charge Rollback Command"
+      },
       "maximum_export_power_limit": {
         "name": "Maximum Export Power Limit"
       },

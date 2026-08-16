@@ -5055,6 +5055,24 @@
   {
     "domain": "number",
     "source_component": "number",
+    "translation_key": "ems_complete_block_charge_rollback_command",
+    "source_name": "EMS Complete Block Charge Rollback Command",
+    "source_id": "ems_complete_block_charge_rollback_command",
+    "source_object_id": "ems_complete_block_charge_rollback_command",
+    "entity_category": "config",
+    "name": {
+      "en": "EMS Complete Block Charge Rollback Command",
+      "pl": "Polecenie pełnego rollbacku bloku ładowania EMS"
+    },
+    "description": {
+      "en": "Writable Hoymiles HIT xxL G3 setting: EMS Complete Block Charge Rollback Command.",
+      "pl": "Zapisywalne ustawienie falownika Hoymiles HIT xxL G3: Polecenie pełnego rollbacku bloku ładowania EMS."
+    },
+    "options": []
+  },
+  {
+    "domain": "number",
+    "source_component": "number",
     "translation_key": "maximum_export_power_limit",
     "source_name": "Maximum Export Power Limit",
     "source_id": "gcf_export_soft_limit_ratio_259",

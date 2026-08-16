@@ -88,6 +88,9 @@ PHRASE_TRANSLATIONS = {
     "EMS Backup SOC Readback": "Odczyt rezerwy SOC Backup EMS",
     "EMS Force Charge SOC Readback": "Odczyt docelowego SOC ładowania EMS",
     "EMS Maximum Charge Power Readback": "Odczyt maksymalnej mocy ładowania EMS",
+    "EMS Complete Block Charge Rollback Command": (
+        "Polecenie pełnego rollbacku bloku ładowania EMS"
+    ),
     "EMS Force Discharge SOC Readback": "Odczyt minimalnego SOC rozładowania EMS",
     "EMS Maximum Discharge Power Readback": "Odczyt maksymalnej mocy rozładowania EMS",
     "GCF Enable Readback Code": "Kod odczytanego stanu GCF",

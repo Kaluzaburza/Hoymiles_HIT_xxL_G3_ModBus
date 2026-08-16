@@ -654,6 +654,74 @@ select:
       "Felicity LV": 39
 
 number:
+  # Jawne, pojedyncze wejście dla taryfowego rollbacku całego bloku EMS.
+  # Payload jest bezstratnym kodem: force_charge_soc * 1001 + raw_4304,
+  # gdzie raw_4304 ma rozdzielczość 0,1%. Pozostałe pola są pobierane
+  # wyłącznie z ostatniego lokalnego, fizycznego snapshotu FC03 ESPHome.
+  # Encja nie jest ACK; potwierdzenie nadal zapewnia nowsza generacja FC03
+  # i zgodność pełnego bloku 4300-4306 po stronie Home Assistant.
+  - platform: template
+    name: "EMS Complete Block Charge Rollback Command"
+    id: ems_complete_block_charge_rollback_command
+    min_value: 0
+    max_value: 101100
+    step: 1
+    mode: box
+    initial_value: 0
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (!std::isfinite(x)) {
+            ESP_LOGE("ems", "Rollback taryfowy zablokowany: nieprawidłowy payload bloku EMS");
+            return;
+          }
+          if (x < 10010.0f || x > 101100.0f) {
+            ESP_LOGE("ems", "Rollback taryfowy zablokowany: payload bloku EMS poza zakresem");
+            return;
+          }
+          const int32_t payload = static_cast<int32_t>(std::lround(x));
+          if (std::fabs(x - static_cast<float>(payload)) > 0.01f) {
+            ESP_LOGE("ems", "Rollback taryfowy zablokowany: payload bloku EMS nie jest całkowity");
+            return;
+          }
+          const int32_t force_charge_soc = payload / 1001;
+          const int32_t maximum_charge_power_raw = payload % 1001;
+          if (force_charge_soc < 10 || force_charge_soc > 100 ||
+              maximum_charge_power_raw < 0 || maximum_charge_power_raw > 1000) {
+            ESP_LOGE("ems", "Rollback taryfowy zablokowany: wartości 4303/4304 poza zakresem");
+            return;
+          }
+          if (!id(ems_mode_raw_4300).has_state() ||
+              !std::isfinite(id(ems_mode_raw_4300).state)) {
+            ESP_LOGE("ems", "Rollback taryfowy zablokowany: brak fizycznego trybu EMS");
+            return;
+          }
+          const float physical_mode_raw = id(ems_mode_raw_4300).state;
+          const int32_t physical_mode =
+              static_cast<int32_t>(std::lround(physical_mode_raw));
+          if (std::fabs(physical_mode_raw - static_cast<float>(physical_mode)) > 0.01f ||
+              (physical_mode != 0 && physical_mode != 3 &&
+               physical_mode != 4 && physical_mode != 5)) {
+            ESP_LOGE("ems", "Rollback taryfowy zablokowany: nieprawidłowy fizyczny tryb EMS");
+            return;
+          }
+          const float rollback_mode = physical_mode == 3 ? 3.0f : 0.0f;
+          const float rollback_force_charge_soc =
+              static_cast<float>(force_charge_soc);
+          const float rollback_maximum_charge_power =
+              static_cast<float>(maximum_charge_power_raw) * 0.1f;
+          id(ems_write_complete_block_4300_4306)->execute(
+              rollback_mode,
+              id(self_used_soc_readback_4301).state,
+              id(backup_soc_raw_4302).state,
+              rollback_force_charge_soc,
+              rollback_maximum_charge_power,
+              id(force_discharge_soc_readback_4305).state,
+              id(maximum_discharge_power_readback_4306).state,
+              id(ems_control_readback_generation).state);
+    entity_category: config
+
   - platform: modbus_controller
     modbus_controller_id: ${modbus_settings_controller_id}
     name: "Maximum Export Power Limit"

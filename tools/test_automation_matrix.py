@@ -1715,28 +1715,228 @@ def assert_tariff_execution_contracts() -> None:
         "hoymiles_rollback_tariff_transaction:", 1
     )[1].split("hoymiles_rollback_rce_transaction:", 1)[0]
     for marker in (
-        "is_state('sensor.hoymiles_ems_hardware_mode', 'self_use')",
-        "rollback_preserve_off_grid",
-        "'sensor.hoymiles_ems_hardware_mode', 'off_grid'",
+        "mode: single",
         "input_number.hoymiles_tariff_saved_max_charge_power",
         "input_number.hoymiles_tariff_saved_force_charge_soc",
+        "sensor.hoymiles_hit_ems_control_readback_generation",
+        "sensor.hoymiles_hit_ems_mode_readback_code",
+        "sensor.hoymiles_hit_ems_self_use_soc_readback",
+        "sensor.hoymiles_hit_ems_backup_soc_readback",
         "sensor.hoymiles_hit_ems_maximum_charge_power_readback",
         "sensor.hoymiles_hit_ems_force_charge_soc_readback",
+        "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+        "sensor.hoymiles_hit_ems_maximum_discharge_power_readback",
+        "rollback_write_required",
+        "rollback_generation_before_transaction",
+        "rollback_generation_after_write",
+        "number.hoymiles_hit_ems_complete_block_charge_rollback_command",
         "continue_on_timeout: false",
     ):
         assert marker in rollback, f"Tariff rollback lacks {marker}"
-    rollback_mode_write = rollback.index('option: "self_use"')
-    assert rollback.rindex(
-        "'sensor.hoymiles_ems_hardware_mode', 'off_grid'",
-        0,
-        rollback_mode_write,
-    ) < rollback_mode_write
-    assert rollback.rindex(
-        "or is_state('sensor.hoymiles_ems_hardware_mode', 'off_grid')"
-    ) < rollback.rindex("action: input_boolean.turn_off")
-    assert rollback.rindex(
-        "input_number.hoymiles_tariff_saved_force_charge_soc"
-    ) < rollback.rindex("action: input_boolean.turn_off")
+    assert "delay:" not in rollback
+    assert "mode: queued" not in rollback
+    assert "script.hoymiles_verified_set_ems_mode" not in rollback
+    assert "script.hoymiles_verified_set_ems_maximum_charge_power" not in rollback
+    assert "script.hoymiles_verified_set_ems_force_charge_soc" not in rollback
+    assert rollback.count("action: number.set_value") == 1
+    assert rollback.count(
+        "number.hoymiles_hit_ems_complete_block_charge_rollback_command"
+    ) == 1
+    command_position = rollback.index("action: number.set_value")
+    no_op_guard_position = rollback.index("rollback_write_required")
+    no_op_generation_position = rollback.index(
+        "rollback_generation_before_transaction"
+    )
+    generation_position = rollback.index(
+        "rollback_generation_after_write", command_position
+    )
+    ack_position = rollback.index("- wait_template:", generation_position)
+    no_op_comment_position = rollback.index("# A logical no-op emits no FC16")
+    no_op_ack_position = rollback.index("- wait_template:", no_op_comment_position)
+    owner_release_position = rollback.rindex("action: input_boolean.turn_off")
+    assert no_op_guard_position < no_op_generation_position < command_position
+    assert command_position < generation_position < ack_position
+    assert ack_position < no_op_comment_position < no_op_ack_position
+    assert no_op_ack_position < owner_release_position
+    for ack_name, ack in (
+        ("write", rollback[ack_position:no_op_comment_position]),
+        ("no-op", rollback[no_op_ack_position:owner_release_position]),
+    ):
+        assert "continue_on_timeout: false" in ack
+        assert "sensor.hoymiles_hit_ems_control_readback_generation" in ack
+        for marker in (
+            "rollback_expected_mode",
+            "rollback_expected_4301",
+            "rollback_expected_4302",
+            "rollback_expected_4303",
+            "rollback_expected_4304",
+            "rollback_expected_4305",
+            "rollback_expected_4306",
+        ):
+            assert marker in ack, f"Tariff rollback {ack_name} ACK lacks {marker}"
+    final_guard = rollback[rollback.index(
+        "# Off-Grid is a user-owned physical mode"
+    ):owner_release_position]
+    for marker in (
+        "rollback_expected_mode",
+        "rollback_expected_4301",
+        "rollback_expected_4302",
+        "rollback_expected_4303",
+        "rollback_expected_4304",
+        "rollback_expected_4305",
+        "rollback_expected_4306",
+    ):
+        assert marker in final_guard, f"Tariff rollback final guard lacks {marker}"
+
+    def tariff_rollback_payload(force_charge_soc: int, power_percent: float) -> int:
+        return force_charge_soc * 1001 + round(power_percent * 10)
+
+    def tariff_rollback_write_required(
+        mode: int,
+        force_charge_soc: float,
+        power_percent: float,
+        desired_mode: int,
+        desired_force_charge_soc: float,
+        desired_power_percent: float,
+    ) -> bool:
+        return (
+            mode != desired_mode
+            or abs(force_charge_soc - desired_force_charge_soc) >= 0.5
+            or abs(power_percent - desired_power_percent) >= 0.05
+        )
+
+    assert tariff_rollback_payload(98, 50.0) == 98 * 1001 + 500
+    assert not tariff_rollback_write_required(0, 98, 50, 0, 98, 50)
+    assert tariff_rollback_write_required(0, 93, 50, 0, 98, 50)
+    assert tariff_rollback_write_required(4, 93, 60, 0, 98, 50)
+
+    if yaml is not None:
+        package = yaml.safe_load(scheduler)
+        rollback_script = package["script"]["hoymiles_rollback_tariff_transaction"]
+        assert rollback_script["mode"] == "single"
+        rollback_sequence = rollback_script["sequence"]
+        rollback_if_index, rollback_if = next(
+            (index, item)
+            for index, item in enumerate(rollback_sequence)
+            if isinstance(item, dict)
+            and "if" in item
+            and "number.hoymiles_hit_ems_complete_block_charge_rollback_command"
+            in str(item)
+        )
+        assert rollback_if["if"] == [
+            {
+                "condition": "template",
+                "value_template": "{{ rollback_write_required }}",
+            }
+        ]
+
+        variable_maps = [
+            item["variables"]
+            for item in rollback_sequence[:rollback_if_index]
+            if isinstance(item, dict) and "variables" in item
+        ]
+        transaction_variables = next(
+            variables
+            for variables in variable_maps
+            if "rollback_payload" in variables
+        )
+        compact = lambda value: "".join(str(value).split())
+        assert compact(transaction_variables["rollback_payload"]) == (
+            "{{(rollback_expected_4303|int(-1))*1001"
+            "+(((rollback_expected_4304|float(-1))*10)|round(0)|int(-1))}}"
+        )
+        assert compact(transaction_variables["rollback_write_required"]) == (
+            "{{(states('sensor.hoymiles_hit_ems_mode_readback_code')|int(-1))"
+            "!=(rollback_expected_mode|int(-2))"
+            "or((states('sensor.hoymiles_hit_ems_force_charge_soc_readback')"
+            "|float(-999))-(rollback_expected_4303|float(-998)))|abs>=0.5"
+            "or((states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')"
+            "|float(-999))-(rollback_expected_4304|float(-998)))|abs>=0.05}}"
+        )
+        assert compact(
+            transaction_variables["rollback_generation_before_transaction"]
+        ) == (
+            "{{states('sensor.hoymiles_hit_ems_control_readback_generation')}}"
+        )
+
+        then_sequence = rollback_if["then"]
+        else_sequence = rollback_if.get("else")
+        assert isinstance(else_sequence, list) and len(else_sequence) == 1
+        action_items = [
+            item for item in then_sequence if isinstance(item, dict) and "action" in item
+        ]
+        assert action_items == [
+            {
+                "action": "number.set_value",
+                "target": {
+                    "entity_id": (
+                        "number.hoymiles_hit_ems_complete_block_charge_rollback_command"
+                    )
+                },
+                "data": {"value": "{{ rollback_payload }}"},
+            }
+        ]
+        assert len(then_sequence) == 3
+        assert "variables" in then_sequence[1]
+        assert set(then_sequence[1]["variables"]) == {
+            "rollback_generation_after_write"
+        }
+        write_wait = then_sequence[2]
+        no_op_wait = else_sequence[0]
+        for wait in (write_wait, no_op_wait):
+            assert set(wait) == {
+                "wait_template",
+                "timeout",
+                "continue_on_timeout",
+            }
+            assert wait["timeout"] == "00:01:00"
+            assert wait["continue_on_timeout"] is False
+
+        def assert_full_tuple(template: str) -> None:
+            normalized = compact(template)
+            assert (
+                "(states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')"
+                "|float(0))>0.5"
+            ) in normalized
+            assert (
+                "(states('sensor.hoymiles_hit_ems_mode_readback_code')|int(-1))"
+                "==(rollback_expected_mode|int(-2))"
+            ) in normalized
+            for entity_id, expected, tolerance in (
+                ("ems_self_use_soc_readback", "4301", "0.5"),
+                ("ems_backup_soc_readback", "4302", "0.5"),
+                ("ems_force_charge_soc_readback", "4303", "0.5"),
+                ("ems_maximum_charge_power_readback", "4304", "0.05"),
+                ("ems_force_discharge_soc_readback", "4305", "0.5"),
+                ("ems_maximum_discharge_power_readback", "4306", "0.05"),
+            ):
+                assert (
+                    f"((states('sensor.hoymiles_hit_{entity_id}')|float(-999))"
+                    f"-(rollback_expected_{expected}|float(-998)))|abs<{tolerance}"
+                ) in normalized
+
+        write_template = write_wait["wait_template"]
+        no_op_template = no_op_wait["wait_template"]
+        generation_available = (
+            "states('sensor.hoymiles_hit_ems_control_readback_generation')"
+            "notin['unknown','unavailable','none','']"
+        )
+        assert generation_available in compact(write_template)
+        assert generation_available in compact(no_op_template)
+        assert (
+            "states('sensor.hoymiles_hit_ems_control_readback_generation')"
+            "!=rollback_generation_after_write"
+        ) in compact(write_template)
+        assert (
+            "states('sensor.hoymiles_hit_ems_control_readback_generation')"
+            "!=rollback_generation_before_transaction"
+        ) in compact(no_op_template)
+        assert_full_tuple(write_template)
+        assert_full_tuple(no_op_template)
+
+        final_condition = rollback_sequence[rollback_if_index + 1]
+        assert final_condition["condition"] == "template"
+        assert_full_tuple(final_condition["value_template"])
 
     update_block = scheduler.split(
         "# Aktualizacja ograniczeń BMS podczas bieżącego bloku",
@@ -4338,19 +4538,17 @@ def assert_physical_hardware_readback_contracts() -> None:
     assert "hoymiles_rcm_active" not in foreign_running
     assert "hoymiles_rcm_pre_discharge_active" not in foreign_running
 
-    for rollback_name, next_name in (
-        (
-            "hoymiles_rollback_tariff_transaction:",
-            "hoymiles_rollback_rce_transaction:",
-        ),
-        (
-            "hoymiles_rollback_rce_transaction:",
-            "hoymiles_start_battery_balancing:",
-        ),
-    ):
-        rollback = scheduler.split(rollback_name, 1)[1].split(next_name, 1)[0]
-        assert "rollback_preserve_off_grid" in rollback
-        assert "'sensor.hoymiles_ems_hardware_mode', 'off_grid'" in rollback
+    tariff_rollback = scheduler.split(
+        "hoymiles_rollback_tariff_transaction:", 1
+    )[1].split("hoymiles_rollback_rce_transaction:", 1)[0]
+    assert "rollback_expected_mode" in tariff_rollback
+    assert "== 3 else 0" in tariff_rollback
+    assert "sensor.hoymiles_hit_ems_mode_readback_code" in tariff_rollback
+    rce_rollback = scheduler.split(
+        "hoymiles_rollback_rce_transaction:", 1
+    )[1].split("hoymiles_start_battery_balancing:", 1)[0]
+    assert "rollback_preserve_off_grid" in rce_rollback
+    assert "'sensor.hoymiles_ems_hardware_mode', 'off_grid'" in rce_rollback
 
     balancing_stop = scheduler.split(
         "hoymiles_stop_battery_balancing:", 1
@@ -4376,13 +4574,17 @@ def assert_physical_hardware_readback_contracts() -> None:
     for controller in (rcm_main, rcm_pre):
         assert "'sensor.hoymiles_ems_hardware_mode', 'off_grid'" in controller
 
-    # No production path may call a writable HIT entity directly.  The only
-    # direct services are inside the seven verified helpers above.
+    # No production path may call a writable HIT entity directly. The only
+    # exception is the tariff rollback's single explicit full-block command,
+    # already proven above to await the complete physical ACK.
     production = scheduler.split("  hoymiles_start_grid_discharge:", 1)[1]
-    assert "action: number.set_value" not in production
-    assert "action: select.select_option" not in production
-    assert writable_mode not in production
-    assert "sensor.hoymiles_ems_hardware_mode" in production
+    production_without_tariff_rollback = production.split(
+        "  hoymiles_rollback_tariff_transaction:", 1
+    )[0] + production.split("  hoymiles_rollback_rce_transaction:", 1)[1]
+    assert "action: number.set_value" not in production_without_tariff_rollback
+    assert "action: select.select_option" not in production_without_tariff_rollback
+    assert writable_mode not in production_without_tariff_rollback
+    assert "sensor.hoymiles_ems_hardware_mode" in production_without_tariff_rollback
 
     execution_ready = scheduler.split(
         '- name: "Hoymiles EMS Execution Ready"', 1

@@ -189,6 +189,124 @@ def _assert_scheduler_result_current_gates() -> None:
         )
 
 
+def _literal_string_set(tree: ast.Module, name: str) -> set[str]:
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            )
+        )
+    ]
+    assert len(matches) == 1, f"Expected exactly one {name} assignment"
+    value = matches[0].value
+    assert value is not None
+    if (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id == "frozenset"
+    ):
+        assert len(value.args) == 1
+        value = value.args[0]
+    assert isinstance(value, (ast.Set, ast.Tuple, ast.List))
+    return {
+        item.value
+        for item in value.elts
+        if isinstance(item, ast.Constant) and isinstance(item.value, str)
+    }
+
+
+def _assert_tariff_feedback_is_not_a_planning_input() -> None:
+    """Execution feedback must not invalidate an accepted tariff plan."""
+
+    path = COMPONENT / "tariff_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    watched = _literal_string_set(tree, "WATCHED_TARIFF_ENTITIES")
+    feedback = _literal_string_set(tree, "TARIFF_EXECUTION_FEEDBACK_ENTITIES")
+    expected_feedback = {
+        "input_boolean.hoymiles_tariff_charge_active",
+        "sensor.hoymiles_hit_ems_mode_readback_code",
+        "sensor.hoymiles_hit_grid_to_battery_power",
+        "sensor.hoymiles_hit_overview_load_active_power",
+        "sensor.hoymiles_tariff_grid_charge_power",
+    }
+    assert feedback == expected_feedback
+    assert watched.isdisjoint(feedback), (
+        "Execution-only tariff feedback can withdraw planning authority"
+    )
+
+    # Genuine mathematical/freshness inputs must still invalidate the plan.
+    for entity_id in (
+        "sensor.hoymiles_hit_overview_battery_soc",
+        "sensor.hoymiles_actual_load_power",
+        "sensor.hoymiles_hit_overview_pv_total_power",
+        "sensor.hoymiles_hit_maximum_charge_current",
+        "input_select.hoymiles_tariff_type",
+        "input_number.hoymiles_tariff_low_price",
+    ):
+        assert entity_id in watched, f"Real tariff input is not watched: {entity_id}"
+
+    class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    for method_name in ("async_added_to_hass", "_current_input_fingerprint"):
+        method = _method(class_node, method_name)
+        names = {
+            node.id for node in ast.walk(method) if isinstance(node, ast.Name)
+        }
+        literals = {
+            node.value
+            for node in ast.walk(method)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+        assert "WATCHED_TARIFF_ENTITIES" in names, (
+            f"{method_name} no longer uses the authoritative planning-input set"
+        )
+        assert "TARIFF_EXECUTION_FEEDBACK_ENTITIES" not in names
+        assert feedback.isdisjoint(literals), (
+            f"{method_name} reintroduced an execution-only tariff input"
+        )
+
+    feedback_method = _method(class_node, "_update_delivered_power_feedback")
+    feedback_literals = {
+        node.value
+        for node in ast.walk(feedback_method)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert feedback <= feedback_literals, (
+        "Execution feedback was removed from its authoritative timer sampler"
+    )
+
+    timer = _method(class_node, "_async_timer")
+    ordered_calls: list[tuple[int, str, bool]] = []
+    for statement in timer.body:
+        if not isinstance(statement, ast.Expr):
+            continue
+        awaited = isinstance(statement.value, ast.Await)
+        call = statement.value.value if awaited else statement.value
+        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+            continue
+        if not isinstance(call.func.value, ast.Name) or call.func.value.id != "self":
+            continue
+        ordered_calls.append((statement.lineno, call.func.attr, awaited))
+    relevant = [
+        item
+        for item in sorted(ordered_calls)
+        if item[1]
+        in {
+            "_update_delivered_power_feedback",
+            "_invalidate_internal_inputs",
+            "_recalculate_and_write",
+        }
+    ]
+    assert relevant == [
+        (relevant[0][0], "_update_delivered_power_feedback", False),
+        (relevant[1][0], "_invalidate_internal_inputs", False),
+        (relevant[2][0], "_recalculate_and_write", True),
+    ], "Tariff feedback is no longer sampled before its timer-driven replan"
+
+
 def _class_node(tree: ast.Module, name: str) -> ast.ClassDef:
     matches = [
         node
@@ -520,6 +638,7 @@ async def _assert_loop_remains_responsive(
 async def _async_main() -> None:
     _assert_revision_fingerprint_contract()
     _assert_scheduler_result_current_gates()
+    _assert_tariff_feedback_is_not_a_planning_input()
     await _assert_dirty_result_is_never_committed()
     contracts: list[tuple[str, ast.AsyncFunctionDef, ast.Await]] = []
     for filename, (class_name, optimizer_name) in SENSORS.items():

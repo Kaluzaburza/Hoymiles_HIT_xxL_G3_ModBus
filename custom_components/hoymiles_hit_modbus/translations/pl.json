@@ -1699,6 +1699,9 @@
       }
     },
     "number": {
+      "ems_complete_block_charge_rollback_command": {
+        "name": "Polecenie pełnego rollbacku bloku ładowania EMS"
+      },
       "maximum_export_power_limit": {
         "name": "Maksymalny limit eksportu"
       },
