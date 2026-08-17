@@ -23,6 +23,14 @@ views:
         grid_entity: sensor.hoymiles_hit_overview_grid_total_active_power
         battery_entity: sensor.hoymiles_hit_overview_battery_power
         battery_soc_entity: sensor.hoymiles_hit_overview_battery_soc
+        battery_current_entity: sensor.hoymiles_hit_battery_current_bms
+        battery_capacity_entity: sensor.hoymiles_hit_battery_capacity
+        ems_mode_readback_entity: sensor.hoymiles_hit_ems_mode_readback_code
+        battery_self_use_floor_entity: sensor.hoymiles_hit_ems_self_use_soc_readback
+        battery_charge_target_entity: sensor.hoymiles_hit_ems_force_charge_soc_readback
+        battery_discharge_target_entity: sensor.hoymiles_hit_ems_force_discharge_soc_readback
+        battery_max_soc_entity: number.hoymiles_hit_maximum_soc
+        battery_min_soc_entity: number.hoymiles_hit_minimum_soc
         inverter_entity: sensor.hoymiles_hit_overview_inverter_active_power
         ems_mode_entity: select.hoymiles_hit_ems_mode
         forecast_today_entity: sensor.hoymiles_solcast_forecast_today

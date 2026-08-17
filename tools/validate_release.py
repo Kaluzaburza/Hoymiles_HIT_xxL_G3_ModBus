@@ -595,12 +595,12 @@ script:
 
     require(
         assets.FRONTEND_RESOURCE_URL
-        == f"/local/hoymiles-rce-chart-card.js?v={assets.VERSION}.17"
+        == f"/local/hoymiles-rce-chart-card.js?v={assets.VERSION}.18"
         and assets.FRONTEND_BOOTSTRAP_URL
-        == f"/local/hoymiles-dashboard-strategy.js?v={assets.VERSION}.17"
+        == f"/local/hoymiles-dashboard-strategy.js?v={assets.VERSION}.18"
         and "/local/hoymiles-dashboard-strategy.js"
         in assets.MANAGED_FRONTEND_RESOURCE_PATHS,
-        "Frontend revision 17 or legacy-bootstrap migration paths changed",
+        "Frontend revision 18 or legacy-bootstrap migration paths changed",
     )
 
 

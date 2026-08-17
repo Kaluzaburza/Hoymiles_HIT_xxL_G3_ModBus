@@ -2460,6 +2460,17 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       grid_entity: "sensor.hoymiles_hit_overview_grid_total_active_power",
       battery_entity: "sensor.hoymiles_hit_overview_battery_power",
       battery_soc_entity: "sensor.hoymiles_hit_overview_battery_soc",
+      battery_current_entity: "sensor.hoymiles_hit_battery_current_bms",
+      battery_capacity_entity: "sensor.hoymiles_hit_battery_capacity",
+      ems_mode_readback_entity: "sensor.hoymiles_hit_ems_mode_readback_code",
+      battery_self_use_floor_entity:
+        "sensor.hoymiles_hit_ems_self_use_soc_readback",
+      battery_charge_target_entity:
+        "sensor.hoymiles_hit_ems_force_charge_soc_readback",
+      battery_discharge_target_entity:
+        "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+      battery_max_soc_entity: "number.hoymiles_hit_maximum_soc",
+      battery_min_soc_entity: "number.hoymiles_hit_minimum_soc",
       inverter_entity: "sensor.hoymiles_hit_overview_inverter_active_power",
       ems_mode_entity: "select.hoymiles_hit_ems_mode",
       forecast_today_entity: "sensor.hoymiles_solcast_forecast_today",
@@ -2693,7 +2704,18 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       .metric.pv { --metric-color: var(--orbit-pv); left: 5%; top: 14%; }
       .metric.grid { --metric-color: var(--orbit-grid); right: 5%; top: 14%; }
       .metric.home { --metric-color: var(--orbit-load); bottom: 8%; left: 5%; }
-      .metric.battery { --metric-color: var(--orbit-battery); bottom: 8%; right: 5%; }
+      .metric.battery { --metric-color: var(--orbit-battery); bottom: 8%; min-width: 178px; right: 5%; }
+      .metric-battery-detail,
+      .metric-battery-eta {
+        color: #91a4bc;
+        display: block;
+        font-size: 9px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.25;
+        margin-top: 3px;
+        white-space: nowrap;
+      }
+      .metric-battery-eta { color: #a8b8ca; margin-top: 1px; }
       .core {
         align-items: center;
         appearance: none;
@@ -2817,7 +2839,8 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
         .metric.pv { left: 2%; top: 15%; }
         .metric.grid { right: 2%; top: 15%; }
         .metric.home { bottom: 8%; left: 2%; }
-        .metric.battery { bottom: 8%; right: 2%; }
+        .metric.battery { bottom: 8%; min-width: 158px; right: 2%; }
+        .metric-battery-detail, .metric-battery-eta { font-size: 8px; }
         .core { height: 132px; top: 51%; width: 132px; }
         .core-value { font-size: 28px; }
         .core-name { font-size: 9px; }
@@ -2857,7 +2880,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
           <button class="metric pv" data-key="pv"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="pv"></span><strong class="metric-value" data-value="pv"></strong></span></button>
           <button class="metric grid" data-key="grid"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="grid_live"></span><strong class="metric-value" data-value="grid"></strong></span></button>
           <button class="metric home" data-key="load"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="load"></span><strong class="metric-value" data-value="load"></strong></span></button>
-          <button class="metric battery" data-key="battery"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="battery_live"></span><strong class="metric-value" data-value="battery"></strong></span></button>
+          <button class="metric battery" data-key="battery"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="battery_live"></span><strong class="metric-value" data-value="battery"></strong><span class="metric-battery-detail" data-value="battery_detail"></span><span class="metric-battery-eta" data-value="battery_eta"></span></span></button>
           <button class="core" data-key="pv"><span><strong class="core-value" data-value="core"></strong><span class="core-name" data-label="core"></span><small class="core-status" data-value="core_status"></small></span></button>
         </div>
         <div class="daily">
@@ -2921,6 +2944,9 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       discharge: "rozładowanie",
       idle: "spoczynek",
       noData: "brak danych",
+      etaUnavailable: "ETA —",
+      toReserve: "do rezerwy",
+      toTarget: "do celu",
       online: "Dane na żywo",
       partial: "Część danych niedostępna",
       offline: "Brak danych falownika",
@@ -2956,6 +2982,9 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       discharge: "discharging",
       idle: "idle",
       noData: "no data",
+      etaUnavailable: "ETA —",
+      toReserve: "to reserve",
+      toTarget: "to target",
       online: "Live data",
       partial: "Some data unavailable",
       offline: "Inverter data unavailable",
@@ -3044,6 +3073,171 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     return `${this._number(Math.abs(value), 1)} kWh`;
   }
 
+  _freshNumericStateById(
+    entityId,
+    maxAgeSeconds,
+    minimum = Number.NEGATIVE_INFINITY,
+    maximum = Number.POSITIVE_INFINITY
+  ) {
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    const raw = String(state?.state ?? "").trim().toLowerCase();
+    if (!raw || ["unknown", "unavailable", "none", "null"].includes(raw)) {
+      return null;
+    }
+    const value = Number(raw);
+    const reported = state?.last_reported || state?.last_updated;
+    const reportedAt = new Date(reported || "").getTime();
+    const ageSeconds = (Date.now() - reportedAt) / 1000;
+    if (
+      !Number.isFinite(value) ||
+      !Number.isFinite(reportedAt) ||
+      !Number.isFinite(ageSeconds) ||
+      ageSeconds < -5 ||
+      ageSeconds > maxAgeSeconds ||
+      value < minimum ||
+      value > maximum
+    ) {
+      return null;
+    }
+    return value;
+  }
+
+  _freshPowerKwById(entityId) {
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    let value = this._freshNumericStateById(entityId, 120);
+    if (value === null) return null;
+    const unit = String(state?.attributes?.unit_of_measurement || "W").toLowerCase();
+    if (!["w", "kw", "mw"].includes(unit)) return null;
+    if (unit === "mw") value *= 1000;
+    else if (unit !== "kw") value /= 1000;
+    return Math.abs(value) <= 1000 ? value : null;
+  }
+
+  _freshCapacityKwh() {
+    const entityId = this._config?.battery_capacity_entity;
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    let value = this._freshNumericStateById(entityId, 120);
+    if (value === null) return null;
+    const unit = String(state?.attributes?.unit_of_measurement || "kWh").toLowerCase();
+    if (!["wh", "kwh", "mwh"].includes(unit)) return null;
+    if (unit === "wh") value /= 1000;
+    else if (unit === "mwh") value *= 1000;
+    return value > 0 && value <= 10000 ? value : null;
+  }
+
+  _freshBatteryCurrentA() {
+    const entityId = this._config?.battery_current_entity;
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    let value = this._freshNumericStateById(entityId, 300);
+    if (value === null) return null;
+    const unit = String(state?.attributes?.unit_of_measurement || "A").toLowerCase();
+    if (!["a", "ma", "ka"].includes(unit)) return null;
+    if (unit === "ma") value /= 1000;
+    else if (unit === "ka") value *= 1000;
+    return Math.abs(value) <= 10000 ? Math.abs(value) : null;
+  }
+
+  _batteryTarget(powerKw, soc) {
+    const mode = this._freshNumericStateById(
+      this._config?.ems_mode_readback_entity,
+      120,
+      0,
+      5
+    );
+    if (![0, 3, 4, 5].includes(mode)) return null;
+
+    let entityId;
+    let kind;
+    if (powerKw < -0.02) {
+      entityId =
+        mode === 4
+          ? this._config?.battery_charge_target_entity
+          : this._config?.battery_max_soc_entity;
+      kind = "target";
+    } else if (powerKw > 0.02) {
+      entityId =
+        mode === 5
+          ? this._config?.battery_discharge_target_entity
+          : mode === 0
+            ? this._config?.battery_self_use_floor_entity
+            : this._config?.battery_min_soc_entity;
+      kind = "reserve";
+    } else {
+      return null;
+    }
+
+    const value = this._freshNumericStateById(entityId, 120, 0, 100);
+    if (
+      value === null ||
+      (kind === "target" && value <= soc) ||
+      (kind === "reserve" && value >= soc)
+    ) {
+      return null;
+    }
+    return { value, kind };
+  }
+
+  _batteryPresentation() {
+    const copy = this._copy();
+    const powerKw = this._freshPowerKwById(this._config?.battery_entity);
+    const soc = this._freshNumericStateById(
+      this._config?.battery_soc_entity,
+      120,
+      0,
+      100
+    );
+    const capacityKwh = this._freshCapacityKwh();
+    const currentA = this._freshBatteryCurrentA();
+    const storedKwh =
+      capacityKwh !== null && soc !== null ? (capacityKwh * soc) / 100 : null;
+    const target =
+      powerKw !== null && soc !== null ? this._batteryTarget(powerKw, soc) : null;
+    let etaHours = null;
+    if (target && capacityKwh !== null && Math.abs(powerKw) > 0.02) {
+      const energyKwh = (capacityKwh * Math.abs(target.value - soc)) / 100;
+      const candidateHours = energyKwh / Math.abs(powerKw);
+      if (Number.isFinite(candidateHours) && candidateHours > 0 && candidateHours <= 168) {
+        etaHours = candidateHours;
+      }
+    }
+
+    const direction =
+      powerKw === null
+        ? copy.noData
+        : Math.abs(powerKw) <= 0.02
+          ? copy.idle
+          : powerKw > 0
+            ? copy.discharge
+            : copy.charge;
+    return {
+      powerKw,
+      soc,
+      currentA,
+      storedKwh,
+      etaHours,
+      etaKind: target?.kind || null,
+      direction,
+    };
+  }
+
+  _formatBatteryEta(etaHours, kind) {
+    const copy = this._copy();
+    if (
+      !Number.isFinite(etaHours) ||
+      etaHours <= 0 ||
+      etaHours > 168 ||
+      !["reserve", "target"].includes(kind)
+    ) {
+      return copy.etaUnavailable;
+    }
+    const totalMinutes = Math.max(1, Math.round(etaHours * 60));
+    const suffix = kind === "reserve" ? copy.toReserve : copy.toTarget;
+    if (totalMinutes < 60) return `~${totalMinutes} min ${suffix}`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = String(totalMinutes % 60).padStart(2, "0");
+    return `~${hours} h ${minutes} min ${suffix}`;
+  }
+
   _setText(selector, value) {
     const element = this._card?.querySelector(selector);
     if (element) element.textContent = value;
@@ -3086,15 +3280,29 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     const pv = this._powerKw("pv");
     const load = this._powerKw("load");
     const grid = this._powerKw("grid");
-    const battery = this._powerKw("battery");
+    const batteryPresentation = this._batteryPresentation();
+    const battery = batteryPresentation.powerKw;
     const inverter = this._powerKw("inverter");
-    const soc = this._numericStateById(this._config.battery_soc_entity);
     const threshold = 0.02;
 
     this._setText('[data-value="pv"]', this._formatPower(pv));
     this._setText('[data-value="load"]', this._formatPower(load));
     this._setText('[data-value="grid"]', this._formatPower(grid));
     this._setText('[data-value="battery"]', this._formatPower(battery));
+    const storedText = Number.isFinite(batteryPresentation.storedKwh)
+      ? `${this._number(batteryPresentation.storedKwh, 1)} kWh`
+      : "—";
+    const currentText = Number.isFinite(batteryPresentation.currentA)
+      ? `${this._number(batteryPresentation.currentA, 1)} A`
+      : "—";
+    this._setText('[data-value="battery_detail"]', `${storedText} · ${currentText}`);
+    this._setText(
+      '[data-value="battery_eta"]',
+      this._formatBatteryEta(
+        batteryPresentation.etaHours,
+        batteryPresentation.etaKind
+      )
+    );
     this._setText('[data-value="core"]', Number.isFinite(pv) ? this._number(Math.abs(pv), 2) : "—");
     this._setText('[data-value="core_status"]', copy.core_status);
     const gridDirection =
@@ -3106,16 +3314,13 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
             ? copy.export
             : copy.import;
     this._setText('[data-label="grid_live"]', gridDirection);
-    const batteryDirection =
-      battery === null
-        ? copy.noData
-        : Math.abs(battery) <= threshold
-          ? copy.idle
-          : battery > 0
-            ? copy.discharge
-            : copy.charge;
-    const socText = Number.isFinite(soc) ? ` · ${this._number(soc, 0)}%` : "";
-    this._setText('[data-label="battery_live"]', `${batteryDirection}${socText}`);
+    const socText = Number.isFinite(batteryPresentation.soc)
+      ? `${this._number(batteryPresentation.soc, 0)}%`
+      : "—";
+    this._setText(
+      '[data-label="battery_live"]',
+      `${batteryPresentation.direction} · ${socText}`
+    );
 
     this._setFlow("pv", pv !== null && pv > threshold, false, pv);
     this._setFlow("home", load !== null && Math.abs(load) > threshold, false, load);
