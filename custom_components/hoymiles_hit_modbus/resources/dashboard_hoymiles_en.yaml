@@ -23,11 +23,22 @@ views:
         grid_entity: sensor.hoymiles_hit_overview_grid_total_active_power
         battery_entity: sensor.hoymiles_hit_overview_battery_power
         battery_soc_entity: sensor.hoymiles_hit_overview_battery_soc
+        battery_current_entity: sensor.hoymiles_hit_battery_current_bms
+        battery_capacity_entity: sensor.hoymiles_hit_battery_capacity
+        ems_mode_readback_entity: sensor.hoymiles_hit_ems_mode_readback_code
+        battery_self_use_floor_entity: sensor.hoymiles_hit_ems_self_use_soc_readback
+        battery_charge_target_entity: sensor.hoymiles_hit_ems_force_charge_soc_readback
+        battery_discharge_target_entity: sensor.hoymiles_hit_ems_force_discharge_soc_readback
+        battery_max_soc_entity: number.hoymiles_hit_maximum_soc
+        battery_min_soc_entity: number.hoymiles_hit_minimum_soc
         inverter_entity: sensor.hoymiles_hit_overview_inverter_active_power
         ems_mode_entity: select.hoymiles_hit_ems_mode
         forecast_today_entity: sensor.hoymiles_solcast_forecast_today
         forecast_remaining_entity: sensor.hoymiles_solcast_forecast_remaining_today
+        forecast_tomorrow_entity: sensor.hoymiles_solcast_forecast_tomorrow
         average_load_entity: sensor.hoymiles_load_average_4_days
+        cav_temperature_entity: sensor.hoymiles_hit_cav_temp
+        battery_path_temperature_entity: sensor.hoymiles_hit_bat_ths_temp
         pv_today_entity: sensor.hoymiles_hit_pv_total_energy_today
         pv_to_load_today_entity: sensor.hoymiles_hit_pv_to_load_energy_today
         pv_to_battery_today_entity: sensor.hoymiles_hit_pv_to_battery_energy_today
@@ -72,6 +83,8 @@ views:
         entities:
           - entity: sensor.hoymiles_ems_control_owner
             name: Current controller
+          - entity: sensor.hoymiles_tariff_charge_status
+            name: Low-cost charging
           - entity: binary_sensor.hoymiles_ems_control_conflict
             name: Control conflict
           - entity: select.hoymiles_hit_ems_mode
@@ -540,6 +553,12 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
+          - entity: sensor.hoymiles_ems_control_owner
+            name: Current controller
+          - entity: sensor.hoymiles_tariff_charge_status
+            name: Low-cost charging
+          - entity: binary_sensor.hoymiles_ems_control_conflict
+            name: Control conflict
           - entity: input_boolean.hoymiles_tariff_charge_enabled
             name: Enable automatic grid top-up
           - entity: input_select.hoymiles_tariff_operator
@@ -652,8 +671,6 @@ views:
         show_header_toggle: false
         state_color: true
         entities:
-          - entity: sensor.hoymiles_tariff_charge_status
-            name: Automation status
           - entity: sensor.hoymiles_tariff_current_zone
             name: Current period
           - entity: sensor.hoymiles_tariff_current_price
@@ -771,10 +788,6 @@ views:
           show_header_toggle: false
           state_color: true
           entities:
-            - entity: sensor.hoymiles_ems_control_owner
-              name: Current controller
-            - entity: binary_sensor.hoymiles_ems_control_conflict
-              name: Control conflict
             - entity: sensor.hoymiles_hit_tariff_charge_plan
               name: Optimizer status
             - entity: binary_sensor.hoymiles_tariff_control_data_ready

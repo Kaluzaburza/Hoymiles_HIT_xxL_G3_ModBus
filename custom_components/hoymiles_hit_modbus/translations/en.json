@@ -667,6 +667,9 @@
           "parallel_invalid_count": "Invalid inverter count"
         }
       },
+      "parallel_aggregate_power_readback_generation": {
+        "name": "Parallel Aggregate Power Readback Generation"
+      },
       "overview_internal_pv_total_power": {
         "name": "Overview Internal PV Total Power"
       },
@@ -1696,6 +1699,9 @@
       }
     },
     "number": {
+      "ems_complete_block_charge_rollback_command": {
+        "name": "EMS Complete Block Charge Rollback Command"
+      },
       "maximum_export_power_limit": {
         "name": "Maximum Export Power Limit"
       },

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import logging
 from statistics import median
 from typing import Any
@@ -12,12 +12,13 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import MATCH_ALL, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
+    async_track_state_report_event,
     async_track_time_interval,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -28,13 +29,16 @@ from .bounded_history import async_get_bounded_state_reports
 from .const import DOMAIN, NAME
 from .energy_data import numeric_state_sample, state_age_seconds
 from .forecast_model import (
+    ForecastLearningPolicy,
+    adaptive_forecast_factor,
     blend_low_expected,
+    forecast_factor_for_policy,
+    forecast_learning_history_day_eligible,
     robust_weighted_factor,
     uncertainty_risk_weight,
 )
 from .models import RuntimeData
 from .optimizer_revision import (
-    INPUT_RECALCULATION_DELAY_SECONDS,
     MAX_IMMEDIATE_RECALCULATIONS,
     OptimizerInputRevision,
     RCE_LOAD_BROKER_ATTRIBUTES,
@@ -43,7 +47,11 @@ from .optimizer_revision import (
 from .rce_sensor import (
     DAY3_FORECAST_CANDIDATES,
     DAY3_FORECAST_ENTITY_HELPER,
+    FORECAST_EMS_PACKAGE_VERSION_ENTITY,
+    FORECAST_EXPORT_ALLOWED_ENTITY,
     FORECAST_ENTITY_HELPERS,
+    FORECAST_GCF_POLICY_TRIGGER_ENTITIES,
+    FORECAST_GCF_COHORT_REPORT_ENTITIES,
     REMAINING_TODAY_CANDIDATES,
     TODAY_FORECAST_CANDIDATES,
     TODAY_FORECAST_ENTITY_HELPER,
@@ -53,6 +61,9 @@ from .rce_sensor import (
     _detailed_pv_map,
     _fallback_pv_map,
     _first_numeric_state,
+    _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS,
+    _forecast_learning_policy_signature,
+    _forecast_learning_policy_snapshot,
     _helper_minutes,
     _select_number,
     _state_number,
@@ -61,7 +72,6 @@ from .rce_sensor import (
 from .tariff_optimizer import (
     TariffOptimizerInput,
     TariffSchedule,
-    adaptive_forecast_factor,
     floor_half_hour,
     horizon_gap_expensive_load_reserve_kwh,
     is_polish_public_holiday,
@@ -89,6 +99,7 @@ LIVE_TELEMETRY_MAX_AGE_SECONDS = 120.0
 SLOW_TELEMETRY_MAX_AGE_SECONDS = 300.0
 LOAD_BROKER_MAX_AGE_SECONDS = 300.0
 FORECAST_MAX_AGE_SECONDS = 18 * 60 * 60.0
+TARIFF_INPUT_RECALCULATION_DELAY_SECONDS = 5 * 60.0
 
 WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_rce_optimized_plan",
@@ -100,15 +111,10 @@ WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_number_of_machines_master_and_slave",
     "sensor.hoymiles_hit_pv_total_energy_today",
     "sensor.hoymiles_hit_overview_battery_power",
-    "sensor.hoymiles_hit_grid_to_battery_power",
-    "sensor.hoymiles_hit_overview_load_active_power",
     "sensor.hoymiles_actual_load_power",
     "sensor.hoymiles_hit_overview_pv_total_power",
-    "sensor.hoymiles_tariff_grid_charge_power",
     "sensor.hoymiles_hit_ems_self_use_soc_readback",
-    "sensor.hoymiles_hit_ems_mode_readback_code",
     "input_boolean.hoymiles_tariff_charge_enabled",
-    "input_boolean.hoymiles_tariff_charge_active",
     "input_boolean.hoymiles_tariff_weekend_low_price",
     "input_boolean.hoymiles_tariff_polish_holidays_low_price",
     "input_select.hoymiles_tariff_operator",
@@ -124,6 +130,7 @@ WATCHED_TARIFF_ENTITIES = {
     "input_number.hoymiles_tariff_minimum_saving",
     "input_number.hoymiles_tariff_soc_safety_margin",
     "input_number.hoymiles_tariff_maximum_soc",
+    "input_number.hoymiles_rce_fallback_daily_load",
     "input_datetime.hoymiles_tariff_cheap_1_start",
     "input_datetime.hoymiles_tariff_cheap_1_end",
     "input_datetime.hoymiles_tariff_cheap_2_start",
@@ -137,6 +144,42 @@ WATCHED_TARIFF_ENTITIES = {
     *DAY3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
+
+# These planning inputs change continuously or arrive in forecast batches.
+# The five-minute optimizer timer samples them as one coherent snapshot instead
+# of withdrawing an accepted plan on every HA state event.  User settings,
+# topology and BMS capability inputs remain event-driven and fail closed.
+TARIFF_FIVE_MINUTE_COALESCED_ENTITIES = {
+    "sensor.hoymiles_hit_rce_optimized_plan",
+    "sensor.hoymiles_hit_overview_battery_soc",
+    "sensor.hoymiles_hit_battery_voltage_bms",
+    "sensor.hoymiles_hit_pv_total_energy_today",
+    "sensor.hoymiles_hit_overview_battery_power",
+    "sensor.hoymiles_actual_load_power",
+    "sensor.hoymiles_hit_overview_pv_total_power",
+    *FORECAST_ENTITY_HELPERS,
+    "sun.sun",
+    *TODAY_FORECAST_CANDIDATES,
+    *TOMORROW_FORECAST_CANDIDATES,
+    *DAY3_FORECAST_CANDIDATES,
+    *REMAINING_TODAY_CANDIDATES,
+}
+TARIFF_EVENT_DRIVEN_ENTITIES = (
+    WATCHED_TARIFF_ENTITIES - TARIFF_FIVE_MINUTE_COALESCED_ENTITIES
+)
+
+# These execution states are sampled only by the one-minute delivered-power
+# feedback pass below. They do not participate in optimizer mathematics and
+# therefore must not withdraw planning authority when an accepted cycle starts.
+TARIFF_EXECUTION_FEEDBACK_ENTITIES = frozenset(
+    {
+        "input_boolean.hoymiles_tariff_charge_active",
+        "sensor.hoymiles_hit_ems_mode_readback_code",
+        "sensor.hoymiles_hit_grid_to_battery_power",
+        "sensor.hoymiles_hit_overview_load_active_power",
+        "sensor.hoymiles_tariff_grid_charge_power",
+    }
+)
 
 STATUS_TEXT = {
     "pl": {
@@ -410,6 +453,10 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
     _attr_should_poll = False
     _attr_translation_key = "tariff_charge_plan"
     _attr_icon = "mdi:battery-clock-outline"
+    # The complete current plan remains available to automations, diagnostics,
+    # and RestoreEntity. Recorder intentionally stores no custom attributes for
+    # this entity because the bounded plan can still exceed its 16 KiB column.
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(
         self,
@@ -457,9 +504,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self._current_run_intent_changed_at: datetime | None = None
         self._live_pv_surplus_started_at: datetime | None = None
         self._startup_warmup_task: asyncio.Task[None] | None = None
+        self._forecast_policy_refresh_task: asyncio.Task[None] | None = None
         self._recalculate_cancel = None
+        self._delayed_recalculate_tasks: set[asyncio.Task[None]] = set()
+        self._lifecycle_stopped = False
         self._dynamic_forecast_entities: frozenset[str] = frozenset()
         self._dynamic_forecast_unsub = None
+        self._forecast_gcf_policy_signature: (
+            tuple[bool, str, str | None, float | None] | None
+        ) = None
+        self._forecast_gcf_policy_evaluation_cancel = None
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
         self._attributes.update(
@@ -550,10 +604,35 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
-                sorted(WATCHED_TARIFF_ENTITIES),
+                sorted(TARIFF_EVENT_DRIVEN_ENTITIES),
                 self._async_input_changed,
             )
         )
+        current_policy, _ = _forecast_learning_policy_snapshot(
+            self.hass,
+            dt_util.now(),
+        )
+        self._forecast_gcf_policy_signature = (
+            _forecast_learning_policy_signature(current_policy)
+        )
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                FORECAST_GCF_POLICY_TRIGGER_ENTITIES,
+                self._async_forecast_gcf_policy_changed,
+            )
+        )
+        self.async_on_remove(
+            async_track_state_report_event(
+                self.hass,
+                FORECAST_GCF_COHORT_REPORT_ENTITIES,
+                self._async_forecast_gcf_policy_changed,
+            )
+        )
+        self.async_on_remove(
+            lambda: self._cancel_forecast_gcf_policy_evaluation()
+        )
+        self.async_on_remove(self._cancel_delayed_recalculation)
         refresh_dynamic_forecast_listener = getattr(
             self,
             "_refresh_dynamic_forecast_listener",
@@ -568,7 +647,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             async_track_time_interval(
                 self.hass,
                 self._async_timer,
-                timedelta(minutes=1),
+                timedelta(minutes=5),
             )
         )
         self.async_on_remove(
@@ -675,7 +754,10 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             event.data.get("new_state"),
             attributes=(RCE_LOAD_BROKER_ATTRIBUTES if counterpart else None),
             include_state=not counterpart,
-            include_last_updated=not counterpart,
+            # A fresh report with the same value extends provenance freshness;
+            # it does not change optimizer mathematics.  Availability, state
+            # and consumed attributes remain immediate fail-closed inputs.
+            include_last_updated=False,
         )
         if changed:
             self._mark_recalculation_pending()
@@ -739,16 +821,139 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             self.async_on_remove(task.cancel)
         if not self._invalidate_input_event(event):
             return
-        if self._recalculate_cancel is None:
+        if not self._lifecycle_stopped and self._recalculate_cancel is None:
             self._recalculate_cancel = async_call_later(
                 self.hass,
-                INPUT_RECALCULATION_DELAY_SECONDS,
+                TARIFF_INPUT_RECALCULATION_DELAY_SECONDS,
                 self._async_debounced_recalculate,
             )
 
+    @callback
+    def _async_forecast_gcf_policy_changed(
+        self,
+        event: Event[Any],
+    ) -> None:
+        """Accept a complete cohort or arm one bounded fail-closed deadline."""
+
+        policy, _ = _forecast_learning_policy_snapshot(
+            self.hass,
+            dt_util.now(),
+        )
+        if policy.excluded_reason != "gcf_readback_incoherent":
+            self._cancel_forecast_gcf_policy_evaluation()
+            # A completed HA delivery cohort with the same physical policy is
+            # not a new optimizer input.  A changed signature still invalidates
+            # immediately in _apply_forecast_gcf_policy().
+            self._apply_forecast_gcf_policy(policy)
+            return
+        if self._forecast_gcf_policy_evaluation_cancel is None:
+            # Keep the last coherent, fresh generation while HA finishes
+            # delivering this physical readback cohort.  The bounded deadline
+            # below still fails closed if the cohort remains incoherent.
+            self._forecast_gcf_policy_evaluation_cancel = async_call_later(
+                self.hass,
+                _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS,
+                self._async_evaluate_forecast_gcf_policy,
+            )
+
+    @callback
+    def _cancel_forecast_gcf_policy_evaluation(self) -> None:
+        """Cancel one pending event-order coalescing callback."""
+
+        if self._forecast_gcf_policy_evaluation_cancel is not None:
+            self._forecast_gcf_policy_evaluation_cancel()
+            self._forecast_gcf_policy_evaluation_cancel = None
+
+    async def _async_evaluate_forecast_gcf_policy(
+        self,
+        now: datetime,
+    ) -> None:
+        """Replan only when a completed GCF read changes learning policy."""
+
+        self._forecast_gcf_policy_evaluation_cancel = None
+        policy, _ = _forecast_learning_policy_snapshot(
+            self.hass,
+            now,
+        )
+        self._apply_forecast_gcf_policy(policy, force_recalculate=True)
+
+    @callback
+    def _apply_forecast_gcf_policy(
+        self,
+        policy: ForecastLearningPolicy,
+        *,
+        force_recalculate: bool = False,
+    ) -> None:
+        """Apply one complete or deadline-expired physical GCF policy."""
+
+        signature = _forecast_learning_policy_signature(policy)
+        previous_signature = self._forecast_gcf_policy_signature
+        signature_changed = signature != previous_signature
+        if not signature_changed and not force_recalculate:
+            return
+        self._forecast_gcf_policy_signature = signature
+        if signature_changed and policy.enabled and (
+            previous_signature is None or not previous_signature[0]
+        ):
+            self._schedule_forecast_policy_refresh()
+        self._invalidate_internal_inputs()
+        if not self._lifecycle_stopped and self._recalculate_cancel is None:
+            self._recalculate_cancel = async_call_later(
+                self.hass,
+                TARIFF_INPUT_RECALCULATION_DELAY_SECONDS,
+                self._async_debounced_recalculate,
+            )
+
+    @callback
+    def _schedule_forecast_policy_refresh(self) -> None:
+        """Start one cancel-safe Recorder rebuild after GCF policy recovery."""
+
+        if (
+            self._forecast_policy_refresh_task is not None
+            and not self._forecast_policy_refresh_task.done()
+        ):
+            return
+        task = self._entry.async_create_background_task(
+            self.hass,
+            self._async_refresh_forecast_after_policy_restore(),
+            "hoymiles tariff forecast learning policy refresh",
+        )
+        self._forecast_policy_refresh_task = task
+        self.async_on_remove(task.cancel)
+
+    async def _async_refresh_forecast_after_policy_restore(self) -> None:
+        """Rebuild and publish the adaptive model after GCF becomes usable."""
+
+        await self._async_refresh_forecast_accuracy()
+        self._invalidate_internal_inputs()
+        await self._recalculate_and_write()
+
     async def _async_debounced_recalculate(self, now: datetime) -> None:
         self._recalculate_cancel = None
-        await self._recalculate_and_write()
+        if self._lifecycle_stopped:
+            return
+        task = asyncio.current_task()
+        if task is None:
+            return
+        self._delayed_recalculate_tasks.add(task)
+        try:
+            await self._recalculate_and_write()
+        finally:
+            self._delayed_recalculate_tasks.discard(task)
+
+    @callback
+    def _cancel_delayed_recalculation(self) -> None:
+        """Cancel queued or running delayed work when the entity is removed."""
+
+        self._lifecycle_stopped = True
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+            self._recalculate_cancel = None
+        tasks = tuple(self._delayed_recalculate_tasks)
+        self._delayed_recalculate_tasks.clear()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
     async def _async_timer(self, now: datetime) -> None:
         if self._recalculate_cancel is not None:
@@ -912,6 +1117,18 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             return
         self._forecast_refresh_running = True
         try:
+            timezone = ZoneInfo(self.hass.config.time_zone)
+            now = dt_util.now().astimezone(timezone)
+            learning_policy, _ = _forecast_learning_policy_snapshot(
+                self.hass,
+                now,
+            )
+            policy_signature = _forecast_learning_policy_signature(
+                learning_policy
+            )
+            if not learning_policy.enabled:
+                self._forecast_accuracy_refreshed_at = now
+                return
             configured = _state_text(
                 self.hass,
                 TODAY_FORECAST_ENTITY_HELPER,
@@ -924,14 +1141,17 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             if not forecast_entity or forecast_state is None:
                 return
             actual_entity = "sensor.hoymiles_hit_pv_total_energy_today"
-            timezone = ZoneInfo(self.hass.config.time_zone)
-            now = dt_util.now().astimezone(timezone)
             start = now - timedelta(days=29)
             raw = await async_get_bounded_state_reports(
                 self.hass,
                 dt_util.as_utc(start),
                 dt_util.as_utc(now),
-                (forecast_entity, actual_entity),
+                (
+                    forecast_entity,
+                    actual_entity,
+                    FORECAST_EXPORT_ALLOWED_ENTITY,
+                    FORECAST_EMS_PACKAGE_VERSION_ENTITY,
+                ),
             )
             forecast_by_day: dict[Any, list[float]] = {}
             actual_by_day: dict[Any, list[float]] = {}
@@ -953,8 +1173,32 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                         continue
                     destination.setdefault(local_day, []).append(numeric)
 
+            export_allowed_history = [
+                (item.last_updated, item.state)
+                for item in raw.get(FORECAST_EXPORT_ALLOWED_ENTITY, [])
+                if getattr(item, "last_updated", None) is not None
+            ]
+            package_version_history = [
+                (item.last_updated, item.state)
+                for item in raw.get(FORECAST_EMS_PACKAGE_VERSION_ENTITY, [])
+                if getattr(item, "last_updated", None) is not None
+            ]
+
             dated_ratios: list[tuple[int, float]] = []
             for day in sorted(set(forecast_by_day) & set(actual_by_day))[-28:]:
+                day_start = datetime.combine(day, time.min, tzinfo=timezone)
+                day_end = datetime.combine(
+                    day + timedelta(days=1),
+                    time.min,
+                    tzinfo=timezone,
+                )
+                if not forecast_learning_history_day_eligible(
+                    export_allowed_history,
+                    package_version_history,
+                    day_start=day_start,
+                    day_end=day_end,
+                ):
+                    continue
                 forecasts = [value for value in forecast_by_day[day] if value > 0.5]
                 actuals = actual_by_day[day]
                 if not forecasts or not actuals:
@@ -967,6 +1211,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 dated_ratios.append(
                     (age_days, min(max(actual / forecast, 0.50), 1.10))
                 )
+            current_policy, _ = _forecast_learning_policy_snapshot(
+                self.hass,
+                dt_util.now().astimezone(timezone),
+            )
+            if (
+                not current_policy.enabled
+                or _forecast_learning_policy_signature(current_policy)
+                != policy_signature
+            ):
+                return
             if dated_ratios:
                 # Never increase a forecast automatically; optimism could cause
                 # the home reserve to be undersized.  A weighted lower-middle
@@ -982,6 +1236,18 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 self._forecast_accuracy_source = (
                     "recorder_28d_weighted_actual_vs_solcast"
                 )
+            else:
+                # Preserve only a factor already learned from qualified days;
+                # report zero currently retained evidence instead of leaving a
+                # stale history count/source visible after Recorder purging.
+                self._forecast_accuracy_days = 0
+                if self._forecast_accuracy_source in {
+                    "recorder_28d_weighted_actual_vs_solcast",
+                    "retained_last_qualified_factor_no_current_history",
+                }:
+                    self._forecast_accuracy_source = (
+                        "retained_last_qualified_factor_no_current_history"
+                    )
             self._forecast_accuracy_refreshed_at = now
         except Exception:  # noqa: BLE001 - retain the conservative safe fallback
             _LOGGER.exception("Cannot learn Solcast forecast accuracy")
@@ -997,6 +1263,12 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     return
 
     async def _recalculate_locked(self) -> bool:
+        if self._forecast_gcf_policy_evaluation_cancel is not None:
+            # The current 258/259/generation reports are still a mixed HA
+            # delivery cohort.  Keep the previous plan non-current until the
+            # late report closes it or the bounded deadline fails closed.
+            self._mark_recalculation_pending()
+            return False
         captured_revision = self._input_revision.value
         captured_fingerprint = self._current_input_fingerprint()
         try:
@@ -2077,7 +2349,33 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         control_inputs_fresh = control_input_block_reason == "none"
 
         missing = sorted(key for key, value in required.items() if value is None)
+        learning_policy, learning_diagnostics = (
+            _forecast_learning_policy_snapshot(self.hass, now)
+        )
+        self._forecast_gcf_policy_signature = (
+            _forecast_learning_policy_signature(learning_policy)
+        )
+        forecast_factor_used = forecast_factor_for_policy(
+            learning_policy,
+            self._forecast_accuracy_factor,
+        )
+        forecast_history_days_used = (
+            self._forecast_accuracy_days if learning_policy.enabled else 0
+        )
+        forecast_uncertainty_used = (
+            self._forecast_accuracy_uncertainty
+            if learning_policy.enabled
+            else 0.10
+        )
         metadata: dict[str, Any] = {
+            **learning_diagnostics,
+            "forecast_learning_enabled": learning_policy.enabled,
+            "forecast_learning_mode": learning_policy.mode,
+            "forecast_learning_excluded_reason": (
+                learning_policy.excluded_reason
+            ),
+            "forecast_factor_used": round(forecast_factor_used, 3),
+            "forecast_learning_history_days_used": forecast_history_days_used,
             "missing_entities": missing,
             "control_inputs_fresh": control_inputs_fresh,
             "control_input_block_reason": control_input_block_reason,
@@ -2367,7 +2665,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             now,
         )
         live_adjustment_eligible = (
-            now >= sunrise_today_local + timedelta(minutes=90)
+            learning_policy.enabled
+            and now >= sunrise_today_local + timedelta(minutes=90)
             and now <= sunset_today_local + timedelta(minutes=30)
         )
         (
@@ -2375,7 +2674,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             live_forecast_ratio,
             live_forecast_confidence,
         ) = adaptive_forecast_factor(
-            self._forecast_accuracy_factor,
+            forecast_factor_used,
             actual_pv_today,
             expected_elapsed_raw,
             eligible=live_adjustment_eligible,
@@ -2384,7 +2683,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         tomorrow_p10, _, tomorrow_p90 = _forecast_interval_kwh(tomorrow_state)
         day_3_p10, _, day_3_p90 = _forecast_interval_kwh(day_3_state)
         risk_weight = uncertainty_risk_weight(
-            history_days=self._forecast_accuracy_days,
+            history_days=forecast_history_days_used,
             live_confidence=live_forecast_confidence,
             uncertainty_available=(
                 today_p10 is not None
@@ -2400,7 +2699,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             risk_weight,
         )
         forecast_tomorrow = (
-            forecast_tomorrow_conservative_raw * self._forecast_accuracy_factor
+            forecast_tomorrow_conservative_raw * forecast_factor_used
         )
         forecast_day_3_conservative_raw = blend_low_expected(
             day_3_p10 if day_3_p10 is not None else forecast_day_3_raw,
@@ -2408,7 +2707,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             risk_weight,
         )
         forecast_day_3 = (
-            forecast_day_3_conservative_raw * self._forecast_accuracy_factor
+            forecast_day_3_conservative_raw * forecast_factor_used
         )
         remaining_today_raw = (
             max(float(remaining_state.state), 0.0)
@@ -2492,7 +2791,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         if tomorrow_p10 is not None:
             tomorrow_p10_effective = (
                 min(tomorrow_p10, forecast_tomorrow_raw)
-                * self._forecast_accuracy_factor
+                * forecast_factor_used
             )
             pv_tomorrow_p10 = _detailed_pv_map(
                 tomorrow_state,
@@ -2556,7 +2855,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             if day_3_p10 is not None:
                 day_3_p10_effective = (
                     min(day_3_p10, forecast_day_3_raw)
-                    * self._forecast_accuracy_factor
+                    * forecast_factor_used
                 )
                 pv_day_3_p10 = _detailed_pv_map(
                     day_3_state,
@@ -2742,7 +3041,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         )
         forecast_risk_kwh = (
             (forecast_tomorrow + forecast_day_3)
-            * min(max(self._forecast_accuracy_uncertainty, 0.0), 0.50)
+            * min(max(forecast_uncertainty_used, 0.0), 0.50)
             * 0.05
         )
         uncertainty_margin_kwh = min(
@@ -2938,8 +3237,8 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     3,
                 ),
                 "forecast_live_adjustment_active": (
-                    today_forecast_factor
-                    < self._forecast_accuracy_factor - 0.001
+                    learning_policy.enabled
+                    and today_forecast_factor < forecast_factor_used - 0.001
                 ),
                 "battery_capacity_kwh": round(
                     required["sensor.hoymiles_hit_battery_capacity"],
@@ -3080,7 +3379,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 load_history_days=robust_load_days,
                 pv_p10_by_slot_kwh=pv_p10_by_slot,
                 pv_p10_available_dates=tuple(sorted(pv_p10_available_dates)),
-                forecast_uncertainty_ratio=self._forecast_accuracy_uncertainty,
+                forecast_uncertainty_ratio=forecast_uncertainty_used,
                 live_pv_surplus_stable=live_pv_surplus_stable,
                 live_pv_surplus_stable_seconds=(
                     live_pv_surplus_stable_seconds

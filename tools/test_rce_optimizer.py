@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import importlib.util
 from itertools import product
 import math
@@ -936,6 +937,656 @@ def test_shared_forecast_model_is_conservative_and_robust() -> None:
     assert count == 4
     assert 0.78 <= learned <= 0.83
     assert uncertainty >= 0.0
+
+
+def _load_forecast_learning_policy_snapshot():
+    """Execute the production GCF snapshot resolver without importing HA."""
+
+    source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_forecast_learning_policy_snapshot"
+    )
+    namespace = {
+        "Any": object,
+        "HomeAssistant": object,
+        "datetime": datetime,
+        "ForecastLearningPolicy": FORECAST.ForecastLearningPolicy,
+        "numeric_state_sample": ENERGY_DATA.numeric_state_sample,
+        "resolve_forecast_learning_policy": (
+            FORECAST.resolve_forecast_learning_policy
+        ),
+        "_FORECAST_GCF_SUPPORT_MAX_AGE_SECONDS": 10.0,
+        "_FORECAST_GCF_READBACK_MAX_AGE_SECONDS": 180.0,
+        "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS": 5.0,
+        "FORECAST_GCF_ENABLE_ENTITY": (
+            "sensor.hoymiles_hit_gcf_enable_readback_code"
+        ),
+        "FORECAST_GCF_LIMIT_ENTITY": (
+            "sensor.hoymiles_hit_gcf_maximum_export_power_readback"
+        ),
+        "FORECAST_GCF_GENERATION_ENTITY": (
+            "sensor.hoymiles_hit_gcf_control_readback_generation"
+        ),
+        "FORECAST_GCF_SUPPORT_ENTITY": (
+            "sensor.hoymiles_hit_ems_verified_hardware_readback_supported"
+        ),
+    }
+    module = ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[]))
+    exec(compile(module, "<forecast-gcf-snapshot>", "exec"), namespace)
+    return namespace["_forecast_learning_policy_snapshot"], namespace
+
+
+def test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order() -> None:
+    """HA delivery order cannot invalidate one completed physical 258/259 cycle."""
+
+    snapshot, names = _load_forecast_learning_policy_snapshot()
+
+    def state(value: float, reported_at: datetime):
+        return type(
+            "FakeState",
+            (),
+            {
+                "state": str(value),
+                "last_reported": reported_at,
+                "last_updated": reported_at,
+            },
+        )()
+
+    class FakeStates(dict):
+        pass
+
+    support = names["FORECAST_GCF_SUPPORT_ENTITY"]
+    enable = names["FORECAST_GCF_ENABLE_ENTITY"]
+    limit = names["FORECAST_GCF_LIMIT_ENTITY"]
+    generation = names["FORECAST_GCF_GENERATION_ENTITY"]
+
+    def evaluate(
+        *,
+        enable_at: datetime | None = NOW - timedelta(seconds=2),
+        limit_at: datetime | None = NOW - timedelta(seconds=1),
+        generation_at: datetime | None = NOW,
+        limit_value: float = 10.0,
+    ):
+        states = FakeStates({support: state(1.0, NOW)})
+        if enable_at is not None:
+            states[enable] = state(1.0, enable_at)
+        if limit_at is not None:
+            states[limit] = state(limit_value, limit_at)
+        if generation_at is not None:
+            states[generation] = state(7.0, generation_at)
+        hass = type("FakeHass", (), {"states": states})()
+        return snapshot(hass, NOW)
+
+    # Normal ordering: generation is observed after both physical mirrors.
+    policy, diagnostics = evaluate()
+    assert diagnostics["forecast_learning_gcf_readback_verified"] is True
+    assert diagnostics["forecast_learning_gcf_readback_reason"] is None
+    assert policy.enabled and policy.mode == "adaptive"
+    assert FORECAST.forecast_factor_for_policy(policy, 0.93) == 0.93
+
+    # Native ESPHome order: generation is emitted from 259.on_value before the
+    # outer 259 state report.  The old 259 is rejected, then the same-cycle
+    # catch-up closes the cohort without guessing or weakening freshness.
+    early_policy, early_diagnostics = evaluate(
+        generation_at=NOW - timedelta(seconds=1),
+        limit_at=NOW - timedelta(seconds=20),
+    )
+    assert not early_policy.enabled
+    assert (
+        early_diagnostics["forecast_learning_gcf_readback_reason"]
+        == "gcf_readback_incoherent"
+    )
+    caught_up, caught_up_diagnostics = evaluate(
+        generation_at=NOW - timedelta(seconds=1),
+        limit_at=NOW,
+    )
+    assert caught_up_diagnostics["forecast_learning_gcf_readback_verified"] is True
+    assert caught_up.enabled and caught_up.mode == "adaptive"
+
+    stale_limit, stale_limit_diagnostics = evaluate(
+        limit_at=NOW - timedelta(seconds=181),
+    )
+    assert not stale_limit.enabled
+    assert stale_limit_diagnostics["forecast_learning_gcf_readback_reason"] == (
+        "gcf_limit_stale"
+    )
+    stale_enable, stale_enable_diagnostics = evaluate(
+        enable_at=NOW - timedelta(seconds=181),
+    )
+    assert not stale_enable.enabled
+    assert stale_enable_diagnostics["forecast_learning_gcf_readback_reason"] == (
+        "gcf_enable_stale"
+    )
+    missing_generation, missing_generation_diagnostics = evaluate(
+        generation_at=None,
+    )
+    assert not missing_generation.enabled
+    assert missing_generation_diagnostics[
+        "forecast_learning_gcf_readback_reason"
+    ] == "gcf_generation_missing"
+    old_cycle, old_cycle_diagnostics = evaluate(
+        enable_at=NOW,
+        limit_at=NOW,
+        generation_at=NOW - timedelta(seconds=6),
+    )
+    assert not old_cycle.enabled
+    assert old_cycle_diagnostics["forecast_learning_gcf_readback_reason"] == (
+        "gcf_readback_incoherent"
+    )
+
+    zero_export, zero_diagnostics = evaluate(limit_value=0.0)
+    assert zero_diagnostics["forecast_learning_gcf_readback_verified"] is True
+    assert not zero_export.enabled
+    assert zero_export.mode == "fixed_zero_export"
+    assert zero_export.excluded_reason == "zero_export"
+    assert FORECAST.forecast_factor_for_policy(zero_export, 0.93) == 0.80
+
+
+def test_forecast_gcf_event_closure_is_bounded_and_never_transient() -> None:
+    """Repeated reports cannot starve closure or publish a mid-cycle verdict."""
+
+    source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    sensor_class = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and node.name == "HoymilesRCEOptimizerSensor"
+    )
+    method_names = {
+        "_async_forecast_gcf_policy_changed",
+        "_cancel_forecast_gcf_policy_evaluation",
+        "_async_evaluate_forecast_gcf_policy",
+        "_apply_forecast_gcf_policy",
+    }
+    methods = [
+        node
+        for node in sensor_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in method_names
+    ]
+    assert {method.name for method in methods} == method_names
+
+    scheduled: list[dict[str, object]] = []
+    policy_slot = {
+        "value": type(
+            "Policy",
+            (),
+            {"excluded_reason": "gcf_readback_incoherent"},
+        )()
+    }
+
+    def call_later(_hass, delay, callback):
+        token = {"delay": delay, "callback": callback, "cancelled": False}
+        scheduled.append(token)
+
+        def cancel() -> None:
+            token["cancelled"] = True
+
+        return cancel
+
+    probe_class = ast.ClassDef(
+        name="ForecastGCFEventProbe",
+        bases=[],
+        keywords=[],
+        decorator_list=[],
+        body=methods,
+    )
+    module = ast.fix_missing_locations(
+        ast.Module(
+            body=[
+                ast.ImportFrom(
+                    module="__future__",
+                    names=[ast.alias(name="annotations")],
+                    level=0,
+                ),
+                probe_class,
+            ],
+            type_ignores=[],
+        )
+    )
+    namespace = {
+        "callback": lambda method: method,
+        "async_call_later": call_later,
+        "dt_util": type("DTUtil", (), {"now": staticmethod(lambda: NOW)}),
+        "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS": 5.0,
+        "INPUT_RECALCULATION_DELAY_SECONDS": 1.0,
+        "_forecast_learning_policy_signature": (
+            lambda policy: (policy.enabled, policy.excluded_reason)
+        ),
+        "_forecast_learning_policy_snapshot": (
+            lambda _hass, _now: (policy_slot["value"], {})
+        ),
+    }
+    exec(compile(module, "<forecast-gcf-event-probe>", "exec"), namespace)
+    probe = namespace["ForecastGCFEventProbe"]()
+    probe.hass = object()
+    probe._forecast_gcf_policy_evaluation_cancel = None
+    probe._forecast_gcf_policy_signature = (False, None)
+    probe._recalculate_cancel = None
+    invalidations: list[bool] = []
+    probe._invalidate_internal_inputs = lambda: invalidations.append(True)
+    probe._schedule_forecast_policy_refresh = lambda: None
+    probe._async_debounced_recalculate = object()
+
+    probe._async_forecast_gcf_policy_changed(object())
+    assert len(scheduled) == 1
+    assert scheduled[0]["delay"] == 5.0
+    assert invalidations == [True]
+    first_cancel = probe._forecast_gcf_policy_evaluation_cancel
+    # A rapid repeated report (including a 1-second support cadence in the old
+    # broken design) cannot reschedule the one bounded deadline.
+    probe._async_forecast_gcf_policy_changed(object())
+    assert len(scheduled) == 1
+    assert probe._forecast_gcf_policy_evaluation_cancel is first_cancel
+    assert invalidations == [True]
+
+    coherent = type(
+        "Policy",
+        (),
+        {"enabled": False, "excluded_reason": None},
+    )()
+    policy_slot["value"] = coherent
+    probe._async_forecast_gcf_policy_changed(object())
+    assert scheduled[0]["cancelled"] is True
+    assert probe._forecast_gcf_policy_evaluation_cancel is None
+    # The semantic signature is unchanged, but the closed cohort must still
+    # replace the plan that was withdrawn while the reports were mixed.
+    assert invalidations == [True, True]
+    assert probe._recalculate_cancel is not None
+    assert scheduled[-1]["delay"] == 1.0
+    probe._recalculate_cancel()
+    probe._recalculate_cancel = None
+
+    # If no matching late report arrives, the original deadline applies the
+    # still-incoherent fail-closed policy; no clock path can mark it verified.
+    incoherent = type(
+        "Policy",
+        (),
+        {"enabled": False, "excluded_reason": "gcf_readback_incoherent"},
+    )()
+    policy_slot["value"] = incoherent
+    probe._async_forecast_gcf_policy_changed(object())
+    deadline = scheduled[-1]
+    coroutine = deadline["callback"](NOW + timedelta(seconds=5))
+    try:
+        coroutine.send(None)
+    except StopIteration:
+        pass
+    else:
+        raise AssertionError("GCF deadline unexpectedly suspended")
+    assert probe._forecast_gcf_policy_evaluation_cancel is None
+    assert invalidations == [True, True, True, True]
+    assert probe._forecast_gcf_policy_signature == (
+        False,
+        "gcf_readback_incoherent",
+    )
+    assert probe._recalculate_cancel is not None
+    probe._recalculate_cancel()
+    probe._recalculate_cancel = None
+
+    probe._async_forecast_gcf_policy_changed(object())
+    cleanup = scheduled[-1]
+    probe._cancel_forecast_gcf_policy_evaluation()
+    assert cleanup["cancelled"] is True
+    assert probe._forecast_gcf_policy_evaluation_cancel is None
+
+
+def test_zero_export_forecast_learning_policy_is_fixed_and_reversible() -> None:
+    """A verified 0% cap never consumes clipped actual PV."""
+
+    learned_factor = 0.93
+    zero_export = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=0.0,
+    )
+    assert not zero_export.enabled
+    assert zero_export.mode == "fixed_zero_export"
+    assert zero_export.excluded_reason == "zero_export"
+    assert FORECAST.forecast_factor_for_policy(
+        zero_export,
+        learned_factor,
+    ) == 0.80
+    live_factor, live_ratio, confidence = FORECAST.adaptive_forecast_factor(
+        FORECAST.forecast_factor_for_policy(zero_export, learned_factor),
+        actual_energy_kwh=1.0,
+        expected_elapsed_kwh=10.0,
+        eligible=zero_export.enabled,
+    )
+    assert (live_factor, live_ratio, confidence) == (0.80, None, 0.0)
+
+    export_restored = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=0.1,
+    )
+    assert export_restored.enabled
+    assert export_restored.mode == "adaptive"
+    assert FORECAST.forecast_factor_for_policy(
+        export_restored,
+        learned_factor,
+    ) == learned_factor
+
+    gcf_disabled = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=0.0,
+        export_limit_percent=0.0,
+    )
+    assert gcf_disabled.enabled
+    assert FORECAST.forecast_factor_for_policy(
+        gcf_disabled,
+        learned_factor,
+    ) == learned_factor
+
+
+def test_unverified_gcf_pauses_learning_without_guessing_zero_export() -> None:
+    """Missing/stale evidence is conservative but distinct from 0% GCF."""
+
+    for reason in (
+        "gcf_generation_stale",
+        "gcf_enable_missing",
+        "gcf_limit_future_timestamp",
+        "gcf_readback_incoherent",
+        "hardware_readback_unverified",
+    ):
+        policy = FORECAST.resolve_forecast_learning_policy(
+            readback_verified=False,
+            gcf_enable_code=None,
+            export_limit_percent=None,
+            unverified_reason=reason,
+        )
+        assert not policy.enabled
+        assert policy.mode == "conservative_gcf_unverified"
+        assert policy.excluded_reason == reason
+        assert policy.factor_override is None
+        assert FORECAST.forecast_factor_for_policy(policy, 0.93) == 0.80
+        assert FORECAST.forecast_factor_for_policy(policy, 0.72) == 0.72
+
+    invalid_enable = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=2.0,
+        export_limit_percent=50.0,
+    )
+    assert invalid_enable.excluded_reason == "gcf_enable_invalid"
+    invalid_negative_cap = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=-10.0,
+    )
+    assert invalid_negative_cap.mode == "conservative_gcf_unverified"
+    assert invalid_negative_cap.excluded_reason == "gcf_limit_invalid"
+    maximum_positive_cap = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=200.0,
+    )
+    assert maximum_positive_cap.enabled
+    assert maximum_positive_cap.mode == "adaptive"
+    assert maximum_positive_cap.excluded_reason is None
+    assert maximum_positive_cap.factor_override is None
+    invalid_excess_cap = FORECAST.resolve_forecast_learning_policy(
+        readback_verified=True,
+        gcf_enable_code=1.0,
+        export_limit_percent=200.1,
+    )
+    assert invalid_excess_cap.excluded_reason == "gcf_limit_invalid"
+
+
+def test_zero_export_days_never_reenter_forecast_learning_history() -> None:
+    """Any unverified/blocked interval excludes the cumulative-PV day."""
+
+    day = datetime(2026, 8, 10, tzinfo=WARSAW)
+    always_allowed = [
+        (day - timedelta(minutes=1), "on"),
+        (day + timedelta(hours=12), "on"),
+    ]
+    physical_package = [
+        (day - timedelta(minutes=1), "1.5.5"),
+    ]
+    assert FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        physical_package,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+
+    zero_then_restored = [
+        (day - timedelta(minutes=1), "on"),
+        (day + timedelta(hours=10), "off"),
+        (day + timedelta(hours=11), "on"),
+    ]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        zero_then_restored,
+        physical_package,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    for unknown_state in ("unknown", "unavailable", "off"):
+        assert not FORECAST.forecast_learning_history_day_eligible(
+            [
+                (day, "on"),
+                (day + timedelta(hours=6), unknown_state),
+                (day + timedelta(hours=7), "on"),
+            ],
+            physical_package,
+            day_start=day,
+            day_end=day + timedelta(days=1),
+        )
+    assert FORECAST.forecast_learning_history_day_eligible(
+        [(day, "on"), (day + timedelta(days=1), "off")],
+        [(day, "1.5.2")],
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        [(day + timedelta(hours=1), "on")],
+        physical_package,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+
+    # The v1.5.6 daily evidence attribute creates a Recorder row even when
+    # both semantic states stay constant. The first retained/installation day
+    # has no midnight boundary and is rejected; the following complete day can
+    # use that heartbeat as its proven starting state.
+    heartbeat_at = day + timedelta(minutes=1)
+    retained_export = [(heartbeat_at, "on")]
+    retained_version = [(heartbeat_at, "1.5.6")]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        retained_export,
+        retained_version,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    next_day = day + timedelta(days=1)
+    assert FORECAST.forecast_learning_history_day_eligible(
+        retained_export,
+        retained_version,
+        day_start=next_day,
+        day_end=next_day + timedelta(days=1),
+    )
+
+    legacy_ui_derived = [(day - timedelta(minutes=1), "1.5.1")]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        legacy_ui_derived,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    upgraded_midday = [
+        (day - timedelta(minutes=1), "1.5.1"),
+        (day + timedelta(hours=8), "1.5.5"),
+    ]
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        upgraded_midday,
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        [],
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+    assert not FORECAST.forecast_learning_history_day_eligible(
+        always_allowed,
+        [(day - timedelta(minutes=1), "9" * 5000 + ".0.0")],
+        day_start=day,
+        day_end=day + timedelta(days=1),
+    )
+
+    # Recorder timestamps are UTC-aware, while day boundaries are local. Both
+    # the 23-hour spring day and 25-hour autumn day must reject an intraday
+    # fail-closed interval without inventing a fixed 24-hour window.
+    for dst_day in (
+        datetime(2026, 3, 29, tzinfo=WARSAW),
+        datetime(2026, 10, 25, tzinfo=WARSAW),
+    ):
+        dst_end = dst_day + timedelta(days=1)
+        assert (
+            dst_end.astimezone(timezone.utc)
+            - dst_day.astimezone(timezone.utc)
+        ).total_seconds() in {23 * 3600, 25 * 3600}
+        midpoint_utc = dst_day.astimezone(timezone.utc) + timedelta(hours=12)
+        assert not FORECAST.forecast_learning_history_day_eligible(
+            [
+                (dst_day - timedelta(minutes=1), "on"),
+                (midpoint_utc, "off"),
+                (midpoint_utc + timedelta(minutes=1), "on"),
+            ],
+            [(dst_day - timedelta(minutes=1), "1.5.5")],
+            day_start=dst_day,
+            day_end=dst_end,
+        )
+        assert FORECAST.forecast_learning_history_day_eligible(
+            [(dst_day - timedelta(minutes=1), "on")],
+            [(dst_day - timedelta(minutes=1), "1.5.6")],
+            day_start=dst_day,
+            day_end=dst_end,
+        )
+
+    # A clipped 1/10 actual-vs-Solcast day must not depress an otherwise
+    # stable 0.93 model, even when the model is rebuilt after export returns.
+    candidate_days = [
+        (always_allowed, 0.93),
+        (zero_then_restored, 0.10),
+    ]
+    eligible_ratios = [
+        ratio
+        for history, ratio in candidate_days
+        if FORECAST.forecast_learning_history_day_eligible(
+            history,
+            physical_package,
+            day_start=day,
+            day_end=day + timedelta(days=1),
+        )
+    ]
+    learned, _, count = FORECAST.robust_weighted_factor(
+        [(1.0, ratio) for ratio in eligible_ratios]
+    )
+    assert count == 1
+    assert learned == 0.93
+
+
+def test_forecast_learning_wiring_covers_rce_and_tariff() -> None:
+    """Both independent HA models consume the same physical GCF contract."""
+
+    rce_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "rce_sensor.py"
+    ).read_text(encoding="utf-8")
+    tariff_source = (
+        ROOT / "custom_components" / "hoymiles_hit_modbus" / "tariff_sensor.py"
+    ).read_text(encoding="utf-8")
+    for source in (rce_source, tariff_source):
+        for marker in (
+            "_forecast_learning_policy_snapshot",
+            "FORECAST_EXPORT_ALLOWED_ENTITY",
+            "FORECAST_EMS_PACKAGE_VERSION_ENTITY",
+            "raw.get(FORECAST_EMS_PACKAGE_VERSION_ENTITY, [])",
+            "package_version_history,",
+            '"forecast_learning_enabled"',
+            '"forecast_learning_mode"',
+            '"forecast_learning_excluded_reason"',
+            '"forecast_factor_used"',
+            "forecast_learning_history_day_eligible(",
+            "retained_last_qualified_factor_no_current_history",
+        ):
+            assert marker in source
+        assert source.index('"forecast_learning_enabled"') < source.index(
+            "if missing:"
+        )
+    assert "FORECAST_GCF_POLICY_TRIGGER_ENTITIES" in tariff_source
+    assert """FORECAST_GCF_POLICY_TRIGGER_ENTITIES = (
+    FORECAST_GCF_ENABLE_ENTITY,
+    FORECAST_GCF_LIMIT_ENTITY,
+    FORECAST_GCF_GENERATION_ENTITY,
+    FORECAST_GCF_SUPPORT_ENTITY,
+)""" in rce_source
+    assert """FORECAST_GCF_COHORT_REPORT_ENTITIES = (
+    FORECAST_GCF_ENABLE_ENTITY,
+    FORECAST_GCF_LIMIT_ENTITY,
+    FORECAST_GCF_GENERATION_ENTITY,
+)""" in rce_source
+    assert "FORECAST_GCF_COHORT_REPORT_ENTITIES" in tariff_source
+    for marker in (
+        "async_track_state_report_event",
+        "_forecast_gcf_policy_evaluation_cancel",
+    ):
+        assert marker in rce_source
+        assert marker in tariff_source
+    for source in (rce_source, tariff_source):
+        assert "previous_signature" in source
+        assert "self._entry.async_create_background_task(" in source
+        assert "self.hass.async_create_task(" not in source
+        assert "_forecast_policy_refresh_task" in source
+        assert "self.async_on_remove(task.cancel)" in source
+        assert "_async_refresh_forecast_after_policy_restore" in source
+        sensor_tree = ast.parse(source)
+        sensor_class = next(
+            node
+            for node in sensor_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name
+            in {"HoymilesRCEOptimizerSensor", "HoymilesTariffOptimizerSensor"}
+        )
+        recalculate = next(
+            node
+            for node in sensor_class.body
+            if isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "_recalculate_locked"
+        )
+        recalculate_source = ast.get_source_segment(source, recalculate)
+        assert recalculate_source is not None
+        # Normal timer/input recalculations cannot bypass the bounded GCF
+        # cohort barrier and publish a transient unverified policy.
+        assert recalculate_source.index(
+            "_forecast_gcf_policy_evaluation_cancel"
+        ) < recalculate_source.index("self._optimizer_input()")
+        pending_prefix = recalculate_source[
+            : recalculate_source.index("self._optimizer_input()")
+        ]
+        assert "self._mark_recalculation_pending()" in pending_prefix
+        assert "return False" in pending_prefix
+
+    tariff_tree = ast.parse(tariff_source)
+    forecast_imports = {
+        alias.name
+        for node in tariff_tree.body
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "forecast_model"
+        for alias in node.names
+    }
+    assert "ForecastLearningPolicy" in forecast_imports
 
 
 def test_house_energy_model_applies_charge_and_discharge_losses() -> None:
@@ -2328,6 +2979,8 @@ def test_scheduler_requests_absolute_ordered_pse_rows() -> None:
         source = path.read_text(encoding="utf-8")
         assert source.count("%2Cdtime_utc%2Cperiod_utc") == 2
         assert source.count("%24orderby=dtime_utc%20asc") == 2
+        assert source.count("forecast_learning_evidence_date:") == 2
+        assert source.count("now().date().isoformat()") == 2
 
 
 def test_real_horizon_solver_runtime_is_bounded() -> None:
@@ -3025,6 +3678,12 @@ def main() -> None:
         test_sensor_exposes_terminal_and_gain_contract,
         test_dynamic_solcast_sources_and_day3_freshness_contract,
         test_shared_forecast_model_is_conservative_and_robust,
+        test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order,
+        test_forecast_gcf_event_closure_is_bounded_and_never_transient,
+        test_zero_export_forecast_learning_policy_is_fixed_and_reversible,
+        test_unverified_gcf_pauses_learning_without_guessing_zero_export,
+        test_zero_export_days_never_reenter_forecast_learning_history,
+        test_forecast_learning_wiring_covers_rce_and_tariff,
         test_house_energy_model_applies_charge_and_discharge_losses,
         test_load_and_grid_share_the_same_bms_discharge_budget,
         test_current_slot_uses_only_real_remaining_fraction_and_live_power,

@@ -4,6 +4,243 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-08-21
+
+> **Status:** released; offline/CI PASS; live rollout accepted with a documented
+> RCE evidence limit. The final simultaneous 15-minute window had stable RCE
+> readiness but no planned active slot. The maintainer accepted publication and
+> the next active-slot regression, if any, will be handled as a hotfix.
+>
+> **Status PL:** wydano; offline/CI PASS; wdrożenie live odebrane z jawną
+> granicą dowodu RCE. Końcowe równoległe okno 15-minutowe miało stabilną
+> gotowość RCE, ale bez zaplanowanego aktywnego slotu. Opiekun zaakceptował
+> publikację, a ewentualna regresja następnego aktywnego slotu otrzyma hotfix.
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** keep RCEm in shadow mode and disable every automatic or scheduled
+   EMS writer. Update **EMS for Hoymiles HIT-(5–20)L-G3** to **v1.5.6**.
+   **PL:** pozostaw RCEm w trybie shadow i wyłącz wszystkie automatyczne oraz
+   harmonogramowe zapisy EMS. Zaktualizuj w HACS integrację
+   **EMS for Hoymiles HIT-(5–20)L-G3** do **v1.5.6**.
+2. **Home Assistant:** restart after HACS installs the update. The first start
+   copies managed EMS package **1.5.6**; validate the configuration and perform
+   the second restart requested by the managed-package Repair. Keep all writers
+   disabled during both restarts and hard-refresh every open Hoymiles dashboard
+   so it loads frontend URL `v=1.5.6.24`.
+   **PL:** uruchom Home Assistant ponownie po instalacji aktualizacji z HACS.
+   Pierwszy start kopiuje zarządzany pakiet EMS **1.5.6**; sprawdź konfigurację
+   i wykonaj drugi restart wymagany przez komunikat Napraw pakietu. Podczas obu
+   restartów pozostaw wszystkie zapisy wyłączone i twardo odśwież każdą otwartą
+   kartę dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.6.24`.
+3. **ESP32 / ESPHome:** after the Home Assistant no-write check, rebuild and
+   upload the firmware from the top-level ESPHome file pinned to immutable ref
+   **v1.5.6**. This OTA is mandatory because the hotfix adds the complete
+   aggregate-power readback generation used by the Home Assistant verifier.
+   HACS does not flash the ESP32. Repeat the no-write check after the OTA.
+   **PL:** po odczytowej kontroli Home Assistanta skompiluj i wgraj przez OTA
+   firmware z głównego pliku ESPHome przypiętego do niezmiennego ref
+   **v1.5.6**. Ten krok jest obowiązkowy, ponieważ hotfiks dodaje kompletną
+   generację odczytu mocy sumarycznej używaną przez weryfikator Home Assistanta.
+   HACS nie wgrywa ESP32. Po OTA powtórz kontrolę bez zapisów.
+4. **Verification / Weryfikacja:** confirm package **1.5.6 / Ready**, no
+   unexpected owner or mode/register change, and a fresh
+   `sensor.hoymiles_hit_parallel_aggregate_power_readback_generation` on a
+   detected parallel Master. Then repeat the shared-bus Grid Discharge test on
+   the exact v1.5.6 integration/package/firmware build and retain the aggregate
+   response diagnostic, Master FC03, separate Master and Slave mode/power, and
+   exact start/stop evidence. Do not enable automatic writers until this check
+   passes. **PL:** potwierdź pakiet **1.5.6 / Gotowe**, brak nieoczekiwanego
+   właściciela i zmiany trybu/rejestrów oraz świeżą encję
+   `sensor.hoymiles_hit_parallel_aggregate_power_readback_generation` dla
+   wykrytego Mastera równoległego. Następnie powtórz test Grid Discharge na
+   wspólnej magistrali z dokładnym buildem integracji/pakietu/firmware v1.5.6 i
+   zachowaj diagnostykę odpowiedzi sumarycznej, FC03 Mastera, osobne tryby/moce
+   Mastera i Slave'a oraz dokładne dowody start/stop. Do zakończenia kontroli
+   nie włączaj automatycznych zapisów.
+
+### Added / Dodano
+
+- Added a post-command, system-level aggregate physical-response diagnostic
+  for Grid Discharge on a detected parallel Master. After the existing Master
+  FC03 configuration acknowledgement it allows 20 seconds of transition grace,
+  then examines five newer complete aggregate-power generations (up to 20
+  seconds each) and requires three consecutive stable generations. Its states
+  progress from `pending` to `confirmed`, `not_confirmed`, or `not_evaluable`.
+  It is not a per-Slave protocol acknowledgement.
+- RCE freezes its authoritative discharge target before the command and fails
+  closed through the existing neutral rollback when the required aggregate
+  response is not confirmed; its stable window also requires grid export of at
+  least 0.25 kW and agreement with the frozen target. Manual/manual-recovery
+  and RCEm pre-discharge have no authoritative total-kW target, so they evaluate
+  fresh stable battery-discharge direction without grid-export or amplitude
+  rejection. Self-Use rollback never waits for aggregate discharge evidence.
+- ESPHome now emits a generation only after the complete Master aggregate
+  balance has fresh grid, PV and LOAD inputs. Partial callbacks, local writes
+  and timers cannot forge that generation.
+- Parallel topology is latched before Mode 5; unknown topology blocks the
+  command and a change during verification prevents confirmation. Best-effort
+  sampled-peak attributes annotate the transition without claiming its true
+  instantaneous maximum.
+- Clarified EMS ownership on both dashboards. This presentation-only change
+  leaves execution authority to the scheduler. When no automatic writer is
+  active, **Controls now** reports
+  **No active automation** instead of implying a manual command. A separate
+  **Low-cost charging** row distinguishes disabled, enabled/waiting, active,
+  no-charge-needed and explicitly blocked policy states. The stable diagnostic
+  attribute remains `owner_code=manual` for backward compatibility.
+- RCE and low-cost charging now protect their independent adaptive Solcast
+  models from curtailed PV on persistent zero-export sites. A fresh coherent
+  physical GCF readback with GCF enabled and an exact effective export limit
+  of `0.0%` disables both live and Recorder-backed learning and uses a fixed
+  `0.80 × Solcast` factor. Any stale, missing or incoherent GCF evidence also
+  pauses learning conservatively with an explicit reason, but is never called
+  zero-export. A historical day is eligible only when the existing physical-
+  derived `EMS Export Allowed` entity remained `on` for the whole local day;
+  one `off`, `unknown`, `unavailable` or missing boundary excludes that day.
+  A second Recorder proof from `sensor.hoymiles_ems_package_version` requires
+  managed package v1.5.2 or newer for the complete day: v1.5.0–v1.5.1 used
+  UI-derived semantics under the same stable entity ID. A v1.5.5 installation
+  therefore reuses only physically qualified boundary rows still retained by
+  Recorder; absent, excluded or purged evidence intentionally cold-starts.
+  Daily evidence attributes added in v1.5.6 keep regular boundary reports for
+  unchanged states going forward, without extending Recorder retention.
+- Dodano diagnostykę sumarycznej odpowiedzi fizycznej po poleceniu Grid
+  Discharge na wykrytym Masterze równoległym. Po dotychczasowym potwierdzeniu
+  konfiguracji przez FC03 Mastera stosuje 20 sekund czasu przejściowego, ocenia
+  pięć nowszych kompletnych generacji mocy (maksymalnie po 20 sekund każda) i
+  wymaga trzech kolejnych stabilnych generacji. Nie jest protokołowym ACK
+  żadnego Slave'a.
+- RCE zamraża autorytatywny cel rozładowania przed poleceniem i przy braku
+  potwierdzenia odpowiedzi wykonuje istniejący neutralny rollback fail-closed.
+  Wymaga też eksportu co najmniej 0,25 kW i zgodności z zamrożonym celem.
+  Tryb ręczny/recovery i przygotowanie RCEm bez autorytatywnego celu sumarycznej
+  mocy oceniają świeży stabilny kierunek rozładowania baterii bez odrzucenia za
+  eksport lub amplitudę. Powrót do Self-Use nie czeka na ten dowód.
+- Uporządkowano prezentację właściciela EMS. Ta zmiana wyłącznie prezentacyjna
+  pozostawia autorytet wykonania w schedulerze. Gdy żaden automat nie wykonuje
+  zapisu, **Steruje teraz** pokazuje
+  **Brak aktywnej automatyki**, a osobny wiersz **Tanie ładowanie** rozróżnia
+  stan wyłączony, włączony i oczekujący, aktywne ładowanie, brak potrzeby oraz
+  jawną blokadę. Stabilny atrybut diagnostyczny pozostaje
+  `owner_code=manual` dla zgodności wstecznej.
+- RCE i tanie ładowanie chronią teraz swoje niezależne adaptacyjne modele
+  Solcast przed produkcją PV ograniczoną w instalacjach z trwałym zero-export.
+  Świeży, spójny odczyt fizyczny GCF z włączonym GCF i dokładnym efektywnym
+  limitem eksportu `0,0%` wyłącza learning bieżący i historyczny oraz wymusza
+  stały współczynnik `0,80 × Solcast`. Nieświeży, brakujący lub niespójny GCF
+  również konserwatywnie wstrzymuje uczenie z jawną przyczyną, ale nie jest
+  nazywany zero-export. Dzień historyczny uczestniczy w modelu tylko wtedy,
+  gdy istniejąca, wyprowadzona z fizycznych odczytów encja **EMS Export
+  Allowed** była `on` przez cały lokalny dzień; pojedyncze `off`, `unknown`,
+  `unavailable` albo brak stanu granicznego wyklucza cały dzień. Drugim dowodem
+  Recordera jest `sensor.hoymiles_ems_package_version` z wersją pakietu
+  zarządzanego co najmniej v1.5.2 przez cały dzień: v1.5.0–v1.5.1 używały
+  semantyki opartej na UI pod tym samym stabilnym identyfikatorem encji.
+  Instalacja v1.5.5 wykorzystuje więc tylko fizycznie kwalifikowane wpisy
+  graniczne nadal zachowane w Recorderze; brakujący, wykluczony albo usunięty
+  dowód świadomie rozpoczyna model od zera. Dzienne atrybuty dowodowe dodane w
+  v1.5.6 zapewniają kolejne wpisy graniczne dla niezmiennych stanów, ale nie
+  wydłużają retencji Recordera.
+
+### Fixed / Naprawiono
+
+- Split planning authority for a **new** RCE start from execution authority for
+  an **already latched active** cycle. A normal input update may temporarily set
+  `result_current=false` and block new starts without rolling the active cycle
+  back to Self-Use. Live BMS/GCF, ownership/conflict, Off-Grid, FC03/readback,
+  SOC/reserve and inverter/topology hard stops remain independent and immediate
+  while recalculation is pending.
+- Removed execution-only tariff states such as `tariff_charge_active` and
+  non-consumed owner/execution diagnostics from the optimizer fingerprint.
+  Actual SOC, PV/LOAD, tariff/profile, BMS and freshness inputs still invalidate
+  the result normally.
+- Made tariff rollback one physical transaction: derive one final
+  `4300–4306` block from the last confirmed physical snapshot plus explicit
+  rollback values, skip no-ops, issue at most one FC16, and require its newer
+  matching full-block FC03 before completion.
+- Require every Home Assistant EMS-block helper to acknowledge all seven
+  physical `4300–4306` registers. Stale, missing or mismatching FC03 stays
+  fail-closed; no second transaction mechanism or firmware-barrier change was
+  added.
+- Keep the tariff planner's large live/diagnostic/restore attributes while
+  excluding them from Recorder persistence, cancel all overlapping delayed
+  recalculation tasks on unload, and watch the fallback daily-LOAD input so a
+  real fallback change invalidates the plan.
+- Sample continuously changing RCE planning telemetry on the existing one-minute
+  timer and coalesce normal tariff/GCF cohorts into a five-minute planning
+  cadence. Independent availability and safety gates remain immediate.
+- Advance Aurora to frontend revision **24**. The battery node keeps available
+  values visible and shows stored energy, physical current, state and bounded
+  ETA. The main orbit adds tomorrow's forecast and labelled inverter/battery-
+  circuit temperatures, with larger readable text in PL and EN.
+- Rozdzielono autorytet nowego startu RCE od autorytetu już aktywnego,
+  zalatchowanego cyklu. Zwykłe przeliczenie z `result_current=false` blokuje
+  nowe starty, ale nie wymusza Self-Use; niezależne bramki live BMS/GCF,
+  właściciela, Off-Grid, FC03, rezerwy SOC i topologii zatrzymują cykl od razu.
+- Usunięto z fingerprintu taryfy stany wyłącznie wykonawcze. Prawdziwe wejścia
+  SOC, PV/LOAD, taryfy/profilu, BMS i świeżości nadal unieważniają wynik.
+- Rollback taryfy tworzy jeden blok `4300–4306` z ostatniego potwierdzonego
+  fizycznego snapshotu i jawnych wartości rollbacku, wykonuje najwyżej jeden
+  FC16 i kończy się dopiero po nowszym zgodnym FC03 wszystkich siedmiu
+  rejestrów. Ten pełny kontrakt ACK obowiązuje każdy helper bloku EMS.
+- Duże atrybuty taryfy wyłączono tylko z zapisu do Recordera; nakładające się
+  opóźnione przeliczenia są anulowane przy unload, a zmiana zastępczego
+  dziennego LOAD prawidłowo unieważnia plan.
+- Ciągłą telemetrię planowania RCE próbkuje istniejący minutowy timer, a zwykłe
+  kohorty taryfy/GCF są łączone w pięciominutowy rytm. Niezależne bramki
+  dostępności i bezpieczeństwa nadal działają natychmiast.
+- Aurora rev **24** utrzymuje dostępne dane baterii i pokazuje energię, fizyczny
+  prąd, stan oraz ograniczone ETA. Główna orbita dodaje prognozę na jutro i
+  podpisane temperatury falownika/toru magazynu oraz większy tekst PL i EN.
+
+These changes deliberately affect execution authority, rollback/readback
+lifecycle and presentation. They do not change optimizer objectives, slot
+selection, forecast/tariff mathematics, RCEm voltage calculations or direct
+register semantics, Off-Grid priority, registers `258/259/306`, or the existing
+parallel broadcast/per-Slave acknowledgement claim boundary.
+
+Zmiany celowo dotyczą autorytetu wykonania, rollback/readback i prezentacji.
+Nie zmieniają celów optymalizatorów, wyboru slotów, matematyki prognozy/taryfy,
+obliczeń napięciowych i rejestrów bezpośrednich RCEm, priorytetu Off-Grid,
+rejestrów `258/259/306` ani granicy deklaracji broadcastu/per-Slave.
+
+### Validation / Walidacja
+
+- The tagged source passed the complete applicable offline gate, including
+  quick **488/488** and exhaustive **2064/2064** matrices, release/frontend
+  validation, deterministic generation, optimizer, history, firmware/readback,
+  startup/executor, source-rebind, diagnostics and 100-archive analyzer suites.
+- Publication additionally required exact-ref `project-checks`, conditional
+  `firmware-compile`, Hassfest and HACS validation in GitHub Actions.
+- Otagowane źródło przeszło pełną właściwą bramkę offline oraz wymagane CI dla
+  dokładnego ref. To dowód offline/CI, a nie uniwersalny certyfikat instalacji.
+
+### Field evidence boundary / Granica dowodu terenowego
+
+- The v1.5.6 runtime was deployed on localhost and `miernik.com.pl`; Home
+  Assistant checks/restarts, fresh FC03/readback and Aurora revision 24 passed.
+- During the final simultaneous 15-minute window localhost tariff readiness was
+  **16/16** with no status transition or schedule flapping; three subsequent
+  five-minute cycles also remained ready.
+- An earlier controlled meter run had RCE ownership **16/16** and physical grid
+  discharge **13/16**; after operator power adjustments its final eight minutes
+  were stable, and the vendor application confirmed discharge and Self-Use
+  return. The final scheduler guard was deployed afterward.
+- The final meter window was RCE-ready **16/16**, but no active slot was planned
+  **16/16**. Publication therefore carries an explicit active exact-final RCE
+  evidence gap accepted by the maintainer, with a hotfix path for a regression.
+- Runtime v1.5.6 wdrożono na localhost i `miernik.com.pl`; kontrole/restart HA,
+  świeży FC03/readback oraz Aurora rev24 przeszły. Taryfa localhost zachowała
+  gotowość **16/16** bez skakania planu, także w trzech kolejnych cyklach.
+  Wcześniejszy kontrolowany test miernika miał właściciela RCE **16/16** i
+  fizyczne rozładowanie **13/16**, a końcowe osiem minut było stabilne.
+  Końcowe okno miało gotowość RCE **16/16**, lecz bez planowanego aktywnego
+  slotu **16/16**; opiekun jawnie zaakceptował tę lukę z możliwością hotfixu.
+- The 2026-08-15 run on HA package **1.5.4** and ESP32 project **1.5.3** remains
+  bounded hardware/protocol evidence only, not per-Slave ACK or exact-v1.5.6
+  software acceptance.
+
 ## [1.5.5] - 2026-08-15
 
 ### User update steps / Kroki po aktualizacji

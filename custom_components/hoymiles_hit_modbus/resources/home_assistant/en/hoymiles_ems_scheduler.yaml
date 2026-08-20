@@ -936,7 +936,12 @@ template:
       - name: "Hoymiles EMS Package Version"
         unique_id: hoymiles_ems_package_version
         icon: mdi:package-variant-closed-check
-        state: "1.5.5"
+        state: "1.5.6"
+        attributes:
+          # One changing attribute per local day gives Recorder a recent
+          # boundary report even when the package version itself is stable.
+          forecast_learning_evidence_date: >-
+            {{ now().date().isoformat() }}
 
       - name: "Hoymiles EMS Hardware Mode"
         unique_id: hoymiles_ems_hardware_mode
@@ -1025,6 +1030,87 @@ template:
           {% else %}
             No valid notify entity
           {% endif %}
+
+  # The event-driven sensor reports a system-level physical response after a
+  # Grid Discharge command.  Configuration is acknowledged by the Master FC03
+  # block; this separate signal uses only the aggregate system power balance
+  # and deliberately makes no claim about an individual inverter readback.
+  - triggers:
+      - trigger: event
+        event_type: hoymiles_parallel_aggregate_physical_response
+    sensor:
+      - name: "Hoymiles Parallel Aggregate Physical Response"
+        unique_id: hoymiles_parallel_aggregate_physical_response
+        icon: mdi:transmission-tower-export
+        state: >-
+          {{ trigger.event.data.result | default('not_evaluable', true) }}
+        attributes:
+          phase: >-
+            {{ trigger.event.data.phase | default('complete', true) }}
+          reason: >-
+            {{ trigger.event.data.reason | default('missing_event_data', true) }}
+          transaction_id: >-
+            {{ trigger.event.data.transaction_id | default('', true) }}
+          owner: >-
+            {{ trigger.event.data.owner | default('unknown', true) }}
+          transaction_started_epoch: >-
+            {{ trigger.event.data.transaction_started_epoch | default(none) }}
+          latched_esp_uptime_seconds: >-
+            {{ trigger.event.data.latched_esp_uptime_seconds | default(none) }}
+          pending_at: >-
+            {{ trigger.event.data.pending_at | default(none) }}
+          evidence_scope: aggregate_system_power
+          configuration_acknowledgement_scope: master_fc03
+          individual_inverter_acknowledgement: unavailable
+          formula: "P_battery = P_grid + P_load - P_pv"
+          transition_grace_seconds: 20
+          candidate_generations: 5
+          required_stable_generations: 3
+          detected_inverters: >-
+            {{ trigger.event.data.detected_inverters | default(none) }}
+          latched_machine_type: >-
+            {{ trigger.event.data.latched_machine_type | default(none) }}
+          topology_known: >-
+            {{ trigger.event.data.topology_known | default(false) }}
+          requires_parallel_proof: >-
+            {{ trigger.event.data.requires_parallel_proof | default(false) }}
+          authoritative_expected_power: >-
+            {{ trigger.event.data.authoritative_expected_power
+               | default(false) }}
+          expected_power_kw: >-
+            {{ trigger.event.data.expected_power_kw | default(none) }}
+          observed_median_power_kw: >-
+            {{ trigger.event.data.observed_median_power_kw | default(none) }}
+          observed_spread_kw: >-
+            {{ trigger.event.data.observed_spread_kw | default(none) }}
+          sampled_transition_peak_kw: >-
+            {{ trigger.event.data.sampled_transition_peak_kw | default(none) }}
+          sampled_transition_observed: >-
+            {{ trigger.event.data.sampled_transition_observed
+               | default(false) }}
+          sampled_transition_scope: >-
+            best_effort_post_master_ack_boundaries_and_complete_candidates
+          verification_horizon_seconds: >-
+            {{ trigger.event.data.verification_horizon_seconds | default(135) }}
+          stable_window_start: >-
+            {{ trigger.event.data.stable_window_start | default(none) }}
+          tolerance_kw: >-
+            {{ trigger.event.data.tolerance_kw | default(none) }}
+          sample_count: >-
+            {{ trigger.event.data.sample_count | default(0) }}
+          samples_kw: >-
+            {{ trigger.event.data.samples_kw | default([], true) }}
+          grid_samples_kw: >-
+            {{ trigger.event.data.grid_samples_kw | default([], true) }}
+          baseline_generation: >-
+            {{ trigger.event.data.baseline_generation | default(none) }}
+          collection_baseline_generation: >-
+            {{ trigger.event.data.collection_baseline_generation
+               | default(none) }}
+          final_generation: >-
+            {{ trigger.event.data.final_generation | default(none) }}
+          completed_at: >-
+            {{ trigger.event.data.completed_at | default(none) }}
 
   # Shared execution gate for the complete EMS block 4300-4306. On a parallel
   # Master it represents the proven address-0 system broadcast followed by a
@@ -1272,6 +1358,10 @@ template:
              and ((gcf | int(-1)) == 0
                   or ((gcf | int(-1)) == 1 and (limit | float(0)) > 0)) }}
         attributes:
+          # Record a daily report while physical permission remains unchanged.
+          # Forecast learning can prove complete days within retained history.
+          forecast_learning_evidence_date: >-
+            {{ now().date().isoformat() }}
           gcf: >-
             {{ states('sensor.hoymiles_hit_gcf_enable_readback_code') }}
           export_limit_percent: >-
@@ -2590,19 +2680,66 @@ template:
         unique_id: hoymiles_tariff_charge_status
         icon: mdi:battery-clock-outline
         state: >-
-          {% if is_state('input_boolean.hoymiles_tariff_charge_enabled', 'off') %}
-            Disabled
-          {% elif is_state('input_boolean.hoymiles_rce_discharge_enabled', 'on') %}
-            Blocked — RCE automation is active
-          {% elif is_state('input_boolean.hoymiles_tariff_charge_active', 'on') %}
-            {% if state_attr('sensor.hoymiles_hit_tariff_charge_plan',
-                             'current_action') == 'grid_support' %}
-              Home powered from the low-cost grid — battery preserved
+          {% set plan = states.sensor.hoymiles_hit_tariff_charge_plan %}
+          {% set plan_state = states('sensor.hoymiles_hit_tariff_charge_plan') %}
+          {% set status = state_attr('sensor.hoymiles_hit_tariff_charge_plan',
+                                     'status_code')
+                          | default('missing_data', true) %}
+          {% set pending = state_attr('sensor.hoymiles_hit_tariff_charge_plan',
+                                      'recalculation_pending') is sameas true %}
+          {% set result_current = state_attr(
+               'sensor.hoymiles_hit_tariff_charge_plan',
+               'result_current') is sameas true %}
+          {% set current_slot = state_attr(
+               'sensor.hoymiles_hit_tariff_charge_plan',
+               'current_slot_planned') is sameas true %}
+          {% set planned_slots = state_attr(
+               'sensor.hoymiles_hit_tariff_charge_plan',
+               'planned_slots') | default([], true) %}
+          {% set active_action = states(
+               'input_text.hoymiles_tariff_active_action') %}
+          {% set blocking_statuses = [
+               'missing_data', 'optimizer_error', 'unsupported_profile',
+               'expired_profile', 'soc_limits_conflict',
+               'hard_reserve_unavailable'] %}
+          {% if is_state('input_boolean.hoymiles_tariff_charge_active', 'on') %}
+            {% if is_state('input_boolean.hoymiles_tariff_charge_enabled', 'off') %}
+              Disabled — finishing the active slot
+            {% elif active_action == 'grid_support' %}
+              Active — home supplied from the low-cost grid
+            {% elif active_action in ['battery_charge',
+                                      'grid_support_and_charge'] %}
+              Active — grid charging
             {% else %}
-              Grid charging — {{ states('sensor.hoymiles_tariff_current_zone') }}
+              Active — tariff control
             {% endif %}
+          {% elif is_state('input_boolean.hoymiles_tariff_charge_enabled', 'off') %}
+            Disabled
+          {% elif not is_state('input_boolean.hoymiles_tariff_charge_enabled',
+                                'on') %}
+            Unavailable — initializing
+          {% elif is_state('input_boolean.hoymiles_rce_discharge_enabled', 'on') %}
+            Enabled — blocked: RCE policy is enabled
+          {% elif plan is none
+                or plan_state in ['unknown', 'unavailable', 'none', ''] %}
+            Enabled — blocked: plan unavailable
+          {% elif pending or not result_current %}
+            Enabled — waiting for a current plan
+          {% elif status in blocking_statuses %}
+            Enabled — blocked: {{ plan_state }}
+          {% elif not is_state('binary_sensor.hoymiles_tariff_control_data_ready',
+                                'on') %}
+            Enabled — blocked: {{
+              state_attr('binary_sensor.hoymiles_tariff_control_data_ready',
+                         'reason') | default(plan_state, true) }}
+          {% elif status == 'no_charge_needed' %}
+            Enabled — no charging needed
+          {% elif current_slot %}
+            Enabled — selected slot waiting to start
+          {% elif planned_slots | count > 0 %}
+            Enabled — waiting for a selected slot
           {% else %}
-            {{ states('sensor.hoymiles_hit_tariff_charge_plan') }}
+            Enabled — {{ plan_state }}
           {% endif %}
 
       - name: "Hoymiles Battery Balancing BMS Safe Charge Power"
@@ -2758,13 +2895,13 @@ template:
         icon: mdi:account-cog-outline
         state: >-
           {% if is_state('input_boolean.hoymiles_battery_balancing_active', 'on') %}
-            Battery balancing
+            Balancing
           {% elif is_state('input_boolean.hoymiles_discharge_cycle_active', 'on') %}
-            Manual schedule — discharge
+            Manual control
           {% elif is_state('input_boolean.hoymiles_charge_cycle_active', 'on') %}
-            Manual schedule — charge
+            Manual control
           {% elif is_state('input_boolean.hoymiles_rce_discharge_active', 'on') %}
-            RCE automation
+            RCE
           {% elif is_state('input_boolean.hoymiles_tariff_charge_active', 'on') %}
             Low-cost charging
           {% elif is_state('input_boolean.hoymiles_rcm_active', 'on')
@@ -2772,9 +2909,9 @@ template:
                  'input_boolean.hoymiles_rcm_export_control_active', 'on')
                or is_state(
                  'input_boolean.hoymiles_rcm_pre_discharge_active', 'on') %}
-            RCEm 253 V+
+            RCEm
           {% else %}
-            Manual control
+            No active automation
           {% endif %}
         attributes:
           owner_code: >-
@@ -3223,8 +3360,8 @@ timer:
 script:
   # These are the only scripts allowed to write HIT/GCF control entities.
   # A Home Assistant number/select state is only a command echo.  Every helper
-  # snapshots the firmware readback generation *after* the service call and
-  # returns only after a later Modbus read proves the requested raw value.
+  # freezes the complete physical 4300-4306 tuple before the service call and
+  # returns only after a later Modbus read proves the complete requested block.
   hoymiles_verified_set_ems_mode:
     alias: "EMS — set mode with hardware readback"
     description: >-
@@ -3246,15 +3383,29 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ option in ['self_use', 'off_grid', 'grid_charge', 'grid_discharge'] }}
       - condition: template
-        value_template: >-
-          {{ option in ['self_use', 'off_grid', 'grid_charge', 'grid_discharge']
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation'))
+        value_template: &ems_complete_physical_snapshot_ready >-
+          {% set ems_generation =
+            states.sensor.hoymiles_hit_ems_control_readback_generation %}
+          {% set topology_generation =
+            states.sensor.hoymiles_hit_parallel_topology_readback_generation %}
+          {% set ems_reported = ems_generation.last_reported
+            if ems_generation.last_reported is defined
+            else ems_generation.last_updated %}
+          {% set topology_reported = topology_generation.last_reported
+            if topology_generation.last_reported is defined
+            else topology_generation.last_updated %}
+          {% set ems_age = as_timestamp(now())
+            - as_timestamp(ems_reported, 0) %}
+          {% set topology_age = as_timestamp(now())
+            - as_timestamp(topology_reported, 0) %}
+          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+               | float(0) > 0.5
+             and is_number(ems_generation.state)
+             and is_number(topology_generation.state)
+             and ems_age >= -5 and ems_age <= 180
+             and topology_age >= -5 and topology_age <= 180
              and is_number(states(
                'sensor.hoymiles_hit_ems_mode_readback_code'))
              and is_number(states(
@@ -3270,7 +3421,9 @@ script:
              and is_number(states(
                'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')) }}
       - variables:
-          target_mode_code: >-
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
             {{ {'self_use': 0, 'off_grid': 3, 'grid_charge': 4,
                 'grid_discharge': 5}.get(option, -1) }}
           expected_self_use_soc: >-
@@ -3315,37 +3468,69 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
+      - wait_template: &ems_complete_physical_block_ack >-
+          {% set current_generation = states(
+            'sensor.hoymiles_hit_ems_control_readback_generation')
+            | float(-1) %}
+          {% set generation_before = ems_generation_before_write | float(-1) %}
+          {% set generation_after = ems_generation_after_write | float(-1) %}
+          {% set generation_after_not_older = generation_after == generation_before
+            or generation_after > generation_before
+            or (generation_before >= 16000000
+                and generation_after >= 1
+                and generation_after < generation_before) %}
+          {% set newer_than_after = current_generation > generation_after
+            or (generation_after >= 16000000
+                and current_generation >= 1
+                and current_generation < generation_after) %}
           {{ (states(
                'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
                | float(0) > 0.5)
-             and states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')
-                 not in ['unknown', 'unavailable', 'none', '']
-             and states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')
-                 != ems_generation_after_write
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_control_readback_generation'))
+             and generation_after_not_older
+             and newer_than_after
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_mode_readback_code'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_self_use_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_backup_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_force_charge_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_maximum_charge_power_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_force_discharge_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_maximum_discharge_power_readback'))
              and (states('sensor.hoymiles_hit_ems_mode_readback_code')
-                  | int(-1)) == (target_mode_code | int(-2))
-             and (states('sensor.hoymiles_hit_ems_self_use_soc_readback')
-                  | float(-999)) == (expected_self_use_soc | float(-998))
-             and (states('sensor.hoymiles_hit_ems_backup_soc_readback')
-                  | float(-999)) == (expected_backup_soc | float(-998))
-             and (states(
+                   | int(-1)) == (expected_mode_code | int(-2))
+             and ((states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+                   | float(-999)) - (expected_self_use_soc | float(-998)))
+                   | abs < 0.5
+             and ((states('sensor.hoymiles_hit_ems_backup_soc_readback')
+                   | float(-999)) - (expected_backup_soc | float(-998)))
+                   | abs < 0.5
+             and ((states(
                'sensor.hoymiles_hit_ems_force_charge_soc_readback')
-                  | float(-999)) == (expected_force_charge_soc | float(-998))
-             and (states(
+                   | float(-999)) - (expected_force_charge_soc | float(-998)))
+                   | abs < 0.5
+             and ((states(
                'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
-                  | float(-999))
-                    == (expected_maximum_charge_power | float(-998))
-             and (states(
+                   | float(-999))
+                     - (expected_maximum_charge_power | float(-998)))
+                   | abs < 0.05
+             and ((states(
                'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
-                  | float(-999))
-                    == (expected_force_discharge_soc | float(-998))
-             and (states(
+                   | float(-999))
+                     - (expected_force_discharge_soc | float(-998)))
+                   | abs < 0.5
+             and ((states(
                'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
-                  | float(-999))
-                    == (expected_maximum_discharge_power | float(-998)) }}
+                   | float(-999))
+                     - (expected_maximum_discharge_power | float(-998)))
+                   | abs < 0.05 }}
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3363,15 +3548,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+               | float(-999) }}
+          expected_maximum_charge_power: >-
+            {{ value | float(0) | round(1) }}
+          expected_force_discharge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          expected_maximum_discharge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_maximum_charge_power
@@ -3380,17 +3581,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.05 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3408,15 +3599,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ value | float(0) | round(0) }}
+          expected_maximum_charge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+               | float(-999) }}
+          expected_force_discharge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          expected_maximum_discharge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_force_charge_soc
@@ -3425,17 +3632,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_force_charge_soc_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.5 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3453,15 +3650,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+               | float(-999) }}
+          expected_maximum_charge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+               | float(-999) }}
+          expected_force_discharge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          expected_maximum_discharge_power: >-
+            {{ value | float(0) | round(1) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_maximum_discharge_power
@@ -3470,17 +3683,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.05 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3498,15 +3701,31 @@ script:
     sequence:
       - condition: template
         value_template: >-
-          {{ states('sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5 }}
+          {{ is_number(value) }}
       - condition: template
-        value_template: >-
-          {{ is_number(value)
-             and is_number(states(
-               'sensor.hoymiles_hit_parallel_topology_readback_generation'))
-             and is_number(states(
-               'sensor.hoymiles_hit_ems_control_readback_generation')) }}
+        value_template: *ems_complete_physical_snapshot_ready
+      - variables:
+          ems_generation_before_write: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+          expected_mode_code: >-
+            {{ states('sensor.hoymiles_hit_ems_mode_readback_code') | int(-1) }}
+          expected_self_use_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          expected_backup_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          expected_force_charge_soc: >-
+            {{ states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+               | float(-999) }}
+          expected_maximum_charge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+               | float(-999) }}
+          expected_force_discharge_soc: >-
+            {{ value | float(0) | round(0) }}
+          expected_maximum_discharge_power: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
       - action: number.set_value
         target:
           entity_id: number.hoymiles_hit_force_discharge_soc
@@ -3515,17 +3734,7 @@ script:
       - variables:
           ems_generation_after_write: >-
             {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
-      - wait_template: >-
-          {{ (states(
-               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
-               | float(0) > 0.5)
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               not in ['unknown', 'unavailable', 'none', '']
-             and states('sensor.hoymiles_hit_ems_control_readback_generation')
-               != ems_generation_after_write
-             and ((states(
-               'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
-                 | float(-999)) - (value | float(0))) | abs < 0.5 }}
+      - wait_template: *ems_complete_physical_block_ack
         timeout: "00:01:00"
         continue_on_timeout: false
 
@@ -3625,6 +3834,1102 @@ script:
                  | float(-999)) - (value | float(0))) | abs < 0.05 }}
         timeout: "00:01:00"
         continue_on_timeout: false
+
+  hoymiles_verify_parallel_aggregate_discharge_response:
+    alias: "EMS — verify aggregate power response after Grid Discharge"
+    description: >-
+      After the physical Master mode ACK, looks for three consecutive stable
+      balances within five newer complete generations. A transition peak only
+      shifts the window. The result is aggregate-response evidence, not a readback
+      confirming the state of any individual inverter.
+    # Independent callers carry their own transaction id. Parallel mode avoids
+    # a later observer cancelling an in-flight safety decision; exact caller
+    # correlation below turns any event-sensor overwrite into a safe failure.
+    mode: parallel
+    max: 4
+    max_exceeded: error
+    fields:
+      transaction_id:
+        required: true
+        selector:
+          text:
+      transaction_started_epoch:
+        required: true
+        selector:
+          number:
+            min: 0
+            max: 4102444800
+            step: 0.001
+            mode: box
+      baseline_generation:
+        required: true
+        selector:
+          number:
+            min: -1
+            max: 16000000
+            step: 1
+            mode: box
+      latched_esp_uptime_seconds:
+        required: true
+        selector:
+          number:
+            min: 0
+            max: 2147483647
+            step: 1
+            mode: box
+      owner:
+        required: true
+        selector:
+          text:
+      latched_machine_type:
+        required: true
+        selector:
+          number:
+            min: -1
+            max: 10
+            step: 1
+            mode: box
+      latched_inverter_count:
+        required: true
+        selector:
+          number:
+            min: -1
+            max: 10
+            step: 1
+            mode: box
+      topology_known:
+        required: true
+        selector:
+          boolean:
+      requires_parallel_proof:
+        required: true
+        selector:
+          boolean:
+      expected_power_kw:
+        required: false
+        default: 0
+        selector:
+          number:
+            min: 0
+            max: 200
+            step: 0.1
+            mode: box
+      authoritative_expected_power:
+        required: false
+        default: false
+        selector:
+          boolean:
+    sequence:
+      - variables:
+          response_transaction_id: >-
+            {{ transaction_id | default('', true) | trim }}
+          response_started_epoch: >-
+            {{ transaction_started_epoch | float(0) }}
+          response_pending_at: "{{ now().isoformat() }}"
+          response_owner: "{{ owner | default('unknown', true) }}"
+          response_baseline_generation: >-
+            {{ baseline_generation | float(-1) }}
+          response_latched_esp_uptime_seconds: >-
+            {{ latched_esp_uptime_seconds | float(-1) }}
+          response_authoritative_requested: >-
+            {{ authoritative_expected_power | default(false) | bool(false) }}
+          response_expected_kw: >-
+            {{ expected_power_kw | default(0) | float(0) }}
+          response_transition_entry_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_machine_type: "{{ latched_machine_type | int(-1) }}"
+          response_machine_count: "{{ latched_inverter_count | int(-1) }}"
+          response_topology_known: >-
+            {{ topology_known | bool(false) }}
+          response_requires_parallel_proof: >-
+            {{ requires_parallel_proof | bool(false) }}
+      - condition: template
+        value_template: >-
+          {{ response_transaction_id | length >= 8
+             and response_started_epoch | float(0) > 0
+             and response_latched_esp_uptime_seconds | float(-1) >= 180
+             and response_owner in
+               ['manual', 'manual_recovery', 'rce', 'rcm_pre_discharge'] }}
+      - event: hoymiles_parallel_aggregate_physical_response
+        event_data:
+          result: pending
+          phase: collecting
+          reason: awaiting_fresh_complete_samples
+          transaction_id: "{{ response_transaction_id }}"
+          owner: "{{ response_owner }}"
+          transaction_started_epoch: "{{ response_started_epoch }}"
+          latched_esp_uptime_seconds: >-
+            {{ response_latched_esp_uptime_seconds | float(-1) }}
+          pending_at: "{{ response_pending_at }}"
+          verification_horizon_seconds: 135
+          detected_inverters: "{{ response_machine_count }}"
+          latched_machine_type: "{{ response_machine_type }}"
+          topology_known: "{{ response_topology_known | bool(false) }}"
+          requires_parallel_proof: >-
+            {{ response_requires_parallel_proof | bool(false) }}
+          authoritative_expected_power: >-
+            {{ response_authoritative_requested | bool(false) }}
+          expected_power_kw: "{{ response_expected_kw | float(0) }}"
+          sample_count: 0
+          samples_kw: []
+          grid_samples_kw: []
+          baseline_generation: >-
+            {{ response_baseline_generation | float(-1) }}
+          final_generation: null
+          completed_at: null
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ not response_topology_known | bool(false) }}
+            sequence:
+              - event: hoymiles_parallel_aggregate_physical_response
+                event_data:
+                  result: not_confirmed
+                  phase: complete
+                  reason: precommand_topology_unknown
+                  transaction_id: "{{ response_transaction_id }}"
+                  owner: "{{ response_owner }}"
+                  transaction_started_epoch: "{{ response_started_epoch }}"
+                  latched_esp_uptime_seconds: >-
+                    {{ response_latched_esp_uptime_seconds | float(-1) }}
+                  pending_at: "{{ response_pending_at }}"
+                  verification_horizon_seconds: 135
+                  detected_inverters: "{{ response_machine_count }}"
+                  latched_machine_type: "{{ response_machine_type }}"
+                  topology_known: false
+                  requires_parallel_proof: >-
+                    {{ response_requires_parallel_proof | bool(false) }}
+                  authoritative_expected_power: >-
+                    {{ response_authoritative_requested | bool(false) }}
+                  expected_power_kw: "{{ response_expected_kw | float(0) }}"
+                  sample_count: 0
+                  samples_kw: []
+                  grid_samples_kw: []
+                  baseline_generation: >-
+                    {{ response_baseline_generation | float(-1) }}
+                  final_generation: null
+                  completed_at: "{{ now().isoformat() }}"
+              - wait_template: >-
+                  {{ state_attr(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'transaction_id') == response_transaction_id
+                     and state_attr(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'owner') == response_owner
+                     and not is_state(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'pending') }}
+                timeout: "00:00:05"
+                continue_on_timeout: true
+              - stop: "Pre-command topology was not unambiguous"
+                error: false
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ response_topology_known | bool(false)
+                     and not response_requires_parallel_proof | bool(false) }}
+            sequence:
+              - event: hoymiles_parallel_aggregate_physical_response
+                event_data:
+                  result: not_evaluable
+                  phase: complete
+                  reason: parallel_proof_not_required
+                  transaction_id: "{{ response_transaction_id }}"
+                  owner: "{{ response_owner }}"
+                  transaction_started_epoch: "{{ response_started_epoch }}"
+                  latched_esp_uptime_seconds: >-
+                    {{ response_latched_esp_uptime_seconds | float(-1) }}
+                  pending_at: "{{ response_pending_at }}"
+                  verification_horizon_seconds: 135
+                  detected_inverters: "{{ response_machine_count }}"
+                  latched_machine_type: "{{ response_machine_type }}"
+                  topology_known: true
+                  requires_parallel_proof: false
+                  authoritative_expected_power: >-
+                    {{ response_authoritative_requested | bool(false) }}
+                  expected_power_kw: "{{ response_expected_kw | float(0) }}"
+                  sample_count: 0
+                  samples_kw: []
+                  grid_samples_kw: []
+                  baseline_generation: >-
+                    {{ response_baseline_generation | float(-1) }}
+                  final_generation: null
+                  completed_at: "{{ now().isoformat() }}"
+              - wait_template: >-
+                  {{ state_attr(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'transaction_id') == response_transaction_id
+                     and state_attr(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'owner') == response_owner
+                     and not is_state(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'pending') }}
+                timeout: "00:00:05"
+                continue_on_timeout: true
+              - stop: "Aggregate evidence is not required for this topology"
+                error: false
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ response_requires_parallel_proof | bool(false)
+                     and (response_machine_type | int(-1) != 1
+                     or response_machine_count | int(-1) < 2
+                     or response_baseline_generation | float(-1) < 0
+                     or not is_number(states(
+                       'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation'))) }}
+            sequence:
+              - event: hoymiles_parallel_aggregate_physical_response
+                event_data:
+                  result: not_evaluable
+                  phase: complete
+                  reason: aggregate_generation_unavailable
+                  transaction_id: "{{ response_transaction_id }}"
+                  owner: "{{ response_owner }}"
+                  transaction_started_epoch: "{{ response_started_epoch }}"
+                  latched_esp_uptime_seconds: >-
+                    {{ response_latched_esp_uptime_seconds | float(-1) }}
+                  pending_at: "{{ response_pending_at }}"
+                  verification_horizon_seconds: 135
+                  detected_inverters: "{{ response_machine_count }}"
+                  latched_machine_type: "{{ response_machine_type }}"
+                  topology_known: >-
+                    {{ response_topology_known | bool(false) }}
+                  requires_parallel_proof: >-
+                    {{ response_requires_parallel_proof | bool(false) }}
+                  authoritative_expected_power: >-
+                    {{ response_authoritative_requested | bool(false) }}
+                  expected_power_kw: "{{ response_expected_kw | float(0) }}"
+                  sample_count: 0
+                  samples_kw: []
+                  grid_samples_kw: []
+                  baseline_generation: >-
+                    {{ response_baseline_generation | float(-1) }}
+                  final_generation: null
+                  completed_at: "{{ now().isoformat() }}"
+              - wait_template: >-
+                  {{ state_attr(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'transaction_id') == response_transaction_id
+                     and state_attr(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'owner') == response_owner
+                     and not is_state(
+                       'sensor.hoymiles_parallel_aggregate_physical_response',
+                       'pending') }}
+                timeout: "00:00:05"
+                continue_on_timeout: true
+              - stop: "No complete aggregate power-balance generation is available"
+                error: false
+      # A mode change can produce a short constructional power peak. Keep that
+      # interval outside the confirmation window. The wait exits early only if
+      # another mode supersedes Grid Discharge; otherwise it supplies 20 s of
+      # transition grace and collection starts from the then-current generation.
+      - wait_template: >-
+          {{ not is_state(
+            'sensor.hoymiles_ems_hardware_mode', 'grid_discharge') }}
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - variables:
+          response_collection_baseline_generation: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          response_transition_grace_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_esp_uptime_after_grace: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+      # A reboot can reset the generation counter and later catch up. Uptime is
+      # the independent boot latch: it may stay equal between 60-second reports,
+      # but it must never fall below the pre-command value.
+      - if:
+          - condition: template
+            value_template: >-
+              {{ (response_esp_uptime_after_grace | float(-1))
+                   < (response_latched_esp_uptime_seconds | float(-1)) }}
+        then:
+          - event: hoymiles_parallel_aggregate_physical_response
+            event_data:
+              result: not_confirmed
+              phase: complete
+              reason: esp_restart_during_response_verification
+              transaction_id: "{{ response_transaction_id }}"
+              owner: "{{ response_owner }}"
+              transaction_started_epoch: "{{ response_started_epoch }}"
+              latched_esp_uptime_seconds: >-
+                {{ response_latched_esp_uptime_seconds | float(-1) }}
+              pending_at: "{{ response_pending_at }}"
+              verification_horizon_seconds: 135
+              detected_inverters: "{{ response_machine_count }}"
+              latched_machine_type: "{{ response_machine_type }}"
+              topology_known: "{{ response_topology_known | bool(false) }}"
+              requires_parallel_proof: >-
+                {{ response_requires_parallel_proof | bool(false) }}
+              authoritative_expected_power: >-
+                {{ response_authoritative_requested | bool(false) }}
+              expected_power_kw: "{{ response_expected_kw | float(0) }}"
+              sample_count: 0
+              samples_kw: []
+              grid_samples_kw: []
+              baseline_generation: >-
+                {{ response_baseline_generation | float(-1) }}
+              collection_baseline_generation: >-
+                {{ response_collection_baseline_generation | float(-1) }}
+              final_generation: null
+              completed_at: "{{ now().isoformat() }}"
+          - wait_template: >-
+              {{ state_attr(
+                   'sensor.hoymiles_parallel_aggregate_physical_response',
+                   'transaction_id') == response_transaction_id
+                 and state_attr(
+                   'sensor.hoymiles_parallel_aggregate_physical_response',
+                   'owner') == response_owner
+                 and not is_state(
+                   'sensor.hoymiles_parallel_aggregate_physical_response',
+                   'pending') }}
+            timeout: "00:00:05"
+            continue_on_timeout: true
+          - stop: "ESP restarted during response verification"
+            error: false
+      # Generation is monotonic only inside one ESP boot. If it fell below the
+      # pre-command latch, a reboot/reset occurred during the transition and
+      # subsequent low generations must never be accepted as newer evidence.
+      - if:
+          - condition: template
+            value_template: >-
+              {{ (response_collection_baseline_generation | float(-1))
+                   < (response_baseline_generation | float(-1)) }}
+        then:
+          - event: hoymiles_parallel_aggregate_physical_response
+            event_data:
+              result: not_confirmed
+              phase: complete
+              reason: aggregate_generation_reset_during_transition
+              transaction_id: "{{ response_transaction_id }}"
+              owner: "{{ response_owner }}"
+              transaction_started_epoch: "{{ response_started_epoch }}"
+              latched_esp_uptime_seconds: >-
+                {{ response_latched_esp_uptime_seconds | float(-1) }}
+              pending_at: "{{ response_pending_at }}"
+              verification_horizon_seconds: 135
+              detected_inverters: "{{ response_machine_count }}"
+              latched_machine_type: "{{ response_machine_type }}"
+              topology_known: "{{ response_topology_known | bool(false) }}"
+              requires_parallel_proof: >-
+                {{ response_requires_parallel_proof | bool(false) }}
+              authoritative_expected_power: >-
+                {{ response_authoritative_requested | bool(false) }}
+              expected_power_kw: "{{ response_expected_kw | float(0) }}"
+              sample_count: 0
+              samples_kw: []
+              grid_samples_kw: []
+              baseline_generation: >-
+                {{ response_baseline_generation | float(-1) }}
+              collection_baseline_generation: >-
+                {{ response_collection_baseline_generation | float(-1) }}
+              final_generation: null
+              completed_at: "{{ now().isoformat() }}"
+          - wait_template: >-
+              {{ state_attr(
+                   'sensor.hoymiles_parallel_aggregate_physical_response',
+                   'transaction_id') == response_transaction_id
+                 and state_attr(
+                   'sensor.hoymiles_parallel_aggregate_physical_response',
+                   'owner') == response_owner
+                 and not is_state(
+                   'sensor.hoymiles_parallel_aggregate_physical_response',
+                   'pending') }}
+            timeout: "00:00:05"
+            continue_on_timeout: true
+          - stop: "Aggregate readback generation reset after the command"
+            error: false
+      # Each wait accepts exactly one newer firmware generation. The power
+      # timestamps must also be newer than this transaction, so a cached
+      # pre-command value cannot become physical-response evidence. Five
+      # candidates allow the stable three-sample window to restart twice after
+      # a normal transition peak without treating that peak as a failure.
+      - wait_template: >-
+          {% set battery = states.sensor.hoymiles_hit_overview_battery_power %}
+          {% set grid =
+            states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+          {% set battery_reported = battery.last_reported
+            if battery.last_reported is defined else battery.last_updated %}
+          {% set grid_reported = grid.last_reported
+            if grid.last_reported is defined else grid.last_updated %}
+          {{ not is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+             or not is_number(states('sensor.hoymiles_hit_esp_uptime'))
+             or (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                  < (response_latched_esp_uptime_seconds | float(-1))
+             or (is_number(states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation'))
+                 and is_number(states('sensor.hoymiles_hit_esp_uptime'))
+                 and (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                   >= (response_latched_esp_uptime_seconds | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1))
+                   > (response_collection_baseline_generation | float(-1))
+                 and is_number(battery.state)
+                 and is_number(grid.state)
+                 and as_timestamp(battery_reported, 0)
+                   >= (response_started_epoch | float(0))
+                 and as_timestamp(grid_reported, 0)
+                   >= (response_started_epoch | float(0))) }}
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - variables:
+          response_generation_1: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          response_esp_uptime_1: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+          response_sample_1_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_grid_1_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_grid_total_active_power')
+               | float(-999000) / 1000 }}
+          response_battery_reported_1: >-
+            {% set item = states.sensor.hoymiles_hit_overview_battery_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+          response_grid_reported_1: >-
+            {% set item =
+              states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+      - wait_template: >-
+          {% set battery = states.sensor.hoymiles_hit_overview_battery_power %}
+          {% set grid =
+            states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+          {% set battery_reported = battery.last_reported
+            if battery.last_reported is defined else battery.last_updated %}
+          {% set grid_reported = grid.last_reported
+            if grid.last_reported is defined else grid.last_updated %}
+          {{ not is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+             or not is_number(states('sensor.hoymiles_hit_esp_uptime'))
+             or (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                  < (response_latched_esp_uptime_seconds | float(-1))
+             or (is_number(states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation'))
+                 and is_number(states('sensor.hoymiles_hit_esp_uptime'))
+                 and (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                   >= (response_latched_esp_uptime_seconds | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1)) > (response_generation_1 | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1))
+                   > (response_collection_baseline_generation | float(-1))
+                 and is_number(battery.state)
+                 and is_number(grid.state)
+                 and as_timestamp(battery_reported, 0)
+                   >= (response_started_epoch | float(0))
+                 and as_timestamp(grid_reported, 0)
+                   >= (response_started_epoch | float(0))) }}
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - variables:
+          response_generation_2: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          response_esp_uptime_2: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+          response_sample_2_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_grid_2_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_grid_total_active_power')
+               | float(-999000) / 1000 }}
+          response_battery_reported_2: >-
+            {% set item = states.sensor.hoymiles_hit_overview_battery_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+          response_grid_reported_2: >-
+            {% set item =
+              states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+      - wait_template: >-
+          {% set battery = states.sensor.hoymiles_hit_overview_battery_power %}
+          {% set grid =
+            states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+          {% set battery_reported = battery.last_reported
+            if battery.last_reported is defined else battery.last_updated %}
+          {% set grid_reported = grid.last_reported
+            if grid.last_reported is defined else grid.last_updated %}
+          {{ not is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+             or not is_number(states('sensor.hoymiles_hit_esp_uptime'))
+             or (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                  < (response_latched_esp_uptime_seconds | float(-1))
+             or (is_number(states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation'))
+                 and is_number(states('sensor.hoymiles_hit_esp_uptime'))
+                 and (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                   >= (response_latched_esp_uptime_seconds | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1)) > (response_generation_2 | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1))
+                   > (response_collection_baseline_generation | float(-1))
+                 and is_number(battery.state)
+                 and is_number(grid.state)
+                 and as_timestamp(battery_reported, 0)
+                   >= (response_started_epoch | float(0))
+                 and as_timestamp(grid_reported, 0)
+                   >= (response_started_epoch | float(0))) }}
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - variables:
+          response_generation_3: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          response_esp_uptime_3: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+          response_sample_3_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_grid_3_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_grid_total_active_power')
+               | float(-999000) / 1000 }}
+          response_battery_reported_3: >-
+            {% set item = states.sensor.hoymiles_hit_overview_battery_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+          response_grid_reported_3: >-
+            {% set item =
+              states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+      - wait_template: >-
+          {% set battery = states.sensor.hoymiles_hit_overview_battery_power %}
+          {% set grid =
+            states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+          {% set battery_reported = battery.last_reported
+            if battery.last_reported is defined else battery.last_updated %}
+          {% set grid_reported = grid.last_reported
+            if grid.last_reported is defined else grid.last_updated %}
+          {{ not is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+             or not is_number(states('sensor.hoymiles_hit_esp_uptime'))
+             or (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                  < (response_latched_esp_uptime_seconds | float(-1))
+             or (is_number(states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation'))
+                 and is_number(states('sensor.hoymiles_hit_esp_uptime'))
+                 and (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                   >= (response_latched_esp_uptime_seconds | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1)) > (response_generation_3 | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1))
+                   > (response_collection_baseline_generation | float(-1))
+                 and is_number(battery.state)
+                 and is_number(grid.state)
+                 and as_timestamp(battery_reported, 0)
+                   >= (response_started_epoch | float(0))
+                 and as_timestamp(grid_reported, 0)
+                   >= (response_started_epoch | float(0))) }}
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - variables:
+          response_generation_4: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          response_esp_uptime_4: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+          response_sample_4_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_grid_4_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_grid_total_active_power')
+               | float(-999000) / 1000 }}
+          response_battery_reported_4: >-
+            {% set item = states.sensor.hoymiles_hit_overview_battery_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+          response_grid_reported_4: >-
+            {% set item =
+              states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+      - wait_template: >-
+          {% set battery = states.sensor.hoymiles_hit_overview_battery_power %}
+          {% set grid =
+            states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+          {% set battery_reported = battery.last_reported
+            if battery.last_reported is defined else battery.last_updated %}
+          {% set grid_reported = grid.last_reported
+            if grid.last_reported is defined else grid.last_updated %}
+          {{ not is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+             or not is_number(states('sensor.hoymiles_hit_esp_uptime'))
+             or (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                  < (response_latched_esp_uptime_seconds | float(-1))
+             or (is_number(states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation'))
+                 and is_number(states('sensor.hoymiles_hit_esp_uptime'))
+                 and (states('sensor.hoymiles_hit_esp_uptime') | float(-1))
+                   >= (response_latched_esp_uptime_seconds | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1)) > (response_generation_4 | float(-1))
+                 and (states(
+                   'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                   | float(-1))
+                   > (response_collection_baseline_generation | float(-1))
+                 and is_number(battery.state)
+                 and is_number(grid.state)
+                 and as_timestamp(battery_reported, 0)
+                   >= (response_started_epoch | float(0))
+                 and as_timestamp(grid_reported, 0)
+                   >= (response_started_epoch | float(0))) }}
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - variables:
+          response_generation_5: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          response_esp_uptime_5: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+          response_sample_5_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_battery_power')
+               | float(-999000) / 1000 }}
+          response_grid_5_kw: >-
+            {{ states('sensor.hoymiles_hit_overview_grid_total_active_power')
+               | float(-999000) / 1000 }}
+          response_battery_reported_5: >-
+            {% set item = states.sensor.hoymiles_hit_overview_battery_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+          response_grid_reported_5: >-
+            {% set item =
+              states.sensor.hoymiles_hit_overview_grid_total_active_power %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+      - variables:
+          response_sample_1_valid: >-
+            {{ (response_generation_1 | float(-1))
+                  > (response_collection_baseline_generation | float(-1))
+               and (response_esp_uptime_1 | float(-1))
+                 >= (response_latched_esp_uptime_seconds | float(-1))
+               and (response_battery_reported_1 | float(0))
+                 >= (response_started_epoch | float(0))
+               and (response_grid_reported_1 | float(0))
+                 >= (response_started_epoch | float(0)) }}
+          response_sample_2_valid: >-
+            {{ (response_generation_2 | float(-1))
+                  > (response_generation_1 | float(-1))
+               and (response_generation_2 | float(-1))
+                 > (response_collection_baseline_generation | float(-1))
+               and (response_esp_uptime_2 | float(-1))
+                 >= (response_latched_esp_uptime_seconds | float(-1))
+               and (response_battery_reported_2 | float(0))
+                 >= (response_started_epoch | float(0))
+               and (response_grid_reported_2 | float(0))
+                 >= (response_started_epoch | float(0)) }}
+          response_sample_3_valid: >-
+            {{ (response_generation_3 | float(-1))
+                  > (response_generation_2 | float(-1))
+               and (response_generation_3 | float(-1))
+                 > (response_collection_baseline_generation | float(-1))
+               and (response_esp_uptime_3 | float(-1))
+                 >= (response_latched_esp_uptime_seconds | float(-1))
+               and (response_battery_reported_3 | float(0))
+                 >= (response_started_epoch | float(0))
+               and (response_grid_reported_3 | float(0))
+                 >= (response_started_epoch | float(0)) }}
+          response_sample_4_valid: >-
+            {{ (response_generation_4 | float(-1))
+                  > (response_generation_3 | float(-1))
+               and (response_generation_4 | float(-1))
+                 > (response_collection_baseline_generation | float(-1))
+               and (response_esp_uptime_4 | float(-1))
+                 >= (response_latched_esp_uptime_seconds | float(-1))
+               and (response_battery_reported_4 | float(0))
+                 >= (response_started_epoch | float(0))
+               and (response_grid_reported_4 | float(0))
+                 >= (response_started_epoch | float(0)) }}
+          response_sample_5_valid: >-
+            {{ (response_generation_5 | float(-1))
+                  > (response_generation_4 | float(-1))
+               and (response_generation_5 | float(-1))
+                 > (response_collection_baseline_generation | float(-1))
+               and (response_esp_uptime_5 | float(-1))
+                 >= (response_latched_esp_uptime_seconds | float(-1))
+               and (response_battery_reported_5 | float(0))
+                 >= (response_started_epoch | float(0))
+               and (response_grid_reported_5 | float(0))
+                 >= (response_started_epoch | float(0)) }}
+      - variables:
+          response_candidate_sample_count: >-
+            {{ (response_sample_1_valid | bool(false) | int)
+               + (response_sample_2_valid | bool(false) | int)
+               + (response_sample_3_valid | bool(false) | int)
+               + (response_sample_4_valid | bool(false) | int)
+               + (response_sample_5_valid | bool(false) | int) }}
+          response_expected_valid: >-
+            {{ response_authoritative_requested | bool(false)
+               and is_number(response_expected_kw)
+               and (response_expected_kw | float(0)) >= 1.0 }}
+          response_window_1_valid: >-
+            {{ response_sample_1_valid | bool(false)
+               and response_sample_2_valid | bool(false)
+               and response_sample_3_valid | bool(false) }}
+          response_window_2_valid: >-
+            {{ response_sample_2_valid | bool(false)
+               and response_sample_3_valid | bool(false)
+               and response_sample_4_valid | bool(false) }}
+          response_window_3_valid: >-
+            {{ response_sample_3_valid | bool(false)
+               and response_sample_4_valid | bool(false)
+               and response_sample_5_valid | bool(false) }}
+          response_window_1_direction: >-
+            {{ ([response_sample_1_kw | float(-999),
+                 response_sample_2_kw | float(-999),
+                 response_sample_3_kw | float(-999)] | min) >= 0.5
+               and (not response_authoritative_requested | bool(false)
+                    or ([response_grid_1_kw | float(-999),
+                         response_grid_2_kw | float(-999),
+                         response_grid_3_kw | float(-999)] | min) >= 0.25) }}
+          response_window_2_direction: >-
+            {{ ([response_sample_2_kw | float(-999),
+                 response_sample_3_kw | float(-999),
+                 response_sample_4_kw | float(-999)] | min) >= 0.5
+               and (not response_authoritative_requested | bool(false)
+                    or ([response_grid_2_kw | float(-999),
+                         response_grid_3_kw | float(-999),
+                         response_grid_4_kw | float(-999)] | min) >= 0.25) }}
+          response_window_3_direction: >-
+            {{ ([response_sample_3_kw | float(-999),
+                 response_sample_4_kw | float(-999),
+                 response_sample_5_kw | float(-999)] | min) >= 0.5
+               and (not response_authoritative_requested | bool(false)
+                    or ([response_grid_3_kw | float(-999),
+                         response_grid_4_kw | float(-999),
+                         response_grid_5_kw | float(-999)] | min) >= 0.25) }}
+          response_window_1_median_kw: >-
+            {% set samples = [response_sample_1_kw | float(-999),
+                              response_sample_2_kw | float(-999),
+                              response_sample_3_kw | float(-999)] | sort %}
+            {{ samples[1] }}
+          response_window_2_median_kw: >-
+            {% set samples = [response_sample_2_kw | float(-999),
+                              response_sample_3_kw | float(-999),
+                              response_sample_4_kw | float(-999)] | sort %}
+            {{ samples[1] }}
+          response_window_3_median_kw: >-
+            {% set samples = [response_sample_3_kw | float(-999),
+                              response_sample_4_kw | float(-999),
+                              response_sample_5_kw | float(-999)] | sort %}
+            {{ samples[1] }}
+          response_window_1_spread_kw: >-
+            {% set samples = [response_sample_1_kw | float(-999),
+                              response_sample_2_kw | float(-999),
+                              response_sample_3_kw | float(-999)] %}
+            {{ (samples | max) - (samples | min) }}
+          response_window_2_spread_kw: >-
+            {% set samples = [response_sample_2_kw | float(-999),
+                              response_sample_3_kw | float(-999),
+                              response_sample_4_kw | float(-999)] %}
+            {{ (samples | max) - (samples | min) }}
+          response_window_3_spread_kw: >-
+            {% set samples = [response_sample_3_kw | float(-999),
+                              response_sample_4_kw | float(-999),
+                              response_sample_5_kw | float(-999)] %}
+            {{ (samples | max) - (samples | min) }}
+          response_tolerance_kw: >-
+            {{ [1.0, (response_expected_kw | float(0)) * 0.15] | max }}
+      - variables:
+          # A natural transition peak may occupy either of the first two
+          # generations. It merely invalidates that three-sample window; the
+          # next overlapping window restarts stability evaluation.
+          response_window_1_stable: >-
+            {{ response_window_1_valid | bool(false)
+               and response_window_1_direction | bool(false)
+               and (response_window_1_spread_kw | float(999))
+                 <= ([1.0,
+                      ((response_expected_kw | float(0))
+                       if response_expected_valid | bool(false)
+                       else (response_window_1_median_kw | float(0))) * 0.10]
+                     | max) }}
+          response_window_2_stable: >-
+            {{ response_window_2_valid | bool(false)
+               and response_window_2_direction | bool(false)
+               and (response_window_2_spread_kw | float(999))
+                 <= ([1.0,
+                      ((response_expected_kw | float(0))
+                       if response_expected_valid | bool(false)
+                       else (response_window_2_median_kw | float(0))) * 0.10]
+                     | max) }}
+          response_window_3_stable: >-
+            {{ response_window_3_valid | bool(false)
+               and response_window_3_direction | bool(false)
+               and (response_window_3_spread_kw | float(999))
+                 <= ([1.0,
+                      ((response_expected_kw | float(0))
+                       if response_expected_valid | bool(false)
+                       else (response_window_3_median_kw | float(0))) * 0.10]
+                     | max) }}
+      - variables:
+          # For an authoritative RCE transaction a stable transition plateau
+          # outside the target band is not selected while a later candidate
+          # window can still settle correctly. Only exhaustion of all windows
+          # turns a persistent stable mismatch into a negative result.
+          response_window_1_target_compatible: >-
+            {{ not response_expected_valid | bool(false)
+               or ((response_window_1_median_kw | float(-999))
+                   - (response_expected_kw | float(0))) | abs
+                    <= (response_tolerance_kw | float(0)) }}
+          response_window_2_target_compatible: >-
+            {{ not response_expected_valid | bool(false)
+               or ((response_window_2_median_kw | float(-999))
+                   - (response_expected_kw | float(0))) | abs
+                    <= (response_tolerance_kw | float(0)) }}
+          response_window_3_target_compatible: >-
+            {{ not response_expected_valid | bool(false)
+               or ((response_window_3_median_kw | float(-999))
+                   - (response_expected_kw | float(0))) | abs
+                    <= (response_tolerance_kw | float(0)) }}
+      - variables:
+          response_stable_window_start: >-
+            {% if response_window_1_stable | bool(false)
+                  and response_window_1_target_compatible | bool(false) %}
+              1
+            {% elif response_window_2_stable | bool(false)
+                    and response_window_2_target_compatible | bool(false) %}
+              2
+            {% elif response_window_3_stable | bool(false)
+                    and response_window_3_target_compatible | bool(false) %}
+              3
+            {% else %}
+              0
+            {% endif %}
+          # This is a best-effort sampled peak, not the exact physical maximum:
+          # 13-second polling can miss the narrow constructional transient.
+          response_sampled_transition_peak_kw: >-
+            {{ [response_transition_entry_kw | float(-999),
+                response_transition_grace_kw | float(-999),
+                response_sample_1_kw | float(-999),
+                response_sample_2_kw | float(-999),
+                response_sample_3_kw | float(-999),
+                response_sample_4_kw | float(-999),
+                response_sample_5_kw | float(-999)] | max }}
+      - variables:
+          response_sample_count: >-
+            {{ 3 if response_stable_window_start | int(0) > 0
+               else response_candidate_sample_count | int(0) }}
+          response_median_kw: >-
+            {% if response_stable_window_start | int(0) == 1 %}
+              {{ response_window_1_median_kw }}
+            {% elif response_stable_window_start | int(0) == 2 %}
+              {{ response_window_2_median_kw }}
+            {% elif response_stable_window_start | int(0) == 3 %}
+              {{ response_window_3_median_kw }}
+            {% else %}
+              0
+            {% endif %}
+          response_spread_kw: >-
+            {% if response_stable_window_start | int(0) == 1 %}
+              {{ response_window_1_spread_kw }}
+            {% elif response_stable_window_start | int(0) == 2 %}
+              {{ response_window_2_spread_kw }}
+            {% elif response_stable_window_start | int(0) == 3 %}
+              {{ response_window_3_spread_kw }}
+            {% else %}
+              0
+            {% endif %}
+      - variables:
+          response_sampled_transition_observed: >-
+            {{ (response_sampled_transition_peak_kw | float(-999)) >= 0.5
+               and (response_stable_window_start | int(0) == 0
+                    or (response_sampled_transition_peak_kw | float(-999))
+                      > (response_median_kw | float(0))
+                        + ([1.0, (response_median_kw | float(0)) * 0.15]
+                           | max)) }}
+          response_topology_still_matches: >-
+            {{ is_number(states('sensor.hoymiles_hit_machines_type'))
+               and is_number(states(
+                 'sensor.hoymiles_hit_number_of_machines_master_and_slave'))
+               and (states('sensor.hoymiles_hit_machines_type') | int(-2))
+                  == (response_machine_type | int(-1))
+               and (states(
+                 'sensor.hoymiles_hit_number_of_machines_master_and_slave')
+                    | int(-2)) == (response_machine_count | int(-1)) }}
+          response_esp_uptime_still_monotonic: >-
+            {% set uptimes = [response_esp_uptime_after_grace | float(-1),
+                              response_esp_uptime_1 | float(-1),
+                              response_esp_uptime_2 | float(-1),
+                              response_esp_uptime_3 | float(-1),
+                              response_esp_uptime_4 | float(-1),
+                              response_esp_uptime_5 | float(-1),
+                              states('sensor.hoymiles_hit_esp_uptime')
+                                | float(-1)] %}
+            {{ (uptimes | min)
+                 >= (response_latched_esp_uptime_seconds | float(-1)) }}
+      - variables:
+          response_result: >-
+            {% if not response_esp_uptime_still_monotonic | bool(false) %}
+              not_confirmed
+            {% elif not response_topology_still_matches | bool(false) %}
+              not_confirmed
+            {% elif not is_state(
+                 'sensor.hoymiles_ems_hardware_mode', 'grid_discharge') %}
+              not_confirmed
+            {% elif response_authoritative_requested | bool(false)
+                    and not response_expected_valid | bool(false) %}
+              not_evaluable
+            {% elif response_stable_window_start | int(0) == 0 %}
+              not_confirmed
+            {% elif response_expected_valid | bool(false)
+                    and ((response_median_kw | float(-999))
+                         - (response_expected_kw | float(0))) | abs
+                      > (response_tolerance_kw | float(0)) %}
+              not_confirmed
+            {% else %}
+              confirmed
+            {% endif %}
+          response_reason: >-
+            {% if not response_esp_uptime_still_monotonic | bool(false) %}
+              esp_restart_during_response_verification
+            {% elif not response_topology_still_matches | bool(false) %}
+              topology_changed_during_response
+            {% elif not is_state(
+                 'sensor.hoymiles_ems_hardware_mode', 'grid_discharge') %}
+              mode_changed_before_evidence
+            {% elif response_authoritative_requested | bool(false)
+                    and not response_expected_valid | bool(false) %}
+              authoritative_target_invalid
+            {% elif response_stable_window_start | int(0) == 0
+                    and response_expected_valid | bool(false)
+                    and (response_window_1_stable | bool(false)
+                         or response_window_2_stable | bool(false)
+                         or response_window_3_stable | bool(false)) %}
+              authoritative_target_mismatch_after_transition_grace
+            {% elif response_stable_window_start | int(0) == 0
+                    and response_candidate_sample_count | int(0) < 3 %}
+              fresh_sample_timeout
+            {% elif response_stable_window_start | int(0) == 0
+                    and not (response_window_1_direction | bool(false)
+                             or response_window_2_direction | bool(false)
+                             or response_window_3_direction | bool(false)) %}
+              missing_required_direction_after_transition_grace
+            {% elif response_stable_window_start | int(0) == 0 %}
+              stable_sample_window_timeout
+            {% elif response_expected_valid | bool(false)
+                    and ((response_median_kw | float(-999))
+                         - (response_expected_kw | float(0))) | abs
+                      > (response_tolerance_kw | float(0)) %}
+              authoritative_target_mismatch
+            {% elif response_expected_valid | bool(false) %}
+              fresh_direction_and_target_confirmed
+            {% else %}
+              fresh_direction_confirmed
+            {% endif %}
+      - event: hoymiles_parallel_aggregate_physical_response
+        event_data:
+          result: "{{ response_result | trim }}"
+          phase: complete
+          reason: "{{ response_reason | trim }}"
+          transaction_id: "{{ response_transaction_id }}"
+          owner: "{{ response_owner }}"
+          transaction_started_epoch: "{{ response_started_epoch }}"
+          latched_esp_uptime_seconds: >-
+            {{ response_latched_esp_uptime_seconds | float(-1) }}
+          pending_at: "{{ response_pending_at }}"
+          verification_horizon_seconds: 135
+          detected_inverters: "{{ response_machine_count }}"
+          latched_machine_type: "{{ response_machine_type }}"
+          topology_known: "{{ response_topology_known | bool(false) }}"
+          requires_parallel_proof: >-
+            {{ response_requires_parallel_proof | bool(false) }}
+          authoritative_expected_power: >-
+            {{ response_authoritative_requested | bool(false) }}
+          expected_power_kw: >-
+            {{ response_expected_kw | float(0) }}
+          observed_median_power_kw: >-
+            {{ response_median_kw | float(0) | round(3) }}
+          observed_spread_kw: >-
+            {{ response_spread_kw | float(0) | round(3) }}
+          sampled_transition_peak_kw: >-
+            {{ response_sampled_transition_peak_kw | float(0) | round(3) }}
+          sampled_transition_observed: >-
+            {{ response_sampled_transition_observed | bool(false) }}
+          stable_window_start: >-
+            {{ response_stable_window_start | int(0) }}
+          tolerance_kw: >-
+            {{ response_tolerance_kw | float(0) | round(3)
+               if response_expected_valid | bool(false) else none }}
+          sample_count: "{{ response_sample_count | int(0) }}"
+          samples_kw: >-
+            {% if response_stable_window_start | int(0) == 1 %}
+              {{ [response_sample_1_kw | float(0) | round(3),
+                  response_sample_2_kw | float(0) | round(3),
+                  response_sample_3_kw | float(0) | round(3)] }}
+            {% elif response_stable_window_start | int(0) == 2 %}
+              {{ [response_sample_2_kw | float(0) | round(3),
+                  response_sample_3_kw | float(0) | round(3),
+                  response_sample_4_kw | float(0) | round(3)] }}
+            {% elif response_stable_window_start | int(0) == 3 %}
+              {{ [response_sample_3_kw | float(0) | round(3),
+                  response_sample_4_kw | float(0) | round(3),
+                  response_sample_5_kw | float(0) | round(3)] }}
+            {% else %}
+              []
+            {% endif %}
+          grid_samples_kw: >-
+            {% if response_stable_window_start | int(0) == 1 %}
+              {{ [response_grid_1_kw | float(0) | round(3),
+                  response_grid_2_kw | float(0) | round(3),
+                  response_grid_3_kw | float(0) | round(3)] }}
+            {% elif response_stable_window_start | int(0) == 2 %}
+              {{ [response_grid_2_kw | float(0) | round(3),
+                  response_grid_3_kw | float(0) | round(3),
+                  response_grid_4_kw | float(0) | round(3)] }}
+            {% elif response_stable_window_start | int(0) == 3 %}
+              {{ [response_grid_3_kw | float(0) | round(3),
+                  response_grid_4_kw | float(0) | round(3),
+                  response_grid_5_kw | float(0) | round(3)] }}
+            {% else %}
+              []
+            {% endif %}
+          baseline_generation: >-
+            {{ response_baseline_generation | float(-1) }}
+          collection_baseline_generation: >-
+            {{ response_collection_baseline_generation | float(-1) }}
+          final_generation: "{{ response_generation_5 | float(-1) }}"
+          completed_at: "{{ now().isoformat() }}"
+      # Event dispatch and trigger-based template rendering are asynchronous.
+      # Do not return to a policy caller until this transaction owns the sensor.
+      - wait_template: >-
+          {{ state_attr(
+               'sensor.hoymiles_parallel_aggregate_physical_response',
+               'transaction_id') == response_transaction_id
+             and state_attr(
+               'sensor.hoymiles_parallel_aggregate_physical_response',
+               'owner') == response_owner
+             and as_timestamp(state_attr(
+               'sensor.hoymiles_parallel_aggregate_physical_response',
+               'completed_at'), 0) >= response_started_epoch | float(0)
+             and not is_state(
+               'sensor.hoymiles_parallel_aggregate_physical_response',
+               'pending') }}
+        timeout: "00:00:05"
+        # A missing/renamed result sensor must return control to the caller.
+        # Parallel policy callers then see no fresh transaction timestamp and
+        # take their normal fail-closed rollback instead of being orphaned here.
+        continue_on_timeout: true
 
   hoymiles_start_grid_discharge:
     alias: "EMS — start discharge do sieci"
@@ -3728,26 +5033,152 @@ script:
       - condition: template
         value_template: >-
           {{ not is_state('sensor.hoymiles_ems_hardware_mode', 'off_grid') }}
+      - variables:
+          manual_parallel_generation_before_mode: >-
+            {{ states(
+              'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+               | float(-1) }}
+          manual_response_transaction_id: >-
+            {{ now().strftime('%Y%m%dT%H%M%S.%f%z') }}-manual
+          manual_response_transaction_started_epoch: "{{ as_timestamp(now()) }}"
+          manual_latched_machine_type: >-
+            {{ states('sensor.hoymiles_hit_machines_type') | int(-1) }}
+          manual_latched_inverter_count: >-
+            {{ states(
+              'sensor.hoymiles_hit_number_of_machines_master_and_slave')
+               | int(-1) }}
+          manual_latched_esp_uptime_seconds: >-
+            {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+          manual_latched_esp_uptime_reported_epoch: >-
+            {% set item = states.sensor.hoymiles_hit_esp_uptime %}
+            {{ as_timestamp(item.last_reported
+                 if item.last_reported is defined else item.last_updated, 0) }}
+      - variables:
+          manual_topology_known: >-
+            {{ ((manual_latched_machine_type | int(-1)) == 0
+                 and (manual_latched_inverter_count | int(-1)) == 1)
+               or ((manual_latched_machine_type | int(-1)) == 1
+                   and (manual_latched_inverter_count | int(-1)) >= 2
+                   and (manual_latched_inverter_count | int(-1)) <= 10) }}
+          manual_requires_parallel_proof: >-
+            {{ (manual_latched_machine_type | int(-1)) == 1
+               and (manual_latched_inverter_count | int(-1)) >= 2
+               and (manual_latched_inverter_count | int(-1)) <= 10 }}
+          manual_esp_uptime_ready: >-
+            {% set age = (manual_response_transaction_started_epoch | float(0))
+               - (manual_latched_esp_uptime_reported_epoch | float(0)) %}
+            {{ (manual_latched_esp_uptime_seconds | float(-1)) >= 180
+               and age >= -5 and age <= 180 }}
+      # Unknown/unavailable topology is not permission to issue Mode 5.
+      - condition: template
+        value_template: "{{ manual_topology_known | bool(false) }}"
+      - condition: template
+        value_template: "{{ manual_esp_uptime_ready | bool(false) }}"
       - action: script.hoymiles_verified_set_ems_mode
         data:
           option: "grid_discharge"
-      - delay: "00:00:05"
-      - wait_template: >-
-          {{ is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge') }}
-        timeout: "00:01:00"
-        continue_on_timeout: false
+      # The verified helper returns only after fresh Master FC03 Mode 5 ACK.
+      # Re-check that physical alias, then arm the timer without another wait.
       - condition: state
         entity_id: sensor.hoymiles_ems_hardware_mode
         state: "grid_discharge"
       - condition: state
         entity_id: input_boolean.hoymiles_discharge_cycle_active
         state: "on"
+      # Start the exact requested duration as soon as Mode 5 is physically
+      # confirmed. The minute watchdog now sees an active timer throughout the
+      # synchronous aggregate verification and cannot neutralize this owner.
       - action: timer.start
         target:
           entity_id: timer.hoymiles_discharge
         data:
           duration: >-
             {{ (states('input_number.hoymiles_discharge_duration') | int(90)) * 60 }}
+      - action: script.hoymiles_verify_parallel_aggregate_discharge_response
+        continue_on_error: true
+        data:
+          transaction_id: "{{ manual_response_transaction_id }}"
+          transaction_started_epoch: >-
+            {{ manual_response_transaction_started_epoch }}
+          baseline_generation: >-
+            {{ manual_parallel_generation_before_mode }}
+          latched_esp_uptime_seconds: >-
+            {{ manual_latched_esp_uptime_seconds }}
+          owner: manual
+          latched_machine_type: "{{ manual_latched_machine_type }}"
+          latched_inverter_count: "{{ manual_latched_inverter_count }}"
+          topology_known: "{{ manual_topology_known }}"
+          requires_parallel_proof: "{{ manual_requires_parallel_proof }}"
+          authoritative_expected_power: false
+      # Manual mode has no authoritative kW target. It therefore checks only
+      # three fresh, stable battery-discharge samples; neither grid direction
+      # nor an amplitude estimate can reject the user's command.
+      - if:
+          - condition: template
+            value_template: >-
+              {% set correlated =
+                is_state(
+                  'sensor.hoymiles_parallel_aggregate_physical_response',
+                  'confirmed')
+                and state_attr(
+                  'sensor.hoymiles_parallel_aggregate_physical_response',
+                  'transaction_id') == manual_response_transaction_id
+                and state_attr(
+                  'sensor.hoymiles_parallel_aggregate_physical_response',
+                  'owner') == 'manual'
+                and as_timestamp(state_attr(
+                  'sensor.hoymiles_parallel_aggregate_physical_response',
+                  'completed_at'), 0)
+                    >= (manual_response_transaction_started_epoch | float(0)) %}
+              {{ not manual_topology_known | bool(false)
+                 or (manual_requires_parallel_proof | bool(false)
+                     and not correlated) }}
+        then:
+          # Stop the requested-duration clock immediately. If neutralization
+          # cannot be proved, owner=on + timer=idle deliberately hands the same
+          # transaction to the minute finish watchdog for a safe retry.
+          - action: timer.cancel
+            target:
+              entity_id: timer.hoymiles_discharge
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ not is_state(
+                       'sensor.hoymiles_ems_hardware_mode', 'off_grid') }}
+            then:
+              - action: script.hoymiles_verified_set_ems_mode
+                continue_on_error: true
+                data:
+                  option: "self_use"
+          - wait_template: >-
+              {{ states('sensor.hoymiles_ems_hardware_mode')
+                 in ['self_use', 'off_grid'] }}
+            timeout: "00:01:00"
+            continue_on_timeout: true
+          # Release ownership only after the same physical neutral readback
+          # used by the normal timer-finish path. A missing API/readback leaves
+          # the owner latched so the minute watchdog cannot lose the rollback.
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ states('sensor.hoymiles_ems_hardware_mode')
+                     in ['self_use', 'off_grid'] }}
+              - condition: state
+                entity_id: input_boolean.hoymiles_discharge_cycle_active
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ is_state('timer.hoymiles_discharge', 'idle') }}
+            then:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.hoymiles_discharge_cycle_active
+          - stop: >-
+              No fresh, directionally consistent parallel-system power response
+            error: false
+      - condition: state
+        entity_id: input_boolean.hoymiles_discharge_cycle_active
+        state: "on"
 
   hoymiles_start_grid_charge:
     alias: "EMS — start charge z sieci"
@@ -3900,77 +5331,210 @@ script:
     description: >-
       Returns to Self-Use and restores both settings from before the automatic start.
       Ownership remains active until every readback matches.
-    mode: queued
-    max: 5
+    mode: single
     max_exceeded: silent
     sequence:
       - condition: state
         entity_id: input_boolean.hoymiles_tariff_charge_active
         state: "on"
-      - variables:
-          rollback_preserve_off_grid: >-
-            {{ is_state('sensor.hoymiles_ems_hardware_mode', 'off_grid') }}
       - wait_template: >-
           {{ states('sensor.hoymiles_ems_hardware_mode') not in
              ['unknown', 'unavailable', 'none', ''] }}
         timeout: "00:00:10"
         continue_on_timeout: false
-      - if:
-          - condition: template
-            value_template: >-
-              {{ not rollback_preserve_off_grid
-                 and not is_state(
-                   'sensor.hoymiles_ems_hardware_mode', 'off_grid')
-                 and not is_state(
-                   'sensor.hoymiles_ems_hardware_mode', 'self_use') }}
-        then:
-          - action: script.hoymiles_verified_set_ems_mode
-            data:
-              option: "self_use"
-      - delay: "00:00:05"
-      - wait_template: >-
-          {{ is_state('sensor.hoymiles_ems_hardware_mode', 'self_use')
-             or is_state('sensor.hoymiles_ems_hardware_mode', 'off_grid') }}
-        timeout: "00:00:35"
-        continue_on_timeout: false
       - condition: template
         value_template: >-
-          {{ is_number(states('sensor.hoymiles_hit_ems_maximum_charge_power_readback'))
-             and is_number(states('sensor.hoymiles_hit_ems_force_charge_soc_readback'))
+          {{ (states(
+                'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+                | float(0)) > 0.5
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_control_readback_generation'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_mode_readback_code'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_self_use_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_backup_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_force_charge_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_maximum_charge_power_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_force_discharge_soc_readback'))
+             and is_number(states(
+               'sensor.hoymiles_hit_ems_maximum_discharge_power_readback'))
              and is_number(states(
                'input_number.hoymiles_tariff_saved_max_charge_power'))
              and is_number(states(
                'input_number.hoymiles_tariff_saved_force_charge_soc')) }}
-      - action: script.hoymiles_verified_set_ems_maximum_charge_power
-        data:
-          value: >-
-            {{ states('input_number.hoymiles_tariff_saved_max_charge_power')
-               | float(100) | round(1) }}
-      - wait_template: >-
-          {{ ((states('sensor.hoymiles_hit_ems_maximum_charge_power_readback')
-                | float(-999)) - (states(
-                'input_number.hoymiles_tariff_saved_max_charge_power')
-                | float(100))) | abs < 0.5 }}
-        timeout: "00:01:00"
-        continue_on_timeout: false
-      - action: script.hoymiles_verified_set_ems_force_charge_soc
-        data:
-          value: >-
+      # Build one final desired 4300-4306 tuple from the latest physical
+      # readback plus the two values explicitly saved by the tariff owner.
+      # The command endpoint delegates that tuple to the existing firmware
+      # barrier exactly once; writable helper/command echoes are never inputs.
+      - variables:
+          rollback_expected_mode: >-
+            {{ 3 if (states('sensor.hoymiles_hit_ems_mode_readback_code')
+                       | int(-1)) == 3 else 0 }}
+          rollback_expected_4301: >-
+            {{ states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+               | float(-999) }}
+          rollback_expected_4302: >-
+            {{ states('sensor.hoymiles_hit_ems_backup_soc_readback')
+               | float(-999) }}
+          rollback_expected_4303: >-
             {{ states('input_number.hoymiles_tariff_saved_force_charge_soc')
-               | float(100) | round(0) }}
-      - wait_template: >-
-          {{ ((states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
-                | float(-999)) - (states(
-                'input_number.hoymiles_tariff_saved_force_charge_soc')
-                | float(100))) | abs < 1.0 }}
-        timeout: "00:01:00"
-        continue_on_timeout: false
+               | float(-999) | round(0) }}
+          rollback_expected_4304: >-
+            {{ states('input_number.hoymiles_tariff_saved_max_charge_power')
+               | float(-999) | round(1) }}
+          rollback_expected_4305: >-
+            {{ states('sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+               | float(-999) }}
+          rollback_expected_4306: >-
+            {{ states('sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+               | float(-999) }}
+      - variables:
+          rollback_payload: >-
+            {{ (rollback_expected_4303 | int(-1)) * 1001
+               + (((rollback_expected_4304 | float(-1)) * 10)
+                  | round(0) | int(-1)) }}
+          rollback_write_required: >-
+            {{ (states('sensor.hoymiles_hit_ems_mode_readback_code')
+                  | int(-1)) != (rollback_expected_mode | int(-2))
+               or ((states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+                       | float(-999))
+                    - (rollback_expected_4303 | float(-998))) | abs >= 0.5
+               or ((states(
+                       'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+                       | float(-999))
+                    - (rollback_expected_4304 | float(-998))) | abs >= 0.05 }}
+          rollback_generation_before_transaction: >-
+            {{ states('sensor.hoymiles_hit_ems_control_readback_generation') }}
+      - if:
+          - condition: template
+            value_template: "{{ rollback_write_required }}"
+        then:
+          - action: number.set_value
+            target:
+              entity_id: >-
+                number.hoymiles_hit_ems_complete_block_charge_rollback_command
+            data:
+              value: "{{ rollback_payload }}"
+          # Capture after the one command. A cached/pre-command generation can
+          # never satisfy the physical acknowledgement below.
+          - variables:
+              rollback_generation_after_write: >-
+                {{ states(
+                  'sensor.hoymiles_hit_ems_control_readback_generation') }}
+          - wait_template: >-
+              {{ (states(
+                   'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+                    | float(0)) > 0.5
+                 and states(
+                   'sensor.hoymiles_hit_ems_control_readback_generation')
+                    not in ['unknown', 'unavailable', 'none', '']
+                 and states(
+                   'sensor.hoymiles_hit_ems_control_readback_generation')
+                    != rollback_generation_after_write
+                 and (states('sensor.hoymiles_hit_ems_mode_readback_code')
+                      | int(-1)) == (rollback_expected_mode | int(-2))
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_self_use_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4301 | float(-998))) | abs < 0.5
+                 and ((states('sensor.hoymiles_hit_ems_backup_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4302 | float(-998))) | abs < 0.5
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_force_charge_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4303 | float(-998))) | abs < 0.5
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+                        | float(-999))
+                      - (rollback_expected_4304 | float(-998))) | abs < 0.05
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4305 | float(-998))) | abs < 0.5
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+                        | float(-999))
+                      - (rollback_expected_4306 | float(-998))) | abs < 0.05 }}
+            timeout: "00:01:00"
+            continue_on_timeout: false
+        else:
+          # A logical no-op emits no FC16, but it is not allowed to release
+          # ownership from a cached HA snapshot. Require a newer completed
+          # physical cohort with the same frozen seven-field tuple.
+          - wait_template: >-
+              {{ (states(
+                   'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+                    | float(0)) > 0.5
+                 and states(
+                   'sensor.hoymiles_hit_ems_control_readback_generation')
+                    not in ['unknown', 'unavailable', 'none', '']
+                 and states(
+                   'sensor.hoymiles_hit_ems_control_readback_generation')
+                    != rollback_generation_before_transaction
+                 and (states('sensor.hoymiles_hit_ems_mode_readback_code')
+                      | int(-1)) == (rollback_expected_mode | int(-2))
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_self_use_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4301 | float(-998))) | abs < 0.5
+                 and ((states('sensor.hoymiles_hit_ems_backup_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4302 | float(-998))) | abs < 0.5
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_force_charge_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4303 | float(-998))) | abs < 0.5
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+                        | float(-999))
+                      - (rollback_expected_4304 | float(-998))) | abs < 0.05
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+                        | float(-999))
+                      - (rollback_expected_4305 | float(-998))) | abs < 0.5
+                 and ((states(
+                        'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+                        | float(-999))
+                      - (rollback_expected_4306 | float(-998))) | abs < 0.05 }}
+            timeout: "00:01:00"
+            continue_on_timeout: false
       # Off-Grid is a user-owned physical mode. A rollback restores both owned
       # registers but never pulls a running island back onto normal EMS control.
       - condition: template
         value_template: >-
-          {{ is_state('sensor.hoymiles_ems_hardware_mode', 'self_use')
-             or is_state('sensor.hoymiles_ems_hardware_mode', 'off_grid') }}
+          {{ (states(
+               'sensor.hoymiles_hit_ems_verified_hardware_readback_supported')
+                | float(0)) > 0.5
+             and (states('sensor.hoymiles_hit_ems_mode_readback_code')
+                | int(-1)) == (rollback_expected_mode | int(-2))
+             and rollback_expected_mode | int(-1) in [0, 3]
+             and ((states('sensor.hoymiles_hit_ems_self_use_soc_readback')
+                     | float(-999))
+                  - (rollback_expected_4301 | float(-998))) | abs < 0.5
+             and ((states('sensor.hoymiles_hit_ems_backup_soc_readback')
+                     | float(-999))
+                  - (rollback_expected_4302 | float(-998))) | abs < 0.5
+             and ((states('sensor.hoymiles_hit_ems_force_charge_soc_readback')
+                     | float(-999))
+                  - (rollback_expected_4303 | float(-998))) | abs < 0.5
+             and ((states(
+                     'sensor.hoymiles_hit_ems_maximum_charge_power_readback')
+                     | float(-999))
+                  - (rollback_expected_4304 | float(-998))) | abs < 0.05
+             and ((states(
+                     'sensor.hoymiles_hit_ems_force_discharge_soc_readback')
+                     | float(-999))
+                  - (rollback_expected_4305 | float(-998))) | abs < 0.5
+             and ((states(
+                     'sensor.hoymiles_hit_ems_maximum_discharge_power_readback')
+                     | float(-999))
+                  - (rollback_expected_4306 | float(-998))) | abs < 0.05 }}
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.hoymiles_tariff_charge_active
@@ -7355,6 +8919,8 @@ automation:
           - sensor.hoymiles_rce_effective_minimum_soc
           - sensor.hoymiles_rce_dynamic_minimum_soc
           - sensor.hoymiles_ems_hardware_mode
+          - binary_sensor.hoymiles_ems_execution_ready
+          - binary_sensor.hoymiles_ems_control_conflict
           - binary_sensor.hoymiles_rce_reserve_ready
           - binary_sensor.hoymiles_rce_control_data_ready
           - binary_sensor.hoymiles_ems_export_allowed
@@ -7421,6 +8987,173 @@ automation:
             sequence:
               - variables:
                   rce_live_authorization_checked: true
+          # Planning authority is required for every new start or operational
+          # write. A short normal recalculation may, however, preserve an
+          # already accepted and latched cycle while every independent live
+          # execution-safety input remains valid.
+          #
+          # Important: do not infer safety from the stale/latched optimizer
+          # result while recalculation is pending.
+          # Hard-stop conditions must continue to be evaluated independently
+          # from current physical/live safety inputs.
+          # A normal planning-input change may preserve the active latched
+          # cycle, but a safety-critical input change must stop it immediately
+          # even if the new optimizer result has not yet been published.
+          - conditions:
+              - condition: template
+                value_template: &rce_pending_latched_execution_safe >-
+                  {% set plan =
+                    states.sensor.hoymiles_hit_rce_optimized_plan %}
+                  {% set soc =
+                    states.sensor.hoymiles_hit_overview_battery_soc %}
+                  {% set bms_current =
+                    states.sensor.hoymiles_hit_maximum_discharge_current %}
+                  {% set bms_voltage =
+                    states.sensor.hoymiles_hit_battery_voltage_bms %}
+                  {% set floor =
+                    states.sensor.hoymiles_hit_ems_force_discharge_soc_readback %}
+                  {% set power =
+                    states.sensor.hoymiles_hit_ems_maximum_discharge_power_readback %}
+                  {% set soc_reported = soc.last_reported
+                    if soc.last_reported is defined else soc.last_updated %}
+                  {% set current_reported = bms_current.last_reported
+                    if bms_current.last_reported is defined
+                    else bms_current.last_updated %}
+                  {% set voltage_reported = bms_voltage.last_reported
+                    if bms_voltage.last_reported is defined
+                    else bms_voltage.last_updated %}
+                  {% set floor_reported = floor.last_reported
+                    if floor.last_reported is defined else floor.last_updated %}
+                  {% set power_reported = power.last_reported
+                    if power.last_reported is defined else power.last_updated %}
+                  {% set now_ts = as_timestamp(now()) %}
+                  {% set soc_age = now_ts - as_timestamp(soc_reported, 0) %}
+                  {% set current_age =
+                    now_ts - as_timestamp(current_reported, 0) %}
+                  {% set voltage_age =
+                    now_ts - as_timestamp(voltage_reported, 0) %}
+                  {% set floor_age =
+                    now_ts - as_timestamp(floor_reported, 0) %}
+                  {% set power_age =
+                    now_ts - as_timestamp(power_reported, 0) %}
+                  {% set latched_floor = states(
+                    'input_number.hoymiles_rce_latched_minimum_soc') %}
+                  {% set committed_power = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_slot_execution_power_percent') %}
+                  {% set current_price = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_price_pln_kwh') %}
+                  {% set automatic_floor = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'automatic_price_floor_pln_kwh') %}
+                  {% set continue_eligible = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_slot_continue_eligible') %}
+                  {% set continue_seconds = state_attr(
+                    'sensor.hoymiles_hit_rce_optimized_plan',
+                    'current_slot_continue_stable_seconds') %}
+                  {% set machine_type =
+                    states('sensor.hoymiles_hit_machines_type') %}
+                  {% set machine_count = states(
+                    'sensor.hoymiles_hit_number_of_machines_master_and_slave') %}
+                  {% set topology_valid =
+                    is_number(machine_type) and is_number(machine_count)
+                    and (((machine_type | int(-1)) == 0
+                          and (machine_count | int(-1)) == 1)
+                         or ((machine_type | int(-1)) == 1
+                             and (machine_count | int(-1)) >= 2
+                             and (machine_count | int(-1)) <= 10)) %}
+                  {% set owners_clear =
+                    is_state('input_boolean.hoymiles_tariff_charge_enabled', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_tariff_charge_active', 'off')
+                    and is_state('input_boolean.hoymiles_rcm_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_rcm_pre_discharge_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_rcm_export_control_active', 'off')
+                    and (is_state('input_boolean.hoymiles_rcm_enabled', 'off')
+                         or is_state(
+                           'input_boolean.hoymiles_rcm_shadow_mode', 'on'))
+                    and is_state(
+                      'input_boolean.hoymiles_battery_balancing_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_discharge_cycle_active', 'off')
+                    and is_state(
+                      'input_boolean.hoymiles_charge_cycle_active', 'off')
+                    and not is_state('timer.hoymiles_discharge', 'active')
+                    and not is_state('timer.hoymiles_charge', 'active') %}
+                  {% set committed_stop =
+                    continue_eligible is sameas false
+                    and is_number(continue_seconds)
+                    and (continue_seconds | float(0)) >= 60 %}
+                  {% set price_stop =
+                    not is_number(current_price)
+                    or not is_number(automatic_floor)
+                    or (current_price | float(0))
+                       < (automatic_floor | float(0)) %}
+                  {{ is_state(
+                       'input_boolean.hoymiles_rce_discharge_active', 'on')
+                     and is_state(
+                       'input_boolean.hoymiles_rce_discharge_enabled', 'on')
+                     and state_attr(
+                       'sensor.hoymiles_hit_rce_optimized_plan',
+                       'result_current') is sameas false
+                     and state_attr(
+                       'sensor.hoymiles_hit_rce_optimized_plan',
+                       'recalculation_pending') is sameas true
+                     and is_state(
+                       'binary_sensor.hoymiles_ems_execution_ready', 'on')
+                     and is_state(
+                       'binary_sensor.hoymiles_ems_export_allowed', 'on')
+                     and is_state(
+                       'binary_sensor.hoymiles_sale_block_active', 'off')
+                     and is_state(
+                       'binary_sensor.hoymiles_ems_control_conflict', 'off')
+                     and is_state(
+                       'sensor.hoymiles_ems_hardware_mode', 'grid_discharge')
+                     and owners_clear
+                     and topology_valid
+                     and as_timestamp(states(
+                       'input_datetime.hoymiles_rce_latched_slot_end'), 0)
+                         > now_ts
+                     and state_attr(
+                       'sensor.hoymiles_hit_rce_optimized_plan',
+                       'current_slot_planned') | default(false, true)
+                     and not committed_stop
+                     and not price_stop
+                     and is_number(committed_power)
+                     and (committed_power | float(0)) > 0
+                     and is_number(soc.state)
+                     and (soc.state | float(-1)) >= 0
+                     and (soc.state | float(101)) <= 100
+                     and soc_age >= -5 and soc_age <= 120
+                     and is_number(bms_current.state)
+                     and (bms_current.state | float(0)) > 0
+                     and current_age >= -5 and current_age <= 300
+                     and is_number(bms_voltage.state)
+                     and (bms_voltage.state | float(0)) > 0
+                     and voltage_age >= -5 and voltage_age <= 300
+                     and is_number(floor.state)
+                     and (floor.state | float(-1)) >= 0
+                     and (floor.state | float(101)) <= 100
+                     and floor_age >= -5 and floor_age <= 180
+                     and is_number(power.state)
+                     and (power.state | float(0)) > 0
+                     and (power.state | float(101)) <= 100
+                     and power_age >= -5 and power_age <= 180
+                     and is_number(latched_floor)
+                     and (power.state | float(999))
+                         <= (committed_power | float(0)) + 0.5
+                     and (floor.state | float(-999))
+                         >= (latched_floor | float(100)) - 0.5
+                     and (soc.state | float(0))
+                         > [latched_floor | float(100),
+                            floor.state | float(100)] | max }}
+            sequence:
+              - stop: >-
+                  RCE is recalculating; the accepted active cycle remains unchanged
           - conditions:
               - condition: state
                 entity_id: input_boolean.hoymiles_rce_discharge_active
@@ -7552,6 +9285,12 @@ automation:
             sequence:
               - variables:
                   rce_live_authorization_checked: true
+          - conditions:
+              - condition: template
+                value_template: *rce_pending_latched_execution_safe
+            sequence:
+              - stop: >-
+                  RCE is recalculating; the accepted active cycle remains unchanged
           - conditions:
               - condition: state
                 entity_id: input_boolean.hoymiles_rce_discharge_active
@@ -7788,6 +9527,12 @@ automation:
                                          'none', ''] }}
                         then:
                           - action: script.hoymiles_rollback_rce_transaction
+              - conditions:
+                  - condition: template
+                    value_template: *rce_pending_latched_execution_safe
+                sequence:
+                  - stop: >-
+                      RCE is recalculating; the accepted active cycle remains unchanged
             default:
               - action: script.hoymiles_rollback_rce_transaction
               - stop: >-
@@ -7932,6 +9677,17 @@ automation:
                     {{ states(
                       'sensor.hoymiles_rce_effective_discharge_power_percent')
                        | float(0) }}
+                  # This is the authoritative total battery-discharge target
+                  # accepted by the optimizer for this exact start transaction.
+                  # Later forecast refreshes must not move the physical ACK.
+                  rce_start_expected_power_kw: >-
+                    {{ state_attr(
+                      'sensor.hoymiles_hit_rce_optimized_plan',
+                      'current_slot_execution_discharge_power_kw') }}
+              - condition: template
+                value_template: >-
+                  {{ is_number(rce_start_expected_power_kw)
+                     and (rce_start_expected_power_kw | float(0)) >= 1.0 }}
               - action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.hoymiles_rce_latched_slot_end
@@ -8184,6 +9940,50 @@ automation:
                   - stop: "Safe Grid Discharge start conditions expired"
               # Ownership is already active, so the first export sample and
               # every setting written above belong to the same transaction.
+              - variables:
+                  rce_parallel_generation_before_mode: >-
+                    {{ states(
+                      'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                       | float(-1) }}
+                  rce_response_transaction_id: >-
+                    {{ now().strftime('%Y%m%dT%H%M%S.%f%z') }}-rce
+                  rce_response_transaction_started_epoch: >-
+                    {{ as_timestamp(now()) }}
+                  rce_latched_machine_type: >-
+                    {{ states('sensor.hoymiles_hit_machines_type') | int(-1) }}
+                  rce_latched_inverter_count: >-
+                    {{ states(
+                      'sensor.hoymiles_hit_number_of_machines_master_and_slave')
+                       | int(-1) }}
+                  rce_latched_esp_uptime_seconds: >-
+                    {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+                  rce_latched_esp_uptime_reported_epoch: >-
+                    {% set item = states.sensor.hoymiles_hit_esp_uptime %}
+                    {{ as_timestamp(item.last_reported
+                         if item.last_reported is defined
+                         else item.last_updated, 0) }}
+              - variables:
+                  rce_topology_known: >-
+                    {{ ((rce_latched_machine_type | int(-1)) == 0
+                         and (rce_latched_inverter_count | int(-1)) == 1)
+                       or ((rce_latched_machine_type | int(-1)) == 1
+                           and (rce_latched_inverter_count | int(-1)) >= 2
+                           and (rce_latched_inverter_count | int(-1)) <= 10) }}
+                  rce_requires_parallel_proof: >-
+                    {{ (rce_latched_machine_type | int(-1)) == 1
+                       and (rce_latched_inverter_count | int(-1)) >= 2
+                       and (rce_latched_inverter_count | int(-1)) <= 10 }}
+                  rce_esp_uptime_ready: >-
+                    {% set age =
+                      (rce_response_transaction_started_epoch | float(0))
+                      - (rce_latched_esp_uptime_reported_epoch | float(0)) %}
+                    {{ (rce_latched_esp_uptime_seconds | float(-1)) >= 180
+                       and age >= -5 and age <= 180 }}
+              # Freeze topology before Mode 5; unknown is fail-closed.
+              - condition: template
+                value_template: "{{ rce_topology_known | bool(false) }}"
+              - condition: template
+                value_template: "{{ rce_esp_uptime_ready | bool(false) }}"
               - if:
                   - condition: template
                     value_template: >-
@@ -8198,6 +9998,53 @@ automation:
                   {{ is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge') }}
                 timeout: "00:01:00"
                 continue_on_timeout: true
+              - action: >-
+                  script.hoymiles_verify_parallel_aggregate_discharge_response
+                continue_on_error: true
+                data:
+                  transaction_id: "{{ rce_response_transaction_id }}"
+                  transaction_started_epoch: >-
+                    {{ rce_response_transaction_started_epoch }}
+                  baseline_generation: >-
+                    {{ rce_parallel_generation_before_mode }}
+                  latched_esp_uptime_seconds: >-
+                    {{ rce_latched_esp_uptime_seconds }}
+                  owner: rce
+                  latched_machine_type: "{{ rce_latched_machine_type }}"
+                  latched_inverter_count: "{{ rce_latched_inverter_count }}"
+                  topology_known: "{{ rce_topology_known }}"
+                  requires_parallel_proof: "{{ rce_requires_parallel_proof }}"
+                  expected_power_kw: >-
+                    {{ rce_start_expected_power_kw }}
+                  authoritative_expected_power: true
+              # On a parallel Master, RCE owns an authoritative, frozen kW
+              # target and therefore fails closed on missing, wrong-direction,
+              # unstable or out-of-tolerance aggregate physical evidence.
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set correlated =
+                        is_state(
+                          'sensor.hoymiles_parallel_aggregate_physical_response',
+                          'confirmed')
+                        and state_attr(
+                          'sensor.hoymiles_parallel_aggregate_physical_response',
+                          'transaction_id') == rce_response_transaction_id
+                        and state_attr(
+                          'sensor.hoymiles_parallel_aggregate_physical_response',
+                          'owner') == 'rce'
+                        and as_timestamp(state_attr(
+                          'sensor.hoymiles_parallel_aggregate_physical_response',
+                          'completed_at'), 0)
+                            >= (rce_response_transaction_started_epoch
+                                | float(0)) %}
+                      {{ not rce_topology_known | bool(false)
+                         or (rce_requires_parallel_proof | bool(false)
+                             and not correlated) }}
+                then:
+                  - action: script.hoymiles_rollback_rce_transaction
+                  - stop: >-
+                      RCE did not receive a matching aggregate power response
               # A successful mode ACK is not permission to accept an obsolete
               # start. Re-evaluate the entire live transaction once more after
               # the helper returns; dropped state triggers cannot bypass it.
@@ -8212,9 +10059,18 @@ automation:
                       - condition: state
                         entity_id: input_boolean.hoymiles_rce_discharge_enabled
                         state: "on"
-                      - condition: state
-                        entity_id: binary_sensor.hoymiles_rce_control_data_ready
-                        state: "on"
+                      # The parallel-response helper can outlive a normal
+                      # one-minute optimizer refresh. Accept either a current
+                      # result or the already latched execution contract while
+                      # every independent live hard stop remains clear.
+                      - condition: or
+                        conditions:
+                          - condition: state
+                            entity_id: >-
+                              binary_sensor.hoymiles_rce_control_data_ready
+                            state: "on"
+                          - condition: template
+                            value_template: *rce_pending_latched_execution_safe
                       - condition: state
                         entity_id: binary_sensor.hoymiles_ems_export_allowed
                         state: "on"
@@ -8321,6 +10177,17 @@ automation:
                 default:
                   - action: script.hoymiles_rollback_rce_transaction
                   - stop: "RCE authorization lost after Grid Discharge ACK"
+
+          # A recalculation withdraws planning authority but does not revoke an
+          # already latched execution contract while all live hard stops remain
+          # clear. The shared predicate is re-evaluated here after every prior
+          # yielded action; it never trusts the unavailable derived power helper.
+          - conditions:
+              - condition: template
+                value_template: *rce_pending_latched_execution_safe
+            sequence:
+              - stop: >-
+                  RCE is recalculating; the accepted active cycle remains unchanged
 
           # Stop RCE: the slot left the plan, minimum SOC was reached, automation
           # was disabled, or PSE data became unavailable.
@@ -8431,6 +10298,10 @@ automation:
                          and (as_timestamp(now()) - as_timestamp(
                            states.binary_sensor.hoymiles_rce_control_data_ready
                              .last_changed)) >= 120) }}
+              - condition: not
+                conditions:
+                  - condition: template
+                    value_template: *rce_pending_latched_execution_safe
               - condition: template
                 value_template: >-
                   {{ states('sensor.hoymiles_ems_hardware_mode')
@@ -8703,6 +10574,49 @@ automation:
               - condition: state
                 entity_id: binary_sensor.hoymiles_sale_block_active
                 state: "off"
+              - variables:
+                  recovery_parallel_generation_before_mode: >-
+                    {{ states(
+                      'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                       | float(-1) }}
+                  recovery_response_transaction_id: >-
+                    {{ now().strftime('%Y%m%dT%H%M%S.%f%z') }}-manual-recovery
+                  recovery_response_transaction_started_epoch: >-
+                    {{ as_timestamp(now()) }}
+                  recovery_latched_machine_type: >-
+                    {{ states('sensor.hoymiles_hit_machines_type') | int(-1) }}
+                  recovery_latched_inverter_count: >-
+                    {{ states(
+                      'sensor.hoymiles_hit_number_of_machines_master_and_slave')
+                       | int(-1) }}
+                  recovery_latched_esp_uptime_seconds: >-
+                    {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+                  recovery_latched_esp_uptime_reported_epoch: >-
+                    {% set item = states.sensor.hoymiles_hit_esp_uptime %}
+                    {{ as_timestamp(item.last_reported
+                         if item.last_reported is defined
+                         else item.last_updated, 0) }}
+              - variables:
+                  recovery_topology_known: >-
+                    {{ ((recovery_latched_machine_type | int(-1)) == 0
+                         and (recovery_latched_inverter_count | int(-1)) == 1)
+                       or ((recovery_latched_machine_type | int(-1)) == 1
+                           and (recovery_latched_inverter_count | int(-1)) >= 2
+                           and (recovery_latched_inverter_count | int(-1)) <= 10) }}
+                  recovery_requires_parallel_proof: >-
+                    {{ (recovery_latched_machine_type | int(-1)) == 1
+                       and (recovery_latched_inverter_count | int(-1)) >= 2
+                       and (recovery_latched_inverter_count | int(-1)) <= 10 }}
+                  recovery_esp_uptime_ready: >-
+                    {% set age =
+                      (recovery_response_transaction_started_epoch | float(0))
+                      - (recovery_latched_esp_uptime_reported_epoch | float(0)) %}
+                    {{ (recovery_latched_esp_uptime_seconds | float(-1)) >= 180
+                       and age >= -5 and age <= 180 }}
+              - condition: template
+                value_template: "{{ recovery_topology_known | bool(false) }}"
+              - condition: template
+                value_template: "{{ recovery_esp_uptime_ready | bool(false) }}"
               - if:
                   - condition: template
                     value_template: >-
@@ -8719,6 +10633,23 @@ automation:
                   {{ is_state('sensor.hoymiles_ems_hardware_mode', 'grid_discharge') }}
                 timeout: "00:02:00"
                 continue_on_timeout: false
+              - action: >-
+                  script.hoymiles_verify_parallel_aggregate_discharge_response
+                data:
+                  transaction_id: "{{ recovery_response_transaction_id }}"
+                  transaction_started_epoch: >-
+                    {{ recovery_response_transaction_started_epoch }}
+                  baseline_generation: >-
+                    {{ recovery_parallel_generation_before_mode }}
+                  latched_esp_uptime_seconds: >-
+                    {{ recovery_latched_esp_uptime_seconds }}
+                  owner: manual_recovery
+                  latched_machine_type: "{{ recovery_latched_machine_type }}"
+                  latched_inverter_count: "{{ recovery_latched_inverter_count }}"
+                  topology_known: "{{ recovery_topology_known }}"
+                  requires_parallel_proof: >-
+                    {{ recovery_requires_parallel_proof }}
+                  authoritative_expected_power: false
           - conditions:
               - condition: state
                 entity_id: input_boolean.hoymiles_discharge_cycle_active
@@ -10979,6 +12910,45 @@ automation:
               # Ownership is already active here, so the sensor intentionally
               # exposes continue_eligible (not start_eligible). The frozen
               # target/deadline and live register readbacks remain authoritative.
+              - variables:
+                  rcm_parallel_generation_before_mode: >-
+                    {{ states(
+                      'sensor.hoymiles_hit_parallel_aggregate_power_readback_generation')
+                       | float(-1) }}
+                  rcm_response_transaction_id: >-
+                    {{ now().strftime('%Y%m%dT%H%M%S.%f%z') }}-rcm
+                  rcm_response_transaction_started_epoch: >-
+                    {{ as_timestamp(now()) }}
+                  rcm_latched_machine_type: >-
+                    {{ states('sensor.hoymiles_hit_machines_type') | int(-1) }}
+                  rcm_latched_inverter_count: >-
+                    {{ states(
+                      'sensor.hoymiles_hit_number_of_machines_master_and_slave')
+                       | int(-1) }}
+                  rcm_latched_esp_uptime_seconds: >-
+                    {{ states('sensor.hoymiles_hit_esp_uptime') | float(-1) }}
+                  rcm_latched_esp_uptime_reported_epoch: >-
+                    {% set item = states.sensor.hoymiles_hit_esp_uptime %}
+                    {{ as_timestamp(item.last_reported
+                         if item.last_reported is defined
+                         else item.last_updated, 0) }}
+              - variables:
+                  rcm_topology_known: >-
+                    {{ ((rcm_latched_machine_type | int(-1)) == 0
+                         and (rcm_latched_inverter_count | int(-1)) == 1)
+                       or ((rcm_latched_machine_type | int(-1)) == 1
+                           and (rcm_latched_inverter_count | int(-1)) >= 2
+                           and (rcm_latched_inverter_count | int(-1)) <= 10) }}
+                  rcm_requires_parallel_proof: >-
+                    {{ (rcm_latched_machine_type | int(-1)) == 1
+                       and (rcm_latched_inverter_count | int(-1)) >= 2
+                       and (rcm_latched_inverter_count | int(-1)) <= 10 }}
+                  rcm_esp_uptime_ready: >-
+                    {% set age =
+                      (rcm_response_transaction_started_epoch | float(0))
+                      - (rcm_latched_esp_uptime_reported_epoch | float(0)) %}
+                    {{ (rcm_latched_esp_uptime_seconds | float(-1)) >= 180
+                       and age >= -5 and age <= 180 }}
               - if:
                   - condition: template
                     value_template: >-
@@ -11098,6 +13068,11 @@ automation:
                            | float(100))) | abs < 1.0
                          and is_state('sensor.hoymiles_ems_hardware_mode', 'self_use') }}
                 then:
+                  # Unknown/unavailable topology cannot authorize Mode 5.
+                  - condition: template
+                    value_template: "{{ rcm_topology_known | bool(false) }}"
+                  - condition: template
+                    value_template: "{{ rcm_esp_uptime_ready | bool(false) }}"
                   - action: script.hoymiles_verified_set_ems_mode
                     data:
                       option: "grid_discharge"
@@ -11106,6 +13081,26 @@ automation:
                         'sensor.hoymiles_ems_hardware_mode', 'grid_discharge') }}
                     timeout: "00:01:00"
                     continue_on_timeout: true
+                  # RCEm stores a percent register, not an authoritative total
+                  # kW target. Record fresh direction evidence without applying
+                  # the RCE amplitude fail-closed policy.
+                  - action: >-
+                      script.hoymiles_verify_parallel_aggregate_discharge_response
+                    data:
+                      transaction_id: "{{ rcm_response_transaction_id }}"
+                      transaction_started_epoch: >-
+                        {{ rcm_response_transaction_started_epoch }}
+                      baseline_generation: >-
+                        {{ rcm_parallel_generation_before_mode }}
+                      latched_esp_uptime_seconds: >-
+                        {{ rcm_latched_esp_uptime_seconds }}
+                      owner: rcm_pre_discharge
+                      latched_machine_type: "{{ rcm_latched_machine_type }}"
+                      latched_inverter_count: "{{ rcm_latched_inverter_count }}"
+                      topology_known: "{{ rcm_topology_known }}"
+                      requires_parallel_proof: >-
+                        {{ rcm_requires_parallel_proof }}
+                      authoritative_expected_power: false
 
               # A failed final interlock or mode readback is a pending restore,
               # never a reason to forget ownership of the two discharge writes.

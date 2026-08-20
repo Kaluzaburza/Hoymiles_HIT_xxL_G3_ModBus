@@ -440,7 +440,7 @@ na fizycznych końcach zgodnie z instrukcją falownika i konwertera. Zewnętrzny
 Modbus ESP32 jest inną magistralą niż dedykowana wewnętrzna komunikacja
 Parallel/DTS falowników — nie mostkuj tych dwóch magistral.
 
-Firmware v1.5.5 zawiera polecenie systemowe zweryfikowane wcześniej w
+Firmware v1.5.6 zachowuje polecenie systemowe zweryfikowane wcześniej w
 testowej konfiguracji 2×HIT na wspólnej magistrali: każda zmiana rejestrów EMS
 `4300–4306` jest wysyłana jako jeden broadcast FC16 na adres Modbus `0`. RCE,
 tanie ładowanie, harmonogramy ręczne i balansowanie baterii mogą dzięki temu sterować wykrytym
@@ -452,17 +452,54 @@ Home Assistant uznaje polecenie dopiero wtedy, gdy późniejszy fizyczny FC03 z
 Mastera zawiera dokładnie żądany blok. Potwierdza to blok Mastera, a nie odbiór
 lub wykonanie polecenia przez każdego Slave'a.
 
+Dla Grid Discharge na wykrytym Masterze równoległym v1.5.6 dodaje osobną
+diagnostykę **sumarycznej odpowiedzi fizycznej** po poleceniu. Po potwierdzeniu
+konfiguracji przez FC03 Mastera stosuje 20 sekund czasu przejściowego, a potem
+ocenia pięć nowszych kompletnych generacji mocy systemu (maksymalnie po 20
+sekund każda) i wymaga trzech kolejnych stabilnych generacji. Stan diagnostyki
+przechodzi z `pending` do `confirmed`, `not_confirmed` albo `not_evaluable`.
+RCE porównuje odpowiedź z celem zamrożonym przed poleceniem, wymaga też eksportu
+co najmniej 0,25 kW, a przy braku potwierdzenia wykonuje istniejący neutralny
+rollback fail-closed. Tryb ręczny/recovery i przygotowanie RCEm bez
+autorytatywnego celu sumarycznej mocy oceniają świeży stabilny kierunek
+rozładowania baterii bez odrzucenia za eksport lub amplitudę. Powrót do Self-Use
+nigdy nie czeka na sumaryczny dowód rozładowania.
+
+Dwie nowe encje diagnostyczne to
+`sensor.hoymiles_hit_parallel_aggregate_power_readback_generation` oraz
+`sensor.hoymiles_parallel_aggregate_physical_response`.
+
+Ten sygnał potwierdza wyłącznie odpowiedź fizyczną całego systemu. Nie jest
+odczytem FC03 ze Slave'a i nie wolno nazywać go potwierdzeniem każdego Slave'a.
+Zarejestrowany pik przejściowy jest zapisywany diagnostycznie, lecz nie należy
+do stabilnego okna potwierdzenia i sam w sobie nie jest błędem wykonania.
+
 Podczas odbioru sprawdź Grid Discharge i powrót do Self-Use osobno na Masterze
 i na każdym Slave w aplikacji producenta. Stan instalacji `Gotowe`, poprawna
 telemetria sumaryczna i zgodny FC03 Mastera mogą pozostać widoczne także wtedy,
 gdy przewód ESP32 dochodzi tylko do Mastera, więc nie dowodzą fizycznego
 podłączenia Slave'a.
 
-Ten wcześniejszy wynik nie jest deklaracją bieżącego odbioru terenowego. Pełny
-test wspólnej magistrali i potwierdzenie sumarycznej odpowiedzi fizycznej są
-odroczone na czas zbierania danych z instalacji. Po ich przeglądzie zostaną
-uzupełnione w osobnym hotfiksie. Do tego czasu FC03 Mastera nie wolno opisywać
-jako potwierdzenia każdego Slave'a.
+Test wspólnej magistrali z 2026-08-15 dostarczył dodatkowego dowodu sprzętowego
+i protokołowego: rozładowanie baterii ustabilizowało się na 33,653 kW i
+33,863 kW, a operator potwierdził Grid Discharge na obu węzłach w aplikacji
+producenta. Instalacja nadal korzystała jednak z zarządzanego pakietu Home
+Assistant 1.5.4 i firmware/projektu ESP32 1.5.3. Nie zapisano osobnej mocy
+węzłów, zrzutów, dokładnych czasów aplikacji ani dokładnego czasu ręcznego
+polecenia zatrzymania.
+Historia Home Assistanta tej instalacji została też sprawdzona dla wieczornych
+okien 8–14 sierpnia, 19:00–22:00 czasu lokalnego. Pokazuje pik stop około 60 kW
+8 sierpnia oraz pik start około 60 kW zgodny z zapisaną zmianą kodu trybu 14
+sierpnia. Okna 9–13 sierpnia pokazują powtarzające się plateau rozładowania i
+impulsy przełączeń, choć próbkowanie mogło nie uchwycić maksimum. Osobno ślad
+live z 15 sierpnia, 18:20 lokalnie, zawiera 63,069 kW baterii / 65,910 kW
+falownika podczas przejścia. To obserwacja ograniczona do tej instalacji i tych
+dat: wspiera czas przejściowy i stabilne okno, lecz nie jest uniwersalną
+gwarancją dla wszystkich falowników.
+
+Wynik nie stanowi więc odbioru oprogramowania v1.5.5 ani
+v1.5.6, nie potwierdza zatrzymania automatycznego i nie zmienia FC03 Mastera w
+potwierdzenie każdego Slave'a. Nadal wymagany jest test dokładnej wersji v1.5.6.
 
 Rejestry `258`, `259` i `306` leżą poza wspólnym blokiem EMS i nie mają jeszcze
 osobno potwierdzonej semantyki broadcastu Master/Slave. Aktywne działania RCEm,

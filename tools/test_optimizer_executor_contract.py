@@ -171,6 +171,14 @@ def _assert_scheduler_result_current_gates() -> None:
     ]
     assert "'result_current') is sameas true" in rce_ready
     assert "'result_current') is sameas true" in tariff_ready
+    rce_post_ack = source[
+        source.index("# A successful mode ACK is not permission") :
+        source.index('stop: "RCE authorization lost after Grid Discharge ACK"')
+    ]
+    assert "condition: or" in rce_post_ack
+    assert "value_template: *rce_pending_latched_execution_safe" in rce_post_ack, (
+        "A normal optimizer refresh can roll back a physically confirmed RCE start"
+    )
     rcm_control = source[
         source.index("id: hoymiles_rcm_voltage_charge_control") :
         source.index("id: hoymiles_rcm_pre_discharge_control")
@@ -187,6 +195,303 @@ def _assert_scheduler_result_current_gates() -> None:
         assert "or not result_current" not in section, (
             f"{label} treats normal in-flight recalculation as a hardware failure"
         )
+
+
+def _literal_string_set(tree: ast.Module, name: str) -> set[str]:
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            )
+        )
+    ]
+    assert len(matches) == 1, f"Expected exactly one {name} assignment"
+    value = matches[0].value
+    assert value is not None
+    if (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id == "frozenset"
+    ):
+        assert len(value.args) == 1
+        value = value.args[0]
+    assert isinstance(value, (ast.Set, ast.Tuple, ast.List))
+    return {
+        item.value
+        for item in value.elts
+        if isinstance(item, ast.Constant) and isinstance(item.value, str)
+    }
+
+
+def _assert_tariff_feedback_is_not_a_planning_input() -> None:
+    """Execution feedback must not invalidate an accepted tariff plan."""
+
+    path = COMPONENT / "tariff_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    watched = _literal_string_set(tree, "WATCHED_TARIFF_ENTITIES")
+    feedback = _literal_string_set(tree, "TARIFF_EXECUTION_FEEDBACK_ENTITIES")
+    expected_feedback = {
+        "input_boolean.hoymiles_tariff_charge_active",
+        "sensor.hoymiles_hit_ems_mode_readback_code",
+        "sensor.hoymiles_hit_grid_to_battery_power",
+        "sensor.hoymiles_hit_overview_load_active_power",
+        "sensor.hoymiles_tariff_grid_charge_power",
+    }
+    assert feedback == expected_feedback
+    assert watched.isdisjoint(feedback), (
+        "Execution-only tariff feedback can withdraw planning authority"
+    )
+
+    # Genuine mathematical/freshness inputs must remain authoritative inputs.
+    for entity_id in (
+        "sensor.hoymiles_hit_overview_battery_soc",
+        "sensor.hoymiles_actual_load_power",
+        "sensor.hoymiles_hit_overview_pv_total_power",
+        "sensor.hoymiles_hit_maximum_charge_current",
+        "input_select.hoymiles_tariff_type",
+        "input_number.hoymiles_tariff_low_price",
+        "input_number.hoymiles_rce_fallback_daily_load",
+    ):
+        assert entity_id in watched, f"Real tariff input is not watched: {entity_id}"
+
+    class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    optimizer_input = _method(class_node, "_optimizer_input")
+    optimizer_literals = {
+        node.value
+        for node in ast.walk(optimizer_input)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "input_number.hoymiles_rce_fallback_daily_load" in optimizer_literals, (
+        "Fallback daily LOAD is watched without being consumed by tariff planning"
+    )
+    for method_name in ("async_added_to_hass", "_current_input_fingerprint"):
+        method = _method(class_node, method_name)
+        names = {
+            node.id for node in ast.walk(method) if isinstance(node, ast.Name)
+        }
+        literals = {
+            node.value
+            for node in ast.walk(method)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+        expected_set = (
+            "TARIFF_EVENT_DRIVEN_ENTITIES"
+            if method_name == "async_added_to_hass"
+            else "WATCHED_TARIFF_ENTITIES"
+        )
+        assert expected_set in names, (
+            f"{method_name} no longer uses its authoritative planning-input set"
+        )
+        assert "TARIFF_EXECUTION_FEEDBACK_ENTITIES" not in names
+        assert feedback.isdisjoint(literals), (
+            f"{method_name} reintroduced an execution-only tariff input"
+        )
+
+    feedback_method = _method(class_node, "_update_delivered_power_feedback")
+    feedback_literals = {
+        node.value
+        for node in ast.walk(feedback_method)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert feedback <= feedback_literals, (
+        "Execution feedback was removed from its authoritative timer sampler"
+    )
+
+
+    timer = _method(class_node, "_async_timer")
+    ordered_calls: list[tuple[int, str, bool]] = []
+    for statement in timer.body:
+        if not isinstance(statement, ast.Expr):
+            continue
+        awaited = isinstance(statement.value, ast.Await)
+        call = statement.value.value if awaited else statement.value
+        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+            continue
+        if not isinstance(call.func.value, ast.Name) or call.func.value.id != "self":
+            continue
+        ordered_calls.append((statement.lineno, call.func.attr, awaited))
+    relevant = [
+        item
+        for item in sorted(ordered_calls)
+        if item[1]
+        in {
+            "_update_delivered_power_feedback",
+            "_invalidate_internal_inputs",
+            "_recalculate_and_write",
+        }
+    ]
+    assert relevant == [
+        (relevant[0][0], "_update_delivered_power_feedback", False),
+        (relevant[1][0], "_invalidate_internal_inputs", False),
+        (relevant[2][0], "_recalculate_and_write", True),
+    ], "Tariff feedback is no longer sampled before its timer-driven replan"
+
+    assignments = {
+        target.id: node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    assert ast.unparse(
+        assignments["TARIFF_INPUT_RECALCULATION_DELAY_SECONDS"]
+    ) == "5 * 60.0"
+    added = _method(class_node, "async_added_to_hass")
+    five_minute_intervals = [
+        node
+        for node in ast.walk(added)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "timedelta"
+        and any(
+            keyword.arg == "minutes"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value == 5
+            for keyword in node.keywords
+        )
+    ]
+    assert len(five_minute_intervals) == 1
+    for method_name in ("_async_input_changed", "_apply_forecast_gcf_policy"):
+        method_names = {
+            node.id
+            for node in ast.walk(_method(class_node, method_name))
+            if isinstance(node, ast.Name)
+        }
+        assert "TARIFF_INPUT_RECALCULATION_DELAY_SECONDS" in method_names
+        assert "INPUT_RECALCULATION_DELAY_SECONDS" not in method_names
+
+    source_text = path.read_text(encoding="utf-8")
+    gcf_handler_source = ast.get_source_segment(
+        source_text,
+        _method(class_node, "_async_forecast_gcf_policy_changed"),
+    )
+    gcf_deadline_source = ast.get_source_segment(
+        source_text,
+        _method(class_node, "_async_evaluate_forecast_gcf_policy"),
+    )
+    assert gcf_handler_source is not None
+    assert gcf_deadline_source is not None
+    assert "_invalidate_internal_inputs" not in gcf_handler_source, (
+        "A partial GCF delivery cohort can still flap tariff authority"
+    )
+    assert "force_recalculate=cohort_pending" not in gcf_handler_source
+    assert "force_recalculate=True" in gcf_deadline_source, (
+        "A persistently incoherent GCF cohort no longer fails closed"
+    )
+
+
+def _assert_rce_live_telemetry_is_minute_coalesced() -> None:
+    """Fast telemetry and RCE-owned writes must not cancel their own start."""
+
+    path = COMPONENT / "rce_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    watched = _literal_string_set(tree, "WATCHED_ENTITIES")
+    coalesced = _literal_string_set(tree, "RCE_MINUTE_COALESCED_ENTITIES")
+
+    assert "sensor.hoymiles_hit_ems_maximum_discharge_power_readback" not in watched, (
+        "Execution-only RCE power readback can withdraw planning authority"
+    )
+    for entity_id in (
+        "sensor.hoymiles_hit_overview_battery_soc",
+        "sensor.hoymiles_actual_load_power",
+        "sensor.hoymiles_hit_overview_pv_total_power",
+        "sensor.hoymiles_hit_maximum_discharge_current",
+        "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+    ):
+        assert entity_id in watched
+        assert entity_id in coalesced, (
+            f"Fast RCE input can still cause an event-driven authority flap: {entity_id}"
+        )
+
+    class_node = _class_node(tree, "HoymilesRCEOptimizerSensor")
+    added = _method(class_node, "async_added_to_hass")
+    added_names = {node.id for node in ast.walk(added) if isinstance(node, ast.Name)}
+    assert "RCE_EVENT_DRIVEN_ENTITIES" in added_names
+    assert "WATCHED_ENTITIES" not in added_names
+
+    fingerprint = _method(class_node, "_current_input_fingerprint")
+    fingerprint_names = {
+        node.id for node in ast.walk(fingerprint) if isinstance(node, ast.Name)
+    }
+    assert "WATCHED_ENTITIES" in fingerprint_names, (
+        "Minute-coalesced telemetry was removed from in-flight stale-result checks"
+    )
+
+    timer = _method(class_node, "_async_timer")
+    timer_calls = {
+        node.func.attr
+        for node in ast.walk(timer)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "self"
+    }
+    assert {"_invalidate_internal_inputs", "_recalculate_and_write"} <= timer_calls
+
+
+def _assert_tariff_live_telemetry_is_five_minute_coalesced() -> None:
+    """Live planning telemetry must remain stable between five-minute runs."""
+
+    path = COMPONENT / "tariff_sensor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    watched = _literal_string_set(tree, "WATCHED_TARIFF_ENTITIES")
+    coalesced = _literal_string_set(
+        tree,
+        "TARIFF_FIVE_MINUTE_COALESCED_ENTITIES",
+    )
+
+    for entity_id in (
+        "sensor.hoymiles_hit_rce_optimized_plan",
+        "sensor.hoymiles_hit_overview_battery_soc",
+        "sensor.hoymiles_hit_battery_voltage_bms",
+        "sensor.hoymiles_hit_pv_total_energy_today",
+        "sensor.hoymiles_hit_overview_battery_power",
+        "sensor.hoymiles_actual_load_power",
+        "sensor.hoymiles_hit_overview_pv_total_power",
+        "sun.sun",
+    ):
+        assert entity_id in watched
+        assert entity_id in coalesced, (
+            f"Fast tariff input can still withdraw authority between runs: {entity_id}"
+        )
+
+    class_node = _class_node(tree, "HoymilesTariffOptimizerSensor")
+    added = _method(class_node, "async_added_to_hass")
+    added_names = {node.id for node in ast.walk(added) if isinstance(node, ast.Name)}
+    assert "TARIFF_EVENT_DRIVEN_ENTITIES" in added_names
+    assert "WATCHED_TARIFF_ENTITIES" not in added_names
+
+    invalidator = _method(class_node, "_invalidate_input_event")
+    invalidator_source = ast.get_source_segment(
+        path.read_text(encoding="utf-8"), invalidator
+    )
+    assert invalidator_source is not None
+    assert "include_last_updated=False" in invalidator_source, (
+        "Unchanged physical reports can still withdraw tariff authority"
+    )
+
+    fingerprint = _method(class_node, "_current_input_fingerprint")
+    fingerprint_names = {
+        node.id for node in ast.walk(fingerprint) if isinstance(node, ast.Name)
+    }
+    assert "WATCHED_TARIFF_ENTITIES" in fingerprint_names, (
+        "Five-minute telemetry was removed from in-flight stale-result checks"
+    )
+
+    timer = _method(class_node, "_async_timer")
+    timer_calls = {
+        node.func.attr
+        for node in ast.walk(timer)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "self"
+    }
+    assert {"_invalidate_internal_inputs", "_recalculate_and_write"} <= timer_calls
 
 
 def _class_node(tree: ast.Module, name: str) -> ast.ClassDef:
@@ -520,6 +825,9 @@ async def _assert_loop_remains_responsive(
 async def _async_main() -> None:
     _assert_revision_fingerprint_contract()
     _assert_scheduler_result_current_gates()
+    _assert_tariff_feedback_is_not_a_planning_input()
+    _assert_rce_live_telemetry_is_minute_coalesced()
+    _assert_tariff_live_telemetry_is_five_minute_coalesced()
     await _assert_dirty_result_is_never_committed()
     contracts: list[tuple[str, ast.AsyncFunctionDef, ast.Await]] = []
     for filename, (class_name, optimizer_name) in SENSORS.items():

@@ -2,12 +2,19 @@
 
 Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.5 release-candidate validation**
+Latest shared-bus hardware/protocol observation: 2026-08-15 (Europe/Warsaw)
+Final v1.5.6 release date: 2026-08-21 (Europe/Warsaw)
+Last completed offline baseline in this report: **tagged v1.5.6 source — PASS**
 Last accepted live runtime merge:
 **`ce4afc614a691ce70c67da2439613de90e0c61c2`**
 (implementation commit **`915337fa34529c5197ad581a41d351b78bfb1d33`**)
-Current status: **v1.5.5 exact-workspace offline PASS; exact-SHA GitHub CI,
-public HACS release and shared-bus Master/Slave acceptance pending.**
+Current status: **v1.5.6 is published after full local/CI validation and live
+rollout on localhost plus `miernik.com.pl`. The final simultaneous 15-minute
+window proved stable tariff and RCE readiness but contained no planned active
+RCE slot. The maintainer explicitly accepted that bounded exact-final active-
+slot evidence gap for release, with a hotfix path. The 2026-08-15 shared-bus
+run remains hardware/protocol evidence from HA package 1.5.4 and ESP32 project
+1.5.3, not exact-v1.5.6 per-Slave acknowledgement.**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -96,7 +103,147 @@ The final release/tag commit is expected to differ only by this live-evidence
 documentation. Its delta from the tested runtime merge must remain
 documentation-only.
 
-## v1.5.5 consolidated EMS safety release — offline PASS; exact publication and full shared-bus acceptance pending
+## v1.5.6 EMS stability release — offline/CI PASS; live rollout accepted with limit
+
+The candidate adds a physical-response contract after Grid Discharge on a
+detected parallel Master without changing the existing configuration ACK.
+The FC16 system broadcast still has no Modbus reply, and only a newer exact
+FC03 block from the Master acknowledges configuration. That FC03 remains
+Master-only evidence; the new signal is deliberately named and documented as
+an **aggregate system physical response**, never as a per-Slave protocol ACK.
+The source generation is
+`sensor.hoymiles_hit_parallel_aggregate_power_readback_generation`; the result
+is `sensor.hoymiles_parallel_aggregate_physical_response`.
+
+ESPHome publishes a new complete aggregate-power readback generation only from
+the Master LOAD FC03 callback and only when the corresponding grid and PV
+inputs are fresh. Local writes, timers and partial source callbacks cannot
+advance it. After Master FC03 confirms Grid Discharge, Home Assistant applies a
+20-second transition grace, considers five newer complete generations with up
+to 20 seconds for each, and requires three consecutive stable generations. The
+published horizon is 135 seconds. A sampled transition peak is retained as
+diagnostic context but excluded from the stable window and is not sufficient by
+itself for either success or failure.
+
+RCE freezes its authoritative expected discharge power before the first owned
+write. Its stable window requires battery discharge, grid export of at least
+0.25 kW and agreement with that frozen target; otherwise it uses the existing
+neutral fail-closed rollback. Manual/manual-recovery and RCEm pre-discharge have
+no authoritative total-kW target, so their diagnostic evaluates fresh stable
+battery-discharge direction without grid-export or amplitude rejection. The
+neutral Self-Use rollback path never waits for aggregate discharge evidence.
+
+The final post-RC5 stabilization work establishes these additional contracts:
+
+- `result_current=false` is planning authority for **new starts**, not by
+  itself a stop instruction for an **already accepted and latched active RCE
+  cycle**. A harmless price/PV/LOAD update may preserve that cycle on its last
+  committed contract during recalculation. BMS capability/freshness, physical
+  GCF/export permission, ownership/conflict, Off-Grid or incompatible mode,
+  required FC03/readback, SOC/reserve floor and inverter/topology availability
+  continue to be evaluated directly from live safety inputs and stop the cycle
+  immediately, even before the replacement result becomes current.
+- The tariff optimizer fingerprint excludes `tariff_charge_active` and other
+  owner/execution telemetry not consumed by the mathematics, preventing a
+  tariff start from invalidating itself. Real SOC, forecast PV/LOAD,
+  tariff/profile, BMS capability and freshness changes still invalidate the
+  result and block new execution normally.
+- Tariff rollback constructs one final `4300–4306` block from the last
+  confirmed physical snapshot plus explicit rollback values, skips logical
+  no-ops, emits at most one FC16 and waits for a newer matching physical FC03
+  for the whole block. It cannot start another full-block transaction while
+  that acknowledgement is pending.
+- The same physical-ACK invariant now covers every Home Assistant helper for
+  `4300–4306`: all seven readback registers must match. Missing, stale or
+  inconsistent FC03 stays fail-closed. No second transaction mechanism was
+  introduced and the existing firmware barrier/manual-helper semantics remain.
+- Tariff optimizer attributes remain available live and to diagnostics/restore
+  state but are excluded from Recorder persistence. Every overlapping delayed
+  recalculation task is tracked and cancelled at unload. The fallback daily-
+  LOAD input is now watched, so a real fallback change invalidates the result.
+- Normal tariff input events and the periodic timer are coalesced into one
+  five-minute planning cadence. Result invalidation and live safety gates remain
+  immediate; only replacement-plan publication is rate-limited.
+- Aurora frontend revision **19** enlarges the flow-node status, power and
+  battery detail/ETA text. Available unchanged HA values remain visible instead
+  of aging out on `last_updated`; unknown, unavailable, idle or implausible
+  inputs still render `ETA —`. This display rule is not execution authority.
+
+These fixes intentionally change execution authority, rollback/readback
+lifecycle and battery-node presentation. They do not change RCE or tariff
+optimizer objectives, slot selection, forecast/tariff mathematics, RCEm
+voltage calculations or direct-register semantics, Off-Grid priority,
+registers `258/259/306`, or the documented parallel broadcast/per-Slave
+acknowledgement claim boundary.
+
+### Exact candidate offline and CI evidence — PASS
+
+Frozen runtime SHA
+`42414d55c52406ae04cdd9f495388f550c24ad76` passed the complete applicable
+offline gate:
+
+- quick automation matrix **488/488** and exhaustive matrix **2064/2064**;
+- RCE **75/75**, RCE history **3/3**, tariff, RCEm, shared energy/LOAD/power,
+  firmware/readback, optimizer executor/startup and source-device rebind
+  **6/6** suites;
+- release and frontend validation, including 42 Aurora frames for PL, EN and
+  bootstrap-first execution, plus deterministic generated assets; and
+- diagnostics, identity/privacy contracts and the bounded 100-archive analyzer.
+
+Independent review reported no open P0/P1/P2. Exact-SHA GitHub Actions
+`workflow_dispatch` run **31982161039** passed `project-checks`, the conditional
+`firmware-compile`, Hassfest and HACS validation. This is offline/CI evidence;
+it does not substitute for either live gate.
+
+### Final live rollout — 2026-08-20/21
+
+The earlier localhost Core outage was traced to a loader-visible deployment
+backup, not a runtime regression. After the backup was moved outside
+`custom_components`, the release runtime and managed assets were deployed on
+localhost and `miernik.com.pl`. `ha core check`, controlled restart, integration
+setup, fresh physical FC03/readback and Aurora revision 24 passed on both sites.
+
+During the final simultaneous observation from `2026-08-20T22:30:25Z` to
+`22:45:45Z`, localhost tariff readiness was **16/16**, the status remained
+enabled/waiting, there were no ready/status transitions, and three subsequent
+five-minute planner cycles remained ready. Self-Use and no owner remained
+stable. No integration or frontend console error was observed.
+
+An earlier controlled meter test had RCE ownership in **16/16** samples and
+physical grid discharge in **13/16**. Initial Self-Use transitions coincided
+with operator power adjustments; the final eight minutes were stable, and the
+manufacturer application confirmed Grid Discharge and the later Self-Use
+return. A later ordinary result-refresh gap exposed the failsafe interaction
+addressed by the final latched-execution scheduler guard.
+
+In the final simultaneous meter window RCE readiness was **16/16**, but the
+current slot was not planned in **16/16**, so owner and active discharge were
+correctly absent. This proves stable neutral readiness, not an active exact-
+final slot. The maintainer explicitly accepted publication with this evidence
+limit and a hotfix path if the next active slot regresses. It does not relax any
+live BMS, GCF/export, ownership, Off-Grid, FC03/readback, SOC or topology gate.
+
+### Transition-history evidence — bounded to this installation and date range
+
+Home Assistant history was inspected for the test installation over the 8–14
+August evening windows, 19:00–22:00 local. An approximately **60 kW** stop
+transient is stored on 8 August. An approximately **60 kW** start transient is
+visibly aligned with the stored mode-code change on 14 August. The 9–13 August
+windows show repeated discharge plateaus and switching impulses, although the
+recorder cadence may have missed their full instantaneous peaks.
+
+The separate 15 August live trace, outside that evening-history range at 18:20
+local, captured **63.069 kW battery power / 65.910 kW inverter power** during a
+switch. It is correlated by the live trace, not presented as part of the
+8–14 August 19:00–22:00 history review.
+
+This observation supports a transition grace followed by a three-generation
+stable window. It does not prove that every HIT installation has the same
+peak, does not convert a peak into accepted steady response, and does not prove
+execution by a named Slave. The exact v1.5.6 build must still be retested with
+separate retained Master/Slave evidence.
+
+## v1.5.5 consolidated EMS safety release — offline PASS and published; exact-version live software acceptance pending
 
 The v1.5.5 release consolidates the previously unpublished v1.5.4 candidate
 and restores the previously proven Modbus address-0
@@ -179,13 +326,51 @@ about 27 seconds, then returned to Self-Use without alarms. Commit
 FC16 implementation and explicitly documented every Slave on the shared
 `RS485_2` bus.
 
-Formal parallel acceptance remains pending until the shared external bus is
-restored and Grid Discharge plus Self-Use are observed separately on the
-Master and every Slave. Master FC03 alone is not per-node acknowledgement.
-Aggregate physical-response acknowledgement discussed for future parallel
-validation is outside this candidate and outside the reported test claims. It
-has not been implemented, and aggregate power alone could not prove execution
-by every individual Slave.
+Those earlier runs did not complete exact-version parallel software acceptance.
+Master FC03 alone is not per-node acknowledgement, and aggregate
+physical-response acknowledgement was not implemented in the candidate.
+
+### 2026-08-15 shared-bus run — hardware/protocol evidence only
+
+This run used managed Home Assistant package **1.5.4** and ESP32
+firmware/project **1.5.3**. It therefore tests the physical shared bus and the
+address-`0` protocol path, not the exact v1.5.5 software and not a v1.5.6
+candidate. All times below are local Europe/Warsaw observations.
+
+| Time | Recorded observation |
+|---|---|
+| 18:20:03 | The manual discharge owner became active. This is the first exact start-side ownership timestamp, not a claim about a later software version. |
+| 18:20:07 | The first physical response was recorded, 4 seconds after ownership became active. |
+| by 18:20:29 | Physical Master FC03 reported raw EMS mode code `5` (Grid Discharge), no later than 26 seconds after ownership. |
+| 18:21:49 | Stable aggregate sample: grid export 29.087 kW, LOAD 7.307 kW, PV 2.741 kW and battery discharge 33.653 kW. |
+| 18:22:12 | Second stable aggregate sample: grid export 29.232 kW, LOAD 7.353 kW, PV 2.722 kW and battery discharge 33.863 kW. |
+| operator observation, exact time not retained | The operator reported Grid Discharge on both nodes in the manufacturer application. No per-node power, screenshot or exact application timestamp was retained. |
+| 18:22:41 | The discharge timer was first recorded as idle. The operator had been instructed to stop manually; the exact stop command/service timestamp was not captured. This is a stop-side marker, not proof of an automatic stop. |
+| by 18:23:25 | Physical Master FC03 reported raw EMS mode code `0` (Self-Use). The 44-second interval from the first idle-timer observation is not command-to-ACK latency because the actual manual stop time is unknown. |
+| by 18:23:46 | Manual ownership and the observed execution flags were off and aggregate power was in the safe post-discharge state. The 65-second interval from the first idle-timer observation is likewise not exact stop latency. |
+| 18:24:21 | Final observation remained safe; SOC was 97% and the recorded fault set was clean. |
+
+Across the before, active and after observations, registers `4301–4306`
+remained `20 / 90 / 70 / 50 / 30 / 100`. GCF registers `258/259` remained
+`1 / 200`, battery maximum charge register `306` remained `100`, and no new
+fault was recorded. The two stable aggregate samples were 23 seconds apart and
+are consistent with physical contribution beyond a single 20 kW inverter, but
+aggregate power is corroboration rather than an acknowledgement from a named
+Slave.
+
+The manufacturer-application observation supports the conclusion that both
+nodes entered Grid Discharge, but its retained evidence is limited to the
+operator report. It does not establish separate per-node power or an exact
+vendor transition time. The later raw codes `5` and `0` are physical FC03
+evidence from the Master only. Because the stop was requested manually and its
+command timestamp was not retained, this run must not be described as an
+automatic-stop test or assigned an exact stop latency.
+
+Before v1.5.6 can be accepted, repeat the complete sequence on its exact
+candidate versions. Capture exact start and stop service timestamps, separate
+timestamped Master and Slave mode and power evidence, both Master FC03
+transitions, stable aggregate samples, ownership/timer release, unchanged
+protected registers and the final fault-free safe-power state.
 
 During the 2026-08-14 live audit,
 `sensor.solcast_pv_forecast_prognoza_na_dzien_3` was initially disabled in the

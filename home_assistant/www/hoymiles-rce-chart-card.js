@@ -2460,12 +2460,28 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       grid_entity: "sensor.hoymiles_hit_overview_grid_total_active_power",
       battery_entity: "sensor.hoymiles_hit_overview_battery_power",
       battery_soc_entity: "sensor.hoymiles_hit_overview_battery_soc",
+      battery_current_entity: "sensor.hoymiles_hit_battery_current_bms",
+      battery_current_inverter_entity:
+        "sensor.hoymiles_hit_battery_current_inverter",
+      battery_capacity_entity: "sensor.hoymiles_hit_battery_capacity",
+      ems_mode_readback_entity: "sensor.hoymiles_hit_ems_mode_readback_code",
+      battery_self_use_floor_entity:
+        "sensor.hoymiles_hit_ems_self_use_soc_readback",
+      battery_charge_target_entity:
+        "sensor.hoymiles_hit_ems_force_charge_soc_readback",
+      battery_discharge_target_entity:
+        "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+      battery_max_soc_entity: "number.hoymiles_hit_maximum_soc",
+      battery_min_soc_entity: "number.hoymiles_hit_minimum_soc",
       inverter_entity: "sensor.hoymiles_hit_overview_inverter_active_power",
       ems_mode_entity: "select.hoymiles_hit_ems_mode",
       forecast_today_entity: "sensor.hoymiles_solcast_forecast_today",
       forecast_remaining_entity:
         "sensor.hoymiles_solcast_forecast_remaining_today",
+      forecast_tomorrow_entity: "sensor.hoymiles_solcast_forecast_tomorrow",
       average_load_entity: "sensor.hoymiles_load_average_4_days",
+      cav_temperature_entity: "sensor.hoymiles_hit_cav_temp",
+      battery_path_temperature_entity: "sensor.hoymiles_hit_bat_ths_temp",
       pv_today_entity: "sensor.hoymiles_hit_pv_total_energy_today",
       pv_to_load_today_entity: "sensor.hoymiles_hit_pv_to_load_energy_today",
       pv_to_battery_today_entity:
@@ -2572,7 +2588,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       .insights {
         display: grid;
         gap: 10px;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         margin-top: 15px;
       }
       .insight, .daily-item, .grid-import-item, .metric {
@@ -2598,15 +2614,13 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       .insight-label, .daily-label {
         color: #8496ad;
         display: block;
-        font-size: 10px;
+        font-size: 11px;
         letter-spacing: .025em;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        line-height: 1.25;
       }
       .insight-value {
         display: block;
-        font-size: 16px;
+        font-size: 17px;
         font-variant-numeric: tabular-nums;
         font-weight: 650;
         margin-top: 3px;
@@ -2651,8 +2665,8 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
         cursor: pointer;
         display: flex;
         gap: 9px;
-        min-width: 128px;
-        padding: 9px 11px;
+        min-width: 144px;
+        padding: 11px 13px;
         position: absolute;
         text-align: left;
         transition: background .18s ease, border-color .18s ease, transform .18s ease;
@@ -2675,7 +2689,8 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       .metric-name {
         color: #8fa0b5;
         display: block;
-        font-size: 9px;
+        font-size: 13px;
+        font-weight: 600;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2683,7 +2698,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       .metric-value {
         color: #fff;
         display: block;
-        font-size: 14px;
+        font-size: 18px;
         font-variant-numeric: tabular-nums;
         font-weight: 650;
         letter-spacing: -.02em;
@@ -2692,8 +2707,24 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       }
       .metric.pv { --metric-color: var(--orbit-pv); left: 5%; top: 14%; }
       .metric.grid { --metric-color: var(--orbit-grid); right: 5%; top: 14%; }
-      .metric.home { --metric-color: var(--orbit-load); bottom: 8%; left: 5%; }
-      .metric.battery { --metric-color: var(--orbit-battery); bottom: 8%; right: 5%; }
+      .metric.home { --metric-color: var(--orbit-load); bottom: 2%; left: 5%; }
+      .metric.battery { --metric-color: var(--orbit-battery); bottom: 2%; min-width: 238px; right: 5%; }
+      .metric-battery-detail,
+      .metric-battery-eta {
+        color: #91a4bc;
+        display: block;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.25;
+        margin-top: 3px;
+        white-space: nowrap;
+      }
+      .metric-battery-eta {
+        color: #a8b8ca;
+        margin-top: 2px;
+        max-width: 230px;
+        white-space: normal;
+      }
       .core {
         align-items: center;
         appearance: none;
@@ -2716,9 +2747,29 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
         width: 148px;
         z-index: 3;
       }
+      .core-copy { align-items: center; display: flex; flex-direction: column; }
       .core-value { display: block; font-size: 32px; font-variant-numeric: tabular-nums; font-weight: 680; letter-spacing: -.06em; line-height: 1; }
-      .core-name { color: #8fa3bc; display: block; font-size: 10px; margin-top: 3px; }
-      .core-status { color: #83f0d0; display: block; font-size: 9px; margin-top: 10px; }
+      .core-name { color: #8fa3bc; display: block; font-size: 12px; margin-top: 4px; }
+      .core-temperature {
+        background: rgba(13, 20, 30, .9);
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 999px;
+        color: #b6c8dc;
+        display: block;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        left: 50%;
+        line-height: 1.15;
+        padding: 5px 9px;
+        pointer-events: none;
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+      .core-temperature.cav { bottom: calc(100% + 10px); }
+      .core-temperature.battery-path { top: calc(100% + 10px); }
+      .core-status { color: #83f0d0; display: block; font-size: 11px; margin-top: 6px; }
       .daily {
         border-top: 1px solid rgba(255,255,255,.075);
         display: grid;
@@ -2806,22 +2857,27 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
         .header { padding: 0 2px; }
         .brand { font-size: 9px; letter-spacing: .16em; }
         .system-state { font-size: 10px; max-width: 62%; padding: 5px 8px; }
-        .insights { gap: 6px; margin-top: 11px; }
+        .insights { gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 11px; }
         .insight { border-radius: 11px; padding: 8px 8px; text-align: center; }
-        .insight-label { font-size: 8px; }
-        .insight-value { font-size: 13px; }
+        .insight-label { font-size: 11px; }
+        .insight-value { font-size: 15px; }
         .aurora { height: 390px; margin-top: -2px; }
-        .metric { min-width: 106px; padding: 8px 9px; }
-        .metric-name { font-size: 8px; }
-        .metric-value { font-size: 12px; }
+        .metric { min-width: 118px; padding: 9px 10px; }
+        .metric-name { font-size: 11px; }
+        .metric-value { font-size: 16px; }
         .metric.pv { left: 2%; top: 15%; }
         .metric.grid { right: 2%; top: 15%; }
-        .metric.home { bottom: 8%; left: 2%; }
-        .metric.battery { bottom: 8%; right: 2%; }
+        .metric.home { bottom: 2%; left: 2%; }
+        .metric.battery { bottom: 2%; min-width: 198px; right: 2%; }
+        .metric-battery-detail, .metric-battery-eta { font-size: 11px; }
+        .metric-battery-eta { max-width: 190px; }
         .core { height: 132px; top: 51%; width: 132px; }
         .core-value { font-size: 28px; }
-        .core-name { font-size: 9px; }
-        .core-status { font-size: 8px; }
+        .core-name { font-size: 11px; }
+        .core-temperature { font-size: 10px; }
+        .core-temperature.cav { bottom: calc(100% + 8px); }
+        .core-temperature.battery-path { top: calc(100% + 8px); }
+        .core-status { font-size: 10px; }
         .daily { gap: 4px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 11px; }
         .daily-item { background: rgba(255,255,255,.025); padding: 8px 6px; }
         .daily-label { font-size: 9px; }
@@ -2845,6 +2901,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
         <div class="insights">
           <button class="insight" data-key="forecast_today"><span class="insight-label" data-label="forecast_today"></span><span class="insight-value" data-value="forecast_today"></span></button>
           <button class="insight" data-key="forecast_remaining"><span class="insight-label" data-label="forecast_remaining"></span><span class="insight-value" data-value="forecast_remaining"></span></button>
+          <button class="insight" data-key="forecast_tomorrow"><span class="insight-label" data-label="forecast_tomorrow"></span><span class="insight-value" data-value="forecast_tomorrow"></span></button>
           <button class="insight" data-key="average_load"><span class="insight-label" data-label="average_load"></span><span class="insight-value" data-value="average_load"></span></button>
         </div>
         <div class="aurora">
@@ -2857,8 +2914,8 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
           <button class="metric pv" data-key="pv"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="pv"></span><strong class="metric-value" data-value="pv"></strong></span></button>
           <button class="metric grid" data-key="grid"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="grid_live"></span><strong class="metric-value" data-value="grid"></strong></span></button>
           <button class="metric home" data-key="load"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="load"></span><strong class="metric-value" data-value="load"></strong></span></button>
-          <button class="metric battery" data-key="battery"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="battery_live"></span><strong class="metric-value" data-value="battery"></strong></span></button>
-          <button class="core" data-key="pv"><span><strong class="core-value" data-value="core"></strong><span class="core-name" data-label="core"></span><small class="core-status" data-value="core_status"></small></span></button>
+          <button class="metric battery" data-key="battery"><span class="metric-dot"></span><span class="metric-copy"><span class="metric-name" data-label="battery_live"></span><strong class="metric-value" data-value="battery"></strong><span class="metric-battery-detail" data-value="battery_detail"></span><span class="metric-battery-eta" data-value="battery_eta"></span></span></button>
+          <button class="core" data-key="pv"><span class="core-copy"><small class="core-temperature cav"><span data-label="cav_temperature"></span> <span data-value="cav_temperature"></span></small><strong class="core-value" data-value="core"></strong><span class="core-name" data-label="core"></span><small class="core-temperature battery-path"><span data-label="battery_path_temperature"></span> <span data-value="battery_path_temperature"></span></small><small class="core-status" data-value="core_status"></small></span></button>
         </div>
         <div class="daily">
           <button class="daily-item" data-key="pv_today"><span class="daily-label" data-label="pv_today"></span><span class="daily-value" data-value="pv_today"></span></button>
@@ -2897,7 +2954,10 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     const pl = {
       forecast_today: "Prognoza PV dzisiaj",
       forecast_remaining: "Pozostała produkcja",
+      forecast_tomorrow: "Prognoza PV jutro",
       average_load: "Średnie zużycie domu",
+      cav_temperature: "Temperatura Falownika",
+      battery_path_temperature: "Temperatura toru magazynu",
       pv: "PV",
       grid: "Sieć",
       load: "Dom",
@@ -2919,8 +2979,14 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       import: "pobór",
       charge: "ładowanie",
       discharge: "rozładowanie",
+      ready: "gotowość",
       idle: "spoczynek",
       noData: "brak danych",
+      etaUnavailable: "ETA —",
+      toReserve: "do rezerwy",
+      toTarget: "do celu",
+      toFullCharge: "do pełnego naładowania",
+      toFullDischarge: "do pełnego rozładowania",
       online: "Dane na żywo",
       partial: "Część danych niedostępna",
       offline: "Brak danych falownika",
@@ -2932,7 +2998,10 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     const en = {
       forecast_today: "PV forecast today",
       forecast_remaining: "Remaining production",
+      forecast_tomorrow: "PV forecast tomorrow",
       average_load: "Average home use",
+      cav_temperature: "Inverter temperature",
+      battery_path_temperature: "Battery circuit temperature",
       pv: "PV",
       grid: "Grid",
       load: "Home",
@@ -2954,8 +3023,14 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       import: "import",
       charge: "charging",
       discharge: "discharging",
+      ready: "ready",
       idle: "idle",
       noData: "no data",
+      etaUnavailable: "ETA —",
+      toReserve: "to reserve",
+      toTarget: "to target",
+      toFullCharge: "to full charge",
+      toFullDischarge: "to full discharge",
       online: "Live data",
       partial: "Some data unavailable",
       offline: "Inverter data unavailable",
@@ -2976,7 +3051,10 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
       inverter: "inverter_entity",
       forecast_today: "forecast_today_entity",
       forecast_remaining: "forecast_remaining_entity",
+      forecast_tomorrow: "forecast_tomorrow_entity",
       average_load: "average_load_entity",
+      cav_temperature: "cav_temperature_entity",
+      battery_path_temperature: "battery_path_temperature_entity",
       pv_today: "pv_today_entity",
       pv_to_load_today: "pv_to_load_today_entity",
       pv_to_battery_today: "pv_to_battery_today_entity",
@@ -3044,6 +3122,217 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     return `${this._number(Math.abs(value), 1)} kWh`;
   }
 
+  _formatTemperature(key) {
+    const state = this._state(key);
+    const raw = String(state?.state ?? "").trim().toLowerCase();
+    if (!raw || ["unknown", "unavailable", "none", "null"].includes(raw)) {
+      return "—";
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return "—";
+    const unit = String(state?.attributes?.unit_of_measurement || "°C");
+    return `${this._number(value, 1)} ${unit}`;
+  }
+
+  _availableNumericStateById(
+    entityId,
+    minimum = Number.NEGATIVE_INFINITY,
+    maximum = Number.POSITIVE_INFINITY
+  ) {
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    const raw = String(state?.state ?? "").trim().toLowerCase();
+    if (!raw || ["unknown", "unavailable", "none", "null"].includes(raw)) {
+      return null;
+    }
+    const value = Number(raw);
+    if (
+      !Number.isFinite(value) ||
+      value < minimum ||
+      value > maximum
+    ) {
+      return null;
+    }
+    return value;
+  }
+
+  _freshPowerKwById(entityId) {
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    let value = this._availableNumericStateById(entityId);
+    if (value === null) return null;
+    const unit = String(state?.attributes?.unit_of_measurement || "W").toLowerCase();
+    if (!["w", "kw", "mw"].includes(unit)) return null;
+    if (unit === "mw") value *= 1000;
+    else if (unit !== "kw") value /= 1000;
+    return Math.abs(value) <= 1000 ? value : null;
+  }
+
+  _freshCapacityKwh() {
+    const entityId = this._config?.battery_capacity_entity;
+    const state = entityId ? this._hass?.states?.[entityId] : undefined;
+    let value = this._availableNumericStateById(entityId);
+    if (value === null) return null;
+    const unit = String(state?.attributes?.unit_of_measurement || "kWh").toLowerCase();
+    if (!["wh", "kwh", "mwh"].includes(unit)) return null;
+    if (unit === "wh") value /= 1000;
+    else if (unit === "mwh") value *= 1000;
+    return value > 0 && value <= 10000 ? value : null;
+  }
+
+  _freshBatteryCurrentA() {
+    const candidates = [
+      this._config?.battery_current_entity,
+      this._config?.battery_current_inverter_entity,
+    ].filter(Boolean);
+    for (const entityId of candidates) {
+      const state = entityId ? this._hass?.states?.[entityId] : undefined;
+      const value = this._availableNumericStateById(entityId);
+      if (value === null) continue;
+      const unit = String(state?.attributes?.unit_of_measurement || "A").toLowerCase();
+      if (!["a", "ma", "ka"].includes(unit)) continue;
+      let currentA = value;
+      if (unit === "ma") currentA /= 1000;
+      else if (unit === "ka") currentA *= 1000;
+      currentA = Math.abs(currentA);
+      if (currentA <= 10000) return currentA;
+    }
+    return null;
+  }
+
+  _batteryTarget(powerKw, soc) {
+    const mode = this._availableNumericStateById(
+      this._config?.ems_mode_readback_entity,
+      0,
+      5
+    );
+    if (![0, 3, 4, 5].includes(mode)) return null;
+
+    let entityId;
+    let kind;
+    if (powerKw < -0.02) {
+      entityId =
+        mode === 4
+          ? this._config?.battery_charge_target_entity
+          : this._config?.battery_max_soc_entity;
+      kind = "target";
+    } else if (powerKw > 0.02) {
+      entityId =
+        mode === 5
+          ? this._config?.battery_discharge_target_entity
+          : mode === 0
+            ? this._config?.battery_self_use_floor_entity
+            : this._config?.battery_min_soc_entity;
+      kind = "reserve";
+    } else {
+      return null;
+    }
+
+    const value = this._availableNumericStateById(entityId, 0, 100);
+    if (
+      value === null ||
+      (kind === "target" && value <= soc) ||
+      (kind === "reserve" && value >= soc)
+    ) {
+      return null;
+    }
+    return { value, kind };
+  }
+
+  _batteryPresentation() {
+    const copy = this._copy();
+    const powerKw = this._freshPowerKwById(this._config?.battery_entity);
+    const mode = this._availableNumericStateById(
+      this._config?.ems_mode_readback_entity,
+      0,
+      5
+    );
+    const soc = this._availableNumericStateById(
+      this._config?.battery_soc_entity,
+      0,
+      100
+    );
+    const capacityKwh = this._freshCapacityKwh();
+    const currentA = this._freshBatteryCurrentA();
+    const storedKwh =
+      capacityKwh !== null && soc !== null ? (capacityKwh * soc) / 100 : null;
+    const target =
+      powerKw !== null && soc !== null ? this._batteryTarget(powerKw, soc) : null;
+    let etaKind = target?.kind || null;
+    let etaHours = null;
+    if (target && capacityKwh !== null && Math.abs(powerKw) > 0.02) {
+      const energyKwh = (capacityKwh * Math.abs(target.value - soc)) / 100;
+      const candidateHours = energyKwh / Math.abs(powerKw);
+      if (Number.isFinite(candidateHours) && candidateHours > 0 && candidateHours <= 168) {
+        etaHours = candidateHours;
+        etaKind = target.kind;
+      }
+    }
+    if (etaHours === null && capacityKwh !== null && soc !== null && Math.abs(powerKw) > 0.02) {
+      const targetSoc = powerKw < 0 ? 100 : 0;
+      const energyKwh = (capacityKwh * Math.abs(soc - targetSoc)) / 100;
+      const candidateHours = energyKwh / Math.abs(powerKw);
+      if (
+        Number.isFinite(candidateHours) &&
+        candidateHours > 0 &&
+        candidateHours <= 168
+      ) {
+        etaHours = candidateHours;
+        etaKind = powerKw < 0 ? "full_charge" : "full_discharge";
+      }
+    }
+
+    const direction =
+      powerKw === null
+        ? copy.noData
+        : Math.abs(powerKw) <= 0.02
+          ? [0, 3, 4, 5].includes(mode)
+            ? copy.ready
+            : copy.idle
+          : powerKw > 0
+            ? copy.discharge
+            : copy.charge;
+    return {
+      powerKw,
+      soc,
+      currentA,
+      storedKwh,
+      etaHours,
+      etaKind,
+      direction,
+    };
+  }
+
+  _formatBatteryEta(etaHours, kind) {
+    const copy = this._copy();
+    if (
+      !Number.isFinite(etaHours) ||
+      etaHours <= 0 ||
+      etaHours > 168 ||
+      ![
+        "reserve",
+        "target",
+        "full_charge",
+        "full_discharge",
+      ].includes(kind)
+    ) {
+      return copy.etaUnavailable;
+    }
+    const totalMinutes = Math.max(1, Math.round(etaHours * 60));
+    const suffixMap = {
+      reserve: copy.toReserve,
+      target: copy.toTarget,
+      full_charge: copy.toFullCharge,
+      full_discharge: copy.toFullDischarge,
+    };
+    const suffix = suffixMap[kind] || copy.etaUnavailable;
+    if (suffix === copy.etaUnavailable) {
+      return suffix;
+    }
+    if (totalMinutes < 60) return `~${totalMinutes} min ${suffix}`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = String(totalMinutes % 60).padStart(2, "0");
+    return `~${hours} h ${minutes} min ${suffix}`;
+  }
+
   _setText(selector, value) {
     const element = this._card?.querySelector(selector);
     if (element) element.textContent = value;
@@ -3078,7 +3367,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     if (!this._mounted || !this._card || !this._config || !this._hass) return;
     const copy = this._copy();
     Object.keys(copy).forEach((key) => {
-      if (["forecast_today", "forecast_remaining", "average_load", "pv", "grid", "load", "battery", "inverter", "core", "pv_today", "pv_to_load_today", "pv_to_battery_today", "pv_to_grid_today", "grid_import_title", "grid_import_today", "grid_to_load_today", "grid_to_battery_today"].includes(key)) {
+      if (["forecast_today", "forecast_remaining", "forecast_tomorrow", "average_load", "cav_temperature", "battery_path_temperature", "pv", "grid", "load", "battery", "inverter", "core", "pv_today", "pv_to_load_today", "pv_to_battery_today", "pv_to_grid_today", "grid_import_title", "grid_import_today", "grid_to_load_today", "grid_to_battery_today"].includes(key)) {
         this._setText(`[data-label="${key}"]`, copy[key]);
       }
     });
@@ -3086,16 +3375,38 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
     const pv = this._powerKw("pv");
     const load = this._powerKw("load");
     const grid = this._powerKw("grid");
-    const battery = this._powerKw("battery");
+    const batteryPresentation = this._batteryPresentation();
+    const battery = batteryPresentation.powerKw;
     const inverter = this._powerKw("inverter");
-    const soc = this._numericStateById(this._config.battery_soc_entity);
     const threshold = 0.02;
 
     this._setText('[data-value="pv"]', this._formatPower(pv));
     this._setText('[data-value="load"]', this._formatPower(load));
     this._setText('[data-value="grid"]', this._formatPower(grid));
     this._setText('[data-value="battery"]', this._formatPower(battery));
+    const storedText = Number.isFinite(batteryPresentation.storedKwh)
+      ? `${this._number(batteryPresentation.storedKwh, 1)} kWh`
+      : "—";
+    const currentText = Number.isFinite(batteryPresentation.currentA)
+      ? `${this._number(batteryPresentation.currentA, 1)} A`
+      : "—";
+    this._setText('[data-value="battery_detail"]', `${storedText} · ${currentText}`);
+    this._setText(
+      '[data-value="battery_eta"]',
+      this._formatBatteryEta(
+        batteryPresentation.etaHours,
+        batteryPresentation.etaKind
+      )
+    );
     this._setText('[data-value="core"]', Number.isFinite(pv) ? this._number(Math.abs(pv), 2) : "—");
+    this._setText(
+      '[data-value="cav_temperature"]',
+      this._formatTemperature("cav_temperature")
+    );
+    this._setText(
+      '[data-value="battery_path_temperature"]',
+      this._formatTemperature("battery_path_temperature")
+    );
     this._setText('[data-value="core_status"]', copy.core_status);
     const gridDirection =
       grid === null
@@ -3106,16 +3417,13 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
             ? copy.export
             : copy.import;
     this._setText('[data-label="grid_live"]', gridDirection);
-    const batteryDirection =
-      battery === null
-        ? copy.noData
-        : Math.abs(battery) <= threshold
-          ? copy.idle
-          : battery > 0
-            ? copy.discharge
-            : copy.charge;
-    const socText = Number.isFinite(soc) ? ` · ${this._number(soc, 0)}%` : "";
-    this._setText('[data-label="battery_live"]', `${batteryDirection}${socText}`);
+    const socText = Number.isFinite(batteryPresentation.soc)
+      ? `${this._number(batteryPresentation.soc, 0)}%`
+      : "—";
+    this._setText(
+      '[data-label="battery_live"]',
+      `${batteryPresentation.direction} · ${socText}`
+    );
 
     this._setFlow("pv", pv !== null && pv > threshold, false, pv);
     this._setFlow("home", load !== null && Math.abs(load) > threshold, false, load);
@@ -3129,6 +3437,7 @@ class HoymilesAuroraEnergyCard extends HTMLElement {
 
     this._setText('[data-value="forecast_today"]', this._formatEnergy("forecast_today"));
     this._setText('[data-value="forecast_remaining"]', this._formatEnergy("forecast_remaining"));
+    this._setText('[data-value="forecast_tomorrow"]', this._formatEnergy("forecast_tomorrow"));
     this._setText('[data-value="average_load"]', this._formatEnergy("average_load"));
     for (const key of ["pv_today", "pv_to_load_today", "pv_to_battery_today", "pv_to_grid_today"]) {
       this._setText(`[data-value="${key}"]`, this._formatEnergy(key));

@@ -8,12 +8,168 @@ be covered by deterministic tests.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from math import isfinite
+import re
 
 
 LIVE_FORECAST_MIN_EXPECTED_KWH = 2.0
 LIVE_FORECAST_FULL_CONFIDENCE_KWH = 6.0
 LIVE_FORECAST_MIN_FACTOR = 0.15
+ZERO_EXPORT_FORECAST_FACTOR = 0.80
 _EPSILON = 1e-6
+_PHYSICAL_EXPORT_HISTORY_MIN_VERSION = (1, 5, 2)
+_PACKAGE_VERSION = re.compile(
+    r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:[-+][0-9A-Za-z.-]{1,64})?$"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastLearningPolicy:
+    """One deterministic decision about forecast-learning eligibility."""
+
+    enabled: bool
+    mode: str
+    excluded_reason: str | None
+    factor_override: float | None = None
+
+
+def resolve_forecast_learning_policy(
+    *,
+    readback_verified: bool,
+    gcf_enable_code: float | None,
+    export_limit_percent: float | None,
+    unverified_reason: str | None = None,
+) -> ForecastLearningPolicy:
+    """Resolve adaptive learning only from verified physical GCF readbacks.
+
+    Register 258 decides whether register 259 is effective.  A disabled GCF
+    leaves export unrestricted by this function.  An enabled GCF is treated
+    as zero-export only for the exact, verified ``0.0`` readback; values
+    outside the physical ``0..200`` percent range remain invalid evidence.
+    """
+
+    if not readback_verified:
+        return ForecastLearningPolicy(
+            enabled=False,
+            mode="conservative_gcf_unverified",
+            excluded_reason=unverified_reason or "gcf_readback_unverified",
+        )
+    if (
+        gcf_enable_code is None
+        or not isfinite(gcf_enable_code)
+        or gcf_enable_code not in {0.0, 1.0}
+    ):
+        return ForecastLearningPolicy(
+            enabled=False,
+            mode="conservative_gcf_unverified",
+            excluded_reason="gcf_enable_invalid",
+        )
+    if gcf_enable_code == 0.0:
+        return ForecastLearningPolicy(True, "adaptive", None)
+    if (
+        export_limit_percent is None
+        or not isfinite(export_limit_percent)
+        or export_limit_percent < 0.0
+        or export_limit_percent > 200.0
+    ):
+        return ForecastLearningPolicy(
+            enabled=False,
+            mode="conservative_gcf_unverified",
+            excluded_reason="gcf_limit_invalid",
+        )
+
+    if export_limit_percent == 0.0:
+        return ForecastLearningPolicy(
+            enabled=False,
+            mode="fixed_zero_export",
+            excluded_reason="zero_export",
+            factor_override=ZERO_EXPORT_FORECAST_FACTOR,
+        )
+    return ForecastLearningPolicy(True, "adaptive", None)
+
+
+def forecast_factor_for_policy(
+    policy: ForecastLearningPolicy,
+    historical_factor: float,
+) -> float:
+    """Return the factor consumed by planners without mutating their model."""
+
+    historical = min(max(historical_factor, LIVE_FORECAST_MIN_FACTOR), 1.0)
+    if policy.factor_override is not None:
+        return policy.factor_override
+    if not policy.enabled:
+        return min(historical, ZERO_EXPORT_FORECAST_FACTOR)
+    return historical
+
+
+def forecast_learning_history_day_eligible(
+    export_allowed_history: Sequence[tuple[datetime, str]],
+    package_version_history: Sequence[tuple[datetime, str]],
+    *,
+    day_start: datetime,
+    day_end: datetime,
+) -> bool:
+    """Return whether verified export remained allowed for a whole day.
+
+    Since managed package v1.5.2,
+    ``binary_sensor.hoymiles_ems_export_allowed`` is derived from the physical
+    258/259 readbacks and their completed FC03 generation.  Earlier package
+    versions used UI values under the same stable entity ID, so a second
+    version-history boundary deliberately excludes those legacy days.  Any
+    zero-export, stale, unavailable, missing or pre-v1.5.2 interval rejects the
+    complete cumulative-PV day so it can never re-enter adaptive learning.
+    """
+
+    if day_end <= day_start:
+        return False
+
+    def _window_states(
+        history: Sequence[tuple[datetime, str]],
+    ) -> tuple[str | None, list[str]] | None:
+        state_at_start: str | None = None
+        intraday: list[str] = []
+        try:
+            ordered = sorted(history, key=lambda item: item[0])
+            for reported_at, raw_state in ordered:
+                state = str(raw_state).strip().casefold()
+                if reported_at <= day_start:
+                    state_at_start = state
+                elif reported_at < day_end:
+                    intraday.append(state)
+                else:
+                    break
+        except (AttributeError, TypeError, ValueError):
+            return None
+        return state_at_start, intraday
+
+    export_states = _window_states(export_allowed_history)
+    version_states = _window_states(package_version_history)
+    if export_states is None or version_states is None:
+        return False
+    export_at_start, export_intraday = export_states
+    if export_at_start != "on" or any(
+        state != "on" for state in export_intraday
+    ):
+        return False
+
+    def _physical_history_version(raw: str) -> bool:
+        match = _PACKAGE_VERSION.fullmatch(raw)
+        if match is None:
+            return False
+        try:
+            version = tuple(int(part) for part in match.groups()[:3])
+        except (TypeError, ValueError):
+            return False
+        return version >= _PHYSICAL_EXPORT_HISTORY_MIN_VERSION
+
+    version_at_start, version_intraday = version_states
+    if version_at_start is None or not _physical_history_version(
+        version_at_start
+    ):
+        return False
+    return all(_physical_history_version(state) for state in version_intraday)
 
 
 def adaptive_forecast_factor(

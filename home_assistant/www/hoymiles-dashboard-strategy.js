@@ -1,10 +1,36 @@
 (function registerHoymilesDashboardStrategy() {
   "use strict";
 
-  const scriptUrl = document.currentScript?.src;
-  const assetBase = scriptUrl
-    ? new URL(".", scriptUrl)
-    : new URL("/local/", window.location.origin);
+  const scriptUrl =
+    document.currentScript?.src ||
+    Array.from(document.scripts || [])
+      .reverse()
+      .find((script) => {
+        try {
+          return new URL(script.src, window.location.origin).pathname.endsWith(
+            "/hoymiles-dashboard-strategy.js"
+          );
+        } catch (_error) {
+          return false;
+        }
+      })?.src;
+  const canonicalModuleUrl = scriptUrl
+    ? new URL("hoymiles-rce-chart-card.js", new URL(".", scriptUrl))
+    : new URL(
+        "/local/hoymiles-rce-chart-card.js?v=1.5.6.24",
+        window.location.origin
+      );
+  if (scriptUrl) {
+    canonicalModuleUrl.search = new URL(scriptUrl).search;
+  }
+  let canonicalModulePromise;
+
+  const loadCanonicalModule = () => {
+    canonicalModulePromise ??= import(canonicalModuleUrl.href);
+    return canonicalModulePromise;
+  };
+
+  const elementName = "ll-strategy-dashboard-hoymiles-hit-xxl-g3";
 
   class HoymilesHitDashboardBootstrapStrategy extends HTMLElement {
     static noEditor = true;
@@ -24,33 +50,21 @@
     }
 
     static async generate(config, hass) {
-      const requestedLanguage = (
-        config?.language ??
-        hass?.locale?.language ??
-        hass?.language ??
-        "en"
-      ).toLowerCase();
-      const language = requestedLanguage.startsWith("pl") ? "pl" : "en";
-      const dashboardUrl = new URL(
-        `dashboard_hoymiles_${language}.json`,
-        assetBase
+      const bootstrapGenerate = this.generate;
+      await loadCanonicalModule();
+      const canonicalStrategy = customElements.get(elementName);
+      if (
+        canonicalStrategy?.generate &&
+        canonicalStrategy.generate !== bootstrapGenerate
+      ) {
+        return canonicalStrategy.generate(config, hass);
+      }
+      throw new Error(
+        "Canonical Hoymiles frontend module did not upgrade the dashboard strategy"
       );
-      dashboardUrl.search = "";
-      const response = await fetch(dashboardUrl, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(
-          `Cannot load Hoymiles dashboard (${response.status} ${response.statusText})`
-        );
-      }
-      const dashboard = await response.json();
-      if (config?.title) {
-        dashboard.title = config.title;
-      }
-      return dashboard;
     }
   }
 
-  const elementName = "ll-strategy-dashboard-hoymiles-hit-xxl-g3";
   if (!customElements.get(elementName)) {
     customElements.define(
       elementName,

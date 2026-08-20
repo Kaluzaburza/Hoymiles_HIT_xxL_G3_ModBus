@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import timedelta
 from functools import partial
 from typing import Any
@@ -25,6 +26,9 @@ from .installation_identity import async_get_or_create_installation_identity
 from .models import RuntimeData
 
 
+# Response-event attributes are an optional extension inside the existing
+# control_history item mapping.  Readers of report schema 1 already ignore
+# unknown item keys, so this additive evidence does not require a schema bump.
 REPORT_SCHEMA_VERSION = 1
 HISTORY_HOURS = 24
 MAX_HISTORY_EVENTS_PER_ENTITY = 500
@@ -71,6 +75,57 @@ HISTORY_SENSOR_PARTS = (
     "system_work_state",
     "tariff_charge_plan",
 )
+HISTORY_EXACT_SENSOR_ENTITY_IDS = frozenset(
+    {
+        "sensor.hoymiles_ems_hardware_mode",
+        "sensor.hoymiles_parallel_aggregate_physical_response",
+    }
+)
+AGGREGATE_RESPONSE_ENTITY_ID = (
+    "sensor.hoymiles_parallel_aggregate_physical_response"
+)
+# Recorder attributes are normally omitted to keep the archive compact.  This
+# one event-driven diagnostic sensor is the exception: its bounded attributes
+# are needed to correlate a pending transaction with its terminal aggregate
+# response without exporting unrelated state attributes.
+AGGREGATE_RESPONSE_HISTORY_ATTRIBUTE_KEYS = frozenset(
+    {
+        "authoritative_expected_power",
+        "baseline_generation",
+        "candidate_generations",
+        "collection_baseline_generation",
+        "completed_at",
+        "configuration_acknowledgement_scope",
+        "detected_inverters",
+        "evidence_scope",
+        "expected_power_kw",
+        "final_generation",
+        "formula",
+        "grid_samples_kw",
+        "individual_inverter_acknowledgement",
+        "latched_machine_type",
+        "observed_median_power_kw",
+        "observed_spread_kw",
+        "owner",
+        "pending_at",
+        "phase",
+        "reason",
+        "required_stable_generations",
+        "requires_parallel_proof",
+        "sample_count",
+        "sampled_transition_observed",
+        "sampled_transition_peak_kw",
+        "sampled_transition_scope",
+        "samples_kw",
+        "stable_window_start",
+        "tolerance_kw",
+        "topology_known",
+        "transaction_id",
+        "transaction_started_epoch",
+        "transition_grace_seconds",
+        "verification_horizon_seconds",
+    }
+)
 
 
 def _state_snapshot(state: State | None, *, key_hint: str = "") -> Any:
@@ -106,21 +161,49 @@ def _needs_history(entity_id: str) -> bool:
     domain, _, object_id = entity_id.partition(".")
     if domain in HISTORY_DOMAINS:
         return True
-    return domain == "sensor" and any(
-        part in object_id for part in HISTORY_SENSOR_PARTS
+    return entity_id in HISTORY_EXACT_SENSOR_ENTITY_IDS or (
+        domain == "sensor"
+        and any(part in object_id for part in HISTORY_SENSOR_PARTS)
     )
 
 
-def _serialize_history_item(item: Any) -> dict[str, Any]:
+def _response_history_attributes(attributes: Any) -> dict[str, Any]:
+    """Return only the response event attributes needed by the analyzer."""
+    if not isinstance(attributes, Mapping):
+        return {}
+    return {
+        key: sanitize_diagnostic_value(value, key_hint=key)
+        for key, value in attributes.items()
+        if key in AGGREGATE_RESPONSE_HISTORY_ATTRIBUTE_KEYS
+    }
+
+
+def _serialize_history_item(
+    item: Any,
+    *,
+    entity_id: str,
+) -> dict[str, Any]:
     """Serialize recorder State objects and tolerate compressed dictionaries."""
     if isinstance(item, State):
-        return {
+        serialized = {
             "state": sanitize_diagnostic_value(item.state),
             "last_changed": item.last_changed.isoformat(),
             "last_updated": item.last_updated.isoformat(),
         }
+        if entity_id == AGGREGATE_RESPONSE_ENTITY_ID:
+            serialized["attributes"] = _response_history_attributes(
+                dict(item.attributes)
+            )
+        return serialized
     if isinstance(item, dict):
-        return sanitize_diagnostic_value(item)
+        serialized = sanitize_diagnostic_value(item)
+        if entity_id == AGGREGATE_RESPONSE_ENTITY_ID:
+            serialized["attributes"] = _response_history_attributes(
+                item.get("attributes")
+            )
+        else:
+            serialized.pop("attributes", None)
+        return serialized
     return {"value": sanitize_diagnostic_value(item)}
 
 
@@ -134,19 +217,44 @@ async def _async_history(
     end = dt_util.utcnow()
     start = end - timedelta(hours=HISTORY_HOURS)
     try:
-        query = partial(
-            recorder_history.get_significant_states,
-            hass,
-            start,
-            end,
-            entity_ids,
-            None,
-            True,
-            True,
-            False,
-            True,
-        )
-        raw = await get_recorder_instance(hass).async_add_executor_job(query)
+        recorder = get_recorder_instance(hass)
+        regular_entity_ids = [
+            entity_id
+            for entity_id in entity_ids
+            if entity_id != AGGREGATE_RESPONSE_ENTITY_ID
+        ]
+        raw: dict[str, Any] = {}
+        if regular_entity_ids:
+            regular_query = partial(
+                recorder_history.get_significant_states,
+                hass,
+                start,
+                end,
+                regular_entity_ids,
+                None,
+                True,
+                True,
+                False,
+                True,
+            )
+            raw.update(await recorder.async_add_executor_job(regular_query))
+        if AGGREGATE_RESPONSE_ENTITY_ID in entity_ids:
+            # Attribute retrieval is isolated to the exact event-driven
+            # response sensor.  Every other history query retains the prior
+            # no-attributes performance contract.
+            response_query = partial(
+                recorder_history.get_significant_states,
+                hass,
+                start,
+                end,
+                [AGGREGATE_RESPONSE_ENTITY_ID],
+                None,
+                True,
+                True,
+                False,
+                False,
+            )
+            raw.update(await recorder.async_add_executor_job(response_query))
     except Exception as err:  # noqa: BLE001 - diagnostics must still download
         return {
             "available": False,
@@ -161,7 +269,10 @@ async def _async_history(
         if len(items) > MAX_HISTORY_EVENTS_PER_ENTITY:
             items = items[-MAX_HISTORY_EVENTS_PER_ENTITY:]
             truncated.append(entity_id)
-        serialized[entity_id] = [_serialize_history_item(item) for item in items]
+        serialized[entity_id] = [
+            _serialize_history_item(item, entity_id=entity_id)
+            for item in items
+        ]
     return {
         "available": True,
         "hours": HISTORY_HOURS,

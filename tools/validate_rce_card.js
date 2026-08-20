@@ -12,11 +12,18 @@ const bootstrapSource = fs.readFileSync(
 if (!source.includes("import.meta.url")) {
   throw new Error("Dashboard strategy no longer resolves assets from its module URL");
 }
+if (
+  !bootstrapSource.includes("document.currentScript") ||
+  !bootstrapSource.includes("document.scripts") ||
+  !bootstrapSource.includes("import(canonicalModuleUrl.href)")
+) {
+  throw new Error("Early dashboard strategy no longer loads the canonical module");
+}
 // The card is loaded as an ES module by Home Assistant.  vm.runInNewContext
 // executes classic scripts, so inject the same deterministic module URL while
 // retaining an explicit assertion above that production code uses import.meta.
 const canonicalModuleUrl =
-  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.5.17";
+  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.6.24";
 const executableSource = source.replaceAll(
   "import.meta.url",
   JSON.stringify(canonicalModuleUrl),
@@ -172,7 +179,7 @@ const bootstrapFirstContext = {
     currentScript: {
       src: (
         "https://homeassistant.example/local/"
-        + "hoymiles-dashboard-strategy.js?v=1.5.5.17"
+        + "hoymiles-dashboard-strategy.js?v=1.5.6.24"
       ),
     },
   },
@@ -204,6 +211,64 @@ if (
   !== bootstrapFirstStrategy
 ) {
   throw new Error("Canonical module attempted to redefine a bootstrap-first strategy");
+}
+
+const scriptFallbackWindow = {
+  location: { origin: "https://homeassistant.example" },
+};
+const scriptFallbackContext = {
+  ...bootstrapFirstContext,
+  document: {
+    ...context.document,
+    currentScript: null,
+    scripts: [
+      { src: "https://homeassistant.example/local/user-card.js" },
+      {
+        src: (
+          "https://homeassistant.example/local/"
+          + "hoymiles-dashboard-strategy.js?v=1.5.6.24"
+        ),
+      },
+    ],
+  },
+  window: scriptFallbackWindow,
+  customElements: {
+    define() {},
+    get() {},
+  },
+};
+const inspectableBootstrapSource = bootstrapSource.replace(
+  "let canonicalModulePromise;",
+  "window.__canonicalModuleUrl = canonicalModuleUrl.href; let canonicalModulePromise;",
+);
+vm.runInNewContext(inspectableBootstrapSource, scriptFallbackContext, {
+  filename: "hoymiles-dashboard-strategy-script-fallback.js",
+});
+if (
+  scriptFallbackWindow.__canonicalModuleUrl !==
+  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.6.24"
+) {
+  throw new Error("Bootstrap lost its cache-busting query when currentScript was absent");
+}
+const noScriptWindow = {
+  location: { origin: "https://homeassistant.example" },
+};
+vm.runInNewContext(inspectableBootstrapSource, {
+  ...scriptFallbackContext,
+  document: {
+    ...context.document,
+    currentScript: null,
+    scripts: [],
+  },
+  window: noScriptWindow,
+}, {
+  filename: "hoymiles-dashboard-strategy-no-script-fallback.js",
+});
+if (
+  noScriptWindow.__canonicalModuleUrl !==
+  "https://homeassistant.example/local/hoymiles-rce-chart-card.js?v=1.5.6.24"
+) {
+  throw new Error("Bootstrap fallback imported an unversioned canonical module");
 }
 
 const Card = registry.get("hoymiles-rce-chart-card");
@@ -559,10 +624,20 @@ for (const expected of [
   "prefers-reduced-motion: reduce",
   'data-ribbon="pv"',
   'data-flow="battery"',
+  'data-ribbon="battery" d="M450 210 C675 245 685 425 950 390"',
+  '<button class="metric battery" data-key="battery">',
+  '.metric.battery { --metric-color: var(--orbit-battery); bottom: 2%; min-width: 238px; right: 5%; }',
   'data-label="grid_import_title"',
   'data-key="grid_import_today"',
   'data-key="grid_to_load_today"',
   'data-key="grid_to_battery_today"',
+  'data-value="battery_detail"',
+  'data-value="battery_eta"',
+  'data-key="forecast_tomorrow"',
+  'data-value="cav_temperature"',
+  'data-value="battery_path_temperature"',
+  'grid-template-columns: repeat(4, minmax(0, 1fr))',
+  'grid-template-columns: repeat(2, minmax(0, 1fr))',
   'new CustomEvent("hass-more-info"',
 ]) {
   if (!source.includes(expected)) {
@@ -589,6 +664,18 @@ auroraCard._hass = {
       state: "12.5",
       attributes: { unit_of_measurement: "kWh" },
     },
+    "sensor.hoymiles_solcast_forecast_tomorrow": {
+      state: "18.75",
+      attributes: { unit_of_measurement: "kWh" },
+    },
+    "sensor.hoymiles_hit_cav_temp": {
+      state: "48.25",
+      attributes: { unit_of_measurement: "°C" },
+    },
+    "sensor.hoymiles_hit_bat_ths_temp": {
+      state: "42.75",
+      attributes: { unit_of_measurement: "°C" },
+    },
   },
 };
 if (auroraCard._powerKw("pv") !== 1.55) {
@@ -613,6 +700,223 @@ if (
 if (auroraCard._formatEnergy("grid_import_today") !== "12,5 kWh") {
   throw new Error("Aurora card did not format today's grid import energy");
 }
+if (
+  auroraCard._entityId("forecast_tomorrow") !==
+    "sensor.hoymiles_solcast_forecast_tomorrow" ||
+  auroraCard._entityId("cav_temperature") !== "sensor.hoymiles_hit_cav_temp" ||
+  auroraCard._entityId("battery_path_temperature") !==
+    "sensor.hoymiles_hit_bat_ths_temp" ||
+  auroraCard._formatEnergy("forecast_tomorrow") !== "18,8 kWh" ||
+  auroraCard._formatTemperature("cav_temperature") !== "48,3 °C" ||
+  auroraCard._formatTemperature("battery_path_temperature") !== "42,8 °C"
+) {
+  throw new Error("Aurora tomorrow forecast or temperature defaults changed");
+}
+
+const freshAuroraState = (value, unit, ageSeconds = 0) => ({
+  state: String(value),
+  attributes: unit ? { unit_of_measurement: unit } : {},
+  last_reported: new Date(Date.now() - ageSeconds * 1000).toISOString(),
+});
+const batteryAuroraCard = new AuroraCard();
+batteryAuroraCard.setConfig({ language: "pl" });
+batteryAuroraCard._hass = {
+  language: "pl",
+  states: {
+    "sensor.hoymiles_hit_overview_battery_power": freshAuroraState(-3200, "W"),
+    "sensor.hoymiles_hit_overview_battery_soc": freshAuroraState(62, "%"),
+    "sensor.hoymiles_hit_battery_current_bms": freshAuroraState(-61, "A"),
+    "sensor.hoymiles_hit_battery_capacity": freshAuroraState(22.7, "kWh"),
+    "sensor.hoymiles_hit_ems_mode_readback_code": freshAuroraState(4),
+    "sensor.hoymiles_hit_ems_force_charge_soc_readback": freshAuroraState(80, "%"),
+    "sensor.hoymiles_hit_ems_force_discharge_soc_readback": freshAuroraState(50, "%"),
+    "sensor.hoymiles_hit_ems_self_use_soc_readback": freshAuroraState(30, "%"),
+    "number.hoymiles_hit_maximum_soc": freshAuroraState(95, "%"),
+    "number.hoymiles_hit_minimum_soc": freshAuroraState(10, "%"),
+    "sensor.hoymiles_solcast_forecast_tomorrow": freshAuroraState(18.75, "kWh"),
+    "sensor.hoymiles_hit_cav_temp": freshAuroraState(48.25, "°C"),
+    "sensor.hoymiles_hit_bat_ths_temp": freshAuroraState(42.75, "°C"),
+  },
+};
+const chargingBattery = batteryAuroraCard._batteryPresentation();
+if (
+  chargingBattery.direction !== "ładowanie" ||
+  chargingBattery.powerKw !== -3.2 ||
+  Math.abs(chargingBattery.storedKwh - 14.074) > 0.0001 ||
+  chargingBattery.currentA !== 61 ||
+  chargingBattery.etaKind !== "target" ||
+  Math.abs(chargingBattery.etaHours - 1.276875) > 0.0001 ||
+  batteryAuroraCard._formatBatteryEta(
+    chargingBattery.etaHours,
+    chargingBattery.etaKind,
+  ) !== "~1 h 17 min do celu"
+) {
+  throw new Error("Aurora battery charge view did not use physical 4303 target data");
+}
+const batteryDomWrites = {};
+batteryAuroraCard._mounted = true;
+batteryAuroraCard._card = { querySelector: () => null };
+batteryAuroraCard._setText = (selector, value) => {
+  batteryDomWrites[selector] = value;
+};
+batteryAuroraCard._setFlow = () => {};
+batteryAuroraCard._update();
+if (
+  batteryDomWrites['[data-value="battery_detail"]'] !== "14,1 kWh · 61,0 A" ||
+  batteryDomWrites['[data-value="battery_eta"]'] !== "~1 h 17 min do celu" ||
+  batteryDomWrites['[data-value="forecast_tomorrow"]'] !== "18,8 kWh" ||
+  batteryDomWrites['[data-value="cav_temperature"]'] !== "48,3 °C" ||
+  batteryDomWrites['[data-value="battery_path_temperature"]'] !== "42,8 °C" ||
+  batteryDomWrites['[data-label="cav_temperature"]'] !== "Temperatura Falownika" ||
+  batteryDomWrites['[data-label="battery_path_temperature"]'] !==
+    "Temperatura toru magazynu"
+) {
+  throw new Error("Aurora battery detail and ETA were not written to the live DOM");
+}
+
+const englishBatteryAuroraCard = new AuroraCard();
+englishBatteryAuroraCard.setConfig({ language: "en" });
+englishBatteryAuroraCard._hass = {
+  language: "en",
+  states: batteryAuroraCard._hass.states,
+};
+const englishChargingBattery = englishBatteryAuroraCard._batteryPresentation();
+if (
+  englishBatteryAuroraCard._copy().cav_temperature !== "Inverter temperature" ||
+  englishBatteryAuroraCard._copy().battery_path_temperature !==
+    "Battery circuit temperature" ||
+  englishBatteryAuroraCard._formatBatteryEta(
+    englishChargingBattery.etaHours,
+    englishChargingBattery.etaKind,
+  ) !== "~1 h 17 min to target"
+) {
+  throw new Error("Aurora battery ETA English copy changed");
+}
+
+const batteryStates = batteryAuroraCard._hass.states;
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] =
+  freshAuroraState(800, "W");
+batteryStates["sensor.hoymiles_hit_overview_battery_soc"] =
+  freshAuroraState(81, "%");
+batteryStates["sensor.hoymiles_hit_battery_current_bms"] =
+  freshAuroraState(-15, "A");
+batteryStates["sensor.hoymiles_hit_ems_mode_readback_code"] =
+  freshAuroraState(0);
+const selfUseDischarge = batteryAuroraCard._batteryPresentation();
+if (
+  selfUseDischarge.direction !== "rozładowanie" ||
+  selfUseDischarge.currentA !== 15 ||
+  selfUseDischarge.etaKind !== "reserve" ||
+  Math.abs(selfUseDischarge.etaHours - 14.47125) > 0.0001
+) {
+  throw new Error("Aurora battery discharge view did not use physical 4301 reserve");
+}
+
+batteryStates["sensor.hoymiles_hit_ems_mode_readback_code"] =
+  freshAuroraState(5);
+const forcedDischarge = batteryAuroraCard._batteryPresentation();
+if (Math.abs(forcedDischarge.etaHours - 8.79625) > 0.0001) {
+  throw new Error("Aurora Grid Discharge ETA did not use the physical 4305 floor");
+}
+
+batteryStates["sensor.hoymiles_hit_ems_mode_readback_code"] =
+  freshAuroraState(3);
+const offGridDischarge = batteryAuroraCard._batteryPresentation();
+if (Math.abs(offGridDischarge.etaHours - 20.14625) > 0.0001) {
+  throw new Error("Aurora non-EMS discharge ETA did not use configured minimum SOC");
+}
+
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] =
+  freshAuroraState(-3200, "W");
+batteryStates["sensor.hoymiles_hit_overview_battery_soc"] =
+  freshAuroraState(62, "%");
+const offGridCharge = batteryAuroraCard._batteryPresentation();
+if (Math.abs(offGridCharge.etaHours - 2.3409375) > 0.0001) {
+  throw new Error("Aurora non-Grid-Charge ETA did not use configured maximum SOC");
+}
+
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] =
+  freshAuroraState(-3200, "W", 121);
+const stalePower = batteryAuroraCard._batteryPresentation();
+if (
+  Math.abs(stalePower.powerKw + 3.2) > 0.0001 ||
+  !Number.isFinite(stalePower.etaHours)
+) {
+  throw new Error("Aurora battery view hid available unchanged battery power");
+}
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] =
+  freshAuroraState(0, "W");
+if (
+  batteryAuroraCard._batteryPresentation().etaHours !== null ||
+  batteryAuroraCard._formatBatteryEta(null, null) !== "ETA —" ||
+  batteryAuroraCard._formatBatteryEta(169, "target") !== "ETA —"
+) {
+  throw new Error("Aurora battery ETA did not fail closed at idle");
+}
+batteryStates["sensor.hoymiles_hit_battery_current_bms"] =
+  freshAuroraState(15, "A", 301);
+if (batteryAuroraCard._batteryPresentation().currentA !== 15) {
+  throw new Error("Aurora battery view hid available unchanged BMS current");
+}
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] =
+  freshAuroraState(-3200, "W");
+batteryStates["sensor.hoymiles_hit_overview_battery_soc"] =
+  freshAuroraState(62, "%", 121);
+if (
+  !Number.isFinite(batteryAuroraCard._batteryPresentation().storedKwh) ||
+  !Number.isFinite(batteryAuroraCard._batteryPresentation().etaHours)
+) {
+  throw new Error("Aurora battery view hid available unchanged SOC");
+}
+batteryStates["sensor.hoymiles_hit_overview_battery_soc"] =
+  freshAuroraState(62, "%");
+batteryStates["sensor.hoymiles_hit_battery_capacity"] =
+  freshAuroraState(22.7, "kWh", 121);
+if (
+  !Number.isFinite(batteryAuroraCard._batteryPresentation().storedKwh) ||
+  !Number.isFinite(batteryAuroraCard._batteryPresentation().etaHours)
+) {
+  throw new Error("Aurora battery view hid available unchanged capacity");
+}
+batteryStates["sensor.hoymiles_hit_battery_capacity"] =
+  freshAuroraState(22.7, "kWh");
+batteryStates["sensor.hoymiles_hit_ems_mode_readback_code"] =
+  freshAuroraState(4, undefined, 121);
+if (!Number.isFinite(batteryAuroraCard._batteryPresentation().etaHours)) {
+  throw new Error("Aurora battery view hid available unchanged EMS mode");
+}
+batteryStates["sensor.hoymiles_hit_ems_mode_readback_code"] =
+  freshAuroraState(4);
+batteryStates["sensor.hoymiles_hit_ems_force_charge_soc_readback"] =
+  freshAuroraState(80, "%", 121);
+if (!Number.isFinite(batteryAuroraCard._batteryPresentation().etaHours)) {
+  throw new Error("Aurora battery view hid available unchanged 4303 target");
+}
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] = {
+  state: "unavailable",
+  attributes: { unit_of_measurement: "W" },
+};
+if (
+  batteryAuroraCard._batteryPresentation().powerKw !== null ||
+  batteryAuroraCard._batteryPresentation().etaHours !== null
+) {
+  throw new Error("Aurora battery view accepted unavailable battery power");
+}
+batteryStates["sensor.hoymiles_hit_overview_battery_power"] =
+  freshAuroraState(21, "W");
+batteryStates["sensor.hoymiles_hit_overview_battery_soc"] =
+  freshAuroraState(99, "%");
+batteryStates["sensor.hoymiles_hit_battery_capacity"] =
+  freshAuroraState(10000, "kWh");
+batteryStates["sensor.hoymiles_hit_ems_mode_readback_code"] =
+  freshAuroraState(5);
+batteryStates["sensor.hoymiles_hit_ems_force_discharge_soc_readback"] =
+  freshAuroraState(0, "%");
+if (batteryAuroraCard._batteryPresentation().etaHours !== null) {
+  throw new Error("Aurora battery view exposed an absurd multi-day ETA");
+}
+console.log("Aurora battery node: physical targets, availability and bounded ETA OK");
+
 for (const language of ["pl", "en"]) {
   const dashboard = JSON.parse(
     fs.readFileSync(
@@ -621,12 +925,33 @@ for (const language of ["pl", "en"]) {
     ),
   );
   const start = dashboard.views?.find((view) => view.path === "start");
-  if (
-    !start?.cards?.some(
-      (item) => item.type === "custom:hoymiles-aurora-energy-card",
-    )
-  ) {
+  const energyCard = start?.cards?.find(
+    (item) => item.type === "custom:hoymiles-aurora-energy-card",
+  );
+  if (!energyCard) {
     throw new Error(`The ${language} Start view does not contain Aurora`);
+  }
+  for (const [key, entityId] of Object.entries({
+    battery_current_entity: "sensor.hoymiles_hit_battery_current_bms",
+    battery_capacity_entity: "sensor.hoymiles_hit_battery_capacity",
+    ems_mode_readback_entity: "sensor.hoymiles_hit_ems_mode_readback_code",
+    battery_self_use_floor_entity:
+      "sensor.hoymiles_hit_ems_self_use_soc_readback",
+    battery_charge_target_entity:
+      "sensor.hoymiles_hit_ems_force_charge_soc_readback",
+    battery_discharge_target_entity:
+      "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+    battery_max_soc_entity: "number.hoymiles_hit_maximum_soc",
+    battery_min_soc_entity: "number.hoymiles_hit_minimum_soc",
+    forecast_tomorrow_entity: "sensor.hoymiles_solcast_forecast_tomorrow",
+    cav_temperature_entity: "sensor.hoymiles_hit_cav_temp",
+    battery_path_temperature_entity: "sensor.hoymiles_hit_bat_ths_temp",
+  })) {
+    if (energyCard[key] !== entityId) {
+      throw new Error(
+        `The ${language} Aurora battery ${key} mapping is ${energyCard[key]}, expected ${entityId}`,
+      );
+    }
   }
 }
 console.log("Aurora energy card: registration, units and dashboard payloads OK");

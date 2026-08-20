@@ -53,10 +53,19 @@ Execution authority comes from the optimizer entity itself: `result_current`,
 plan report age and source-freshness attributes. A recently updated derived
 proxy does not make an old plan executable. For RCEm, battery capacity is a
 stable property and its report age is diagnostic; live BMS voltage and current
-limits remain fail-closed freshness inputs. `owner_code` reports actual
-actuator ownership, while the `*_policy_enabled` attributes show configuration
-only. Optional Solcast Day 3 exposes its selected entity, signed age, freshness
-and fallback reason in the planner attributes.
+limits remain fail-closed freshness inputs. The control-owner sensor state
+reports active actuator ownership, while `owner_code=manual` remains the stable
+machine-readable compatibility fallback when no automatic writer is active;
+the `*_policy_enabled` attributes show configuration only. Optional Solcast Day
+3 exposes its selected entity, signed age, freshness and fallback reason in the
+planner attributes.
+
+RCE and tariff-plan attributes also expose `forecast_learning_enabled`,
+`forecast_learning_mode`, `forecast_learning_excluded_reason` and the effective
+`forecast_factor_used`. On a physically verified exact 0% GCF export limit the
+contract is `false / fixed_zero_export / zero_export / 0.80`. Missing or stale
+GCF evidence has its own conservative reason and must not be interpreted as a
+confirmed zero-export site.
 
 ### Master changes mode but a Slave does not
 
@@ -147,9 +156,18 @@ Uprawnienie do wykonania pochodzi z samej encji optymalizatora:
 odświeżona encja pośrednia nie nadaje staremu planowi prawa wykonania. W RCEm
 pojemność baterii jest stabilną cechą, a wiek jej raportu ma znaczenie
 diagnostyczne; bieżące napięcie i limity prądowe BMS nadal działają fail-closed.
-`owner_code` pokazuje rzeczywistą własność aktuatora, natomiast atrybuty
+Stan sensora właściciela sterowania pokazuje aktywną własność aktuatora,
+natomiast `owner_code=manual` pozostaje stabilnym fallbackiem maszynowym dla
+zgodności, gdy żaden automatyczny sterownik nie jest aktywny; atrybuty
 `*_policy_enabled` opisują wyłącznie konfigurację. Opcjonalny Dzień 3 Solcast
 publikuje wybraną encję, wiek ze znakiem, świeżość i przyczynę fallbacku.
+
+Atrybuty planów RCE i taryfy publikują też `forecast_learning_enabled`,
+`forecast_learning_mode`, `forecast_learning_excluded_reason` oraz rzeczywiście
+użyty `forecast_factor_used`. Dla fizycznie potwierdzonego, dokładnego limitu
+GCF 0% kontrakt ma wartości `false / fixed_zero_export / zero_export / 0.80`.
+Brak albo nieświeżość GCF ma osobną konserwatywną przyczynę i nie może być
+interpretowana jako potwierdzony zero-export.
 
 ### Master zmienia tryb, a Slave nie
 
