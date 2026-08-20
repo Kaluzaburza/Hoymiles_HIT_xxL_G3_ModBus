@@ -17,6 +17,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
 from .assets import (
+    FRONTEND_BOOTSTRAP_URL,
     FRONTEND_RESOURCE_URL,
     FRONTEND_STATIC_ROUTE,
     RESOURCE_ROOT,
@@ -46,7 +47,7 @@ from .support_http import HoymilesSupportBundleView
 
 _LOGGER = logging.getLogger(__name__)
 STATIC_URL = f"/api/{DOMAIN}/{FRONTEND_STATIC_ROUTE}"
-FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL
+FRONTEND_MODULE_URL = FRONTEND_BOOTSTRAP_URL
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 INSTALL_ASSETS_SCHEMA = vol.Schema(

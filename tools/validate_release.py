@@ -595,12 +595,12 @@ script:
 
     require(
         assets.FRONTEND_RESOURCE_URL
-        == f"/local/hoymiles-rce-chart-card.js?v={assets.VERSION}.18"
+        == f"/local/hoymiles-rce-chart-card.js?v={assets.VERSION}.24"
         and assets.FRONTEND_BOOTSTRAP_URL
-        == f"/local/hoymiles-dashboard-strategy.js?v={assets.VERSION}.18"
+        == f"/local/hoymiles-dashboard-strategy.js?v={assets.VERSION}.24"
         and "/local/hoymiles-dashboard-strategy.js"
         in assets.MANAGED_FRONTEND_RESOURCE_PATHS,
-        "Frontend revision 18 or legacy-bootstrap migration paths changed",
+        "Frontend revision 24 or bootstrap migration paths changed",
     )
 
 
@@ -940,9 +940,9 @@ def main() -> int:
         "Availability is restart-gated" in setup_body
         and "frontend_assets_ready and frontend_local_ready" in setup_body
         and setup_body.count("add_extra_js_url(hass,") == 1
-        and "FRONTEND_MODULE_URL = FRONTEND_RESOURCE_URL" in init_source
-        and "FRONTEND_BOOTSTRAP_URL" not in init_source,
-        "Restart-gated /local startup or canonical frontend loader is missing",
+        and "FRONTEND_MODULE_URL = FRONTEND_BOOTSTRAP_URL" in init_source
+        and "FRONTEND_BOOTSTRAP_URL" in init_source,
+        "Restart-gated /local startup or early strategy loader is missing",
     )
     require(
         "frontend" in manifest.get("dependencies", []),
@@ -1193,7 +1193,9 @@ def main() -> int:
     require(
         "ll-strategy-dashboard-hoymiles-hit-xxl-g3" in bootstrap_source
         and "document.currentScript" in bootstrap_source
-        and 'new URL("/local/", window.location.origin)' in bootstrap_source
+        and "document.scripts" in bootstrap_source
+        and "canonicalModuleUrl" in bootstrap_source
+        and "import(canonicalModuleUrl.href)" in bootstrap_source
         and "/api/hoymiles_hit_modbus/static-r2/" not in bootstrap_source
         and "import.meta" not in bootstrap_source,
         "Classic dashboard bootstrap is missing or uses ES-module-only syntax",

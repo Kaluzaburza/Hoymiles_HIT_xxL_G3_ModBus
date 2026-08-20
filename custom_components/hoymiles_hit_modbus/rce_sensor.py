@@ -165,7 +165,6 @@ WATCHED_ENTITIES = {
     "sensor.hoymiles_hit_maximum_discharge_current",
     "sensor.hoymiles_hit_ems_self_use_soc_readback",
     "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
-    "sensor.hoymiles_hit_ems_maximum_discharge_power_readback",
     "sensor.hoymiles_hit_gcf_maximum_export_power_readback",
     "sensor.hoymiles_hit_gcf_enable_readback_code",
     "sensor.hoymiles_rce_effective_export_power",
@@ -192,6 +191,38 @@ WATCHED_ENTITIES = {
     *DAY3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
+
+# These continuously changing physical values are sampled by the existing
+# one-minute optimizer timer instead of withdrawing plan authority on every
+# ESPHome state change.  The scheduler keeps its independent live SOC, BMS,
+# export-permission and hardware-readback gates, so a real safety loss still
+# stops execution immediately.  In particular, the Force Discharge readback
+# is written by the RCE transaction itself and must not invalidate that same
+# transaction before its mode write can be acknowledged.
+RCE_MINUTE_COALESCED_ENTITIES = {
+    "sensor.hoymiles_hit_overview_battery_soc",
+    "sensor.hoymiles_hit_pv_total_energy_today",
+    "sensor.hoymiles_hit_pv_to_load_energy_today",
+    "sensor.hoymiles_hit_energy_from_battery_today",
+    "sensor.hoymiles_hit_energy_from_grid_today",
+    "sensor.hoymiles_hit_load_from_pv_power",
+    "sensor.hoymiles_hit_overview_pv_total_power",
+    "sensor.hoymiles_actual_load_power",
+    "sensor.hoymiles_actual_load_energy_today",
+    *LOAD_PHASE_ENERGY_ENTITIES,
+    "sensor.hoymiles_hit_load_power_l1n",
+    "sensor.hoymiles_hit_load_power_l2n",
+    "sensor.hoymiles_hit_load_power_l3n",
+    "sensor.hoymiles_hit_overview_load_active_power",
+    "sensor.hoymiles_hit_battery_voltage_bms",
+    "sensor.hoymiles_hit_maximum_charge_current",
+    "sensor.hoymiles_hit_maximum_discharge_current",
+    "sensor.hoymiles_hit_ems_force_discharge_soc_readback",
+    "sensor.hoymiles_rce_effective_export_power",
+    "sensor.hoymiles_rce_learned_export_power",
+    "sun.sun",
+}
+RCE_EVENT_DRIVEN_ENTITIES = WATCHED_ENTITIES - RCE_MINUTE_COALESCED_ENTITIES
 
 
 def _forecast_learning_policy_snapshot(
@@ -781,7 +812,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
-                sorted(WATCHED_ENTITIES),
+                sorted(RCE_EVENT_DRIVEN_ENTITIES),
                 self._async_input_changed,
             )
         )

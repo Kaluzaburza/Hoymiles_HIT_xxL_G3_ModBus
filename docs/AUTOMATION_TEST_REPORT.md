@@ -3,16 +3,18 @@
 Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
 Latest shared-bus hardware/protocol observation: 2026-08-15 (Europe/Warsaw)
-Last completed offline baseline in this report: **v1.5.5 release-candidate validation**
+Final v1.5.6 release date: 2026-08-21 (Europe/Warsaw)
+Last completed offline baseline in this report: **tagged v1.5.6 source — PASS**
 Last accepted live runtime merge:
 **`ce4afc614a691ce70c67da2439613de90e0c61c2`**
 (implementation commit **`915337fa34529c5197ad581a41d351b78bfb1d33`**)
-Current status: **v1.5.5 exact-workspace offline PASS and published; the v1.5.6
-implementation is present, but a complete frozen-workspace offline release gate
-and exact-version field/live acceptance are not recorded, and v1.5.6 is not
-publicly released. The 2026-08-15 shared-bus run remains hardware/protocol
-evidence from managed Home Assistant package 1.5.4 and ESP32 firmware/project
-1.5.3, not software acceptance of v1.5.5 or v1.5.6.**
+Current status: **v1.5.6 is published after full local/CI validation and live
+rollout on localhost plus `miernik.com.pl`. The final simultaneous 15-minute
+window proved stable tariff and RCE readiness but contained no planned active
+RCE slot. The maintainer explicitly accepted that bounded exact-final active-
+slot evidence gap for release, with a hotfix path. The 2026-08-15 shared-bus
+run remains hardware/protocol evidence from HA package 1.5.4 and ESP32 project
+1.5.3, not exact-v1.5.6 per-Slave acknowledgement.**
 
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
@@ -101,7 +103,7 @@ The final release/tag commit is expected to differ only by this live-evidence
 documentation. Its delta from the tested runtime merge must remain
 documentation-only.
 
-## v1.5.6 parallel aggregate-response hotfix — implemented candidate; complete release gate and exact-version acceptance not recorded
+## v1.5.6 EMS stability release — offline/CI PASS; live rollout accepted with limit
 
 The candidate adds a physical-response contract after Grid Discharge on a
 detected parallel Master without changing the existing configuration ACK.
@@ -130,14 +132,96 @@ neutral fail-closed rollback. Manual/manual-recovery and RCEm pre-discharge have
 no authoritative total-kW target, so their diagnostic evaluates fresh stable
 battery-discharge direction without grid-export or amplitude rejection. The
 neutral Self-Use rollback path never waits for aggregate discharge evidence.
-Registers `258`, `259`, and `306`, Off-Grid mode `3`, tariff charging and RCEm
-voltage-control calculations/direct-register semantics are unchanged.
 
-The complete frozen-workspace offline release gate, exact generated-asset counts
-and immutable candidate SHA are not recorded here. Because the firmware
-generation is new, an exact v1.5.6 acceptance deployment requires the HACS
-integration update, the managed-package restart cycle and a mandatory ESPHome
-rebuild/upload before any automatic writer is restored.
+The final post-RC5 stabilization work establishes these additional contracts:
+
+- `result_current=false` is planning authority for **new starts**, not by
+  itself a stop instruction for an **already accepted and latched active RCE
+  cycle**. A harmless price/PV/LOAD update may preserve that cycle on its last
+  committed contract during recalculation. BMS capability/freshness, physical
+  GCF/export permission, ownership/conflict, Off-Grid or incompatible mode,
+  required FC03/readback, SOC/reserve floor and inverter/topology availability
+  continue to be evaluated directly from live safety inputs and stop the cycle
+  immediately, even before the replacement result becomes current.
+- The tariff optimizer fingerprint excludes `tariff_charge_active` and other
+  owner/execution telemetry not consumed by the mathematics, preventing a
+  tariff start from invalidating itself. Real SOC, forecast PV/LOAD,
+  tariff/profile, BMS capability and freshness changes still invalidate the
+  result and block new execution normally.
+- Tariff rollback constructs one final `4300–4306` block from the last
+  confirmed physical snapshot plus explicit rollback values, skips logical
+  no-ops, emits at most one FC16 and waits for a newer matching physical FC03
+  for the whole block. It cannot start another full-block transaction while
+  that acknowledgement is pending.
+- The same physical-ACK invariant now covers every Home Assistant helper for
+  `4300–4306`: all seven readback registers must match. Missing, stale or
+  inconsistent FC03 stays fail-closed. No second transaction mechanism was
+  introduced and the existing firmware barrier/manual-helper semantics remain.
+- Tariff optimizer attributes remain available live and to diagnostics/restore
+  state but are excluded from Recorder persistence. Every overlapping delayed
+  recalculation task is tracked and cancelled at unload. The fallback daily-
+  LOAD input is now watched, so a real fallback change invalidates the result.
+- Normal tariff input events and the periodic timer are coalesced into one
+  five-minute planning cadence. Result invalidation and live safety gates remain
+  immediate; only replacement-plan publication is rate-limited.
+- Aurora frontend revision **19** enlarges the flow-node status, power and
+  battery detail/ETA text. Available unchanged HA values remain visible instead
+  of aging out on `last_updated`; unknown, unavailable, idle or implausible
+  inputs still render `ETA —`. This display rule is not execution authority.
+
+These fixes intentionally change execution authority, rollback/readback
+lifecycle and battery-node presentation. They do not change RCE or tariff
+optimizer objectives, slot selection, forecast/tariff mathematics, RCEm
+voltage calculations or direct-register semantics, Off-Grid priority,
+registers `258/259/306`, or the documented parallel broadcast/per-Slave
+acknowledgement claim boundary.
+
+### Exact candidate offline and CI evidence — PASS
+
+Frozen runtime SHA
+`42414d55c52406ae04cdd9f495388f550c24ad76` passed the complete applicable
+offline gate:
+
+- quick automation matrix **488/488** and exhaustive matrix **2064/2064**;
+- RCE **75/75**, RCE history **3/3**, tariff, RCEm, shared energy/LOAD/power,
+  firmware/readback, optimizer executor/startup and source-device rebind
+  **6/6** suites;
+- release and frontend validation, including 42 Aurora frames for PL, EN and
+  bootstrap-first execution, plus deterministic generated assets; and
+- diagnostics, identity/privacy contracts and the bounded 100-archive analyzer.
+
+Independent review reported no open P0/P1/P2. Exact-SHA GitHub Actions
+`workflow_dispatch` run **31982161039** passed `project-checks`, the conditional
+`firmware-compile`, Hassfest and HACS validation. This is offline/CI evidence;
+it does not substitute for either live gate.
+
+### Final live rollout — 2026-08-20/21
+
+The earlier localhost Core outage was traced to a loader-visible deployment
+backup, not a runtime regression. After the backup was moved outside
+`custom_components`, the release runtime and managed assets were deployed on
+localhost and `miernik.com.pl`. `ha core check`, controlled restart, integration
+setup, fresh physical FC03/readback and Aurora revision 24 passed on both sites.
+
+During the final simultaneous observation from `2026-08-20T22:30:25Z` to
+`22:45:45Z`, localhost tariff readiness was **16/16**, the status remained
+enabled/waiting, there were no ready/status transitions, and three subsequent
+five-minute planner cycles remained ready. Self-Use and no owner remained
+stable. No integration or frontend console error was observed.
+
+An earlier controlled meter test had RCE ownership in **16/16** samples and
+physical grid discharge in **13/16**. Initial Self-Use transitions coincided
+with operator power adjustments; the final eight minutes were stable, and the
+manufacturer application confirmed Grid Discharge and the later Self-Use
+return. A later ordinary result-refresh gap exposed the failsafe interaction
+addressed by the final latched-execution scheduler guard.
+
+In the final simultaneous meter window RCE readiness was **16/16**, but the
+current slot was not planned in **16/16**, so owner and active discharge were
+correctly absent. This proves stable neutral readiness, not an active exact-
+final slot. The maintainer explicitly accepted publication with this evidence
+limit and a hotfix path if the next active slot regresses. It does not relax any
+live BMS, GCF/export, ownership, Off-Grid, FC03/readback, SOC or topology gate.
 
 ### Transition-history evidence — bounded to this installation and date range
 

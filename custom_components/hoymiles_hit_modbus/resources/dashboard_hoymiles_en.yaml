@@ -35,7 +35,10 @@ views:
         ems_mode_entity: select.hoymiles_hit_ems_mode
         forecast_today_entity: sensor.hoymiles_solcast_forecast_today
         forecast_remaining_entity: sensor.hoymiles_solcast_forecast_remaining_today
+        forecast_tomorrow_entity: sensor.hoymiles_solcast_forecast_tomorrow
         average_load_entity: sensor.hoymiles_load_average_4_days
+        cav_temperature_entity: sensor.hoymiles_hit_cav_temp
+        battery_path_temperature_entity: sensor.hoymiles_hit_bat_ths_temp
         pv_today_entity: sensor.hoymiles_hit_pv_total_energy_today
         pv_to_load_today_entity: sensor.hoymiles_hit_pv_to_load_energy_today
         pv_to_battery_today_entity: sensor.hoymiles_hit_pv_to_battery_energy_today

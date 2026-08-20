@@ -2722,7 +2722,7 @@ def assert_rce_execution_contracts() -> None:
         "RCE przelicza plan; aktywny zatwierdzony cykl pozostaje bez zmian"
     )
     assert scheduler.count(f"&{pending_marker}") == 1
-    assert scheduler.count(f"*{pending_marker}") == 3
+    assert scheduler.count(f"*{pending_marker}") == 5
     assert scheduler.count(pending_stop) == 4
     pending_source = scheduler.split(f"&{pending_marker}", 1)[1].split(
         "sequence:", 1

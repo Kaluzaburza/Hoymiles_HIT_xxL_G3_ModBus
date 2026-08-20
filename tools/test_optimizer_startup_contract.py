@@ -119,6 +119,8 @@ def _compile_probe_method(
         "WATCHED_TARIFF_ENTITIES": (),
         "FORECAST_GCF_POLICY_TRIGGER_ENTITIES": (),
         "FORECAST_GCF_COHORT_REPORT_ENTITIES": (),
+        "RCE_EVENT_DRIVEN_ENTITIES": (),
+        "TARIFF_EVENT_DRIVEN_ENTITIES": (),
         "_forecast_learning_policy_snapshot": lambda *args: (object(), {}),
         "_forecast_learning_policy_signature": lambda policy: (True, "adaptive"),
         "dt_util": SimpleNamespace(now=lambda: object()),

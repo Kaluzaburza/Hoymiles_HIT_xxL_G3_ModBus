@@ -10059,9 +10059,18 @@ automation:
                       - condition: state
                         entity_id: input_boolean.hoymiles_rce_discharge_enabled
                         state: "on"
-                      - condition: state
-                        entity_id: binary_sensor.hoymiles_rce_control_data_ready
-                        state: "on"
+                      # The parallel-response helper can outlive a normal
+                      # one-minute optimizer refresh. Accept either a current
+                      # result or the already latched execution contract while
+                      # every independent live hard stop remains clear.
+                      - condition: or
+                        conditions:
+                          - condition: state
+                            entity_id: >-
+                              binary_sensor.hoymiles_rce_control_data_ready
+                            state: "on"
+                          - condition: template
+                            value_template: *rce_pending_latched_execution_safe
                       - condition: state
                         entity_id: binary_sensor.hoymiles_ems_export_allowed
                         state: "on"
@@ -10289,6 +10298,10 @@ automation:
                          and (as_timestamp(now()) - as_timestamp(
                            states.binary_sensor.hoymiles_rce_control_data_ready
                              .last_changed)) >= 120) }}
+              - condition: not
+                conditions:
+                  - condition: template
+                    value_template: *rce_pending_latched_execution_safe
               - condition: template
                 value_template: >-
                   {{ states('sensor.hoymiles_ems_hardware_mode')

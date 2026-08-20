@@ -39,7 +39,6 @@ from .forecast_model import (
 )
 from .models import RuntimeData
 from .optimizer_revision import (
-    INPUT_RECALCULATION_DELAY_SECONDS,
     MAX_IMMEDIATE_RECALCULATIONS,
     OptimizerInputRevision,
     RCE_LOAD_BROKER_ATTRIBUTES,
@@ -100,6 +99,7 @@ LIVE_TELEMETRY_MAX_AGE_SECONDS = 120.0
 SLOW_TELEMETRY_MAX_AGE_SECONDS = 300.0
 LOAD_BROKER_MAX_AGE_SECONDS = 300.0
 FORECAST_MAX_AGE_SECONDS = 18 * 60 * 60.0
+TARIFF_INPUT_RECALCULATION_DELAY_SECONDS = 5 * 60.0
 
 WATCHED_TARIFF_ENTITIES = {
     "sensor.hoymiles_hit_rce_optimized_plan",
@@ -144,6 +144,29 @@ WATCHED_TARIFF_ENTITIES = {
     *DAY3_FORECAST_CANDIDATES,
     *REMAINING_TODAY_CANDIDATES,
 }
+
+# These planning inputs change continuously or arrive in forecast batches.
+# The five-minute optimizer timer samples them as one coherent snapshot instead
+# of withdrawing an accepted plan on every HA state event.  User settings,
+# topology and BMS capability inputs remain event-driven and fail closed.
+TARIFF_FIVE_MINUTE_COALESCED_ENTITIES = {
+    "sensor.hoymiles_hit_rce_optimized_plan",
+    "sensor.hoymiles_hit_overview_battery_soc",
+    "sensor.hoymiles_hit_battery_voltage_bms",
+    "sensor.hoymiles_hit_pv_total_energy_today",
+    "sensor.hoymiles_hit_overview_battery_power",
+    "sensor.hoymiles_actual_load_power",
+    "sensor.hoymiles_hit_overview_pv_total_power",
+    *FORECAST_ENTITY_HELPERS,
+    "sun.sun",
+    *TODAY_FORECAST_CANDIDATES,
+    *TOMORROW_FORECAST_CANDIDATES,
+    *DAY3_FORECAST_CANDIDATES,
+    *REMAINING_TODAY_CANDIDATES,
+}
+TARIFF_EVENT_DRIVEN_ENTITIES = (
+    WATCHED_TARIFF_ENTITIES - TARIFF_FIVE_MINUTE_COALESCED_ENTITIES
+)
 
 # These execution states are sampled only by the one-minute delivered-power
 # feedback pass below. They do not participate in optimizer mathematics and
@@ -581,7 +604,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
-                sorted(WATCHED_TARIFF_ENTITIES),
+                sorted(TARIFF_EVENT_DRIVEN_ENTITIES),
                 self._async_input_changed,
             )
         )
@@ -624,7 +647,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             async_track_time_interval(
                 self.hass,
                 self._async_timer,
-                timedelta(minutes=1),
+                timedelta(minutes=5),
             )
         )
         self.async_on_remove(
@@ -731,7 +754,10 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             event.data.get("new_state"),
             attributes=(RCE_LOAD_BROKER_ATTRIBUTES if counterpart else None),
             include_state=not counterpart,
-            include_last_updated=not counterpart,
+            # A fresh report with the same value extends provenance freshness;
+            # it does not change optimizer mathematics.  Availability, state
+            # and consumed attributes remain immediate fail-closed inputs.
+            include_last_updated=False,
         )
         if changed:
             self._mark_recalculation_pending()
@@ -798,7 +824,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         if not self._lifecycle_stopped and self._recalculate_cancel is None:
             self._recalculate_cancel = async_call_later(
                 self.hass,
-                INPUT_RECALCULATION_DELAY_SECONDS,
+                TARIFF_INPUT_RECALCULATION_DELAY_SECONDS,
                 self._async_debounced_recalculate,
             )
 
@@ -814,20 +840,16 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             dt_util.now(),
         )
         if policy.excluded_reason != "gcf_readback_incoherent":
-            cohort_pending = (
-                self._forecast_gcf_policy_evaluation_cancel is not None
-            )
             self._cancel_forecast_gcf_policy_evaluation()
-            self._apply_forecast_gcf_policy(
-                policy,
-                force_recalculate=cohort_pending,
-            )
+            # A completed HA delivery cohort with the same physical policy is
+            # not a new optimizer input.  A changed signature still invalidates
+            # immediately in _apply_forecast_gcf_policy().
+            self._apply_forecast_gcf_policy(policy)
             return
         if self._forecast_gcf_policy_evaluation_cancel is None:
-            # Withdraw execution authority while HA finishes delivering the
-            # three physical readback reports.  No optimizer run may publish
-            # the transient mixed cohort as a current plan.
-            self._invalidate_internal_inputs()
+            # Keep the last coherent, fresh generation while HA finishes
+            # delivering this physical readback cohort.  The bounded deadline
+            # below still fails closed if the cohort remains incoherent.
             self._forecast_gcf_policy_evaluation_cancel = async_call_later(
                 self.hass,
                 _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS,
@@ -878,7 +900,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
         if not self._lifecycle_stopped and self._recalculate_cancel is None:
             self._recalculate_cancel = async_call_later(
                 self.hass,
-                INPUT_RECALCULATION_DELAY_SECONDS,
+                TARIFF_INPUT_RECALCULATION_DELAY_SECONDS,
                 self._async_debounced_recalculate,
             )
 

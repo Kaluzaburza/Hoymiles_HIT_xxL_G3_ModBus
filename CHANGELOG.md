@@ -4,15 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-## [1.5.6] - Unreleased
+## [1.5.6] - 2026-08-21
 
-> **Status:** the implementation is present, but a complete frozen-workspace
-> offline release gate and exact-version field/live acceptance are not recorded,
-> and v1.5.6 is not publicly released.
+> **Status:** released; offline/CI PASS; live rollout accepted with a documented
+> RCE evidence limit. The final simultaneous 15-minute window had stable RCE
+> readiness but no planned active slot. The maintainer accepted publication and
+> the next active-slot regression, if any, will be handled as a hotfix.
 >
-> **Status PL:** implementacja jest obecna, ale nie zapisano pełnej bramki
-> offline z zamrożonego workspace ani odbioru field/live dokładnej wersji,
-> a v1.5.6 nie została publicznie wydana.
+> **Status PL:** wydano; offline/CI PASS; wdrożenie live odebrane z jawną
+> granicą dowodu RCE. Końcowe równoległe okno 15-minutowe miało stabilną
+> gotowość RCE, ale bez zaplanowanego aktywnego slotu. Opiekun zaakceptował
+> publikację, a ewentualna regresja następnego aktywnego slotu otrzyma hotfix.
 
 ### User update steps / Kroki po aktualizacji
 
@@ -25,12 +27,12 @@ All notable changes to this project are documented in this file.
    copies managed EMS package **1.5.6**; validate the configuration and perform
    the second restart requested by the managed-package Repair. Keep all writers
    disabled during both restarts and hard-refresh every open Hoymiles dashboard
-   so it loads frontend URL `v=1.5.6.17`.
+   so it loads frontend URL `v=1.5.6.24`.
    **PL:** uruchom Home Assistant ponownie po instalacji aktualizacji z HACS.
    Pierwszy start kopiuje zarządzany pakiet EMS **1.5.6**; sprawdź konfigurację
    i wykonaj drugi restart wymagany przez komunikat Napraw pakietu. Podczas obu
    restartów pozostaw wszystkie zapisy wyłączone i twardo odśwież każdą otwartą
-   kartę dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.6.17`.
+   kartę dashboardu Hoymiles, aby wczytała URL frontendu `v=1.5.6.24`.
 3. **ESP32 / ESPHome:** after the Home Assistant no-write check, rebuild and
    upload the firmware from the top-level ESPHome file pinned to immutable ref
    **v1.5.6**. This OTA is mandatory because the hotfix adds the complete
@@ -80,8 +82,9 @@ All notable changes to this project are documented in this file.
   command and a change during verification prevents confirmation. Best-effort
   sampled-peak attributes annotate the transition without claiming its true
   instantaneous maximum.
-- Clarified EMS ownership on both dashboards without changing any control
-  decision. When no automatic writer is active, **Controls now** reports
+- Clarified EMS ownership on both dashboards. This presentation-only change
+  leaves execution authority to the scheduler. When no automatic writer is
+  active, **Controls now** reports
   **No active automation** instead of implying a manual command. A separate
   **Low-cost charging** row distinguishes disabled, enabled/waiting, active,
   no-charge-needed and explicitly blocked policy states. The stable diagnostic
@@ -114,8 +117,9 @@ All notable changes to this project are documented in this file.
   Tryb ręczny/recovery i przygotowanie RCEm bez autorytatywnego celu sumarycznej
   mocy oceniają świeży stabilny kierunek rozładowania baterii bez odrzucenia za
   eksport lub amplitudę. Powrót do Self-Use nie czeka na ten dowód.
-- Uporządkowano prezentację właściciela EMS bez zmiany decyzji sterujących.
-  Gdy żaden automat nie wykonuje zapisu, **Steruje teraz** pokazuje
+- Uporządkowano prezentację właściciela EMS. Ta zmiana wyłącznie prezentacyjna
+  pozostawia autorytet wykonania w schedulerze. Gdy żaden automat nie wykonuje
+  zapisu, **Steruje teraz** pokazuje
   **Brak aktywnej automatyki**, a osobny wiersz **Tanie ładowanie** rozróżnia
   stan wyłączony, włączony i oczekujący, aktywne ładowanie, brak potrzeby oraz
   jawną blokadę. Stabilny atrybut diagnostyczny pozostaje
@@ -139,34 +143,103 @@ All notable changes to this project are documented in this file.
   v1.5.6 zapewniają kolejne wpisy graniczne dla niezmiennych stanów, ale nie
   wydłużają retencji Recordera.
 
+### Fixed / Naprawiono
+
+- Split planning authority for a **new** RCE start from execution authority for
+  an **already latched active** cycle. A normal input update may temporarily set
+  `result_current=false` and block new starts without rolling the active cycle
+  back to Self-Use. Live BMS/GCF, ownership/conflict, Off-Grid, FC03/readback,
+  SOC/reserve and inverter/topology hard stops remain independent and immediate
+  while recalculation is pending.
+- Removed execution-only tariff states such as `tariff_charge_active` and
+  non-consumed owner/execution diagnostics from the optimizer fingerprint.
+  Actual SOC, PV/LOAD, tariff/profile, BMS and freshness inputs still invalidate
+  the result normally.
+- Made tariff rollback one physical transaction: derive one final
+  `4300–4306` block from the last confirmed physical snapshot plus explicit
+  rollback values, skip no-ops, issue at most one FC16, and require its newer
+  matching full-block FC03 before completion.
+- Require every Home Assistant EMS-block helper to acknowledge all seven
+  physical `4300–4306` registers. Stale, missing or mismatching FC03 stays
+  fail-closed; no second transaction mechanism or firmware-barrier change was
+  added.
+- Keep the tariff planner's large live/diagnostic/restore attributes while
+  excluding them from Recorder persistence, cancel all overlapping delayed
+  recalculation tasks on unload, and watch the fallback daily-LOAD input so a
+  real fallback change invalidates the plan.
+- Sample continuously changing RCE planning telemetry on the existing one-minute
+  timer and coalesce normal tariff/GCF cohorts into a five-minute planning
+  cadence. Independent availability and safety gates remain immediate.
+- Advance Aurora to frontend revision **24**. The battery node keeps available
+  values visible and shows stored energy, physical current, state and bounded
+  ETA. The main orbit adds tomorrow's forecast and labelled inverter/battery-
+  circuit temperatures, with larger readable text in PL and EN.
+- Rozdzielono autorytet nowego startu RCE od autorytetu już aktywnego,
+  zalatchowanego cyklu. Zwykłe przeliczenie z `result_current=false` blokuje
+  nowe starty, ale nie wymusza Self-Use; niezależne bramki live BMS/GCF,
+  właściciela, Off-Grid, FC03, rezerwy SOC i topologii zatrzymują cykl od razu.
+- Usunięto z fingerprintu taryfy stany wyłącznie wykonawcze. Prawdziwe wejścia
+  SOC, PV/LOAD, taryfy/profilu, BMS i świeżości nadal unieważniają wynik.
+- Rollback taryfy tworzy jeden blok `4300–4306` z ostatniego potwierdzonego
+  fizycznego snapshotu i jawnych wartości rollbacku, wykonuje najwyżej jeden
+  FC16 i kończy się dopiero po nowszym zgodnym FC03 wszystkich siedmiu
+  rejestrów. Ten pełny kontrakt ACK obowiązuje każdy helper bloku EMS.
+- Duże atrybuty taryfy wyłączono tylko z zapisu do Recordera; nakładające się
+  opóźnione przeliczenia są anulowane przy unload, a zmiana zastępczego
+  dziennego LOAD prawidłowo unieważnia plan.
+- Ciągłą telemetrię planowania RCE próbkuje istniejący minutowy timer, a zwykłe
+  kohorty taryfy/GCF są łączone w pięciominutowy rytm. Niezależne bramki
+  dostępności i bezpieczeństwa nadal działają natychmiast.
+- Aurora rev **24** utrzymuje dostępne dane baterii i pokazuje energię, fizyczny
+  prąd, stan oraz ograniczone ETA. Główna orbita dodaje prognozę na jutro i
+  podpisane temperatury falownika/toru magazynu oraz większy tekst PL i EN.
+
+These changes deliberately affect execution authority, rollback/readback
+lifecycle and presentation. They do not change optimizer objectives, slot
+selection, forecast/tariff mathematics, RCEm voltage calculations or direct
+register semantics, Off-Grid priority, registers `258/259/306`, or the existing
+parallel broadcast/per-Slave acknowledgement claim boundary.
+
+Zmiany celowo dotyczą autorytetu wykonania, rollback/readback i prezentacji.
+Nie zmieniają celów optymalizatorów, wyboru slotów, matematyki prognozy/taryfy,
+obliczeń napięciowych i rejestrów bezpośrednich RCEm, priorytetu Off-Grid,
+rejestrów `258/259/306` ani granicy deklaracji broadcastu/per-Slave.
+
+### Validation / Walidacja
+
+- The tagged source passed the complete applicable offline gate, including
+  quick **488/488** and exhaustive **2064/2064** matrices, release/frontend
+  validation, deterministic generation, optimizer, history, firmware/readback,
+  startup/executor, source-rebind, diagnostics and 100-archive analyzer suites.
+- Publication additionally required exact-ref `project-checks`, conditional
+  `firmware-compile`, Hassfest and HACS validation in GitHub Actions.
+- Otagowane źródło przeszło pełną właściwą bramkę offline oraz wymagane CI dla
+  dokładnego ref. To dowód offline/CI, a nie uniwersalny certyfikat instalacji.
+
 ### Field evidence boundary / Granica dowodu terenowego
 
-- The 2026-08-15 shared-bus run remains **hardware and protocol evidence only**:
-  the host used managed Home Assistant package **1.5.4** and ESP32
-  firmware/project **1.5.3**, not the v1.5.6 candidate. It recorded Master mode
-  `5`, stable aggregate battery discharge of **33.653 kW** and **33.863 kW**,
-  and the later return to Master mode `0`; the operator reported Grid Discharge
-  on both nodes but retained no per-node power or exact vendor timestamp.
-- Home Assistant history inspected for this installation over the 8–14 August
-  evening windows (19:00–22:00 local) shows an approximately **60 kW** stop
-  transient on 8 August and an approximately **60 kW** start transient aligned
-  with the stored mode-code change on 14 August. The 9–13 August windows show
-  repeated discharge plateaus and switching impulses, although recorder
-  sampling may miss the full peak. Separately, the 15 August live trace at
-  18:20 local captured **63.069 kW battery / 65.910 kW inverter** during a
-  switch. This installation- and date-bounded evidence motivates grace plus a
-  stable window; a sampled peak is annotated, not accepted as stable response
-  or treated by itself as an error.
-- Dokładnie ten sam test z 2026-08-15 pozostaje wyłącznie **dowodem sprzętowym
-  i protokołowym**, ponieważ instalacja korzystała z pakietu HA **1.5.4** i
-  firmware/projektu ESP32 **1.5.3**. Historia tej instalacji z wieczorów 8–14
-  sierpnia, 19:00–22:00 czasu lokalnego, pokazuje pik stop około **60 kW** 8
-  sierpnia oraz pik start około **60 kW** zgodny ze zmianą kodu trybu 14
-  sierpnia. Okna 9–13 sierpnia zawierają powtarzające się plateau rozładowania
-  i impulsy przełączeń, choć próbkowanie mogło nie uchwycić maksimum. Osobno
-  ślad live z 15 sierpnia, 18:20 lokalnie, zawiera **63,069 kW baterii /
-  65,910 kW falownika** podczas przejścia. Ten ograniczony dowód uzasadnia czas
-  przejściowy i stabilne okno; pełny odbiór wymaga testu dokładnej v1.5.6.
+- The v1.5.6 runtime was deployed on localhost and `miernik.com.pl`; Home
+  Assistant checks/restarts, fresh FC03/readback and Aurora revision 24 passed.
+- During the final simultaneous 15-minute window localhost tariff readiness was
+  **16/16** with no status transition or schedule flapping; three subsequent
+  five-minute cycles also remained ready.
+- An earlier controlled meter run had RCE ownership **16/16** and physical grid
+  discharge **13/16**; after operator power adjustments its final eight minutes
+  were stable, and the vendor application confirmed discharge and Self-Use
+  return. The final scheduler guard was deployed afterward.
+- The final meter window was RCE-ready **16/16**, but no active slot was planned
+  **16/16**. Publication therefore carries an explicit active exact-final RCE
+  evidence gap accepted by the maintainer, with a hotfix path for a regression.
+- Runtime v1.5.6 wdrożono na localhost i `miernik.com.pl`; kontrole/restart HA,
+  świeży FC03/readback oraz Aurora rev24 przeszły. Taryfa localhost zachowała
+  gotowość **16/16** bez skakania planu, także w trzech kolejnych cyklach.
+  Wcześniejszy kontrolowany test miernika miał właściciela RCE **16/16** i
+  fizyczne rozładowanie **13/16**, a końcowe osiem minut było stabilne.
+  Końcowe okno miało gotowość RCE **16/16**, lecz bez planowanego aktywnego
+  slotu **16/16**; opiekun jawnie zaakceptował tę lukę z możliwością hotfixu.
+- The 2026-08-15 run on HA package **1.5.4** and ESP32 project **1.5.3** remains
+  bounded hardware/protocol evidence only, not per-Slave ACK or exact-v1.5.6
+  software acceptance.
 
 ## [1.5.5] - 2026-08-15
 
