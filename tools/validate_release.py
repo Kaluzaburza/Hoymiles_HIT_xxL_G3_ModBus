@@ -853,10 +853,16 @@ def main() -> int:
     firmware_core_source = (ROOT / "packages" / "core.yaml").read_text(
         encoding="utf-8"
     )
-    require(
-        f'version: "{manifest["version"]}"' in firmware_core_source,
-        "ESPHome project version in packages/core.yaml does not match manifest.json",
+    firmware_version_match = re.search(
+        r'^\s*version: "(\d+\.\d+\.\d+)"$',
+        firmware_core_source,
+        re.MULTILINE,
     )
+    require(
+        firmware_version_match is not None,
+        "ESPHome project version is missing from packages/core.yaml",
+    )
+    compatible_firmware_version = firmware_version_match.group(1)
     require(
         'name: "hoymiles.energy-storage-modbus"' in firmware_core_source,
         "Stable ESPHome project.name must not change during a marketing rename",
@@ -1736,8 +1742,8 @@ def main() -> int:
             f"Public ESPHome entry point has no remote package: {entry_file.name}",
         )
         require(
-            f"ref: v{manifest['version']}" in entry_text,
-            "ESPHome entry point is not pinned to the release version: "
+            f"ref: v{compatible_firmware_version}" in entry_text,
+            "ESPHome entry point is not pinned to the compatible firmware version: "
             f"{entry_file.name}",
         )
         require(

@@ -4,6 +4,7 @@ Baseline date: 2026-08-13 (Europe/Warsaw)
 Final RC6 live audit date: 2026-08-14 (Europe/Warsaw)
 Latest shared-bus hardware/protocol observation: 2026-08-15 (Europe/Warsaw)
 Final v1.5.6 release date: 2026-08-21 (Europe/Warsaw)
+v1.5.7 GCF cohort hotfix candidate date: 2026-08-22 (Europe/Warsaw)
 Last completed offline baseline in this report: **tagged v1.5.6 source — PASS**
 Last accepted live runtime merge:
 **`ce4afc614a691ce70c67da2439613de90e0c61c2`**
@@ -16,11 +17,48 @@ slot evidence gap for release, with a hotfix path. The 2026-08-15 shared-bus
 run remains hardware/protocol evidence from HA package 1.5.4 and ESP32 project
 1.5.3, not exact-v1.5.6 per-Slave acknowledgement.**
 
+Current v1.5.7 candidate: semantic hotfix commit
+**`59fb1e28efb0471e10a40728f8d2e74b4b8164dd`**. Focused deterministic
+tests and mutation probes pass as recorded below. This source entry does not
+claim exact-final localhost, field, CI or public-release acceptance; those
+remain mandatory gates and are recorded in the external release report for the
+exact final commit.
+
 This report covers the deterministic planning and control safeguards used by
 the RCE market-price optimizer, tariff-aware grid charging and experimental
 RCEm 253 V+ voltage management. The tests do not write to a real inverter.
 They verify arithmetic, state transitions, interlocks and fail-safe behaviour
 before field acceptance on each installation.
+
+## v1.5.7 RCE GCF cohort hotfix — focused candidate evidence
+
+The change is limited to RCE source-state ingestion in `rce_sensor.py` and its
+focused regression coverage. During delivery of one three-part physical GCF
+report, the last coherent cohort may remain authoritative for no more than five
+seconds. Completion consumes one changed semantic cohort once; an identical
+completion does not advance the input revision or start another full optimizer
+calculation. If coherence does not return, the retained state expires and the
+existing physical contract fails closed. Unload clears the state and cancels
+delayed callbacks. No retained state is restored across restart.
+
+Focused pre-release evidence on 2026-08-22:
+
+- RCE optimizer/sensor deterministic suite: **77/77 PASS**, repeated twice;
+- optimizer executor contract: **PASS**;
+- optimizer startup contract: **PASS**;
+- Python AST syntax and `git diff --check`: **PASS**;
+- temporary out-of-tree mutation campaign: **12/12 mutations killed**,
+  including unbounded/60-second grace, duplicate or missed cohorts, retained
+  unload state, future/stale/unsupported trust, factor drift, optimizer output
+  drift and a sensor self-loop.
+
+The frozen public-v1.5.6 `rce_optimizer.py` SHA-256 is
+`F95CA95D8290995016CED33F12A9FEEC8306CA7E6BF224DA385C956774866870`;
+the hotfix does not edit it. Exact enabled physical GCF plus export limit
+`0.0%` still selects `fixed_zero_export`, excludes restricted learning and
+uses exactly `0.80 × Solcast`. Positive export, disabled GCF and unknown/fail-
+closed behavior remain unchanged. The complete exact-final release gate and
+real-inverter acceptance are separate from these offline focused results.
 
 The v1.5.2 RC2 deterministic, packaging and firmware checks below were
 completed on 2026-08-13. Its local Home Assistant 2026.8 deployment exposed a

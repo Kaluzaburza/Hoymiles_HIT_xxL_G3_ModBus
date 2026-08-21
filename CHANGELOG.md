@@ -4,6 +4,81 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-08-22
+
+> **Status:** RCE GCF cohort stability hotfix. Publication is permitted only
+> after the exact final commit passes the complete offline, localhost,
+> `miernik.com.pl` and CI release gates.
+>
+> **Status PL:** hotfix stabilności kohorty GCF w RCE. Publikacja jest
+> dozwolona dopiero po przejściu przez dokładny finalny commit pełnych bramek
+> offline, localhost, `miernik.com.pl` oraz CI.
+
+### User update steps / Kroki po aktualizacji
+
+1. **HACS:** keep RCEm in shadow mode and disable every automatic or scheduled
+   EMS writer. Update **EMS for Hoymiles HIT-(5–20)L-G3** to **v1.5.7**.
+   **PL:** pozostaw RCEm w trybie shadow i wyłącz wszystkie automatyczne oraz
+   harmonogramowe zapisy EMS. Zaktualizuj w HACS integrację
+   **EMS for Hoymiles HIT-(5–20)L-G3** do **v1.5.7**.
+2. **Home Assistant:** restart after HACS installs the update. The first start
+   loads the new Python runtime and copies managed EMS package **1.5.7**;
+   validate the configuration and perform the second restart requested by the
+   managed-package Repair. Keep all writers disabled during both restarts.
+   **PL:** uruchom Home Assistant ponownie po instalacji aktualizacji z HACS.
+   Pierwszy start ładuje nowy runtime Python i kopiuje zarządzany pakiet EMS
+   **1.5.7**; sprawdź konfigurację i wykonaj drugi restart wymagany przez
+   komunikat Napraw pakietu. Podczas obu restartów pozostaw wszystkie zapisy
+   wyłączone.
+3. **ESP32 / ESPHome:** no firmware rebuild or upload is required. Firmware
+   from the last compatible immutable tag **v1.5.6** remains valid; HACS does
+   not flash the ESP32.
+   **PL:** ponowna kompilacja ani wgrywanie firmware nie są wymagane. Firmware
+   z ostatniego zgodnego, niezmiennego tagu **v1.5.6** pozostaje właściwe;
+   HACS nie wgrywa ESP32.
+4. **Verification / Weryfikacja:** confirm package **1.5.7 / Ready**, exactly
+   **294** localized entities, no unexpected owner, mode or Modbus write, and
+   no repeated RCE full-plan recalculation for an unchanged completed GCF
+   cohort. Where fresh physical GCF readback proves enabled zero export,
+   confirm `fixed_zero_export` and factor **0.80**.
+   **PL:** potwierdź pakiet **1.5.7 / Gotowe**, dokładnie **294** lokalizowane
+   encje, brak nieoczekiwanego właściciela, zmiany trybu lub zapisu Modbus oraz
+   brak powtarzanego pełnego przeliczania planu RCE dla niezmienionej kompletnej
+   kohorty GCF. Gdy świeży fizyczny odczyt GCF potwierdza włączony zerowy
+   eksport, sprawdź `fixed_zero_export` i współczynnik **0,80**.
+
+### Fixed / Naprawiono
+
+- RCE now retains only the last coherent physical GCF cohort for a bounded
+  maximum of five seconds while one three-part report finishes. The mixed
+  intermediate state does not immediately invalidate the accepted plan.
+- One newly completed semantic cohort is consumed at most once. An identical
+  completed cohort does not advance the optimizer input revision or create
+  `result_current` / pending churn.
+- Persistent incoherence still expires fail-closed. Missing, stale, future,
+  malformed or unsupported physical GCF readback remains untrusted.
+- Exact enabled GCF plus `0.0%` physical export limit still selects
+  `fixed_zero_export`, excludes restricted learning and uses exactly
+  **0.80 × Solcast**.
+- RCE economic optimization, scheduler, Modbus, firmware, tariff, RCEm,
+  Aurora/dashboard/frontend and parallel communication behavior are unchanged.
+  This release adds neither RCE market charging nor EMS Supervisor.
+
+- RCE zachowuje ostatnią spójną fizyczną kohortę GCF tylko przez ograniczone
+  maksimum pięciu sekund, gdy kończy się trzyczęściowy raport. Stan pośredni
+  nie unieważnia natychmiast zaakceptowanego planu.
+- Nowa kompletna kohorta semantyczna jest używana najwyżej raz. Identyczna
+  kompletna kohorta nie zwiększa rewizji wejścia optymalizatora i nie powoduje
+  migotania `result_current` / oczekiwania.
+- Trwała niespójność nadal wygasa fail-closed. Brakujący, nieświeży, przyszły,
+  wadliwy lub nieobsługiwany fizyczny odczyt GCF pozostaje niezaufany.
+- Włączony GCF i dokładny fizyczny limit eksportu `0,0%` nadal wybierają
+  `fixed_zero_export`, wykluczają uczenie z okresu ograniczenia i stosują
+  dokładnie **0,80 × Solcast**.
+- Ekonomia RCE, scheduler, Modbus, firmware, taryfa, RCEm,
+  Aurora/dashboard/frontend i komunikacja równoległa pozostają bez zmian.
+  Wydanie nie dodaje ładowania z rynku RCE ani EMS Supervisora.
+
 ## [1.5.6] - 2026-08-21
 
 > **Status:** released; offline/CI PASS; live rollout accepted with a documented
