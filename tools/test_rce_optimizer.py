@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import ast
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import hashlib
 import importlib.util
 from itertools import product
 import math
@@ -68,6 +70,17 @@ NOW = datetime(2026, 7, 28, 0, 0, tzinfo=WARSAW)
 # ceiling for the heavy 96/110-slot regressions; event-loop safety is proved by
 # the separate executor/offload contract rather than by this benchmark.
 SHARED_RUNNER_SOLVER_CEILING_SECONDS = 1.0
+V156_RCE_OPTIMIZER_SHA256 = (
+    "f95ca95d8290995016ced33f12a9feec8306ca7e6bf224da385c956774866870"
+)
+
+
+def test_v156_rce_optimizer_source_is_frozen() -> None:
+    """The cohort hotfix cannot alter any RCE economic implementation byte."""
+
+    assert hashlib.sha256(MODULE_PATH.read_bytes()).hexdigest() == (
+        V156_RCE_OPTIMIZER_SHA256
+    )
 
 
 def slots(day_offset: int, hour: int, count: int, price: float):
@@ -952,6 +965,16 @@ def _load_forecast_learning_policy_snapshot():
         if isinstance(node, ast.FunctionDef)
         and node.name == "_forecast_learning_policy_snapshot"
     )
+    max_skew = next(
+        ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS"
+            for target in node.targets
+        )
+    )
     namespace = {
         "Any": object,
         "HomeAssistant": object,
@@ -963,7 +986,7 @@ def _load_forecast_learning_policy_snapshot():
         ),
         "_FORECAST_GCF_SUPPORT_MAX_AGE_SECONDS": 10.0,
         "_FORECAST_GCF_READBACK_MAX_AGE_SECONDS": 180.0,
-        "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS": 5.0,
+        "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS": max_skew,
         "FORECAST_GCF_ENABLE_ENTITY": (
             "sensor.hoymiles_hit_gcf_enable_readback_code"
         ),
@@ -987,7 +1010,7 @@ def test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order() -> None
 
     snapshot, names = _load_forecast_learning_policy_snapshot()
 
-    def state(value: float, reported_at: datetime):
+    def state(value: object, reported_at: datetime):
         return type(
             "FakeState",
             (),
@@ -1008,18 +1031,24 @@ def test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order() -> None
 
     def evaluate(
         *,
+        support_at: datetime | None = NOW,
+        support_value: object = 1.0,
         enable_at: datetime | None = NOW - timedelta(seconds=2),
+        enable_value: object = 1.0,
         limit_at: datetime | None = NOW - timedelta(seconds=1),
+        limit_value: object = 10.0,
         generation_at: datetime | None = NOW,
-        limit_value: float = 10.0,
+        generation_value: object = 7.0,
     ):
-        states = FakeStates({support: state(1.0, NOW)})
+        states = FakeStates()
+        if support_at is not None:
+            states[support] = state(support_value, support_at)
         if enable_at is not None:
-            states[enable] = state(1.0, enable_at)
+            states[enable] = state(enable_value, enable_at)
         if limit_at is not None:
             states[limit] = state(limit_value, limit_at)
         if generation_at is not None:
-            states[generation] = state(7.0, generation_at)
+            states[generation] = state(generation_value, generation_at)
         hass = type("FakeHass", (), {"states": states})()
         return snapshot(hass, NOW)
 
@@ -1080,6 +1109,60 @@ def test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order() -> None
         "gcf_readback_incoherent"
     )
 
+    for span_seconds in (4.999, 5.0):
+        boundary, boundary_diagnostics = evaluate(
+            enable_at=NOW - timedelta(seconds=span_seconds),
+            limit_at=NOW,
+            generation_at=NOW,
+        )
+        assert boundary.enabled
+        assert boundary_diagnostics[
+            "forecast_learning_gcf_readback_verified"
+        ] is True
+    over_boundary, over_boundary_diagnostics = evaluate(
+        enable_at=NOW - timedelta(seconds=5.001),
+        limit_at=NOW,
+        generation_at=NOW,
+    )
+    assert not over_boundary.enabled
+    assert over_boundary_diagnostics[
+        "forecast_learning_gcf_readback_reason"
+    ] == "gcf_readback_incoherent"
+
+    exact_future_tolerance, exact_future_diagnostics = evaluate(
+        generation_at=NOW + timedelta(seconds=5.0),
+        enable_at=NOW,
+        limit_at=NOW,
+    )
+    assert exact_future_tolerance.enabled
+    assert exact_future_diagnostics[
+        "forecast_learning_gcf_readback_verified"
+    ] is True
+    future_generation, future_generation_diagnostics = evaluate(
+        generation_at=NOW + timedelta(seconds=5.001),
+    )
+    assert not future_generation.enabled
+    assert future_generation_diagnostics[
+        "forecast_learning_gcf_readback_reason"
+    ] == "gcf_generation_future_timestamp"
+
+    fail_closed_cases = (
+        ({"support_value": 0.0}, "hardware_readback_unverified"),
+        ({"support_at": None}, "hardware_readback_missing"),
+        ({"enable_value": "unknown"}, "gcf_enable_unavailable"),
+        ({"enable_value": 2.0}, "gcf_enable_above_maximum"),
+        ({"limit_at": None}, "gcf_limit_missing"),
+        ({"limit_value": "unavailable"}, "gcf_limit_unavailable"),
+        ({"limit_value": "nan"}, "gcf_limit_not_finite"),
+    )
+    for kwargs, expected_reason in fail_closed_cases:
+        rejected, rejected_diagnostics = evaluate(**kwargs)
+        assert not rejected.enabled
+        assert rejected.mode == "conservative_gcf_unverified"
+        assert rejected_diagnostics[
+            "forecast_learning_gcf_readback_reason"
+        ] == expected_reason
+
     zero_export, zero_diagnostics = evaluate(limit_value=0.0)
     assert zero_diagnostics["forecast_learning_gcf_readback_verified"] is True
     assert not zero_export.enabled
@@ -1087,25 +1170,79 @@ def test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order() -> None
     assert zero_export.excluded_reason == "zero_export"
     assert FORECAST.forecast_factor_for_policy(zero_export, 0.93) == 0.80
 
+    disabled, disabled_diagnostics = evaluate(enable_value=0.0)
+    assert disabled_diagnostics["forecast_learning_gcf_readback_verified"] is True
+    assert disabled.enabled and disabled.mode == "adaptive"
+    positive, positive_diagnostics = evaluate(limit_value=25.0)
+    assert positive_diagnostics["forecast_learning_gcf_readback_verified"] is True
+    assert positive.enabled and positive.mode == "adaptive"
 
-def test_forecast_gcf_event_closure_is_bounded_and_never_transient() -> None:
-    """Repeated reports cannot starve closure or publish a mid-cycle verdict."""
+
+def _gcf_policy(
+    *,
+    enabled: bool = True,
+    mode: str = "adaptive",
+    excluded_reason: str | None = None,
+    factor_override: float | None = None,
+):
+    return FORECAST.ForecastLearningPolicy(
+        enabled,
+        mode,
+        excluded_reason,
+        factor_override,
+    )
+
+
+def _gcf_diagnostics(
+    *,
+    enable_code: float | None = 1.0,
+    export_limit: float | None = 10.0,
+    generation: float | None = 7.0,
+) -> dict[str, float | None]:
+    return {
+        "forecast_learning_gcf_enable_code": enable_code,
+        "forecast_learning_gcf_export_limit_percent": export_limit,
+        "forecast_learning_gcf_generation": generation,
+    }
+
+
+def _load_forecast_gcf_event_probe():
+    """Execute the production cohort/lifecycle methods without importing HA."""
 
     source = (
         ROOT / "custom_components" / "hoymiles_hit_modbus" / "rce_sensor.py"
     ).read_text(encoding="utf-8")
     tree = ast.parse(source)
+    max_skew = next(
+        ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS"
+            for target in node.targets
+        )
+    )
     sensor_class = next(
         node
         for node in tree.body
         if isinstance(node, ast.ClassDef)
         and node.name == "HoymilesRCEOptimizerSensor"
     )
+    optimizer_signature_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_forecast_gcf_optimizer_signature"
+    )
     method_names = {
         "_async_forecast_gcf_policy_changed",
         "_cancel_forecast_gcf_policy_evaluation",
+        "_clear_forecast_gcf_cohort_state",
         "_async_evaluate_forecast_gcf_policy",
         "_apply_forecast_gcf_policy",
+        "_async_debounced_recalculate",
+        "_cancel_delayed_recalculation",
     }
     methods = [
         node
@@ -1115,14 +1252,28 @@ def test_forecast_gcf_event_closure_is_bounded_and_never_transient() -> None:
     ]
     assert {method.name for method in methods} == method_names
 
-    scheduled: list[dict[str, object]] = []
+    initial_policy = _gcf_policy()
+    initial_diagnostics = _gcf_diagnostics()
     policy_slot = {
-        "value": type(
-            "Policy",
-            (),
-            {"excluded_reason": "gcf_readback_incoherent"},
-        )()
+        "policy": initial_policy,
+        "diagnostics": initial_diagnostics,
     }
+    scheduled: list[dict[str, object]] = []
+    counters = {
+        "input_revision": 0,
+        "optimizer_calls": 0,
+        "publications": 0,
+        "policy_refreshes": 0,
+        "result_current": True,
+    }
+
+    def policy_signature(policy):
+        return (
+            policy.enabled,
+            policy.mode,
+            policy.excluded_reason,
+            policy.factor_override,
+        )
 
     def call_later(_hass, delay, callback):
         token = {"delay": delay, "callback": callback, "cancelled": False}
@@ -1148,96 +1299,311 @@ def test_forecast_gcf_event_closure_is_bounded_and_never_transient() -> None:
                     names=[ast.alias(name="annotations")],
                     level=0,
                 ),
+                optimizer_signature_function,
                 probe_class,
             ],
             type_ignores=[],
         )
     )
     namespace = {
+        "asyncio": asyncio,
         "callback": lambda method: method,
         "async_call_later": call_later,
         "dt_util": type("DTUtil", (), {"now": staticmethod(lambda: NOW)}),
-        "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS": 5.0,
+        "_FORECAST_GCF_READBACK_MAX_SKEW_SECONDS": max_skew,
         "INPUT_RECALCULATION_DELAY_SECONDS": 1.0,
-        "_forecast_learning_policy_signature": (
-            lambda policy: (policy.enabled, policy.excluded_reason)
-        ),
+        "_forecast_learning_policy_signature": policy_signature,
         "_forecast_learning_policy_snapshot": (
-            lambda _hass, _now: (policy_slot["value"], {})
+            lambda _hass, _now: (
+                policy_slot["policy"],
+                policy_slot["diagnostics"],
+            )
         ),
     }
     exec(compile(module, "<forecast-gcf-event-probe>", "exec"), namespace)
+    optimizer_signature = namespace["_forecast_gcf_optimizer_signature"]
     probe = namespace["ForecastGCFEventProbe"]()
     probe.hass = object()
     probe._forecast_gcf_policy_evaluation_cancel = None
-    probe._forecast_gcf_policy_signature = (False, None)
-    probe._recalculate_cancel = None
-    invalidations: list[bool] = []
-    probe._invalidate_internal_inputs = lambda: invalidations.append(True)
-    probe._schedule_forecast_policy_refresh = lambda: None
-    probe._async_debounced_recalculate = object()
-
-    probe._async_forecast_gcf_policy_changed(object())
-    assert len(scheduled) == 1
-    assert scheduled[0]["delay"] == 5.0
-    assert invalidations == [True]
-    first_cancel = probe._forecast_gcf_policy_evaluation_cancel
-    # A rapid repeated report (including a 1-second support cadence in the old
-    # broken design) cannot reschedule the one bounded deadline.
-    probe._async_forecast_gcf_policy_changed(object())
-    assert len(scheduled) == 1
-    assert probe._forecast_gcf_policy_evaluation_cancel is first_cancel
-    assert invalidations == [True]
-
-    coherent = type(
-        "Policy",
-        (),
-        {"enabled": False, "excluded_reason": None},
-    )()
-    policy_slot["value"] = coherent
-    probe._async_forecast_gcf_policy_changed(object())
-    assert scheduled[0]["cancelled"] is True
-    assert probe._forecast_gcf_policy_evaluation_cancel is None
-    # The semantic signature is unchanged, but the closed cohort must still
-    # replace the plan that was withdrawn while the reports were mixed.
-    assert invalidations == [True, True]
-    assert probe._recalculate_cancel is not None
-    assert scheduled[-1]["delay"] == 1.0
-    probe._recalculate_cancel()
-    probe._recalculate_cancel = None
-
-    # If no matching late report arrives, the original deadline applies the
-    # still-incoherent fail-closed policy; no clock path can mark it verified.
-    incoherent = type(
-        "Policy",
-        (),
-        {"enabled": False, "excluded_reason": "gcf_readback_incoherent"},
-    )()
-    policy_slot["value"] = incoherent
-    probe._async_forecast_gcf_policy_changed(object())
-    deadline = scheduled[-1]
-    coroutine = deadline["callback"](NOW + timedelta(seconds=5))
-    try:
-        coroutine.send(None)
-    except StopIteration:
-        pass
-    else:
-        raise AssertionError("GCF deadline unexpectedly suspended")
-    assert probe._forecast_gcf_policy_evaluation_cancel is None
-    assert invalidations == [True, True, True, True]
-    assert probe._forecast_gcf_policy_signature == (
-        False,
-        "gcf_readback_incoherent",
+    probe._forecast_gcf_policy_signature = policy_signature(initial_policy)
+    probe._forecast_gcf_optimizer_signature = optimizer_signature(
+        initial_policy,
+        initial_diagnostics,
     )
-    assert probe._recalculate_cancel is not None
-    probe._recalculate_cancel()
     probe._recalculate_cancel = None
+    probe._delayed_recalculate_tasks = set()
+    probe._lifecycle_stopped = False
 
+    def invalidate() -> None:
+        counters["input_revision"] += 1
+        counters["result_current"] = False
+
+    async def recalculate_and_write() -> None:
+        counters["optimizer_calls"] += 1
+        counters["publications"] += 1
+        counters["result_current"] = True
+
+    def refresh_policy() -> None:
+        counters["policy_refreshes"] += 1
+
+    probe._invalidate_internal_inputs = invalidate
+    probe._recalculate_and_write = recalculate_and_write
+    probe._schedule_forecast_policy_refresh = refresh_policy
+    return probe, policy_slot, scheduled, counters, source, sensor_class
+
+
+def _fire_gcf_callback(token: dict[str, object], now: datetime = NOW) -> None:
+    assert token["cancelled"] is False
+    callback = token["callback"]
+    assert callable(callback)
+    asyncio.run(callback(now))
+
+
+def test_forecast_gcf_event_closure_is_bounded_and_never_transient() -> None:
+    """A three-part report creates one semantic optimizer calculation."""
+
+    (
+        probe,
+        policy_slot,
+        scheduled,
+        counters,
+        source,
+        sensor_class,
+    ) = _load_forecast_gcf_event_probe()
+
+    event_assignment = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "RCE_EVENT_DRIVEN_ENTITIES"
+            for target in node.targets
+        )
+    )
+    event_source = ast.get_source_segment(source, event_assignment)
+    assert event_source is not None
+    assert "RCE_GCF_OPTIMIZER_ENTITIES" in event_source
+    fingerprint = next(
+        node
+        for node in sensor_class.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_current_input_fingerprint"
+    )
+    fingerprint_source = ast.get_source_segment(source, fingerprint)
+    assert fingerprint_source is not None
+    assert "WATCHED_ENTITIES | self._configured_forecast_source_ids()" in (
+        fingerprint_source
+    )
+    assert "sensor.hoymiles_hit_gcf_enable_readback_code" in fingerprint_source
+    assert (
+        "sensor.hoymiles_hit_gcf_maximum_export_power_readback"
+        in fingerprint_source
+    )
+    assert 'getattr(self, "_forecast_gcf_optimizer_signature", None)' in (
+        fingerprint_source
+    )
+    watched_assignment = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "WATCHED_ENTITIES"
+            for target in node.targets
+        )
+    )
+    watched_source = ast.get_source_segment(source, watched_assignment)
+    assert watched_source is not None
+    assert "sensor.hoymiles_hit_rce_optimized_plan" not in watched_source
+
+    # The first two parts of a changed physical report are mixed. They arm one
+    # fixed deadline without withdrawing the previous plan or changing its
+    # input revision, even if the mixed event repeats rapidly.
+    policy_slot["policy"] = _gcf_policy(
+        enabled=False,
+        mode="conservative_gcf_unverified",
+        excluded_reason="gcf_readback_incoherent",
+    )
+    policy_slot["diagnostics"] = _gcf_diagnostics(
+        export_limit=20.0,
+        generation=8.0,
+    )
     probe._async_forecast_gcf_policy_changed(object())
-    cleanup = scheduled[-1]
-    probe._cancel_forecast_gcf_policy_evaluation()
-    assert cleanup["cancelled"] is True
+    first_deadline = scheduled[0]
+    assert first_deadline["delay"] == 5.0
+    assert counters["input_revision"] == 0
+    assert counters["result_current"] is True
+    probe._async_forecast_gcf_policy_changed(object())
+    assert len(scheduled) == 1
+    assert probe._forecast_gcf_policy_evaluation_cancel is not None
+    assert counters["input_revision"] == 0
+
+    # The last report part closes a coherent changed cohort. Multiple HA
+    # callbacks for that one completion create one revision and one solver run.
+    policy_slot["policy"] = _gcf_policy()
+    probe._async_forecast_gcf_policy_changed(object())
+    probe._async_forecast_gcf_policy_changed(object())
+    assert first_deadline["cancelled"] is True
     assert probe._forecast_gcf_policy_evaluation_cancel is None
+    assert counters["input_revision"] == 1
+    assert counters["result_current"] is False
+    assert len(scheduled) == 2
+    assert scheduled[1]["delay"] == 1.0
+    _fire_gcf_callback(scheduled[1])
+    assert counters["optimizer_calls"] == 1
+    assert counters["publications"] == 1
+    assert counters["result_current"] is True
+
+    # Exact duplicate completion and a newer provenance-only generation do not
+    # change optimizer mathematics and therefore cannot manufacture churn.
+    probe._async_forecast_gcf_policy_changed(object())
+    policy_slot["diagnostics"] = _gcf_diagnostics(
+        export_limit=20.0,
+        generation=9.0,
+    )
+    probe._async_forecast_gcf_policy_changed(object())
+    assert counters["input_revision"] == 1
+    assert counters["optimizer_calls"] == 1
+    assert len(scheduled) == 2
+
+    # A consumed value changing under the same generation is not deduplicated.
+    policy_slot["diagnostics"] = _gcf_diagnostics(
+        export_limit=25.0,
+        generation=9.0,
+    )
+    probe._async_forecast_gcf_policy_changed(object())
+    probe._async_forecast_gcf_policy_changed(object())
+    assert counters["input_revision"] == 2
+    assert len(scheduled) == 3
+    _fire_gcf_callback(scheduled[2])
+    assert counters["optimizer_calls"] == 2
+    assert counters["publications"] == 2
+
+    # A genuinely new coherent semantic cohort is also consumed exactly once.
+    policy_slot["diagnostics"] = _gcf_diagnostics(
+        export_limit=30.0,
+        generation=10.0,
+    )
+    for _part in range(3):
+        probe._async_forecast_gcf_policy_changed(object())
+    assert counters["input_revision"] == 3
+    assert len(scheduled) == 4
+    _fire_gcf_callback(scheduled[3])
+    assert counters["optimizer_calls"] == 3
+    assert counters["publications"] == 3
+    assert counters["policy_refreshes"] == 0
+
+
+def test_forecast_gcf_persistent_incoherence_and_unload_fail_closed() -> None:
+    """The 5-second deadline is final and no retained state survives unload."""
+
+    probe, policy_slot, scheduled, counters, source, sensor_class = (
+        _load_forecast_gcf_event_probe()
+    )
+    policy_slot["policy"] = _gcf_policy(
+        enabled=False,
+        mode="conservative_gcf_unverified",
+        excluded_reason="gcf_readback_incoherent",
+    )
+    policy_slot["diagnostics"] = _gcf_diagnostics(generation=8.0)
+    probe._async_forecast_gcf_policy_changed(object())
+    deadline = scheduled[0]
+    assert deadline["delay"] == 5.0
+    assert counters["input_revision"] == 0
+    _fire_gcf_callback(deadline, NOW + timedelta(seconds=5.0))
+    assert probe._forecast_gcf_policy_evaluation_cancel is None
+    assert counters["input_revision"] == 1
+    assert counters["result_current"] is False
+    assert len(scheduled) == 2
+    _fire_gcf_callback(scheduled[1])
+    assert counters["optimizer_calls"] == 1
+    assert counters["publications"] == 1
+
+    # Once fail-closed has been applied, repeated persistent incoherence cannot
+    # arm another deadline or create an optimizer loop.
+    for _report in range(4):
+        probe._async_forecast_gcf_policy_changed(object())
+    assert len(scheduled) == 2
+    assert counters["input_revision"] == 1
+    assert counters["optimizer_calls"] == 1
+
+    # A pending retained cohort is explicitly cancelled and cleared on unload.
+    unload_probe, unload_slot, unload_scheduled, unload_counters, _, _ = (
+        _load_forecast_gcf_event_probe()
+    )
+    unload_slot["policy"] = policy_slot["policy"]
+    unload_slot["diagnostics"] = policy_slot["diagnostics"]
+    unload_probe._async_forecast_gcf_policy_changed(object())
+    unload_deadline = unload_scheduled[0]
+    unload_probe._clear_forecast_gcf_cohort_state()
+    unload_probe._cancel_delayed_recalculation()
+    assert unload_deadline["cancelled"] is True
+    assert unload_probe._forecast_gcf_policy_evaluation_cancel is None
+    assert unload_probe._forecast_gcf_policy_signature is None
+    assert unload_probe._forecast_gcf_optimizer_signature is None
+    assert unload_probe._lifecycle_stopped is True
+    assert unload_counters["optimizer_calls"] == 0
+    assert unload_counters["publications"] == 0
+
+    # A completion-scheduled calculation is also cancelled, and even a forced
+    # late callback cannot publish through the stopped lifecycle.
+    late_probe, late_slot, late_scheduled, late_counters, _, _ = (
+        _load_forecast_gcf_event_probe()
+    )
+    late_slot["diagnostics"] = _gcf_diagnostics(export_limit=20.0)
+    late_probe._async_forecast_gcf_policy_changed(object())
+    queued_recalculation = late_scheduled[0]
+    late_probe._clear_forecast_gcf_cohort_state()
+    late_probe._cancel_delayed_recalculation()
+    assert queued_recalculation["cancelled"] is True
+    callback = queued_recalculation["callback"]
+    assert callable(callback)
+    asyncio.run(callback(NOW))
+    assert late_counters["optimizer_calls"] == 0
+    assert late_counters["publications"] == 0
+
+    class FakeTask:
+        def __init__(self) -> None:
+            self.cancelled = False
+
+        def done(self) -> bool:
+            return False
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    running = FakeTask()
+    late_probe._delayed_recalculate_tasks.add(running)
+    late_probe._cancel_delayed_recalculation()
+    assert running.cancelled is True
+
+    added_to_hass = next(
+        node
+        for node in sensor_class.body
+        if isinstance(node, ast.AsyncFunctionDef)
+        and node.name == "async_added_to_hass"
+    )
+    added_source = ast.get_source_segment(source, added_to_hass)
+    assert added_source is not None
+    assert "self._clear_forecast_gcf_cohort_state()" in added_source
+    assert "self.async_on_remove(self._cancel_delayed_recalculation)" in (
+        added_source
+    )
+    assert "RestoreEntity" not in source
+
+    recalculate_locked = next(
+        node
+        for node in sensor_class.body
+        if isinstance(node, ast.AsyncFunctionDef)
+        and node.name == "_recalculate_locked"
+    )
+    recalculate_source = ast.get_source_segment(source, recalculate_locked)
+    assert recalculate_source is not None
+    grace_prefix = recalculate_source[
+        : recalculate_source.index("captured_revision")
+    ]
+    assert "_forecast_gcf_policy_evaluation_cancel" in grace_prefix
+    assert "_mark_recalculation_pending" not in grace_prefix
 
 
 def test_zero_export_forecast_learning_policy_is_fixed_and_reversible() -> None:
@@ -1544,7 +1910,10 @@ def test_forecast_learning_wiring_covers_rce_and_tariff() -> None:
     ):
         assert marker in rce_source
         assert marker in tariff_source
-    for source in (rce_source, tariff_source):
+    for source, pending_during_grace in (
+        (rce_source, False),
+        (tariff_source, True),
+    ):
         assert "previous_signature" in source
         assert "self._entry.async_create_background_task(" in source
         assert "self.hass.async_create_task(" not in source
@@ -1575,7 +1944,12 @@ def test_forecast_learning_wiring_covers_rce_and_tariff() -> None:
         pending_prefix = recalculate_source[
             : recalculate_source.index("self._optimizer_input()")
         ]
-        assert "self._mark_recalculation_pending()" in pending_prefix
+        if pending_during_grace:
+            assert "self._mark_recalculation_pending()" in pending_prefix
+        else:
+            # RCE retains its last coherent plan only until the exact bounded
+            # deadline; the deadline then performs the fail-closed invalidation.
+            assert "self._mark_recalculation_pending()" not in pending_prefix
         assert "return False" in pending_prefix
 
     tariff_tree = ast.parse(tariff_source)
@@ -3649,6 +4023,7 @@ def test_self_use_reserve_uses_fresh_physical_readback() -> None:
 def main() -> None:
     """Run without pytest so the release validator has no extra dependency."""
     tests = [
+        test_v156_rce_optimizer_source_is_frozen,
         test_higher_tomorrow_price_wins,
         test_low_market_prices_still_use_the_best_48h_slots,
         test_negative_prices_do_not_dump_stored_energy,
@@ -3680,6 +4055,7 @@ def main() -> None:
         test_shared_forecast_model_is_conservative_and_robust,
         test_forecast_gcf_snapshot_accepts_one_cycle_in_either_event_order,
         test_forecast_gcf_event_closure_is_bounded_and_never_transient,
+        test_forecast_gcf_persistent_incoherence_and_unload_fail_closed,
         test_zero_export_forecast_learning_policy_is_fixed_and_reversible,
         test_unverified_gcf_pauses_learning_without_guessing_zero_export,
         test_zero_export_days_never_reenter_forecast_learning_history,

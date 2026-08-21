@@ -222,7 +222,17 @@ RCE_MINUTE_COALESCED_ENTITIES = {
     "sensor.hoymiles_rce_learned_export_power",
     "sun.sun",
 }
-RCE_EVENT_DRIVEN_ENTITIES = WATCHED_ENTITIES - RCE_MINUTE_COALESCED_ENTITIES
+RCE_GCF_OPTIMIZER_ENTITIES = frozenset(
+    {
+        FORECAST_GCF_ENABLE_ENTITY,
+        FORECAST_GCF_LIMIT_ENTITY,
+    }
+)
+RCE_EVENT_DRIVEN_ENTITIES = (
+    WATCHED_ENTITIES
+    - RCE_MINUTE_COALESCED_ENTITIES
+    - RCE_GCF_OPTIMIZER_ENTITIES
+)
 
 
 def _forecast_learning_policy_snapshot(
@@ -330,6 +340,25 @@ def _forecast_learning_policy_signature(
         policy.excluded_reason,
         policy.factor_override,
     )
+
+
+def _forecast_gcf_optimizer_signature(
+    policy: ForecastLearningPolicy,
+    diagnostics: Mapping[str, Any],
+) -> tuple[bool, str, str | None, float | None, float | None, float | None]:
+    """Return the stable physical GCF values consumed by RCE planning.
+
+    The FC03 generation proves freshness and cohort coherence, but advances on
+    every unchanged physical report. Excluding it here prevents a periodic
+    provenance heartbeat from becoming a new mathematical optimizer input.
+    """
+
+    return (
+        *_forecast_learning_policy_signature(policy),
+        diagnostics.get("forecast_learning_gcf_enable_code"),
+        diagnostics.get("forecast_learning_gcf_export_limit_percent"),
+    )
+
 
 STATUS_TEXT = {
     "pl": {
@@ -754,7 +783,20 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         self._forecast_gcf_policy_signature: (
             tuple[bool, str, str | None, float | None] | None
         ) = None
+        self._forecast_gcf_optimizer_signature: (
+            tuple[
+                bool,
+                str,
+                str | None,
+                float | None,
+                float | None,
+                float | None,
+            ]
+            | None
+        ) = None
         self._forecast_gcf_policy_evaluation_cancel = None
+        self._delayed_recalculate_tasks: set[asyncio.Task[None]] = set()
+        self._lifecycle_stopped = False
         self._optimizer_lock = asyncio.Lock()
         self._input_revision = OptimizerInputRevision()
         self._current_slot_continue_eligible: bool | None = None
@@ -809,6 +851,7 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Track every input that can change the plan."""
         await super().async_added_to_hass()
+        self._lifecycle_stopped = False
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
@@ -816,12 +859,19 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 self._async_input_changed,
             )
         )
-        current_policy, _ = _forecast_learning_policy_snapshot(
+        current_policy, current_diagnostics = _forecast_learning_policy_snapshot(
             self.hass,
             dt_util.now(),
         )
         self._forecast_gcf_policy_signature = (
             _forecast_learning_policy_signature(current_policy)
+        )
+        self._forecast_gcf_optimizer_signature = (
+            *_forecast_learning_policy_signature(current_policy),
+            current_diagnostics.get("forecast_learning_gcf_enable_code"),
+            current_diagnostics.get(
+                "forecast_learning_gcf_export_limit_percent"
+            ),
         )
         self.async_on_remove(
             async_track_state_change_event(
@@ -837,9 +887,8 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
                 self._async_forecast_gcf_policy_changed,
             )
         )
-        self.async_on_remove(
-            lambda: self._cancel_forecast_gcf_policy_evaluation()
-        )
+        self.async_on_remove(lambda: self._clear_forecast_gcf_cohort_state())
+        self.async_on_remove(self._cancel_delayed_recalculation)
         refresh_dynamic_forecast_listener = getattr(
             self,
             "_refresh_dynamic_forecast_listener",
@@ -1213,15 +1262,24 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     @callback
     def _current_input_fingerprint(self) -> tuple[Any, ...]:
         """Return the exact watched snapshot used to certify publication."""
-        return optimizer_input_fingerprint(
+        watched_entities = WATCHED_ENTITIES | self._configured_forecast_source_ids()
+        watched_entities -= {
+            "sensor.hoymiles_hit_gcf_enable_readback_code",
+            "sensor.hoymiles_hit_gcf_maximum_export_power_readback",
+        }
+        fingerprint = optimizer_input_fingerprint(
             self.hass,
-            WATCHED_ENTITIES | self._configured_forecast_source_ids(),
+            watched_entities,
             attribute_projections={
                 "sensor.hoymiles_hit_tariff_charge_plan": (
                     TARIFF_PRICE_BROKER_ATTRIBUTES
                 ),
             },
         )
+        gcf_signature = getattr(self, "_forecast_gcf_optimizer_signature", None)
+        if gcf_signature is None:
+            return fingerprint
+        return (*fingerprint, ("__rce_gcf_optimizer__", gcf_signature))
 
     @callback
     def _invalidate_input_event(
@@ -1301,25 +1359,31 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     ) -> None:
         """Accept a complete cohort or arm one bounded fail-closed deadline."""
 
-        policy, _ = _forecast_learning_policy_snapshot(
+        if self._lifecycle_stopped:
+            return
+        policy, diagnostics = _forecast_learning_policy_snapshot(
             self.hass,
             dt_util.now(),
         )
         if policy.excluded_reason != "gcf_readback_incoherent":
-            cohort_pending = (
-                self._forecast_gcf_policy_evaluation_cancel is not None
-            )
             self._cancel_forecast_gcf_policy_evaluation()
-            self._apply_forecast_gcf_policy(
-                policy,
-                force_recalculate=cohort_pending,
-            )
+            # A completed HA delivery cohort with the same physical policy is
+            # not a new optimizer input. A changed signature still invalidates
+            # immediately in _apply_forecast_gcf_policy().
+            self._apply_forecast_gcf_policy(policy, diagnostics)
+            return
+        if (
+            self._forecast_gcf_policy_signature
+            == _forecast_learning_policy_signature(policy)
+        ):
+            # The previous bounded deadline already failed closed for this
+            # semantic condition. Repeated incoherent reports cannot create a
+            # new timer/recalculation loop while the source remains invalid.
             return
         if self._forecast_gcf_policy_evaluation_cancel is None:
-            # Withdraw execution authority while HA finishes delivering the
-            # three physical readback reports.  No optimizer run may publish
-            # the transient mixed cohort as a current plan.
-            self._invalidate_internal_inputs()
+            # Keep the last coherent, fresh generation while HA finishes
+            # delivering this physical readback cohort. The bounded deadline
+            # below still fails closed if the cohort remains incoherent.
             self._forecast_gcf_policy_evaluation_cancel = async_call_later(
                 self.hass,
                 _FORECAST_GCF_READBACK_MAX_SKEW_SECONDS,
@@ -1334,6 +1398,15 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
             self._forecast_gcf_policy_evaluation_cancel()
             self._forecast_gcf_policy_evaluation_cancel = None
 
+    @callback
+    def _clear_forecast_gcf_cohort_state(self) -> None:
+        """Drop all retained cohort authority when this entity is removed."""
+
+        self._lifecycle_stopped = True
+        self._cancel_forecast_gcf_policy_evaluation()
+        self._forecast_gcf_policy_signature = None
+        self._forecast_gcf_optimizer_signature = None
+
     async def _async_evaluate_forecast_gcf_policy(
         self,
         now: datetime,
@@ -1341,33 +1414,52 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         """Replan only when a completed GCF read changes learning policy."""
 
         self._forecast_gcf_policy_evaluation_cancel = None
-        policy, _ = _forecast_learning_policy_snapshot(
+        if self._lifecycle_stopped:
+            return
+        policy, diagnostics = _forecast_learning_policy_snapshot(
             self.hass,
             now,
         )
-        self._apply_forecast_gcf_policy(policy, force_recalculate=True)
+        self._apply_forecast_gcf_policy(
+            policy,
+            diagnostics,
+            force_recalculate=True,
+        )
 
     @callback
     def _apply_forecast_gcf_policy(
         self,
         policy: ForecastLearningPolicy,
+        diagnostics: Mapping[str, Any],
         *,
         force_recalculate: bool = False,
     ) -> None:
         """Apply one complete or deadline-expired physical GCF policy."""
 
-        signature = _forecast_learning_policy_signature(policy)
-        previous_signature = self._forecast_gcf_policy_signature
-        signature_changed = signature != previous_signature
-        if not signature_changed and not force_recalculate:
+        if self._lifecycle_stopped:
             return
-        self._forecast_gcf_policy_signature = signature
-        if signature_changed and policy.enabled and (
-            previous_signature is None or not previous_signature[0]
+        policy_signature = _forecast_learning_policy_signature(policy)
+        optimizer_signature = _forecast_gcf_optimizer_signature(
+            policy,
+            diagnostics,
+        )
+        previous_signature = self._forecast_gcf_policy_signature
+        previous_optimizer_signature = self._forecast_gcf_optimizer_signature
+        policy_changed = policy_signature != previous_signature
+        optimizer_input_changed = (
+            optimizer_signature != previous_optimizer_signature
+        )
+        if not optimizer_input_changed and not force_recalculate:
+            return
+        self._forecast_gcf_policy_signature = policy_signature
+        self._forecast_gcf_optimizer_signature = optimizer_signature
+        if policy_changed and policy.enabled and (
+            previous_signature is None
+            or not previous_signature[0]
         ):
             self._schedule_forecast_policy_refresh()
         self._invalidate_internal_inputs()
-        if self._recalculate_cancel is None:
+        if not self._lifecycle_stopped and self._recalculate_cancel is None:
             self._recalculate_cancel = async_call_later(
                 self.hass,
                 INPUT_RECALCULATION_DELAY_SECONDS,
@@ -1400,7 +1492,30 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
 
     async def _async_debounced_recalculate(self, now: datetime) -> None:
         self._recalculate_cancel = None
-        await self._recalculate_and_write()
+        if self._lifecycle_stopped:
+            return
+        task = asyncio.current_task()
+        if task is None:
+            return
+        self._delayed_recalculate_tasks.add(task)
+        try:
+            await self._recalculate_and_write()
+        finally:
+            self._delayed_recalculate_tasks.discard(task)
+
+    @callback
+    def _cancel_delayed_recalculation(self) -> None:
+        """Cancel queued or running delayed work when the entity is removed."""
+
+        self._lifecycle_stopped = True
+        if self._recalculate_cancel is not None:
+            self._recalculate_cancel()
+            self._recalculate_cancel = None
+        tasks = tuple(self._delayed_recalculate_tasks)
+        self._delayed_recalculate_tasks.clear()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
     async def _async_timer(self, now: datetime) -> None:
         """Refresh the active slot and rolling forecast every minute."""
@@ -1442,9 +1557,8 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
     async def _recalculate_locked(self) -> bool:
         if self._forecast_gcf_policy_evaluation_cancel is not None:
             # The current 258/259/generation reports are still a mixed HA
-            # delivery cohort.  Keep the previous plan non-current until the
-            # late report closes it or the bounded deadline fails closed.
-            self._mark_recalculation_pending()
+            # delivery cohort. Keep the previous coherent plan current until
+            # the late report closes it or the bounded deadline fails closed.
             return False
         captured_revision = self._input_revision.value
         captured_fingerprint = self._current_input_fingerprint()
@@ -2291,6 +2405,12 @@ class HoymilesRCEOptimizerSensor(SensorEntity):
         )
         self._forecast_gcf_policy_signature = (
             _forecast_learning_policy_signature(learning_policy)
+        )
+        self._forecast_gcf_optimizer_signature = (
+            _forecast_gcf_optimizer_signature(
+                learning_policy,
+                learning_diagnostics,
+            )
         )
         forecast_factor_used = forecast_factor_for_policy(
             learning_policy,
