@@ -46,6 +46,8 @@ MIN_GRID_SUPPORT_USEFUL_RUNTIME_SECONDS = 5 * 60
 MIN_GRID_SUPPORT_CYCLE_ENERGY_KWH = 0.25
 MIN_GRID_SUPPORT_CYCLE_BENEFIT_PLN = 0.10
 GRID_SUPPORT_TARGET_SOC_OFFSET_PERCENT = 1.0
+_ALLOCATION_REQUIRED_ENERGY = 1
+_ALLOCATION_ECONOMIC = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +212,7 @@ class TariffOptimizerResult:
     modeled_pv_kwh: float = 0.0
     effective_terminal_reserve_soc_percent: float = 0.0
     current_run_end: datetime | None = None
+    current_run_need_class: str = "none"
     current_run_duration_seconds: float = 0.0
     current_run_grid_import_kwh: float = 0.0
     current_run_stored_kwh: float = 0.0
@@ -267,6 +270,32 @@ class _Simulation:
     total_optimization_cost_pln: float
     terminal_shortfall_kwh: float
     terminal_import_kwh: float
+
+
+def _classify_current_run_need(
+    *,
+    current_planned: bool,
+    current_run_slot_indices: tuple[int, ...],
+    allocation_provenance: dict[int, int],
+) -> str:
+    """Return bounded current-run need provenance from accepted allocations."""
+    if not current_planned or not current_run_slot_indices:
+        return "none"
+    combined = 0
+    for index in current_run_slot_indices:
+        origin = allocation_provenance.get(index)
+        if origin not in {
+            _ALLOCATION_REQUIRED_ENERGY,
+            _ALLOCATION_ECONOMIC,
+            _ALLOCATION_REQUIRED_ENERGY | _ALLOCATION_ECONOMIC,
+        }:
+            return "none"
+        combined |= origin
+    return {
+        _ALLOCATION_REQUIRED_ENERGY: "required_energy",
+        _ALLOCATION_ECONOMIC: "economic",
+        _ALLOCATION_REQUIRED_ENERGY | _ALLOCATION_ECONOMIC: "mixed",
+    }.get(combined, "none")
 
 
 def floor_half_hour(value: datetime) -> datetime:
@@ -973,6 +1002,7 @@ def optimize_tariff_charging(
     )
     planned: dict[int, float] = {}
     planned_support: dict[int, float] = {}
+    allocation_provenance: dict[int, int] = {}
     simulation = baseline
     charge_power = max(settings.charge_power_kw, 0.0)
     requested_charge_power = max(
@@ -1229,9 +1259,17 @@ def optimize_tariff_charging(
                         else:
                             lower = middle
                     planned[index] = base_amount + upper
+                    allocation_provenance[index] = (
+                        allocation_provenance.get(index, 0)
+                        | _ALLOCATION_REQUIRED_ENERGY
+                    )
                     simulation = selected_simulation
                     break
                 planned[index] = base_amount + available
+                allocation_provenance[index] = (
+                    allocation_provenance.get(index, 0)
+                    | _ALLOCATION_REQUIRED_ENERGY
+                )
                 simulation = full_simulation
 
     # The configured Self-Use reserve plus the user's safety correction is a
@@ -1334,10 +1372,18 @@ def optimize_tariff_charging(
                             else:
                                 lower = middle
                         planned[index] = base_amount + upper
+                        allocation_provenance[index] = (
+                            allocation_provenance.get(index, 0)
+                            | _ALLOCATION_REQUIRED_ENERGY
+                        )
                         simulation = selected_simulation
                         break
 
                     planned[index] = base_amount + available
+                    allocation_provenance[index] = (
+                        allocation_provenance.get(index, 0)
+                        | _ALLOCATION_REQUIRED_ENERGY
+                    )
                     simulation = full_simulation
                     projected_at_deadline = full_projected
 
@@ -1484,9 +1530,14 @@ def optimize_tariff_charging(
 
         if best is None:
             break
-        _, _, _, planned, planned_support, simulation = best
+        _, _, selected_index, planned, planned_support, simulation = best
+        allocation_provenance[selected_index] = (
+            allocation_provenance.get(selected_index, 0)
+            | _ALLOCATION_ECONOMIC
+        )
 
     charges: list[PlannedCharge] = []
+    charge_indices: list[int] = []
     capacity = max(settings.battery_capacity_kwh, 0.001)
     action_indices = sorted(
         set(simulation.accepted_import_kwh)
@@ -1525,6 +1576,7 @@ def optimize_tariff_charging(
                 ),
             )
         )
+        charge_indices.append(index)
 
     planned_grid = sum(item.grid_import_kwh for item in charges)
     planned_stored = sum(item.stored_energy_kwh for item in charges)
@@ -1544,15 +1596,17 @@ def optimize_tariff_charging(
     current_action = charges[0].action if current_planned else "none"
     current_slot_end: datetime | None = None
     current_run_items: list[PlannedCharge] = []
+    current_run_slot_indices: list[int] = []
     if current_planned:
         current_run_items = [charges[0]]
+        current_run_slot_indices = [charge_indices[0]]
         current_slot_end_utc = charges[0].start.astimezone(timezone.utc) + SLOT
         current_action_family = (
             "support_only"
             if current_action == "grid_support"
             else "required_charge"
         )
-        for item in charges[1:]:
+        for item_index, item in zip(charge_indices[1:], charges[1:]):
             item_action_family = (
                 "support_only"
                 if item.action == "grid_support"
@@ -1564,8 +1618,14 @@ def optimize_tariff_charging(
             ):
                 break
             current_run_items.append(item)
+            current_run_slot_indices.append(item_index)
             current_slot_end_utc += SLOT
         current_slot_end = current_slot_end_utc.astimezone(settings.now.tzinfo)
+    current_run_need_class = _classify_current_run_need(
+        current_planned=current_planned,
+        current_run_slot_indices=tuple(current_run_slot_indices),
+        allocation_provenance=allocation_provenance,
+    )
     current_run_duration_seconds = (
         max(
             (
@@ -1592,7 +1652,7 @@ def optimize_tariff_charging(
     )
     current_run_benefit = 0.0
     if current_run_items:
-        current_run_indices = set(range(len(current_run_items)))
+        counterfactual_relative_indices = set(range(len(current_run_items)))
         counterfactual = _simulate(
             effective_settings,
             starts,
@@ -1600,12 +1660,12 @@ def optimize_tariff_charging(
             {
                 index: amount
                 for index, amount in planned.items()
-                if index not in current_run_indices
+                if index not in counterfactual_relative_indices
             },
             {
                 index: amount
                 for index, amount in planned_support.items()
-                if index not in current_run_indices
+                if index not in counterfactual_relative_indices
             },
             rates,
             slot_fractions,
@@ -1916,6 +1976,7 @@ def optimize_tariff_charging(
             _effective_terminal_reserve_soc_percent(settings)
         ),
         current_run_end=current_slot_end,
+        current_run_need_class=current_run_need_class,
         current_run_duration_seconds=current_run_duration_seconds,
         current_run_grid_import_kwh=current_run_grid_import,
         current_run_stored_kwh=current_run_stored,

@@ -472,6 +472,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
             "status_code": "missing_data",
             "missing_entities": [],
             "planned_slots": [],
+            "current_run_need_class": "none",
             "current_run_start_eligible": False,
             "current_run_suppression_reason": "live_data_missing",
             "current_run_continue_eligible": False,
@@ -1284,6 +1285,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                     "planned_slots": [],
                     "current_slot_planned": False,
                     "current_action": "none",
+                    "current_run_need_class": "none",
                     "current_run_start_eligible": False,
                     "current_run_suppression_reason": "live_data_missing",
                     "current_run_continue_eligible": False,
@@ -1396,6 +1398,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 "planned_slots": planned_slots,
                 "current_slot_planned": result.current_slot_planned,
                 "current_action": result.current_action,
+                "current_run_need_class": result.current_run_need_class,
                 "current_run_start_eligible": current_run_start_eligible,
                 "current_run_suppression_reason": (
                     current_run_suppression_reason
@@ -1771,6 +1774,7 @@ class HoymilesTariffOptimizerSensor(SensorEntity, RestoreEntity):
                 "planned_slots": [],
                 "current_slot_planned": False,
                 "current_action": "none",
+                "current_run_need_class": "none",
                 "current_slot_end": None,
                 "current_run_start_eligible": False,
                 "current_run_suppression_reason": "live_data_missing",

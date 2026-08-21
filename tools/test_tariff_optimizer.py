@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import ast
+from dataclasses import asdict
 from datetime import datetime, timedelta
+import hashlib
+import json
 from pathlib import Path
 from random import Random
 import sys
@@ -15,6 +19,7 @@ sys.path.insert(0, str(ROOT / "custom_components" / "hoymiles_hit_modbus"))
 from tariff_optimizer import (  # noqa: E402
     TariffOptimizerInput,
     TariffSchedule,
+    _classify_current_run_need,
     _simulate,
     adaptive_forecast_factor,
     horizon_gap_load_reserve_kwh,
@@ -30,6 +35,25 @@ from tariff_optimizer import (  # noqa: E402
 
 
 ZONE = ZoneInfo("Europe/Warsaw")
+
+
+def existing_result_digest(result) -> str:
+    """Hash every result field that existed before Phase 1B-1."""
+    payload = asdict(result)
+    assert payload.pop("current_run_need_class") in {
+        "required_energy",
+        "economic",
+        "mixed",
+        "none",
+    }
+    serialized = json.dumps(
+        payload,
+        default=lambda value: value.isoformat(),
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(serialized).hexdigest()
 
 
 def schedule(kind: str = "G12") -> TariffSchedule:
@@ -462,6 +486,144 @@ def main() -> None:
     assert material_support.current_run_direct_load_kwh > 0.8
     assert material_support.current_run_benefit_pln >= 0.10
 
+    # Phase 1B-1 provenance is owned by the allocation steps themselves. A
+    # normal empty current run is not promoted to an economic action.
+    provenance_none = optimize_tariff_charging(
+        settings(
+            monday.replace(day=4, hour=12, minute=0),
+            battery_soc_percent=100.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    assert provenance_none.current_action == "none"
+    assert provenance_none.current_run_need_class == "none"
+
+    provenance_required = optimize_tariff_charging(
+        settings(
+            datetime(2026, 8, 9, 6, 13, tzinfo=ZONE),
+            schedule=schedule("G12w"),
+            battery_soc_percent=20.0,
+            base_reserve_soc_percent=25.0,
+            reserve_soc_percent=27.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+        )
+    )
+    assert provenance_required.current_action == "battery_charge"
+    assert provenance_required.current_run_need_class == "required_energy"
+    assert material_support.current_run_need_class == "economic"
+
+    mixed_now = datetime(2026, 8, 3, 22, 0, tzinfo=ZONE)
+    provenance_mixed = optimize_tariff_charging(
+        settings(
+            mixed_now,
+            battery_soc_percent=15.0,
+            base_reserve_soc_percent=25.0,
+            reserve_soc_percent=27.0,
+            average_daily_load_kwh=30.0,
+            average_night_load_kwh=12.0,
+            charge_power_kw=8.0,
+            battery_charge_power_kw=8.0,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert provenance_mixed.current_slot_planned
+    assert provenance_mixed.current_run_need_class == "mixed"
+
+    # The current run is classified across every contiguous accepted slot,
+    # including separate required and economic allocations merged by action.
+    merged_now = datetime(2026, 8, 4, 4, 30, tzinfo=ZONE)
+    merged_load = {
+        merged_now.replace(hour=hour, minute=minute): 2.0
+        for hour in range(6, 22)
+        for minute in (0, 30)
+    }
+    provenance_merged = optimize_tariff_charging(
+        settings(
+            merged_now,
+            battery_soc_percent=15.0,
+            base_reserve_soc_percent=25.0,
+            reserve_soc_percent=27.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            load_by_slot_kwh=merged_load,
+            charge_power_kw=8.0,
+            battery_charge_power_kw=8.0,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert provenance_merged.current_run_need_class == "mixed"
+    assert provenance_merged.current_slot_end == datetime(
+        2026, 8, 4, 6, 0, tzinfo=ZONE
+    )
+    assert len([
+        item
+        for item in provenance_merged.planned_charges
+        if item.start < provenance_merged.current_slot_end
+    ]) == 3
+
+    # UTC stepping preserves the origin while a required run crosses a local
+    # day boundary.
+    midnight_now = datetime(2026, 8, 3, 23, 30, tzinfo=ZONE)
+    midnight_run = optimize_tariff_charging(
+        settings(
+            midnight_now,
+            battery_capacity_kwh=20.0,
+            battery_soc_percent=0.0,
+            base_reserve_soc_percent=50.0,
+            reserve_soc_percent=50.0,
+            average_daily_load_kwh=0.0,
+            average_night_load_kwh=0.0,
+            charge_power_kw=5.0,
+            battery_charge_power_kw=5.0,
+            charge_efficiency_percent=100.0,
+            discharge_efficiency_percent=100.0,
+            minimum_saving_pln_kwh=0.0,
+        )
+    )
+    assert midnight_run.current_run_need_class == "required_energy"
+    assert midnight_run.current_slot_end == datetime(
+        2026, 8, 4, 1, 30, tzinfo=ZONE
+    )
+
+    # Missing or malformed allocation metadata fails closed to none; it can
+    # never be silently interpreted as an economic origin.
+    assert _classify_current_run_need(
+        current_planned=False,
+        current_run_slot_indices=(),
+        allocation_provenance={},
+    ) == "none"
+    assert _classify_current_run_need(
+        current_planned=True,
+        current_run_slot_indices=(0,),
+        allocation_provenance={},
+    ) == "none"
+    assert _classify_current_run_need(
+        current_planned=True,
+        current_run_slot_indices=(0,),
+        allocation_provenance={0: 99},
+    ) == "none"
+
+    # Frozen pre-change hashes cover every existing result field. The new
+    # bounded scalar is removed before hashing and is the sole schema delta.
+    assert existing_result_digest(result) == (
+        "f2624de8dbdcdae8afe9397708c78b8ccf4667bfb38de816e023038edcbd620b"
+    )
+    assert existing_result_digest(provenance_required) == (
+        "b2dcbab49ce360888b4e52b075a62dd0e735164ab66266803cead7ae9e96abff"
+    )
+    assert existing_result_digest(material_support) == (
+        "4be14bb629b2e3ba87904d37402dabd623bb55089f5aef105399485946eb25cd"
+    )
+    assert existing_result_digest(provenance_none) == (
+        "c09feecb9602724237e107f12a770588a80e442bc8ddd954e63e318bb01b7806"
+    )
+
     # Pure support fails closed when live powers are missing/stale, or when PV
     # already covers LOAD / the battery is not actually discharging. Required
     # battery charging is deliberately unaffected by this execution-only gate.
@@ -831,6 +993,7 @@ def main() -> None:
     tariff_sensor_source = (
         ROOT / "custom_components" / "hoymiles_hit_modbus" / "tariff_sensor.py"
     ).read_text(encoding="utf-8")
+    tariff_sensor_tree = ast.parse(tariff_sensor_source)
     for required_attribute in (
         '"planning_horizon_fallback_reason"',
         '"planning_horizon_gap_to_target_hours"',
@@ -841,6 +1004,7 @@ def main() -> None:
         '"charge_power_feedback_state"',
         '"charge_power_feedback_samples_remaining"',
         '"charge_power_feedback_applied_factor"',
+        '"current_run_need_class"',
         '"current_run_start_eligible"',
         '"current_run_suppression_reason"',
         '"current_run_continue_eligible"',
@@ -881,6 +1045,16 @@ def main() -> None:
         "sample = numeric_state_sample(",
     ):
         assert required_attribute in tariff_sensor_source
+    pending_method = tariff_sensor_source.split(
+        "def _mark_recalculation_pending", 1
+    )[1].split("def _mark_result_current", 1)[0]
+    current_method = tariff_sensor_source.split(
+        "def _mark_result_current", 1
+    )[1].split("async def", 1)[0]
+    assert "**self._attributes" in pending_method
+    assert "**self._attributes" in current_method
+    assert '"current_run_need_class"' not in pending_method
+    assert '"current_run_need_class"' not in current_method
     assert "if bms_charge_data_fresh\n            else 0.0" in tariff_sensor_source
     assert "if bms_discharge_data_fresh\n            else 0.0" in tariff_sensor_source
     assert "battery_charge_power_kw=bms_power_kw" in tariff_sensor_source
@@ -903,6 +1077,80 @@ def main() -> None:
     ):
         assert marker in tariff_sensor_source
     assert 'required["Solcast Forecast Day 3"]' not in tariff_sensor_source
+
+    # Published Supervisor provenance is an output, never a consumed planner
+    # input. Execute the real fingerprint method body against two otherwise
+    # identical fixtures whose only difference is the published scalar.
+    fingerprint_method = next(
+        node
+        for node in ast.walk(tariff_sensor_tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "_current_input_fingerprint"
+    )
+    fingerprint_segment = ast.get_source_segment(
+        tariff_sensor_source,
+        fingerprint_method,
+    )
+    assert fingerprint_segment is not None
+    assert "current_run_need_class" not in fingerprint_segment
+    assert "self._attributes" not in fingerprint_segment
+    fingerprint_method.decorator_list = []
+    fingerprint_module = ast.fix_missing_locations(
+        ast.Module(body=[fingerprint_method], type_ignores=[])
+    )
+    fingerprint_namespace = {
+        "WATCHED_TARIFF_ENTITIES": {"sensor.input"},
+        "RCE_LOAD_BROKER_ATTRIBUTES": ("bounded_attribute",),
+        "optimizer_input_fingerprint": lambda hass, entities, **kwargs: (
+            hass,
+            tuple(sorted(entities)),
+            kwargs,
+        ),
+    }
+    exec(
+        compile(fingerprint_module, "<tariff-fingerprint-contract>", "exec"),
+        fingerprint_namespace,
+    )
+
+    class FingerprintFixture:
+        hass = "same-hass-state"
+
+        def __init__(self, published_need: str) -> None:
+            self._attributes = {"current_run_need_class": published_need}
+
+        @staticmethod
+        def _configured_forecast_source_ids() -> frozenset[str]:
+            return frozenset({"sensor.forecast"})
+
+    fingerprint_function = fingerprint_namespace[
+        "_current_input_fingerprint"
+    ]
+    assert fingerprint_function(
+        FingerprintFixture("required_energy")
+    ) == fingerprint_function(FingerprintFixture("economic"))
+
+    watched_assignment = next(
+        node
+        for node in tariff_sensor_tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "WATCHED_TARIFF_ENTITIES"
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else (node.target,)
+            )
+        )
+    )
+    watched_segment = ast.get_source_segment(
+        tariff_sensor_source,
+        watched_assignment,
+    )
+    assert watched_segment is not None
+    assert "sensor.hoymiles_hit_tariff_charge_plan" not in watched_segment
+    assert 'return "hoymiles_hit_tariff_charge_plan"' in tariff_sensor_source
+    assert '"current_run_need_class": result.current_run_need_class' in (
+        tariff_sensor_source
+    )
 
     # The reserve is dynamic.  With Self-Use 25% and a 2-point correction the
     # optimizer restores 27%; changing the user threshold changes the target.
