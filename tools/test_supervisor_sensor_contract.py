@@ -24,14 +24,9 @@ NOW = datetime(2026, 8, 22, 10, 0, tzinfo=timezone.utc)
 CLOCK = {"now": NOW, "calls": 0}
 CHECKS = 0
 GROUPS = 0
-EXPECTED_CHECK_COUNT = 331
+EXPECTED_CHECK_COUNT = 403
 EXPECTED_TASK_PATHS = {
-    "custom_components/hoymiles_hit_modbus/__init__.py",
     "custom_components/hoymiles_hit_modbus/sensor.py",
-    "custom_components/hoymiles_hit_modbus/supervisor_sensor.py",
-    "custom_components/hoymiles_hit_modbus/translations/en.json",
-    "custom_components/hoymiles_hit_modbus/translations/pl.json",
-    "tools/build_hacs_assets.py",
     "tools/test_supervisor_sensor_contract.py",
 }
 
@@ -171,7 +166,7 @@ class FakeHass:
         self.states = FakeStates()
         self.registry = FakeRegistry()
         self.bus = FakeBus()
-        self.config = SimpleNamespace(time_zone="UTC")
+        self.config = SimpleNamespace(time_zone="UTC", language="en")
         self.state_listeners: list[dict[str, Any]] = []
         self.delay_handles: list[FakeHandle] = []
         self.point_handles: list[FakeHandle] = []
@@ -250,6 +245,7 @@ class FakeSensorEntity:
 
     def _init_fake_lifecycle(self) -> None:
         self._fake_platform_state = self.NOT_ADDED
+        self._fake_remove_callbacks: list[Callable[[], None]] = []
         self.attempted_writes = 0
         self.suppressed_adding_writes = 0
         self.visible_writes = 0
@@ -262,6 +258,9 @@ class FakeSensorEntity:
 
     async def async_will_remove_from_hass(self) -> None:
         return None
+
+    def async_on_remove(self, callback: Callable[[], None]) -> None:
+        self._fake_remove_callbacks.append(callback)
 
     async def add_to_platform_finish(self) -> None:
         """Model the relevant Home Assistant 2026.7 add lifecycle."""
@@ -491,6 +490,167 @@ INTEGRATION = _load_nonpackage(
 )
 
 
+@dataclass
+class FakeMatchedEntity:
+    """Exact constructor projection consumed by production sensor.py."""
+
+    catalog: dict[str, Any]
+    source: Any
+
+
+class FakeHoymilesProxyEntity(FakeSensorEntity):
+    """Minimal proxy base needed to instantiate the real HoymilesSensor class."""
+
+    def __init__(
+        self,
+        hass: FakeHass,
+        entry: FakeConfigEntry,
+        runtime: FakeRuntimeData,
+        matched: FakeMatchedEntity,
+    ) -> None:
+        self._init_fake_lifecycle()
+        self.hass = hass
+        self._entry = entry
+        self._runtime = runtime
+        self._matched = matched
+        self._catalog = matched.catalog
+        self._attr_unique_id = f"{entry.entry_id}_{matched.catalog['translation_key']}"
+        self.entity_id = f"sensor.hoymiles_hit_{matched.catalog['translation_key']}"
+
+    @property
+    def source_state(self) -> FakeState | None:
+        source = self._matched.source
+        return self.hass.states.get(source.entity_id) if source is not None else None
+
+    @property
+    def available(self) -> bool:
+        state = self.source_state
+        return state is not None and state.state not in {"unknown", "unavailable"}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+
+class FakeOptimizerSensor(FakeSensorEntity):
+    """Register one real optimizer-plan identity when sequentially added."""
+
+    plan_locator = ""
+
+    def __init__(
+        self,
+        hass: FakeHass,
+        entry: FakeConfigEntry,
+        runtime: FakeRuntimeData,
+    ) -> None:
+        self._init_fake_lifecycle()
+        self.hass = hass
+        self._entry = entry
+        self._runtime = runtime
+        self._attr_unique_id = f"{entry.entry_id}_{self.plan_locator}"
+        self.entity_id = f"sensor.hoymiles_hit_{self.plan_locator}"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        unique_id = f"{self._entry.entry_id}_{self.plan_locator}"
+        entity_id = self.hass.registry.async_get_entity_id(
+            "sensor",
+            DOMAIN,
+            unique_id,
+        )
+        action = "update"
+        if entity_id is None:
+            entity_id = self.entity_id
+            self.hass.registry.add(
+                FakeRegistryEntry(
+                    entity_id=entity_id,
+                    platform=DOMAIN,
+                    unique_id=unique_id,
+                    config_entry_id=self._entry.entry_id,
+                    translation_key=self.plan_locator,
+                )
+            )
+            action = "create"
+        self.hass.bus.fire(
+            "entity_registry_updated",
+            {"action": action, "entity_id": entity_id},
+        )
+
+
+class FakeRCEOptimizerSensor(FakeOptimizerSensor):
+    plan_locator = "rce_optimized_plan"
+
+
+class FakeTariffOptimizerSensor(FakeOptimizerSensor):
+    plan_locator = "tariff_charge_plan"
+
+
+class FakeRCMOptimizerSensor(FakeOptimizerSensor):
+    plan_locator = "rcm_voltage_plan"
+
+
+def _install_sensor_platform_stubs() -> None:
+    """Install only imports needed to execute production sensor.async_setup_entry."""
+    const = sys.modules["homeassistant.const"]
+    const.EntityCategory = SimpleNamespace(DIAGNOSTIC="diagnostic")
+    helpers = sys.modules["homeassistant.helpers"]
+    helpers.entity_platform = _module(
+        "homeassistant.helpers.entity_platform",
+        AddConfigEntryEntitiesCallback=Callable[..., None],
+    )
+    models = sys.modules["custom_components.hoymiles_hit_modbus.models"]
+    models.MatchedEntity = FakeMatchedEntity
+    _module(
+        "custom_components.hoymiles_hit_modbus.entity",
+        HoymilesProxyEntity=FakeHoymilesProxyEntity,
+    )
+    _module(
+        "custom_components.hoymiles_hit_modbus.energy_data",
+        numeric_state_sample=lambda *_args, **_kwargs: SimpleNamespace(
+            fresh=False,
+            value=None,
+        ),
+    )
+    _module(
+        "custom_components.hoymiles_hit_modbus.localization",
+        localized_text_state=lambda value, _language: value,
+    )
+    _module(
+        "custom_components.hoymiles_hit_modbus.power_balance",
+        OVERVIEW_BATTERY_POWER="overview_battery_power",
+        OVERVIEW_INVERTER_ACTIVE_POWER="overview_inverter_active_power",
+        PARALLEL_POWER_SOURCE_KEYS_BY_TARGET={},
+        PARALLEL_POWER_TARGETS=set(),
+        calculate_parallel_power_balance=lambda **_kwargs: None,
+        calculate_parallel_inverter_power=lambda **_kwargs: None,
+        is_parallel_master=lambda _value: False,
+        is_known_machine_type=lambda _value: True,
+        select_overview_power=lambda _key, **kwargs: kwargs.get("source_power"),
+    )
+    _module(
+        "custom_components.hoymiles_hit_modbus.rce_sensor",
+        HoymilesRCEOptimizerSensor=FakeRCEOptimizerSensor,
+    )
+    _module(
+        "custom_components.hoymiles_hit_modbus.tariff_sensor",
+        HoymilesTariffOptimizerSensor=FakeTariffOptimizerSensor,
+    )
+    _module(
+        "custom_components.hoymiles_hit_modbus.rcm_sensor",
+        HoymilesRCMOptimizerSensor=FakeRCMOptimizerSensor,
+    )
+
+
+_install_sensor_platform_stubs()
+SENSOR_PLATFORM = _load(
+    "custom_components.hoymiles_hit_modbus.sensor_order_under_test",
+    COMPONENT / "sensor.py",
+)
+
+
 def _source_entity_id(spec: Any, entry_id: str) -> str:
     if not spec.entry_local:
         return spec.locator
@@ -668,6 +828,304 @@ def _active_state_registration(hass: FakeHass) -> dict[str, Any]:
 def _git_paths(*args: str) -> set[str]:
     output = subprocess.check_output(["git", *args], cwd=ROOT, text=True)
     return {line.strip().replace("\\", "/") for line in output.splitlines() if line.strip()}
+
+
+def _platform_environment(
+    *,
+    plan_registry_present: bool,
+) -> tuple[FakeHass, FakeConfigEntry, FakeRuntimeData, tuple[FakeMatchedEntity, ...]]:
+    """Build one production sensor-platform input with literal proxy identities."""
+    hass, entry, runtime, _unused_sensor = environment("entry-order")
+    proxies = (
+        FakeMatchedEntity(
+            catalog={"translation_key": "order_proxy_one"},
+            source=SimpleNamespace(entity_id="sensor.order_source_one"),
+        ),
+        FakeMatchedEntity(
+            catalog={"translation_key": "order_proxy_two"},
+            source=SimpleNamespace(entity_id="sensor.order_source_two"),
+        ),
+    )
+    runtime.entities = {"sensor": list(proxies)}
+    for index, matched in enumerate(proxies, start=1):
+        target_id = f"sensor.hoymiles_hit_{matched.catalog['translation_key']}"
+        hass.registry.add(
+            FakeRegistryEntry(
+                entity_id=target_id,
+                platform=DOMAIN,
+                unique_id=f"{entry.entry_id}_{matched.catalog['translation_key']}",
+                config_entry_id=entry.entry_id,
+                translation_key=matched.catalog["translation_key"],
+            )
+        )
+        hass.states.values[matched.source.entity_id] = FakeState(str(index))
+    if not plan_registry_present:
+        for key in ("rce_plan", "tariff_plan", "rcm_plan"):
+            spec = SENSOR._SOURCE_BY_KEY[key]
+            hass.registry.entries.pop(_source_entity_id(spec, entry.entry_id), None)
+    return hass, entry, runtime, proxies
+
+
+def _capture_platform_entities(
+    hass: FakeHass,
+    entry: FakeConfigEntry,
+) -> tuple[list[Any], list[tuple[tuple[Any, ...], dict[str, Any]]]]:
+    """Run actual production async_setup_entry and capture its one add call."""
+    calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def capture(*args: Any, **kwargs: Any) -> None:
+        calls.append((args, kwargs))
+
+    asyncio.run(SENSOR_PLATFORM.async_setup_entry(hass, entry, capture))
+    if not calls or not calls[0][0]:
+        return [], calls
+    return list(calls[0][0][0]), calls
+
+
+def _add_platform_entity(entity: Any) -> None:
+    """Perform the relevant sequential fake-platform add for one real object."""
+    if not hasattr(entity, "_fake_platform_state"):
+        entity._init_fake_lifecycle()
+    asyncio.run(entity.add_to_platform_finish())
+
+
+def _supervisor_state_registrations(
+    hass: FakeHass,
+    sensor: Any,
+) -> list[dict[str, Any]]:
+    return [
+        registration
+        for registration in hass.state_listeners
+        if getattr(registration["callback"], "__self__", None) is sensor
+    ]
+
+
+def test_platform_entity_order() -> None:
+    hass, entry, runtime, matched_proxies = _platform_environment(
+        plan_registry_present=True
+    )
+    entities, calls = _capture_platform_entities(hass, entry)
+    check(len(calls) == 1, "Production used more than one platform add operation")
+    check(len(calls[0][0]) == 1, "Platform add positional arguments changed")
+    check(calls[0][1] == {}, "update_before_add semantics changed")
+    check(isinstance(calls[0][0][0], list), "Production entity collection is no longer one list")
+    check(len(entities) == len(matched_proxies) + 5, "An existing production entity disappeared")
+    check(len({id(entity) for entity in entities}) == len(entities), "A duplicate entity object was introduced")
+
+    supervisors = [
+        entity
+        for entity in entities
+        if type(entity) is SENSOR.HoymilesSupervisorSensor
+    ]
+    check(len(supervisors) == 1, "Expected exactly one Supervisor entity")
+    supervisor = supervisors[0]
+    supervisor_position = entities.index(supervisor)
+    check(supervisor_position == len(matched_proxies), "Supervisor does not immediately follow every proxy")
+    check(
+        all(type(entity) is SENSOR_PLATFORM.HoymilesSensor for entity in entities[:supervisor_position]),
+        "A non-proxy entity appears before Supervisor",
+    )
+    check(
+        tuple(entity._matched for entity in entities[:supervisor_position])
+        == matched_proxies,
+        "Proxy identity or relative order changed",
+    )
+
+    expected_native_types = (
+        SENSOR_PLATFORM.HoymilesRCEOptimizerSensor,
+        SENSOR_PLATFORM.HoymilesTariffOptimizerSensor,
+        SENSOR_PLATFORM.HoymilesRCMOptimizerSensor,
+        SENSOR_PLATFORM.HoymilesSetupStatusSensor,
+    )
+    actual_native_types = tuple(
+        type(entity) for entity in entities[supervisor_position + 1 :]
+    )
+    check(actual_native_types == expected_native_types, "Native sensor relative order changed")
+    for native_type in expected_native_types:
+        check(
+            supervisor_position
+            < next(index for index, entity in enumerate(entities) if type(entity) is native_type),
+            f"Supervisor is not before {native_type.__name__}",
+        )
+        check(
+            sum(type(entity) is native_type for entity in entities) == 1,
+            f"Native entity count differs for {native_type.__name__}",
+        )
+    check(supervisor._entry is entry, "Supervisor received a different ConfigEntry")
+    check(supervisor._runtime is runtime, "Supervisor received a different RuntimeData")
+    check(supervisor.hass is hass, "Supervisor received a different HomeAssistant")
+
+
+def test_fresh_install_sequential_add() -> None:
+    hass, entry, _runtime, matched_proxies = _platform_environment(
+        plan_registry_present=False
+    )
+    entities, calls = _capture_platform_entities(hass, entry)
+    check(len(calls) == 1, "Fresh install used more than one add operation")
+    supervisor = next(
+        entity for entity in entities if type(entity) is SENSOR.HoymilesSupervisorSensor
+    )
+    supervisor_position = entities.index(supervisor)
+    check(supervisor_position == len(matched_proxies), "Fresh install did not add Supervisor after proxies")
+    plan_keys = ("rce_plan", "tariff_plan", "rcm_plan")
+    plan_ids = {
+        key: _source_entity_id(SENSOR._SOURCE_BY_KEY[key], entry.entry_id)
+        for key in plan_keys
+    }
+    check(
+        all(hass.registry.async_get(plan_ids[key]) is None for key in plan_keys),
+        "Fresh install unexpectedly had an optimizer-plan registry entry",
+    )
+    check(
+        all(
+            hass.registry.async_get(
+                f"sensor.hoymiles_hit_{matched.catalog['translation_key']}"
+            )
+            is not None
+            for matched in matched_proxies
+        ),
+        "Proxy registry entries were not present before Supervisor",
+    )
+
+    for entity in entities[:supervisor_position]:
+        _add_platform_entity(entity)
+    _add_platform_entity(supervisor)
+    check(supervisor.available and supervisor.native_value == "off", "Fresh Supervisor did not publish bounded Off")
+    check(supervisor.visible_writes == 1, "Fresh Supervisor initial write count differs")
+    check(
+        supervisor.extra_state_attributes["supervisor_execution_authorized"] is False
+        and supervisor.extra_state_attributes["legacy_execution_unchanged"] is True,
+        "Fresh Supervisor gained physical authority",
+    )
+    check(
+        all(supervisor._source_entity_ids[key] is None for key in plan_keys),
+        "Missing optimizer registry source used a canonical fallback",
+    )
+    check(
+        all(supervisor._read_source_states()[key] is None for key in plan_keys),
+        "Old canonical plan State became authority without registry ownership",
+    )
+    check(
+        len(hass.data[SENSOR._GUARD_KEY].sensors) == 1
+        and hass.data[SENSOR._GUARD_KEY].sensors[entry.entry_id] is supervisor,
+        "Fresh install registered a duplicate Supervisor",
+    )
+
+    for entity_id in plan_ids.values():
+        hass.states.values.pop(entity_id, None)
+    optimizer_types = (
+        SENSOR_PLATFORM.HoymilesRCEOptimizerSensor,
+        SENSOR_PLATFORM.HoymilesTariffOptimizerSensor,
+        SENSOR_PLATFORM.HoymilesRCMOptimizerSensor,
+    )
+    optimizer_keys = dict(zip(optimizer_types, plan_keys, strict=True))
+    for entity in entities[supervisor_position + 1 :]:
+        _add_platform_entity(entity)
+        entity_type = type(entity)
+        if entity_type not in optimizer_keys:
+            continue
+        key = optimizer_keys[entity_type]
+        registry_entry = hass.registry.async_get(plan_ids[key])
+        check(supervisor._source_entity_ids[key] == plan_ids[key], f"{key} did not re-resolve")
+        check(registry_entry is not None, f"{key} registry entry was not created")
+        check(
+            registry_entry.config_entry_id == entry.entry_id
+            and registry_entry.unique_id
+            == f"{entry.entry_id}_{SENSOR._SOURCE_BY_KEY[key].locator}",
+            f"{key} resolved outside the current config entry",
+        )
+        check(hass.states.get(plan_ids[key]) is None, f"{key} became healthy without real state data")
+
+    check(
+        all(supervisor._source_entity_ids[key] == plan_ids[key] for key in plan_keys),
+        "Final plan source mapping is incomplete",
+    )
+    check(
+        all(supervisor._read_source_states()[key] is None for key in plan_keys),
+        "Missing plan state became available after registry creation",
+    )
+    check(supervisor.available and supervisor.native_value == "off", "Fresh sequence did not remain safely Off")
+    check(supervisor.visible_writes == 1, "Registry creation duplicated an unchanged Off publication")
+    registrations = _supervisor_state_registrations(hass, supervisor)
+    check(sum(item["active"] for item in registrations) == 1, "Supervisor state listener leaked during re-resolution")
+    check(
+        all(item["active"] or item["unsubscribe_calls"] == 1 for item in registrations),
+        "Replaced Supervisor listener was not unsubscribed exactly once",
+    )
+    check(
+        sum(
+            type(entity) is SENSOR.HoymilesSupervisorSensor
+            for entity in entities
+        )
+        == 1,
+        "Fresh sequence introduced a duplicate Supervisor",
+    )
+    remove(supervisor)
+    check(
+        not any(item["active"] for item in _supervisor_state_registrations(hass, supervisor)),
+        "Fresh sequence left a Supervisor state listener",
+    )
+    check(
+        not any(
+            active
+            for records in hass.bus.listeners.values()
+            for callback, active, _unsubscribe_calls in records
+            if getattr(callback, "__self__", None) is supervisor
+        ),
+        "Fresh sequence left a Supervisor bus listener",
+    )
+
+
+def test_existing_install_order() -> None:
+    hass, entry, _runtime, matched_proxies = _platform_environment(
+        plan_registry_present=True
+    )
+    entities, calls = _capture_platform_entities(hass, entry)
+    check(len(calls) == 1, "Existing install used more than one add operation")
+    supervisor = next(
+        entity for entity in entities if type(entity) is SENSOR.HoymilesSupervisorSensor
+    )
+    supervisor_position = entities.index(supervisor)
+    check(supervisor_position == len(matched_proxies), "Existing install Supervisor order differs")
+    for entity in entities[: supervisor_position + 1]:
+        _add_platform_entity(entity)
+    plan_keys = ("rce_plan", "tariff_plan", "rcm_plan")
+    expected_ids = {
+        key: _source_entity_id(SENSOR._SOURCE_BY_KEY[key], entry.entry_id)
+        for key in plan_keys
+    }
+    check(
+        all(
+            supervisor._source_entity_ids[key] == expected_ids[key]
+            for key in plan_keys
+        ),
+        "Existing plan mappings were not resolved before optimizer addition",
+    )
+    check(supervisor.available and supervisor.native_value == "off", "Existing install initial Off failed")
+    check(supervisor.visible_writes == 1, "Existing install initial write count differs")
+    initial_registration = _supervisor_state_registrations(hass, supervisor)[0]
+    for entity in entities[supervisor_position + 1 :]:
+        _add_platform_entity(entity)
+    check(supervisor.visible_writes == 1, "Later optimizer addition duplicated Off publication")
+    registrations = _supervisor_state_registrations(hass, supervisor)
+    check(registrations == [initial_registration], "Unchanged registry events duplicated source resolution listener")
+    check(initial_registration["active"], "Existing-install state listener became inactive")
+    check(
+        len(hass.data[SENSOR._GUARD_KEY].sensors) == 1
+        and hass.data[SENSOR._GUARD_KEY].sensors[entry.entry_id] is supervisor,
+        "Existing install duplicated Supervisor guard ownership",
+    )
+    check(supervisor._attr_unique_id == f"{entry.entry_id}_ems_supervisor", "Supervisor unique ID changed")
+    for key in plan_keys:
+        registry_entry = hass.registry.async_get(expected_ids[key])
+        check(registry_entry is not None, f"Existing {key} registry entry disappeared")
+        check(registry_entry.config_entry_id == entry.entry_id, f"Existing {key} changed config-entry owner")
+        check(
+            registry_entry.unique_id
+            == f"{entry.entry_id}_{SENSOR._SOURCE_BY_KEY[key].locator}",
+            f"Existing {key} unique ID changed",
+        )
+    remove(supervisor)
 
 
 def test_structure_and_manifest() -> None:
@@ -1702,10 +2160,21 @@ def test_static_safety() -> None:
     check(runtime_pop < unload_notify, "Unload guard notification precedes RuntimeData pop")
     check('active_translation_keys.add("ems_supervisor")' in init_source, "Registry reconciliation key missing")
     check(sensor_source.count("HoymilesSupervisorSensor(hass, entry, runtime)") == 1, "Entity registration differs")
+    supervisor_position = sensor_source.index("HoymilesSupervisorSensor(hass, entry, runtime)")
+    rce_position = sensor_source.index("HoymilesRCEOptimizerSensor(hass, entry, runtime)")
+    tariff_position = sensor_source.index("HoymilesTariffOptimizerSensor(hass, entry, runtime)")
+    rcm_position = sensor_source.index("HoymilesRCMOptimizerSensor(hass, entry, runtime)")
     setup_status_position = sensor_source.index("HoymilesSetupStatusSensor(hass, entry, runtime)")
-    supervisor_position = sensor_source.index("HoymilesSupervisorSensor(hass, entry, runtime)", setup_status_position)
-    add_position = sensor_source.index("async_add_entities(entities)", supervisor_position)
-    check(setup_status_position < supervisor_position < add_position, "Supervisor is not the last native sensor")
+    add_position = sensor_source.index("async_add_entities(entities)", setup_status_position)
+    check(
+        supervisor_position
+        < rce_position
+        < tariff_position
+        < rcm_position
+        < setup_status_position
+        < add_position,
+        "Native sensor source order differs",
+    )
 
 
 def _translation_count(payload: dict[str, Any]) -> int:
@@ -1722,13 +2191,16 @@ def test_translations() -> None:
     generator = (ROOT / "tools" / "build_hacs_assets.py").read_text(encoding="utf-8")
     check(generator.count('["ems_supervisor"]') == 2, "Generator native key differs")
     before = json.loads(subprocess.check_output(["git", "show", "HEAD:custom_components/hoymiles_hit_modbus/translations/en.json"], cwd=ROOT, text=True))
-    check(_translation_count(before) == 298, "Baseline localized entity count differs")
+    check(_translation_count(before) == 299, "Baseline localized entity count differs")
     check(_translation_count(en) == 299, "Current localized entity count differs")
-    check(_translation_count(en) - _translation_count(before) == 1, "Entity count did not increase by one")
+    check(_translation_count(en) == _translation_count(before), "Entity-order task changed entity count")
 
 
 TEST_GROUPS = (
     ("STRUCTURE_AND_MANIFEST", test_structure_and_manifest),
+    ("PLATFORM_ENTITY_ORDER", test_platform_entity_order),
+    ("FRESH_INSTALL_SEQUENTIAL_ADD", test_fresh_install_sequential_add),
+    ("EXISTING_INSTALL_ORDER", test_existing_install_order),
     ("ENTITY_IDENTITY", test_entity_identity),
     ("PUBLICATION", test_publication),
     ("MODE_PROFILE_PERMISSIONS", test_mode_profile_permissions),

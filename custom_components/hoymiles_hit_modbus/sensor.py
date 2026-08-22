@@ -52,11 +52,11 @@ async def async_setup_entry(
         HoymilesSensor(hass, entry, runtime, matched)
         for matched in runtime.entities["sensor"]
     ]
+    entities.append(HoymilesSupervisorSensor(hass, entry, runtime))
     entities.append(HoymilesRCEOptimizerSensor(hass, entry, runtime))
     entities.append(HoymilesTariffOptimizerSensor(hass, entry, runtime))
     entities.append(HoymilesRCMOptimizerSensor(hass, entry, runtime))
     entities.append(HoymilesSetupStatusSensor(hass, entry, runtime))
-    entities.append(HoymilesSupervisorSensor(hass, entry, runtime))
     async_add_entities(entities)
 
 
