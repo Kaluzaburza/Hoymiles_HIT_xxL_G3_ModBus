@@ -1696,6 +1696,9 @@
       },
       "setup_status": {
         "name": "Installation status"
+      },
+      "ems_supervisor": {
+        "name": "EMS Supervisor"
       }
     },
     "number": {

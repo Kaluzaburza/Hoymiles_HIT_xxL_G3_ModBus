@@ -42,6 +42,7 @@ from .source_device import (
     async_resolve_source_device,
     persist_resolved_source_entry,
 )
+from .supervisor_sensor import notify_supervisor_guard
 from .support_http import HoymilesSupportBundleView
 
 
@@ -170,6 +171,7 @@ def _async_reconcile_entity_registry(
     active_translation_keys.add("tariff_charge_plan")
     active_translation_keys.add("rcm_voltage_plan")
     active_translation_keys.add("setup_status")
+    active_translation_keys.add("ems_supervisor")
 
     for registry_entry in er.async_entries_for_config_entry(
         entity_registry,
@@ -360,6 +362,7 @@ async def async_setup_entry(
         source_device=source_device,
         entities=matched,
     )
+    notify_supervisor_guard(hass)
     source_count = matched_source_count(matched)
     catalog_count = sum(len(entities) for entities in matched.values())
     if source_count < catalog_count:
@@ -398,6 +401,7 @@ async def async_unload_entry(
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        notify_supervisor_guard(hass)
         ir.async_delete_issue(hass, DOMAIN, _ems_package_issue_id(entry))
         ir.async_delete_issue(
             hass,

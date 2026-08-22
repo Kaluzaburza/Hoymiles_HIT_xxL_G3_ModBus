@@ -3303,6 +3303,12 @@ def build() -> None:
     pl["entity"]["sensor"]["setup_status"] = {
         "name": "Stan instalacji"
     }
+    en["entity"]["sensor"]["ems_supervisor"] = {
+        "name": "EMS Supervisor"
+    }
+    pl["entity"]["sensor"]["ems_supervisor"] = {
+        "name": "Nadzorca EMS"
+    }
 
     COMPONENT.mkdir(parents=True, exist_ok=True)
     TRANSLATIONS.mkdir(parents=True, exist_ok=True)

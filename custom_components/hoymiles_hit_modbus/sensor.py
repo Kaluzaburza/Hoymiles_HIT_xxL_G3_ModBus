@@ -37,6 +37,7 @@ from .power_balance import (
 )
 from .rcm_sensor import HoymilesRCMOptimizerSensor
 from .rce_sensor import HoymilesRCEOptimizerSensor
+from .supervisor_sensor import HoymilesSupervisorSensor
 from .tariff_sensor import HoymilesTariffOptimizerSensor
 
 
@@ -55,6 +56,7 @@ async def async_setup_entry(
     entities.append(HoymilesTariffOptimizerSensor(hass, entry, runtime))
     entities.append(HoymilesRCMOptimizerSensor(hass, entry, runtime))
     entities.append(HoymilesSetupStatusSensor(hass, entry, runtime))
+    entities.append(HoymilesSupervisorSensor(hass, entry, runtime))
     async_add_entities(entities)
 
 

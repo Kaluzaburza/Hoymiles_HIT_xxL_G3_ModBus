@@ -1696,6 +1696,9 @@
       },
       "setup_status": {
         "name": "Stan instalacji"
+      },
+      "ems_supervisor": {
+        "name": "Nadzorca EMS"
       }
     },
     "number": {
